@@ -433,12 +433,14 @@ export default function Home() {
   };
 
   const mainOffsetClass =
-    isInfoOpen || isPinned ? "ml-[56px] md:ml-[72px] lg:ml-[510px]" : "ml-[56px] md:ml-[72px] lg:ml-[80px]";
+    isInfoOpen || isPinned
+      ? "ml-[48px] sm:ml-[56px] md:ml-[72px] lg:ml-[510px]"
+      : "ml-[48px] sm:ml-[56px] md:ml-[72px] lg:ml-[80px]";
 
   const sidebarVariant = currentStep === "contentEditor" ? "editor" : "default";
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[image:var(--brand-gradient)] bg-no-repeat bg-[size:100%_100%] p-3">
+    <div className="flex h-screen overflow-hidden bg-[image:var(--brand-gradient)] bg-no-repeat bg-[size:100%_100%] p-2 sm:p-3">
       <SidebarInfoPanel
         ref={infoRef}
         onInfoClick={() => {

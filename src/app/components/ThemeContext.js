@@ -13,7 +13,7 @@ export function ThemeProvider({ children }) {
       window.matchMedia &&
       window.matchMedia("(prefers-color-scheme: dark)").matches;
 
-    const next = stored ? stored : "light";
+    const next = stored ? stored : (prefersDark ? "dark" : "light");
     setTheme(next);
     document.documentElement.classList.toggle("dark", next === "dark");
   }, []);

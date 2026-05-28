@@ -181,6 +181,16 @@ body {
 .bg-gray-50     { background-color: #f3f4f6 !important; }
 .bg-gray-100    { background-color: var(--app-bg) !important; }
 
+/* dark-mode overrides for classes that don't use CSS variables */
+html.dark .bg-gray-50  { background-color: #2a2c2c !important; }
+html.dark .text-gray-500 { color: #9ca3af !important; }
+html.dark .border-gray-300 { border-color: #4b5563 !important; }
+
+/* bg-white with Tailwind opacity modifier (/95 etc.) — not caught by .bg-white remap */
+html.dark .bg-white\/95 { background-color: rgb(31 33 33 / 0.95) !important; }
+html.dark .bg-white\/90 { background-color: rgb(31 33 33 / 0.90) !important; }
+html.dark .bg-white\/80 { background-color: rgb(31 33 33 / 0.80) !important; }
+
 /* text */
 .text-gray-900  { color: var(--text) !important; }
 .text-gray-800  { color: var(--text) !important; }

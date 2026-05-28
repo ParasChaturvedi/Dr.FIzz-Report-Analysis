@@ -241,7 +241,7 @@ export default function DownloadReportModal({ domain, onClose }) {
         onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
         placeholder={placeholder}
         className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#d45427]/30 ${
-          errors[key] ? "border-red-400 bg-red-50" : "border-gray-200 bg-white"
+          errors[key] ? "border-red-400 bg-red-50 dark:bg-red-900/20" : "border-gray-200 bg-white"
         }`}
       />
       {errors[key] && <p className="text-xs text-red-500 mt-1">{errors[key]}</p>}
@@ -252,7 +252,7 @@ export default function DownloadReportModal({ domain, onClose }) {
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+      <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90dvh] overflow-y-auto">
         {/* Header */}
         <div className="bg-gray-950 text-white px-6 py-5">
           <div className="flex items-center justify-between">

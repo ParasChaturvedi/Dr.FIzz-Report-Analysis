@@ -26,13 +26,13 @@ export default function DashboardHeader() {
     >
       {/* LEFT SIDE */}
       <div>
-        <p className="text-[11px] sm:text-[12px] text-[#6B7280]">
+        <p className="text-[11px] sm:text-[12px] text-[#6B7280] dark:text-[#9CA3AF]">
           Good Morning,{" "}
-          <span className="font-semibold text-[#020617]">Sam!</span>
+          <span className="font-semibold text-[#020617] dark:text-white">Sam!</span>
         </p>
 
         <div className="mt-0.5 flex flex-col gap-1.5 sm:flex-row sm:items-baseline sm:gap-4">
-          <h1 className="text-[22px] sm:text-[24px] md:text-[26px] font-extrabold leading-tight text-[#020617]">
+          <h1 className="text-[22px] sm:text-[24px] md:text-[26px] font-extrabold leading-tight text-[#020617] dark:text-white">
             Dashboard
           </h1>
 
@@ -46,13 +46,16 @@ export default function DashboardHeader() {
 
             <button
               type="button"
+              aria-label="Help"
               className="
-                inline-flex h-4 w-4 items-center justify-center
-                rounded-full border border-[#E5E7EB] text-[#9CA3AF] bg-white
-                flex-shrink-0
+                inline-flex h-7 w-7 items-center justify-center
+                rounded-full border border-[#E5E7EB] dark:border-[#374151]
+                text-[#9CA3AF] bg-white dark:bg-[#303030]
+                flex-shrink-0 hover:bg-gray-50 dark:hover:bg-[#404040]
+                transition-colors
               "
             >
-              <HelpCircle size={10} />
+              <HelpCircle size={12} />
             </button>
           </div>
         </div>
@@ -74,10 +77,11 @@ export default function DashboardHeader() {
           type="button"
           className="
             inline-flex items-center justify-center gap-2
-            rounded-full border border-[#F97316] bg-[#FFF7ED]
-            px-3 py-1.5 sm:px-4 sm:py-2
-            text-[11px] sm:text-[13px] font-semibold text-[#C05621]
-            hover:bg-[#FFE7D1] transition
+            rounded-full border border-[#F97316] bg-[#FFF7ED] dark:bg-[#F97316]/10
+            px-3 py-2 sm:px-4 sm:py-2
+            min-h-[36px] sm:min-h-[40px]
+            text-[11px] sm:text-[13px] font-semibold text-[#C05621] dark:text-[#FB923C]
+            hover:bg-[#FFE7D1] dark:hover:bg-[#F97316]/20 transition
             whitespace-nowrap
           "
         >
@@ -90,7 +94,8 @@ export default function DashboardHeader() {
           type="button"
           className="
             inline-flex items-center justify-center gap-2
-            rounded-full px-3 py-1.5 sm:px-4 sm:py-2
+            rounded-full px-3 py-2 sm:px-4 sm:py-2
+            min-h-[36px] sm:min-h-[40px]
             text-[11px] sm:text-[13px] font-semibold text-white
             shadow-sm bg-[image:var(--infoHighlight-gradient)]
             hover:opacity-90 transition

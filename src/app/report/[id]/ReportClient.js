@@ -73,7 +73,7 @@ export default function ReportClient({ id }) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center p-6">
         <div className="max-w-md text-center">
-          <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center mx-auto mb-4">
             <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#d45427" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
             </svg>
@@ -97,9 +97,9 @@ export default function ReportClient({ id }) {
   return (
     <div className="min-h-screen bg-white relative">
 
-      {/* ── Full-screen proceed overlay ── */}
+      {/* ── Full-screen proceed overlay (dark-mode aware) ── */}
       {proceeding && (
-        <div className="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-white/95 dark:bg-[#1f2121]/95 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-6 w-full max-w-sm px-8">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#d45427] to-[#ffa615] flex items-center justify-center shadow-lg">
               <svg width="22" height="22" fill="white" viewBox="0 0 20 20">
@@ -110,7 +110,7 @@ export default function ReportClient({ id }) {
               <div className="text-lg font-black text-gray-900">Loading your Dashboard</div>
               <div className="text-xs text-gray-500 mt-1">Preparing all metrics &amp; insights…</div>
             </div>
-            <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+            <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 overflow-hidden">
               <div
                 className="h-2 rounded-full bg-gradient-to-r from-[#d45427] to-[#ffa615] transition-all duration-300 ease-out"
                 style={{ width: `${progress}%` }}
@@ -121,8 +121,8 @@ export default function ReportClient({ id }) {
         </div>
       )}
 
-      {/* Report content */}
-      <div id="report-content">
+      {/* Report content — horizontally scrollable on very small screens */}
+      <div id="report-content" className="min-w-0 overflow-x-auto">
         {reportType === "page" ? (
           <PageReport data={data} />
         ) : (
@@ -130,34 +130,37 @@ export default function ReportClient({ id }) {
         )}
       </div>
 
-      {/* Sticky bottom bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center gap-4 py-4 px-6 bg-white border-t border-gray-200 shadow-lg">
+      {/* Sticky bottom bar — responsive layout for mobile */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-center gap-2 sm:gap-4 py-3 sm:py-4 px-3 sm:px-6 bg-white border-t border-gray-200 shadow-lg">
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-6 py-3 rounded-full border-2 border-[#d45427] text-[#d45427] font-semibold text-sm hover:bg-[#d45427] hover:text-white transition-colors"
+          className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-full border-2 border-[#d45427] text-[#d45427] font-semibold text-xs sm:text-sm hover:bg-[#d45427] hover:text-white transition-colors whitespace-nowrap"
         >
-          <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
+          <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20" className="sm:w-4 sm:h-4">
             <path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" />
           </svg>
-          Download Report
+          <span className="hidden xs:inline">Download</span>
+          <span className="xs:hidden">PDF</span>
         </button>
         <button
           onClick={handleProceed}
           disabled={proceeding}
-          className="flex items-center gap-2 px-8 py-3 rounded-full bg-gradient-to-r from-[#d45427] to-[#ffa615] text-white font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-70"
+          className="flex items-center gap-1.5 sm:gap-2 px-5 sm:px-8 py-2.5 sm:py-3 rounded-full bg-gradient-to-r from-[#d45427] to-[#ffa615] text-white font-semibold text-xs sm:text-sm hover:opacity-90 transition-opacity disabled:opacity-70 whitespace-nowrap"
         >
           {proceeding ? (
             <>
-              <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+              <svg className="animate-spin w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              Loading Dashboard…
+              <span className="hidden sm:inline">Loading Dashboard…</span>
+              <span className="sm:hidden">Loading…</span>
             </>
           ) : (
             <>
-              Proceed to Dashboard
-              <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
+              <span className="hidden sm:inline">Proceed to Dashboard</span>
+              <span className="sm:hidden">Go to Dashboard</span>
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20" className="sm:w-4 sm:h-4">
                 <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
               </svg>
             </>
@@ -165,7 +168,7 @@ export default function ReportClient({ id }) {
         </button>
       </div>
 
-      <div className="h-24" />
+      <div className="h-20 sm:h-24" />
 
       {showModal && (
         <DownloadReportModal
