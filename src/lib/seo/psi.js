@@ -41,20 +41,15 @@ export async function fetchPsiForStrategy(url, strategy = "mobile") {
     "https://www.googleapis.com/pagespeedonline/v5/runPagespeed" +
     `?url=${encodeURIComponent(url)}&strategy=${strategy}&key=${PSI_API_KEY}`;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 50000); // 50s — slow sites take longer
-
-  let res;
-  try {
-    res = await fetch(apiUrl, { cache: "no-store", signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  // No client-side timeout — Google PSI can take 60-120 s for slow/large sites.
+  // The Vercel route sets maxDuration = 300 s which acts as the hard ceiling.
+  // Both mobile + desktop are fetched in parallel so total wait ≈ the slower one.
+  const res = await fetch(apiUrl, { cache: "no-store" });
 
   if (!res.ok) {
-    const text = await res.text().catch(() => res.status);
+    const text = await res.text().catch(() => String(res.status));
     throw new Error(
-      `PageSpeed Insights (${strategy}) failed: ${res.status} - ${text}`
+      `PageSpeed Insights (${strategy}) failed: ${res.status} — ${text}`
     );
   }
 

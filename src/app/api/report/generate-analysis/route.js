@@ -13,8 +13,8 @@ import {
 } from "@/lib/seo/dataforseo";
 import { fetchPsiForStrategy } from "@/lib/seo/psi";
 
-export const runtime = "nodejs";
-export const maxDuration = 120;
+export const runtime     = "nodejs";
+export const maxDuration = 300; // PSI alone can take 90-120 s; Claude adds another 30-60 s
 
 // ─── helpers ───────────────────────────────────────────────────────────────────
 
@@ -403,10 +403,11 @@ export async function POST(request) {
       needFreshPsi ? safeCall(() => fetchPsiForStrategy(safeUrl, "desktop")) : Promise.resolve(null),
     ]);
 
-    if (needFreshPsi && psiMobileRaw) {
-      mobileScore  = normScore(psiMobileRaw?.performanceScore);
-      desktopScore = normScore(psiDesktopRaw?.performanceScore);
-      cwvLab = psiMobileRaw?.coreWebVitalsLab ?? psiDesktopRaw?.coreWebVitalsLab ?? {};
+    if (needFreshPsi && (psiMobileRaw || psiDesktopRaw)) {
+      // Use whichever succeeded — mobile preferred for CWV (most relevant)
+      mobileScore  = normScore(psiMobileRaw?.performanceScore)  ?? null;
+      desktopScore = normScore(psiDesktopRaw?.performanceScore) ?? null;
+      cwvLab       = psiMobileRaw?.coreWebVitalsLab ?? psiDesktopRaw?.coreWebVitalsLab ?? {};
       issueCritical = (psiMobileRaw?.issueCounts?.critical ?? 0) + (psiDesktopRaw?.issueCounts?.critical ?? 0);
       issueWarning  = (psiMobileRaw?.issueCounts?.warning  ?? 0) + (psiDesktopRaw?.issueCounts?.warning  ?? 0);
     }
