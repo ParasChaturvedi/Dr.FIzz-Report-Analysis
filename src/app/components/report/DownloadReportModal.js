@@ -92,13 +92,80 @@ export default function DownloadReportModal({ domain, onClose }) {
     pdf.save(`ItzFizz-Report-${domain || "report"}-${Date.now()}.pdf`);
   };
 
-  // ── ConvertAPI Web→PDF (production only) ──────────────────────────────────
-  // Real headless Chrome renders the live URL — perfect quality, all CSS intact.
+  // ── ConvertAPI HTML→PDF (production) ─────────────────────────────────────
+  // The browser inlines all <link rel="stylesheet"> CSS into <style> tags,
+  // then sends a fully self-contained HTML document to the server.
+  // ConvertAPI receives the HTML directly — no URL visit, no sessionStorage
+  // dependency — so the report renders perfectly even on Vercel.
   const generateWithConvertAPI = async () => {
+    // 1. Fetch and inline every linked stylesheet (same-origin fetch works fine)
+    const linkEls  = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
+    const cssChunks = await Promise.all(
+      linkEls.map(async (el) => {
+        try {
+          const href = el.getAttribute("href");
+          if (!href || href.startsWith("data:")) return "";
+          const absUrl = new URL(href, window.location.href).href;
+          const r = await fetch(absUrl, { credentials: "same-origin" });
+          return r.ok ? await r.text() : "";
+        } catch { return ""; }
+      })
+    );
+
+    // 2. Collect existing inline <style> tags from <head>
+    const inlineStyles = Array.from(document.querySelectorAll("head style"))
+      .map((s) => s.textContent || "")
+      .join("\n");
+
+    // 3. Get the rendered report content (element already has real data)
+    const reportEl = document.getElementById("report-content");
+    if (!reportEl) throw new Error("Report content element not found");
+
+    // Make animated / intersection-observer-hidden elements visible before clone
+    const hiddenEls     = Array.from(document.querySelectorAll(".opacity-0, [data-hidden='true']"));
+    const transformEls  = Array.from(document.querySelectorAll("[style*='translateY']"));
+    hiddenEls.forEach   ((el) => { el._bak = el.style.opacity;    el.style.opacity    = "1";    });
+    transformEls.forEach((el) => { el._bak = el.style.transform;  el.style.transform  = "none"; });
+
+    const reportHtml = reportEl.outerHTML;
+
+    // Restore
+    hiddenEls.forEach   ((el) => { el.style.opacity    = el._bak || ""; delete el._bak; });
+    transformEls.forEach((el) => { el.style.transform  = el._bak || ""; delete el._bak; });
+
+    // 4. PDF-specific overrides (always-visible, no animations, exact colours)
+    const pdfOverrides = [
+      "* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }",
+      "body { margin: 0; padding: 0; background: #ffffff; }",
+      ".opacity-0 { opacity: 1 !important; }",
+      ".translate-y-5, .translate-y-8 { transform: none !important; }",
+      "[style*='opacity: 0'] { opacity: 1 !important; }",
+      "[style*='translateY'] { transform: none !important; }",
+    ].join("\n");
+
+    // 5. Assemble completely self-contained HTML document
+    const htmlDoc = [
+      "<!DOCTYPE html>",
+      '<html lang="en">',
+      "<head>",
+      '<meta charset="UTF-8" />',
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+      "<title>ItzFizz Intelligence Report</title>",
+      `<style>${cssChunks.join("\n")}</style>`,
+      `<style>${inlineStyles}</style>`,
+      `<style>${pdfOverrides}</style>`,
+      "</head>",
+      '<body class="bg-white min-h-screen">',
+      reportHtml,
+      "</body>",
+      "</html>",
+    ].join("\n");
+
+    // 6. POST self-contained HTML to our server → ConvertAPI HTML→PDF
     const resp = await fetch("/api/report/download-pdf", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ reportUrl: window.location.href, domain }),
+      body:    JSON.stringify({ htmlContent: htmlDoc, domain }),
     });
 
     if (!resp.ok) {

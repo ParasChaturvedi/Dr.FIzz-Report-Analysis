@@ -1,11 +1,17 @@
 /**
  * POST /api/report/download-pdf
  *
- * Generates a PDF via ConvertAPI Web→PDF (real Chrome renders the live URL).
- * ✅ Production / Vercel — works perfectly (URL is public)
- * ❌ localhost — URL not reachable by ConvertAPI; frontend falls back to html2canvas
+ * Primary flow  (production): browser inlines all CSS and sends a fully
+ * self-contained HTML document → we forward it to ConvertAPI HTML→PDF.
+ * No URL visit needed, so sessionStorage restrictions don't apply.
  *
- * Body:  { reportUrl: string, domain: string }
+ * Fallback flow (legacy / web): if only a reportUrl is provided we fall back
+ * to ConvertAPI Web→PDF (kept for compatibility, not used by current client).
+ *
+ * Body:
+ *   { htmlContent: string, domain?: string }   ← primary (HTML→PDF)
+ *   { reportUrl:   string, domain?: string }   ← legacy  (Web→PDF)
+ *
  * Returns: application/pdf binary stream
  */
 
@@ -13,11 +19,8 @@ export const maxDuration = 60; // Vercel: allow up to 60 s
 
 export async function POST(req) {
   try {
-    const { reportUrl, domain } = await req.json();
-
-    if (!reportUrl) {
-      return Response.json({ error: "reportUrl is required" }, { status: 400 });
-    }
+    const body                            = await req.json();
+    const { reportUrl, htmlContent, domain } = body;
 
     const secret = process.env.CONVERTAPI_SECRET;
     if (!secret) {
@@ -27,50 +30,83 @@ export async function POST(req) {
       );
     }
 
-    // ── ConvertAPI Web → PDF (real headless Chrome) ───────────────────────────
-    const convertResp = await fetch(
-      `https://v2.convertapi.com/convert/web/to/pdf?Secret=${secret}`,
-      {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          Parameters: [
-            { Name: "Url",                Value: reportUrl  },
+    let convertResp;
 
-            // Page layout — no margins so report fills the page
-            { Name: "PageSize",           Value: "A4"       },
-            { Name: "PageOrientation",    Value: "Portrait" },
-            { Name: "MarginTop",          Value: "0"        },
-            { Name: "MarginBottom",       Value: "0"        },
-            { Name: "MarginLeft",         Value: "0"        },
-            { Name: "MarginRight",        Value: "0"        },
+    // ── Primary: HTML→PDF (browser-inlined CSS, no URL needed) ───────────────
+    if (htmlContent) {
+      const htmlBase64 = Buffer.from(htmlContent, "utf-8").toString("base64");
 
-            // Capture full page height (not just viewport)
-            { Name: "FullPage",           Value: "true"     },
+      convertResp = await fetch(
+        `https://v2.convertapi.com/convert/html/to/pdf?Secret=${secret}`,
+        {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            Parameters: [
+              // Send the self-contained HTML as a base64-encoded file
+              {
+                Name:      "File",
+                FileValue: { Name: "report.html", Data: htmlBase64 },
+              },
 
-            // Render backgrounds / dark sections correctly
-            { Name: "PrintBackground",    Value: "true"     },
+              // Page layout
+              { Name: "PageSize",        Value: "A4"    },
+              { Name: "MarginTop",       Value: "0"     },
+              { Name: "MarginBottom",    Value: "0"     },
+              { Name: "MarginLeft",      Value: "0"     },
+              { Name: "MarginRight",     Value: "0"     },
 
-            // Wait for all SSE data + lazy sections to render
-            { Name: "WaitForNetworkIdle", Value: "true"     },
-            { Name: "WaitTime",           Value: "6"        },
+              // Render full page (not just viewport height)
+              { Name: "FullPage",        Value: "true"  },
 
-            // Inject CSS to hide the sticky bottom action bar in the PDF
-            {
-              Name:  "CssText",
-              Value: [
-                ".fixed.bottom-0 { display: none !important; }",
-                ".h-24 { height: 0 !important; }",
-                // Ensure animated sections are visible
-                ".opacity-0 { opacity: 1 !important; }",
-                ".translate-y-5 { transform: none !important; }",
-              ].join(" "),
-            },
-          ],
-        }),
-      }
-    );
+              // Render background colours / gradients correctly
+              { Name: "PrintBackground", Value: "true"  },
+            ],
+          }),
+        }
+      );
 
+    // ── Fallback: Web→PDF (legacy — ConvertAPI visits the live URL) ───────────
+    } else if (reportUrl) {
+      convertResp = await fetch(
+        `https://v2.convertapi.com/convert/web/to/pdf?Secret=${secret}`,
+        {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            Parameters: [
+              { Name: "Url",                Value: reportUrl },
+              { Name: "PageSize",           Value: "A4"      },
+              { Name: "MarginTop",          Value: "0"       },
+              { Name: "MarginBottom",       Value: "0"       },
+              { Name: "MarginLeft",         Value: "0"       },
+              { Name: "MarginRight",        Value: "0"       },
+              { Name: "FullPage",           Value: "true"    },
+              { Name: "PrintBackground",    Value: "true"    },
+              { Name: "WaitForNetworkIdle", Value: "true"    },
+              { Name: "WaitTime",           Value: "6"       },
+              {
+                Name:  "CssText",
+                Value: [
+                  ".fixed.bottom-0 { display: none !important; }",
+                  ".h-24 { height: 0 !important; }",
+                  ".opacity-0 { opacity: 1 !important; }",
+                  ".translate-y-5 { transform: none !important; }",
+                ].join(" "),
+              },
+            ],
+          }),
+        }
+      );
+
+    } else {
+      return Response.json(
+        { error: "Either htmlContent or reportUrl is required." },
+        { status: 400 }
+      );
+    }
+
+    // ── Handle ConvertAPI response ─────────────────────────────────────────────
     if (!convertResp.ok) {
       const errText = await convertResp.text();
       console.error("[download-pdf] ConvertAPI error:", convertResp.status, errText);
@@ -88,7 +124,7 @@ export async function POST(req) {
       return Response.json({ error: "ConvertAPI returned no file data." }, { status: 502 });
     }
 
-    // Decode base64 → binary → stream back as PDF download
+    // Decode base64 → buffer → stream back as PDF download
     const pdfBuffer  = Buffer.from(fileData, "base64");
     const safeDomain = (domain || "report").replace(/[^a-z0-9.-]/gi, "_");
     const filename   = `ItzFizz-Report-${safeDomain}-${Date.now()}.pdf`;
@@ -101,6 +137,7 @@ export async function POST(req) {
         "Content-Length":      String(pdfBuffer.byteLength),
       },
     });
+
   } catch (err) {
     console.error("[download-pdf] Unexpected error:", err);
     return Response.json({ error: err?.message || "Unknown error" }, { status: 500 });
