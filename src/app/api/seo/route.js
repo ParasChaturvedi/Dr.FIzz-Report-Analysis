@@ -17,7 +17,8 @@ import {
 // ✅ Claude: generate "New On-Page SEO Opportunity" keywords
 import { getKeywordsForPage } from "@/lib/claude/pipeline";
 
-export const runtime = "nodejs";
+export const runtime    = "nodejs";
+export const maxDuration = 300; // Vercel Pro: SSE stream can run up to 5 min
 
 const DEBUG_CONTENT = String(process.env.DEBUG_CONTENT || "").trim() === "1";
 

@@ -4,7 +4,8 @@ import { getSiteProfile, getKeywordsFromProfile, getCompetitorsFromProfile } fro
 import { normalizeHost } from "@/lib/perplexity/utils";
 import { cacheGet, cacheSet } from "@/lib/perplexity/cache";
 
-export const runtime = "nodejs";
+export const runtime     = "nodejs";
+export const maxDuration = 120; // Vercel: Claude bootstrap can take ~60-90s
 
 function makeKey(domain, industry, location) {
   return [domain || "", industry || "", location || ""]
