@@ -278,7 +278,7 @@ try {
               height: 10px;
               width: 100%;
               border-radius: 9999px;
-              background: #e6e8eb; /* neutral grey track */
+              background: var(--border); /* adapts to dark/light mode */
               overflow: hidden;
             }
             .progress-fill {

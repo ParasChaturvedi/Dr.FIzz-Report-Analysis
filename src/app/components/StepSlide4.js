@@ -407,7 +407,7 @@ export default function StepSlide4({
                         type="button"
                         aria-pressed={isSelected}
                         onClick={() => handleKeywordToggle(keyword)}
-                        className={`keyword-chip group inline-flex items-center justify-between mx-1 px-3.5 sm:px-4 py-2.5 min-h-[34px] sm:min-h-[36px] text-[11px] sm:text-[12px] md:text-[13px] leading-normal ${isSelected ? "active" : ""}`}
+                        className={`keyword-chip group inline-flex items-center justify-between mx-1 px-3.5 sm:px-4 py-2.5 min-h-[40px] text-[11px] sm:text-[12px] md:text-[13px] leading-normal ${isSelected ? "active" : ""}`}
                       >
                         <span className="truncate max-w-[150px] sm:max-w-[180px] md:max-w-none">{keyword}</span>
 

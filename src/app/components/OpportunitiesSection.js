@@ -22,7 +22,7 @@ const GENERIC_CARD_TITLES = [
   "How to Improve Site Speed",
   "Complete Local SEO Guide",
   "Content Strategy Basics",
-  "Beginner’s Guide to SEO",
+  "Beginner's Guide to SEO",
 ];
 
 const STORAGE_DOMAIN_KEYS = [
@@ -264,7 +264,7 @@ function StartModal({
     <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40">
       <div
         className="
-          relative grid overflow-hidden rounded-2xl bg-white shadow-2xl
+          relative grid overflow-hidden rounded-2xl bg-white dark:bg-[#1f2121] shadow-2xl
           w-[min(980px,100vw-32px)]
           grid-cols-1 md:grid-cols-2
           h-[92vh] md:h-auto
@@ -292,7 +292,7 @@ function StartModal({
             }}
           />
           <div className="pt-12 pb-3 px-6 text-center">
-            <div className="text-[34px] font-extrabold leading-[1.05] tracking-tight text-[#0F172A]">
+            <div className="text-[34px] font-extrabold leading-[1.05] tracking-tight text-[#0F172A] dark:text-white break-words">
               CREATE,<br />
               OPTIMIZE &<br />
               PUBLISH
@@ -312,7 +312,7 @@ function StartModal({
           }}
         >
           <div className="pointer-events-none select-none">
-            <div className="text-[56px] font-extrabold leading-[0.95] tracking-tight text-[#0F172A]">
+            <div className="text-[56px] font-extrabold leading-[0.95] tracking-tight text-[#0F172A] break-words">
               CREATE,<br />
               OPTIMIZE &<br />
               PUBLISH
@@ -324,10 +324,10 @@ function StartModal({
         </div>
 
         {/* Right column / content */}
-        <div className="flex h-full min-h-0 flex-col bg-[#FAFAFA]">
+        <div className="flex h-full min-h-0 flex-col bg-[#FAFAFA] dark:bg-[#2a2c2c]">
           {/* Mobile header + helper panel */}
           <div className="md:hidden px-6">
-            <div className="text-[16px] font-semibold text-[#0F172A]">
+            <div className="text-[16px] font-semibold text-[#0F172A] dark:text-white">
               Blogs
             </div>
             <p className="mt-2 text-[13px] leading-relaxed text-[#6B7280]">
@@ -335,19 +335,19 @@ function StartModal({
               &amp; insights in the industry
             </p>
 
-            <div className="mt-4 rounded-2xl bg-[#F5F5F5] px-4 pt-3 pb-2 border border-[#ECECEC]">
+            <div className="mt-4 rounded-2xl bg-[#F5F5F5] dark:bg-[#1f2121] px-4 pt-3 pb-2 border border-[#ECECEC] dark:border-[#374151]">
               <div className="text-[12px] text-[#9CA3AF]">
                 Select any{" "}
                 <span className="font-medium text-[#6B7280]">1 style</span> to
                 proceed
               </div>
-              <div className="mt-2 border-t border-[#E5E7EB]" />
+              <div className="mt-2 border-t border-[#E5E7EB] dark:border-[#374151]" />
             </div>
           </div>
 
           {/* Desktop header */}
           <div className="hidden md:flex flex-col p-6">
-            <div className="text-xl font-semibold text-[#0F172A]">Blogs</div>
+            <div className="text-xl font-semibold text-[#0F172A] dark:text-white">Blogs</div>
             <div className="mt-1 text-[12px] text-[#6B7280]">
               Select any 1 to create with that style
             </div>
@@ -370,12 +370,12 @@ function StartModal({
                   }}
                   className={`
                     w-full rounded-2xl p-4 text-left transition
-                    bg-white border border-[#EFEFEF] shadow-[0_2px_10px_rgba(0,0,0,0.06)]
+                    bg-white dark:bg-[#1f2121] border border-[#EFEFEF] dark:border-[#374151] shadow-[0_2px_10px_rgba(0,0,0,0.06)]
                     flex items-center justify-between
                     ${
                       hover === s.id
-                        ? "ring-1 ring-black/5"
-                        : "hover:ring-1 hover:ring-black/5"
+                        ? "ring-1 ring-black/5 dark:ring-[#374151]"
+                        : "hover:ring-1 hover:ring-black/5 dark:hover:ring-[#374151]"
                     }
                     disabled:opacity-60
                   `}
@@ -383,7 +383,7 @@ function StartModal({
                   title="Click to create a new blog with this style"
                 >
                   <div className="pr-3">
-                    <div className="font-semibold text-[15px] text-[#0F172A]">
+                    <div className="font-semibold text-[15px] text-[#0F172A] dark:text-white break-words">
                       {s.title}
                     </div>
                     <div className="mt-1 max-w-[380px] text-[12px] leading-relaxed text-[#6B7280]">
@@ -391,7 +391,7 @@ function StartModal({
                     </div>
                   </div>
                   <div className="relative shrink-0">
-                    <div className="h-[76px] w-[116px] rounded-[14px] bg-[#E5E7EB]" />
+                    <div className="h-[76px] w-[116px] rounded-[14px] bg-[#E5E7EB] dark:bg-[#374151]" />
                     <div className="pointer-events-none absolute inset-2 rounded-[10px] border border-white/60 shadow-inner" />
                   </div>
                 </button>
@@ -400,7 +400,7 @@ function StartModal({
           </div>
 
           {/* Sticky footer */}
-          <div className="sticky bottom-0 left-0 right-0 bg-white border-t border-[#E5E7EB] px-6 py-4 flex items-center justify-between gap-3">
+          <div className="sticky bottom-0 left-0 right-0 bg-white dark:bg-[#1f2121] border-t border-[#E5E7EB] dark:border-[#374151] px-6 py-4 flex items-center justify-between gap-3">
             <button
               onClick={onCreateFromScratch}
               disabled={editingExisting}
@@ -1036,32 +1036,41 @@ export default function OpportunitiesSection({ onOpenContentEditor }) {
       v <= 30
         ? {
             label: "High Priority",
-            bg: "#FFF0F4",
-            br: "#FFE1EA",
+            lightBg: "#FFF0F4",
+            lightBr: "#FFE1EA",
+            darkBg: "bg-pink-900/30",
+            darkBr: "border-pink-700/50",
             dot: "#EF4444",
             txt: "#D12C2C",
+            darkTxt: "dark:text-pink-300",
           }
         : v <= 70
         ? {
             label: "Medium Priority",
-            bg: "#FFF5D9",
-            br: "#FDE7B8",
+            lightBg: "#FFF5D9",
+            lightBr: "#FDE7B8",
+            darkBg: "bg-yellow-900/30",
+            darkBr: "border-yellow-700/50",
             dot: "#F59E0B",
             txt: "#B98500",
+            darkTxt: "dark:text-yellow-300",
           }
         : {
             label: "Low Priority",
-            bg: "#EAF8F1",
-            br: "#CBEBD9",
+            lightBg: "#EAF8F1",
+            lightBr: "#CBEBD9",
+            darkBg: "bg-emerald-900/30",
+            darkBr: "border-emerald-700/50",
             dot: "#22C55E",
             txt: "#178A5D",
+            darkTxt: "dark:text-emerald-300",
           };
     return (
       <span
-        className="inline-flex items-center gap-2 rounded-[10px] px-2.5 py-1 text-[12px] font-medium"
+        className={`inline-flex items-center gap-2 rounded-[10px] px-2.5 py-1 text-[12px] font-medium dark:${cfg.darkBg} dark:${cfg.darkBr} ${cfg.darkTxt}`}
         style={{
-          backgroundColor: cfg.bg,
-          border: `1px solid ${cfg.br}`,
+          backgroundColor: cfg.lightBg,
+          border: `1px solid ${cfg.lightBr}`,
           color: cfg.txt,
         }}
       >
@@ -1087,22 +1096,22 @@ export default function OpportunitiesSection({ onOpenContentEditor }) {
     return (
       <div className="relative rounded-[18px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
         <div className="group absolute right-4 top-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full text-[14px] font-semibold shadow-sm tabular-nums bg-[#FFF5D9] border border-[#FDE7B8] text-[#B98500]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full text-[14px] font-semibold shadow-sm tabular-nums bg-[#FFF5D9] border border-[#FDE7B8] text-[#B98500] dark:bg-yellow-900/30 dark:border-yellow-700/50 dark:text-yellow-300">
             {Math.round(score * prog)}
           </div>
         </div>
 
         <div className="pr-14">
-          <h3 className="text-[20px] font-semibold leading-snug text-[var(--text)]">
+          <h3 className="text-[20px] font-semibold leading-snug text-[var(--text)] break-words">
             {displayTitle}
           </h3>
         </div>
 
         <hr className="mt-3 border-t border-[var(--border)]" />
 
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3 flex items-center gap-2 flex-wrap">
           <PriorityBadge score={score} />
-          <span className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[#F6F8FB] px-2.5 py-1 text-[12px] text-[var(--muted)]">
+          <span className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[#F6F8FB] dark:bg-[#2a2c2c] px-2.5 py-1 text-[12px] text-[var(--muted)]">
             {status === "Published" ? <Check size={14} /> : <PencilLine size={14} />}
             {status}
           </span>
@@ -1192,7 +1201,7 @@ export default function OpportunitiesSection({ onOpenContentEditor }) {
       <section className="mb-10 grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="rounded-[16px] border border-[var(--border)] bg-[var(--input)] p-4">
           <div className="mb-3 flex items-center gap-2">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#FDE7B8] bg-[#FFF5D9] text-[#B98500]">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#FDE7B8] bg-[#FFF5D9] text-[#B98500] dark:bg-yellow-900/30 dark:border-yellow-700/50 dark:text-yellow-300">
               <BookOpen size={14} />
             </span>
             <span className="text-[13px] font-semibold">BLOG</span>
@@ -1206,7 +1215,7 @@ export default function OpportunitiesSection({ onOpenContentEditor }) {
 
         <div className="rounded-[16px] border border-[var(--border)] bg-[var(--input)] p-4">
           <div className="mb-3 flex items-center gap-2">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#D1FAE5] bg-[#EAF8F1] text-[#178A5D]">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#D1FAE5] bg-[#EAF8F1] text-[#178A5D] dark:bg-emerald-900/30 dark:border-emerald-700/50 dark:text-emerald-300">
               <FileText size={14} />
             </span>
             <span className="text-[13px] font-semibold">PAGES</span>
