@@ -1,46 +1,106 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import DownloadReportModal from "@/app/components/report/DownloadReportModal";
 
 const WebsiteReport = dynamic(() => import("@/app/components/report/WebsiteReport"), { ssr: false });
-const PageReport = dynamic(() => import("@/app/components/report/PageReport"), { ssr: false });
+const PageReport    = dynamic(() => import("@/app/components/report/PageReport"),    { ssr: false });
 
-export default function ReportClient({ id, reportType, data }) {
-  const [showModal, setShowModal] = useState(false);
-  const [proceeding, setProceeding] = useState(false);
-  const [progress, setProgress]   = useState(0);
+export default function ReportClient({ id }) {
+  const [reportType, setReportType]   = useState(null);
+  const [data, setData]               = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [notFound, setNotFound]       = useState(false);
+  const [showModal, setShowModal]     = useState(false);
+  const [proceeding, setProceeding]   = useState(false);
+  const [progress, setProgress]       = useState(0);
 
+  // ── Load report from sessionStorage ──────────────────────────────────────
+  useEffect(() => {
+    if (!id) { setNotFound(true); setLoading(false); return; }
+    try {
+      const raw = sessionStorage.getItem(`drfizz:report:${id}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.reportType && parsed?.data) {
+          setReportType(parsed.reportType);
+          setData(parsed.data);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("[ReportClient] sessionStorage read failed:", e);
+    }
+    // Not found in sessionStorage
+    setNotFound(true);
+    setLoading(false);
+  }, [id]);
+
+  // ── Proceed to Dashboard ──────────────────────────────────────────────────
   const handleProceed = () => {
     if (typeof window === "undefined" || proceeding) return;
     setProceeding(true);
     setProgress(15);
-
-    // Animate the progress bar, then navigate
     const steps = [
       { pct: 40, delay: 200 },
       { pct: 65, delay: 450 },
       { pct: 85, delay: 700 },
       { pct: 95, delay: 950 },
     ];
-    steps.forEach(({ pct, delay }) =>
-      setTimeout(() => setProgress(pct), delay)
-    );
+    steps.forEach(({ pct, delay }) => setTimeout(() => setProgress(pct), delay));
     setTimeout(() => {
       setProgress(100);
       setTimeout(() => { window.location.href = "/#dashboard"; }, 150);
     }, 1200);
   };
 
+  // ── Loading state ─────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#d45427] to-[#ffa615] animate-pulse" />
+          <div className="text-sm text-gray-500">Loading report…</div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Not found state ───────────────────────────────────────────────────────
+  if (notFound || !data) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-6">
+        <div className="max-w-md text-center">
+          <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center mx-auto mb-4">
+            <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#d45427" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-black text-gray-900 mb-2">Report Not Found</h2>
+          <p className="text-sm text-gray-500 mb-6">
+            This report link has expired or was opened in a different browser tab.
+            Reports are session-based — please regenerate from the dashboard.
+          </p>
+          <a
+            href="/"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#d45427] to-[#ffa615] text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+          >
+            ← Back to Dashboard
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white relative">
 
-      {/* ── Full-screen preloading overlay ── */}
+      {/* ── Full-screen proceed overlay ── */}
       {proceeding && (
         <div className="fixed inset-0 z-[9998] flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-6 w-full max-w-sm px-8">
-            {/* Logo / brand mark */}
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#d45427] to-[#ffa615] flex items-center justify-center shadow-lg">
               <svg width="22" height="22" fill="white" viewBox="0 0 20 20">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -50,7 +110,6 @@ export default function ReportClient({ id, reportType, data }) {
               <div className="text-lg font-black text-gray-900">Loading your Dashboard</div>
               <div className="text-xs text-gray-500 mt-1">Preparing all metrics &amp; insights…</div>
             </div>
-            {/* Progress bar */}
             <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
               <div
                 className="h-2 rounded-full bg-gradient-to-r from-[#d45427] to-[#ffa615] transition-all duration-300 ease-out"
@@ -106,10 +165,8 @@ export default function ReportClient({ id, reportType, data }) {
         </button>
       </div>
 
-      {/* Bottom padding so sticky bar doesn't cover content */}
       <div className="h-24" />
 
-      {/* Download modal */}
       {showModal && (
         <DownloadReportModal
           domain={data?.domain || "report"}

@@ -1,38 +1,24 @@
 // src/app/report/[id]/page.js
-import { readFile } from "fs/promises";
-import { join } from "path";
-import { notFound } from "next/navigation";
+//
+// Thin server shell — just extracts the report ID from the URL and passes it
+// to the client component. Report data is loaded from sessionStorage on the
+// client (written there by Step5Slide2 immediately after generate-analysis).
+//
+// Why not read from /tmp here?
+//   Vercel serverless functions are stateless. generate-analysis writes to
+//   /tmp on instance A; this page handler runs on instance B whose /tmp is
+//   empty → 404. sessionStorage survives same-tab navigation and is the right
+//   mechanism for ephemeral per-session data like a freshly-generated report.
+
 import ReportClient from "./ReportClient";
 
-export async function generateMetadata({ params }) {
-  const { id } = await params;
-  try {
-    const raw = await readFile(join("/tmp", "reports", `${id}.json`), "utf8");
-    const { data } = JSON.parse(raw);
-    return {
-      title: `ItzFizz Intelligence Report — ${data?.domain || "SEO Report"}`,
-      description: `Comprehensive SEO & GEO intelligence report for ${data?.domain || "your website"} prepared by ItzFizz Digital`,
-    };
-  } catch {
-    return {
-      title: "ItzFizz Intelligence Report",
-      description: "Comprehensive SEO & GEO intelligence report prepared by ItzFizz Digital",
-    };
-  }
-}
+export const metadata = {
+  title: "ItzFizz Intelligence Report",
+  description: "Comprehensive SEO & GEO intelligence report prepared by ItzFizz Digital",
+};
 
 export default async function ReportPage({ params }) {
   const { id } = await params;
-
-  let report = null;
-  try {
-    const raw = await readFile(join("/tmp", "reports", `${id}.json`), "utf8");
-    report = JSON.parse(raw);
-  } catch {
-    notFound();
-  }
-
-  if (!report) notFound();
-
-  return <ReportClient id={id} reportType={report.reportType} data={report.data} />;
+  // All data loading happens client-side in ReportClient
+  return <ReportClient id={id} />;
 }

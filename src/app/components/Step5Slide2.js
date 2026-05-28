@@ -576,6 +576,26 @@ export default function Step5Slide2({
         if (reportRes.ok) {
           const reportData = await reportRes.json();
           reportId = reportData?.id;
+
+          // ── Save full report to sessionStorage ──────────────────────────
+          // Vercel serverless /tmp is per-invocation — the report page cannot
+          // read the file written by generate-analysis on a different instance.
+          // Storing in sessionStorage bridges the gap (same browser tab).
+          if (reportId && reportData.reportType && reportData.data) {
+            try {
+              sessionStorage.setItem(
+                `drfizz:report:${reportId}`,
+                JSON.stringify({
+                  id:         reportId,
+                  reportType: reportData.reportType,
+                  data:       reportData.data,
+                })
+              );
+            } catch (storErr) {
+              console.warn("[Step5] Could not cache report in sessionStorage:", storErr);
+            }
+          }
+
           updateStage("report", {
             state: "done",
             value: reportId ? "Report ready" : "Generated",

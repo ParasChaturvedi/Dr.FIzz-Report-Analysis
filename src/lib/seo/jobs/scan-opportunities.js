@@ -307,7 +307,7 @@ export function enqueueOpportunitiesScan({
   return scan;
 }
 
-async function runOpportunitiesScan({
+export async function runOpportunitiesScan({
   inFlightKey,
   scanId,
   websiteUrl,
