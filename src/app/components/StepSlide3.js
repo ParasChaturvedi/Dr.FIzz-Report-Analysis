@@ -278,8 +278,11 @@ try {
               height: 10px;
               width: 100%;
               border-radius: 9999px;
-              background: var(--border); /* adapts to dark/light mode */
+              background: #e5e7eb; /* light-mode neutral track */
               overflow: hidden;
+            }
+            html.dark .progress-wrap {
+              background: #374151; /* dark-mode neutral track */
             }
             .progress-fill {
               position: absolute;
