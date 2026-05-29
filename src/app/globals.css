@@ -215,6 +215,51 @@ input, textarea, select {
   border-color: var(--border);
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   REPORT CONTENT — always locked to light mode
+   The branded PDF-quality report (/report/[id]) must look identical
+   regardless of the user's dark/light preference.
+   Reset every CSS variable back to its light-mode value so that
+   bg-white, text-gray-900, border-gray-200 etc. all use original
+   colours inside #report-content, and undo every dark-mode override.
+   ═══════════════════════════════════════════════════════════════ */
+html.dark #report-content {
+  /* Re-pin all design tokens to their light values */
+  --panel:    #ffffff;
+  --app-bg:   #f9fafb;
+  --text:     #111827;
+  --muted:    #4b5563;
+  --border:   #e5e7eb;
+  --input:    #ffffff;
+  --bg-panel: #F4F4F3;
+  color-scheme: light;
+}
+
+/* Undo the per-class dark overrides that are NOT expressed via variables */
+html.dark #report-content .bg-gray-50       { background-color: #f3f4f6 !important; }
+html.dark #report-content .bg-white\/95     { background-color: rgb(255 255 255 / 0.95) !important; }
+html.dark #report-content .bg-white\/90     { background-color: rgb(255 255 255 / 0.90) !important; }
+html.dark #report-content .bg-white\/80     { background-color: rgb(255 255 255 / 0.80) !important; }
+html.dark #report-content .text-gray-500    { color: #6b7280 !important; }
+html.dark #report-content .border-gray-300  { border-color: #d1d5db !important; }
+
+/* Undo the global input/textarea override inside the report */
+html.dark #report-content input,
+html.dark #report-content textarea,
+html.dark #report-content select {
+  background-color: #ffffff;
+  color: #111827;
+  border-color: #e5e7eb;
+}
+
+/* Also reset box-shadow back to light-mode values inside the report */
+html.dark #report-content .shadow-sm,
+html.dark #report-content .shadow,
+html.dark #report-content .shadow-md,
+html.dark #report-content .shadow-lg {
+  box-shadow: 0 1px 2px rgba(0,0,0,.07), 0 1px 1px rgba(0,0,0,.06);
+}
+
 /* small elevation parity between light/dark */
 .shadow-sm, .shadow, .shadow-md, .shadow-lg {
   box-shadow: 0 1px 2px rgba(0,0,0,.07), 0 1px 1px rgba(0,0,0,.06);
