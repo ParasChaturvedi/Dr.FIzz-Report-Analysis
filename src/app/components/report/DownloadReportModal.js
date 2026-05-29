@@ -133,29 +133,65 @@ export default function DownloadReportModal({ domain, onClose }) {
     hiddenEls.forEach   ((el) => { el.style.opacity    = el._bak || ""; delete el._bak; });
     transformEls.forEach((el) => { el.style.transform  = el._bak || ""; delete el._bak; });
 
-    // 4. PDF-specific overrides (always-visible, no animations, exact colours)
+    // 4. PDF-specific overrides — clean layout, no animations, exact colours
     const pdfOverrides = [
-      "* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }",
-      "body { margin: 0; padding: 0; background: #ffffff; }",
+      /* 1 – Colour accuracy */
+      "* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-scheme: light !important; }",
+
+      /* 2 – Body reset */
+      "html, body { margin: 0 !important; padding: 0 !important; background: #ffffff !important; }",
+
+      /* 3 – Kill all CSS motion so nothing stays invisible */
+      "* { transition: none !important; animation: none !important; }",
       ".opacity-0 { opacity: 1 !important; }",
       ".translate-y-5, .translate-y-8 { transform: none !important; }",
       "[style*='opacity: 0'] { opacity: 1 !important; }",
       "[style*='translateY'] { transform: none !important; }",
+
+      /* 4 – Hide fixed / sticky browser chrome */
+      ".fixed { display: none !important; }",
+      "[class*='sticky'] { position: static !important; }",
+
+      /* 5 – Compact section padding for PDF (py-16 = 4 rem → 2 rem) */
+      "#report-content section { padding-top: 2rem !important; padding-bottom: 2rem !important; }",
+
+      /* 6 – Cover page: keep full viewport height + hard page break after */
+      "#report-content section:first-child { padding-top: 0 !important; padding-bottom: 0 !important; min-height: 100vh !important; page-break-after: always !important; break-after: page !important; }",
+
+      /* 7 – Content sections: remove artificial min-height */
+      "#report-content section:not(:first-child) { min-height: 0 !important; }",
+
+      /* 8 – Tables: never break mid-row */
+      "table { page-break-inside: avoid !important; break-inside: avoid !important; width: 100% !important; }",
+      "thead { display: table-header-group !important; }",
+      "tr { page-break-inside: avoid !important; break-inside: avoid !important; }",
+
+      /* 9 – Cards and grid items: never break mid-card */
+      ".rounded-xl { page-break-inside: avoid !important; break-inside: avoid !important; }",
+      ".rounded-r-xl { page-break-inside: avoid !important; break-inside: avoid !important; }",
+      ".grid > div { page-break-inside: avoid !important; break-inside: avoid !important; }",
+      "li { page-break-inside: avoid !important; break-inside: avoid !important; }",
+
+      /* 10 – Section headings stay with the next element */
+      "h1, h2 { page-break-after: avoid !important; break-after: avoid !important; }",
+
     ].join("\n");
 
     // 5. Assemble completely self-contained HTML document
+    // Note: viewport width 1280 ensures md: breakpoint classes (≥768px) apply,
+    // giving the wider px-14 side padding instead of the mobile px-8.
     const htmlDoc = [
       "<!DOCTYPE html>",
       '<html lang="en">',
       "<head>",
       '<meta charset="UTF-8" />',
-      '<meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+      '<meta name="viewport" content="width=1280, initial-scale=1.0" />',
       "<title>ItzFizz Intelligence Report</title>",
       `<style>${cssChunks.join("\n")}</style>`,
       `<style>${inlineStyles}</style>`,
       `<style>${pdfOverrides}</style>`,
       "</head>",
-      '<body class="bg-white min-h-screen">',
+      '<body class="bg-white">',
       reportHtml,
       "</body>",
       "</html>",
