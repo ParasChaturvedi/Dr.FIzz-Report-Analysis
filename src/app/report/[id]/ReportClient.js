@@ -38,22 +38,67 @@ export default function ReportClient({ id }) {
     setLoading(false);
   }, [id]);
 
+  // ── Background pre-fetch: start /api/seo as soon as report loads ─────────
+  // Dashboard reads from sessionStorage drfizz:seo:{domain} on mount.
+  // If the cache is already warm when the user clicks Proceed, the Dashboard
+  // hydrates instantly instead of waiting 15–30 s for the API.
+  useEffect(() => {
+    if (!data?.domain || typeof window === "undefined") return;
+
+    // Mirror Dashboard's normalizeDomain so cache key matches exactly
+    let d = String(data.domain || "").toLowerCase();
+    try {
+      const u = d.includes("://") ? new URL(d) : new URL(`https://${d}`);
+      d = u.hostname.toLowerCase();
+      if (d.startsWith("www.")) d = d.slice(4);
+    } catch {
+      d = d.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+    }
+    if (!d) return;
+
+    // Skip if cache is fresh (< 10 min)
+    try {
+      const raw = sessionStorage.getItem(`drfizz:seo:${d}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.ts && Date.now() - parsed.ts < 10 * 60 * 1000) return;
+      }
+    } catch {}
+
+    // Fire-and-forget — doesn't block the report UI
+    fetch("/api/seo", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: `https://${d}`,
+        keyword: d,
+        countryCode: "in",
+        languageCode: "en",
+        depth: 10,
+        providers: ["psi", "authority", "dataforseo", "content", "onpageKeywords"],
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (!json) return;
+        try {
+          sessionStorage.setItem(`drfizz:seo:${d}`, JSON.stringify({ ts: Date.now(), data: json }));
+          sessionStorage.setItem("drfizz:lastDomain", d);
+        } catch {}
+      })
+      .catch(() => {});
+  }, [data]);
+
   // ── Proceed to Dashboard ──────────────────────────────────────────────────
+  // Reduced from 1350 ms fake animation → 200 ms so redirect feels instant.
   const handleProceed = () => {
     if (typeof window === "undefined" || proceeding) return;
     setProceeding(true);
-    setProgress(15);
-    const steps = [
-      { pct: 40, delay: 200 },
-      { pct: 65, delay: 450 },
-      { pct: 85, delay: 700 },
-      { pct: 95, delay: 950 },
-    ];
-    steps.forEach(({ pct, delay }) => setTimeout(() => setProgress(pct), delay));
+    setProgress(60);
     setTimeout(() => {
       setProgress(100);
-      setTimeout(() => { window.location.href = "/#dashboard"; }, 150);
-    }, 1200);
+      window.location.href = "/#dashboard";
+    }, 200);
   };
 
   // ── Loading state ─────────────────────────────────────────────────────────
