@@ -152,8 +152,10 @@ export default function DownloadReportModal({ domain, onClose }) {
       ".fixed { display: none !important; }",
       "[class*='sticky'] { position: static !important; }",
 
-      /* 5 – Compact section padding for PDF (py-16 = 4 rem → 2 rem) */
-      "#report-content section { padding-top: 2rem !important; padding-bottom: 2rem !important; }",
+      /* 5 – Section padding: reduce from py-16 (4rem) to 3rem.
+             Balances compact layout with enough spread to minimise
+             the blank tail on the last PDF page. */
+      "#report-content section { padding-top: 3rem !important; padding-bottom: 3rem !important; }",
 
       /* 6 – Cover page: keep full viewport height + hard page break after */
       "#report-content section:first-child { padding-top: 0 !important; padding-bottom: 0 !important; min-height: 100vh !important; page-break-after: always !important; break-after: page !important; }",
@@ -174,6 +176,19 @@ export default function DownloadReportModal({ domain, onClose }) {
 
       /* 10 – Section headings stay with the next element */
       "h1, h2 { page-break-after: avoid !important; break-after: avoid !important; }",
+
+      /* 11 – AI Citations (Section 13): .hyphens-auto is uniquely used on the
+             large value text inside citation boxes. Long competitor text at
+             text-4xl makes boxes very tall — reduce to readable size. */
+      ".hyphens-auto { font-size: 1.4rem !important; line-height: 1.4 !important; }",
+
+      /* 12 – Compact inner padding on citation boxes (p-8 → p-5 equivalent) */
+      "#report-content section .p-8 { padding: 1.25rem !important; }",
+      "#report-content section .sm\\:p-8 { padding: 1.25rem !important; }",
+
+      /* 13 – Baseline metric values (text-4xl/5xl): cap at sensible PDF size */
+      "#report-content .text-5xl { font-size: 2.25rem !important; }",
+      "#report-content .text-4xl { font-size: 1.875rem !important; }",
 
     ].join("\n");
 
