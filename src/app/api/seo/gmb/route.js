@@ -7,7 +7,7 @@ import { NextResponse } from "next/server";
 import { claudeChat }   from "@/lib/claude/client";
 
 export const runtime    = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 const DIRECTORIES = [
   { name: "JustDial",      site: "justdial.com",      weight: 3 },
@@ -128,26 +128,85 @@ async function fetchGmbQA(keyword, location, auth) {
   } catch { return []; }
 }
 
-// ── Directory Listings ────────────────────────────────────────────────────────
-async function checkDirectoryListings(domain, auth) {
-  try {
-    const data = await dfsPost(
-      "backlinks/referring_domains/live",
-      [{ target: domain, limit: 200 }],
-      auth
-    );
-    const items = data?.tasks?.[0]?.result?.[0]?.items || [];
-    const fromDomains = items.map(i => i.domain_from || "");
+// ── Directory Listings — SERP-based search with name matching ─────────────────
+// Strategy: for each directory, search Google for:
+//   "<businessName>" site:<directoryDomain>
+// Then verify the result actually mentions the business name or domain.
+// Falls back to backlinks if SERP quota is tight.
+async function checkDirectoryListings(domain, auth, businessName = "") {
+  const host = domain.replace(/^https?:\/\//,"").replace(/^www\./,"").split("/")[0];
 
-    return DIRECTORIES.map(dir => ({
-      name:   dir.name,
-      site:   dir.site,
-      weight: dir.weight,
-      listed: fromDomains.some(d => d.includes(dir.site.split("/")[0])),
-    }));
-  } catch {
-    return DIRECTORIES.map(d => ({ name: d.name, site: d.site, weight: d.weight, listed: null }));
+  // Build search name variants (up to 2 most specific)
+  const nameVariants = [...new Set([
+    businessName,
+    businessName.replace(/\s+private\s+limited$/i, "").replace(/\s+pvt\.?\s+ltd\.?$/i, "").trim(),
+    host.split(".")[0],
+  ].filter(Boolean))].slice(0, 2);
+
+  const primaryName = nameVariants[0] || host.split(".")[0];
+
+  // Search one directory via Google SERP
+  async function searchOneDir(dir) {
+    const siteRoot = dir.site.split("/")[0];
+    try {
+      // Try each name variant — stop at first hit
+      for (const name of nameVariants) {
+        const query = `"${name}" site:${siteRoot}`;
+        const data = await dfsPost(
+          "serp/google/organic/live/advanced",
+          [{
+            keyword:       query,
+            location_name: "India",
+            language_code: "en",
+            device:        "desktop",
+            depth:         5,
+          }],
+          auth
+        );
+        const items = data?.tasks?.[0]?.result?.[0]?.items || [];
+        const organic = items.filter(i => i.type === "organic");
+        if (!organic.length) continue;
+
+        // Verify the top result actually relates to this business
+        const top = organic[0];
+        const resultUrl  = String(top.url || "").toLowerCase();
+        const resultTitle= String(top.title || "").toLowerCase();
+        const resultDesc = String(top.description || "").toLowerCase();
+        const nameLC     = name.toLowerCase();
+        const hostLC     = host.toLowerCase();
+
+        // Accept if result URL contains the directory domain AND
+        // title/description/url mentions the business name or domain
+        const urlMatchesDir  = resultUrl.includes(siteRoot.split(".")[0]);
+        const mentionsBiz    = resultTitle.includes(nameLC) ||
+                               resultDesc.includes(nameLC)  ||
+                               resultUrl.includes(hostLC)   ||
+                               // also try short name (first word)
+                               resultTitle.includes(nameLC.split(" ")[0]) ||
+                               resultDesc.includes(nameLC.split(" ")[0]);
+
+        if (urlMatchesDir && mentionsBiz) {
+          return {
+            name:    dir.name,
+            site:    dir.site,
+            weight:  dir.weight,
+            listed:  true,
+            listingUrl: top.url || null,
+            matchedAs: name,
+          };
+        }
+      }
+      // Results found but none matched business name — not listed
+      return { name: dir.name, site: dir.site, weight: dir.weight, listed: false, listingUrl: null };
+    } catch (err) {
+      console.warn(`[gmb] dir check ${dir.name}:`, err?.message);
+      return { name: dir.name, site: dir.site, weight: dir.weight, listed: null, listingUrl: null };
+    }
   }
+
+  // Run all 10 directory checks in parallel
+  const results = await Promise.all(DIRECTORIES.map(dir => searchOneDir(dir)));
+  return results;
 }
 
 // ── Review Velocity ───────────────────────────────────────────────────────────
@@ -278,7 +337,7 @@ export async function checkGmb(domain, businessName = "", location = "India") {
     fetchGmbInfo(keyword, location, auth),
     fetchGmbReviews(keyword, location, auth),
     fetchGmbQA(keyword, location, auth),
-    checkDirectoryListings(host, auth),
+    checkDirectoryListings(host, auth, keyword),
   ]);
 
   const info    = gmbRes.status    === "fulfilled" ? gmbRes.value    : null;

@@ -4492,13 +4492,20 @@ const seoTableProg = Math.max(0, prog);
               <div className="text-[12px] font-semibold text-[var(--text)] mb-3">
                 Business Directories ({seo.gmbCheck.listedDirectoryCount ?? 0}/{(seo.gmbCheck.directories || []).length} listed)
               </div>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-2 gap-2">
                 {(seo.gmbCheck.directories || []).map((dir) => (
                   <div key={dir.name} className="flex items-center gap-1.5">
-                    <span className={`text-[11px] ${dir.listed === true ? "text-green-600" : dir.listed === false ? "text-red-400" : "text-[var(--muted)]"}`}>
+                    <span className={`text-[12px] shrink-0 ${dir.listed === true ? "text-green-600" : dir.listed === false ? "text-red-400" : "text-[var(--muted)]"}`}>
                       {dir.listed === true ? "✓" : dir.listed === false ? "✗" : "?"}
                     </span>
-                    <span className="text-[11px] text-[var(--muted)]">{dir.name}</span>
+                    {dir.listed === true && dir.listingUrl ? (
+                      <a href={dir.listingUrl} target="_blank" rel="noopener noreferrer"
+                        className="text-[11px] text-green-600 underline underline-offset-2 hover:text-green-500 truncate" title={dir.listingUrl}>
+                        {dir.name}
+                      </a>
+                    ) : (
+                      <span className={`text-[11px] ${dir.listed === false ? "text-red-400" : "text-[var(--muted)]"}`}>{dir.name}</span>
+                    )}
                   </div>
                 ))}
               </div>
