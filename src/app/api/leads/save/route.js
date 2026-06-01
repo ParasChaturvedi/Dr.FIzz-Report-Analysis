@@ -1,37 +1,33 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
 
 export const runtime = "nodejs";
 
-// ─── Where leads are persisted ────────────────────────────────────────────────
-// Primary:  <project-root>/leads.json  (local dev — survives server restarts)
-// Fallback: /tmp/leads.json            (Vercel / any read-only FS environment)
-const PRIMARY_PATH  = path.join(process.cwd(), "leads.json");
-const FALLBACK_PATH = "/tmp/leads.json";
+// ─── Google Sheets webhook (Apps Script Web App URL) ─────────────────────────
+// Set LEADS_SHEET_WEBHOOK in Vercel env vars → Project Settings → Environment Variables
+// See instructions below for how to create this URL (one-time 5 min setup).
+const SHEET_WEBHOOK = process.env.LEADS_SHEET_WEBHOOK || "";
 
-function resolveLeadsPath() {
-  try {
-    // Check if the project root is writable
-    fs.accessSync(process.cwd(), fs.constants.W_OK);
-    return PRIMARY_PATH;
-  } catch {
-    return FALLBACK_PATH;
+// ─── Fire-and-forget POST to Google Sheets Apps Script ───────────────────────
+async function sendToGoogleSheet(lead) {
+  if (!SHEET_WEBHOOK) {
+    console.warn("[ItzFizz Leads] LEADS_SHEET_WEBHOOK not set — skipping Google Sheets sync");
+    return;
   }
-}
-
-function readLeads(filePath) {
   try {
-    if (!fs.existsSync(filePath)) return [];
-    const raw = fs.readFileSync(filePath, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return [];
+    const res = await fetch(SHEET_WEBHOOK, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(lead),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error(`[ItzFizz Leads] Google Sheets webhook error ${res.status}: ${text}`);
+    } else {
+      console.log(`[ItzFizz Leads] ✅ Lead synced to Google Sheets for ${lead.email}`);
+    }
+  } catch (err) {
+    console.error("[ItzFizz Leads] Google Sheets fetch failed:", err?.message);
   }
-}
-
-function writeLeads(filePath, leads) {
-  fs.writeFileSync(filePath, JSON.stringify(leads, null, 2), "utf-8");
 }
 
 export async function POST(request) {
@@ -48,7 +44,7 @@ export async function POST(request) {
     }
 
     const lead = {
-      id: `lead_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id:        `lead_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       timestamp: new Date().toISOString(),
       name:      name.trim(),
       email:     email.trim(),
@@ -59,14 +55,12 @@ export async function POST(request) {
       reportUrl: reportUrl || "",
     };
 
-    const filePath = resolveLeadsPath();
-    const existing = readLeads(filePath);
-    existing.push(lead);
-    writeLeads(filePath, existing);
+    console.log(`[ItzFizz Leads] New lead: ${lead.name} <${lead.email}> | domain: ${lead.domain} | id: ${lead.id}`);
 
-    console.log(`[ItzFizz Leads] Saved lead #${existing.length} for ${email} → ${filePath}`);
+    // Send to Google Sheets (non-blocking — doesn't affect PDF download)
+    sendToGoogleSheet(lead);
 
-    return NextResponse.json({ success: true, id: lead.id, savedTo: filePath });
+    return NextResponse.json({ success: true, id: lead.id });
   } catch (err) {
     console.error("[ItzFizz Leads] Save error:", err);
     return NextResponse.json({ error: "Failed to save lead" }, { status: 500 });
