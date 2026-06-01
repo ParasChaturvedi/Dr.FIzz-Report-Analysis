@@ -7,11 +7,12 @@ import { prefetchOpportunitiesAndContent } from "@/lib/prefetch-opportunities";
 
 export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
   // selections
+  const [businessName, setBusinessName]         = useState("");
   const [selectedIndustry, setSelectedIndustry] = useState("");
   const [selectedOffering, setSelectedOffering] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [customIndustry, setCustomIndustry] = useState("");
-  const [customCategory, setCustomCategory] = useState("");
+  const [customIndustry, setCustomIndustry]     = useState("");
+  const [customCategory, setCustomCategory]     = useState("");
 
   // UI state
   const [showSummary, setShowSummary] = useState(false);
@@ -94,6 +95,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
       if (industryValue && categoryValue) {
         setShowSummary(true);
         const newData = {
+          businessName: businessName.trim() || null,
           industry: industryValue,
           offering: selectedOffering,
           category: categoryValue,
@@ -111,6 +113,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
       setShowSummary(false);
     }
   }, [
+    businessName,
     selectedIndustry,
     selectedOffering,
     selectedCategory,
@@ -268,10 +271,33 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                 </p>
               </div>
 
+              {/* Business Name input */}
+              <div className="w-full max-w-[480px]">
+                <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">
+                  Business / Company Name <span className="text-[#ffa615]">(for GMB lookup)</span>
+                </label>
+                <input
+                  type="text"
+                  value={businessName}
+                  onChange={e => setBusinessName(e.target.value)}
+                  placeholder="e.g. Itzfizz Digital Private Limited"
+                  className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors"
+                />
+                <p className="text-[11px] text-[var(--muted)] mt-1">
+                  Used to find your Google Business Profile. Use your exact registered name.
+                </p>
+              </div>
+
               {/* Summary (when all selected) */}
               {showSummary && (
                 <div className="bg-[var(--input)] max-w-[360px] w-full rounded-2xl shadow-sm border border-[var(--border)] px-4 sm:px-5 md:px-6 py-3 sm:py-4 my-1 text-left self-end">
                   <div className="space-y-2 text-[13px] sm:text-[14px] md:text-[15px]">
+                    {businessName.trim() && (
+                      <div className="text-[var(--text)]">
+                        <span className="font-semibold">Business Name:</span>{" "}
+                        {businessName.trim()}
+                      </div>
+                    )}
                     <div className="text-[var(--text)]">
                       <span className="font-semibold">Industry Sector:</span>{" "}
                       {selectedIndustry === "Others"
