@@ -171,7 +171,7 @@ function buildLocalSearchFromGmb(gmbData) {
     ? `Target: ${Math.max(50, reviews + 25)} reviews at ${rating >= 4.5 ? "4.5★+" : "4.8★"} within 6 months (currently ${reviews} at ${rating}★). Use WhatsApp automation after each job. Template: "Hi [Name], thanks for choosing us! Your honest Google review takes 30 seconds: [link]"`
     : "First milestone: 25 reviews at 4.8★ within 90 days. Send a post-service WhatsApp with a short Google review link.";
 
-  return { checklist: checklist.slice(0, 8), reviewTarget };
+  return { gbpChecklist: checklist.slice(0, 8), reviewTarget };
 }
 
 function buildKeywordTiersFromGap(keywordGapData) {

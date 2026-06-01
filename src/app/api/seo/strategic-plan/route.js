@@ -244,8 +244,8 @@ export async function POST(request) {
         { role: "system", content: "You are a senior SEO + GEO strategist. Generate highly specific, data-backed plans using the exact metrics provided. No generic advice." },
         { role: "user",   content: prompt },
       ],
-      max_tokens: 8000,
-      timeoutMs:  110000,
+      max_tokens: 5000,
+      timeoutMs:  90000,
       model: "claude-sonnet-4-6",
     });
 
