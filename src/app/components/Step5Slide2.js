@@ -24,6 +24,7 @@ const INITIAL_STAGES = [
   { id: "websiteCrawl",    label: "Website Crawl & Audit",     state: "idle", value: null },
   { id: "gmbCheck",        label: "GMB & Directory Listings",  state: "idle", value: null },
   { id: "competitorAudit", label: "Competitor Audit",          state: "idle", value: null },
+  { id: "keywordGap",      label: "Keyword Gap Analysis",      state: "idle", value: null },
   { id: "strategicPlan",   label: "Strategic Plan (AI)",       state: "idle", value: null },
   { id: "report",          label: "AI Report Generation",      state: "idle", value: null },
 ];
@@ -454,6 +455,16 @@ export default function Step5Slide2({
       }
     } catch { /* ignore */ }
 
+    // Keyword gap
+    try {
+      const kg = json.keywordGap;
+      if (kg) {
+        const gaps    = kg.summary?.totalGapKeywords ?? 0;
+        const wins    = kg.summary?.totalEasyWins    ?? 0;
+        updateStage("keywordGap", { value: `${gaps} gaps · ${wins} easy wins` });
+      }
+    } catch { /* ignore */ }
+
     // Strategic plan
     try {
       const sp = json.strategicPlan;
@@ -681,6 +692,32 @@ export default function Step5Slide2({
         updateStage("competitorAudit", { state: "done", value: "No competitors selected" });
       }
 
+      // ── Keyword Gap Analysis ──────────────────────────────────────────────
+      updateStage("keywordGap", { state: "loading" });
+      let keywordGapJson = null;
+      try {
+        const res = await fetch("/api/seo/keyword-gap", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            domain,
+            competitors: allCompetitors.slice(0, 3),
+            keywords,
+          }),
+        });
+        if (res.ok) {
+          keywordGapJson = await res.json();
+          const gaps = keywordGapJson?.summary?.totalGapKeywords ?? 0;
+          const wins = keywordGapJson?.summary?.totalEasyWins    ?? 0;
+          updateStage("keywordGap", { state: "done", value: `${gaps} gaps · ${wins} easy wins` });
+        } else {
+          updateStage("keywordGap", { state: "error", value: "Skipped" });
+        }
+      } catch (e) {
+        console.warn("[Step5] Keyword gap failed:", e?.message);
+        updateStage("keywordGap", { state: "error", value: "Skipped" });
+      }
+
       // ── Strategic Plan ────────────────────────────────────────────────────
       updateStage("strategicPlan", { state: "loading" });
       let strategicPlanJson = null;
@@ -692,10 +729,11 @@ export default function Step5Slide2({
             domain,
             businessData,
             keywords,
-            seoData:        seoJson,
-            crawlData:      crawlJson,
-            gmbData:        gmbJson,
+            seoData:         seoJson,
+            crawlData:       crawlJson,
+            gmbData:         gmbJson,
             competitorAudit: competitorAuditJson,
+            keywordGap:      keywordGapJson,
           }),
         });
         if (res.ok) {
@@ -722,6 +760,7 @@ export default function Step5Slide2({
         websiteCrawl:    crawlJson,
         gmbCheck:        gmbJson,
         competitorAudit: competitorAuditJson,
+        keywordGap:      keywordGapJson,
         strategicPlan:   strategicPlanJson,
       };
 

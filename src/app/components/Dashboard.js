@@ -4304,7 +4304,9 @@ const seoTableProg = Math.max(0, prog);
   )}
 </section>
 
-      {/* ── Website Crawl & Audit ─────────────────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════════════════════
+          ADVANCED SECTION: Website Crawl & Audit
+      ══════════════════════════════════════════════════════════════════════ */}
       {seo?.websiteCrawl && (
         <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
           <h2 className="text-[16px] font-bold text-[var(--text)] mb-1 flex items-center gap-2">
@@ -4548,30 +4550,148 @@ const seoTableProg = Math.max(0, prog);
         </section>
       )}
 
+      {/* ── Keyword Gap Analysis ─────────────────────────────────────────── */}
+      {seo?.keywordGap && (
+        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
+          <div className="flex items-start justify-between mb-4">
+            <div>
+              <h2 className="text-[16px] font-bold text-[var(--text)] flex items-center gap-2">
+                <svg className="w-4 h-4 text-[#d45427]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                </svg>
+                Keyword Gap Analysis
+              </h2>
+              <p className="text-[12px] text-[var(--muted)] mt-1">
+                {seo.keywordGap.summary?.totalGapKeywords ?? 0} keywords competitors rank for that you don't &middot; {seo.keywordGap.summary?.totalEasyWins ?? 0} easy wins identified
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] text-[var(--muted)] uppercase tracking-wide">Your Keywords</div>
+              <div className="text-[22px] font-bold text-[var(--text)]">{seo.keywordGap.targetKeywordCount ?? 0}</div>
+            </div>
+          </div>
+
+          {seo.keywordGap.summary?.intentBreakdown && (
+            <div className="flex flex-wrap gap-2 mb-5">
+              {Object.entries(seo.keywordGap.summary.intentBreakdown).map(([intent, cnt]) => (
+                <span key={intent} className="rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-[11px]">
+                  <span className="font-semibold text-[var(--text)]">{cnt}</span>
+                  <span className="text-[var(--muted)] ml-1">{intent}</span>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {(seo.keywordGap.easyWins?.length ?? 0) > 0 && (
+            <div className="mb-5">
+              <div className="text-[12px] font-bold text-green-700 dark:text-green-400 mb-2">Easy Wins — Low Competition, Good Volume</div>
+              <div className="space-y-1.5">
+                {seo.keywordGap.easyWins.slice(0, 6).map((kw, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-[8px] border border-green-200 bg-green-50 dark:bg-green-900/10 px-3 py-2">
+                    <span className="text-[12px] font-medium text-[var(--text)]">"{kw.keyword}"</span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-[11px] text-[var(--muted)]">Vol: {(kw.volume||0).toLocaleString()}</span>
+                      <span className="text-[11px] text-[var(--muted)]">Diff: {Math.round((kw.difficulty||0)*100)}%</span>
+                      <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-semibold">{kw.intent}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(seo.keywordGap.gapKeywords?.length ?? 0) > 0 && (
+            <div className="mb-5 overflow-x-auto">
+              <div className="text-[12px] font-semibold text-[var(--text)] mb-2">All Gap Keywords</div>
+              <table className="w-full text-[12px] border-collapse">
+                <thead>
+                  <tr className="border-b border-[var(--border)]">
+                    <th className="text-left py-2 pr-3 font-semibold text-[var(--muted)]">Keyword</th>
+                    <th className="text-center py-2 px-2 font-semibold text-[var(--muted)]">Volume</th>
+                    <th className="text-center py-2 px-2 font-semibold text-[var(--muted)]">Difficulty</th>
+                    <th className="text-center py-2 px-2 font-semibold text-[var(--muted)]">Intent</th>
+                    <th className="text-left py-2 px-2 font-semibold text-[var(--muted)]">Competitor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {seo.keywordGap.gapKeywords.slice(0, 15).map((kw, i) => (
+                    <tr key={i} className="border-b border-[var(--border)]/40 hover:bg-[var(--card)]">
+                      <td className="py-2 pr-3 font-medium text-[var(--text)]">"{kw.keyword}"</td>
+                      <td className="py-2 px-2 text-center text-[var(--muted)]">{(kw.volume||0).toLocaleString()}</td>
+                      <td className="py-2 px-2 text-center">
+                        <span className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${(kw.difficulty||0)<0.3?"bg-green-100 text-green-700":(kw.difficulty||0)<0.6?"bg-yellow-100 text-yellow-700":"bg-red-100 text-red-700"}`}>
+                          {Math.round((kw.difficulty||0)*100)}%
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-center text-[11px] text-[var(--muted)]">{kw.intent}</td>
+                      <td className="py-2 px-2 text-[11px] text-[var(--muted)]">{(kw.foundIn||[]).join(", ")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {(seo.keywordGap.paaQuestions?.length ?? 0) > 0 && (
+            <div>
+              <div className="text-[12px] font-semibold text-[var(--text)] mb-2">People Also Ask — Content Opportunities</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {seo.keywordGap.paaQuestions.slice(0, 8).map((q, i) => (
+                  <div key={i} className="rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] text-[var(--text)]">
+                    {q.question}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* ── Strategic Plan ────────────────────────────────────────────────── */}
       {seo?.strategicPlan?.plan && (
-        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
-          <h2 className="text-[16px] font-bold text-[var(--text)] mb-1 flex items-center gap-2">
-            <svg className="w-4 h-4 text-[#d45427]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            Strategic SEO + GEO Plan
-          </h2>
-          <p className="text-[11px] text-[var(--muted)] mb-4">Generated by Claude AI based on your crawl data, GMB status, and competitor analysis</p>
-          <div
-            className="prose prose-sm max-w-none text-[var(--text)] leading-relaxed"
-            style={{
-              fontSize: "13px",
-              lineHeight: "1.7",
-              whiteSpace: "pre-wrap",
-              fontFamily: "inherit",
-            }}
-          >
-            {seo.strategicPlan.plan}
+        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] overflow-hidden shadow-sm">
+          <div className="px-5 py-4 bg-gradient-to-r from-[#1a0a00] to-[#2d1200] flex items-center justify-between">
+            <div>
+              <h2 className="text-[16px] font-bold text-white flex items-center gap-2">
+                <svg className="w-4 h-4 text-[#ffa615]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                Strategic SEO + GEO Plan
+              </h2>
+              <p className="text-[11px] text-[#ffa615]/80 mt-0.5">
+                Data-specific &middot; Claude AI &middot; Sources: {Object.entries(seo.strategicPlan.dataSourcesUsed||{}).filter(([,v])=>v).map(([k])=>k).join(", ")}
+              </p>
+            </div>
+            <div className="text-[10px] text-white/50 text-right">
+              {seo.strategicPlan.generatedAt ? new Date(seo.strategicPlan.generatedAt).toLocaleString() : ""}
+            </div>
           </div>
-          <div className="mt-4 text-[11px] text-[var(--muted)]">
-            Generated at {seo.strategicPlan.generatedAt ? new Date(seo.strategicPlan.generatedAt).toLocaleString() : "—"}
-          </div>
+
+          {seo.strategicPlan.sections && Object.keys(seo.strategicPlan.sections).length > 1 ? (
+            <div className="divide-y divide-[var(--border)]/40">
+              {Object.entries(seo.strategicPlan.sections).map(([key, content]) => {
+                const label = key.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+                const isUrgent = /critical|fix/i.test(key);
+                return (
+                  <details key={key} open={isUrgent} className="group">
+                    <summary className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-[var(--card)] transition-colors list-none">
+                      <span className={`text-[13px] font-semibold ${isUrgent ? "text-red-600 dark:text-red-400" : "text-[var(--text)]"}`}>{label}</span>
+                      <svg className="w-4 h-4 text-[var(--muted)] group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </summary>
+                    <div className="px-5 pb-5 pt-2 text-[13px] text-[var(--text)] leading-relaxed whitespace-pre-wrap">
+                      {content}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="p-5 text-[13px] text-[var(--text)] leading-relaxed whitespace-pre-wrap">
+              {seo.strategicPlan.plan}
+            </div>
+          )}
         </section>
       )}
 

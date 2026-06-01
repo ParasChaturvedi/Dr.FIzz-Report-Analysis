@@ -1,35 +1,38 @@
 // src/app/api/seo/website-crawl/route.js
-// Crawls a domain's sitemap, robots.txt, and top pages.
-// Extracts: H1s, meta title/desc, index/noindex, image alts, schema JSON-LD, slug quality.
+// Advanced domain crawler — v2
+// Extracts: H1-H6 hierarchy, meta signals, schema depth, internal link graph,
+// duplicate detection, Core Web Vitals hints, social meta, SERP preview,
+// content quality, page speed hints, E-E-A-T signals, overall health score.
 
 import { NextResponse } from "next/server";
 
 export const runtime    = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
-const FETCH_TIMEOUT_MS  = 8000;
-const MAX_PAGES_TO_CRAWL = 12;
+const FETCH_TIMEOUT_MS  = 10000;
+const MAX_PAGES         = 15;
+const CONCURRENCY       = 4;
 
-// ── Tiny fetch wrapper with timeout ──────────────────────────────────────────
+// ── Timed fetch ───────────────────────────────────────────────────────────────
 async function timedFetch(url, opts = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), opts.timeout || FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
+    return await fetch(url, {
       ...opts,
-      signal: controller.signal,
+      signal: ctrl.signal,
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; DrFizz/1.0; +https://drfizz.com)",
+        "User-Agent": "Mozilla/5.0 (compatible; DrFizz/2.0; +https://drfizz.com)",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         ...opts.headers,
       },
     });
-    return res;
   } finally {
     clearTimeout(timer);
   }
 }
 
-// ── Normalise domain → hostname ───────────────────────────────────────────────
+// ── Domain normalisation ──────────────────────────────────────────────────────
 function normHost(input) {
   try {
     const s = String(input || "").trim();
@@ -40,185 +43,511 @@ function normHost(input) {
   }
 }
 
-// ── Parse sitemap XML (index or urlset) and return up to N URLs ───────────────
-function parseSitemapXml(xml, base, limit = MAX_PAGES_TO_CRAWL) {
+// ── Regex helpers ─────────────────────────────────────────────────────────────
+const first  = (html, re)  => { const m = html.match(re); return m?.[1]?.trim() || null; };
+const all    = (html, re)  => [...html.matchAll(re)].map(m => m[1]?.trim()).filter(Boolean);
+const count  = (html, re)  => (html.match(re) || []).length;
+
+// ── Parse sitemap XML → page URLs ─────────────────────────────────────────────
+function parseSitemapXml(xml, limit = MAX_PAGES) {
   const urls = [];
-  // Handle sitemap index → nested <loc> inside <sitemap> tags
-  const locMatches = [...xml.matchAll(/<loc>\s*(https?:\/\/[^<]+)\s*<\/loc>/gi)];
-  for (const m of locMatches) {
+  for (const m of xml.matchAll(/<loc>\s*(https?:\/\/[^<]+)\s*<\/loc>/gi)) {
     const u = m[1].trim();
-    // skip sitemap index entries (they're sub-sitemaps, not pages)
-    if (u.endsWith(".xml")) continue;
-    if (urls.length >= limit) break;
-    urls.push(u);
-  }
-  // If we got nothing useful, try relative <loc> entries
-  if (urls.length === 0) {
-    const rel = [...xml.matchAll(/<loc>\s*([^<]+)\s*<\/loc>/gi)];
-    for (const m of rel) {
-      const u = m[1].trim();
-      if (u.startsWith("http") && !u.endsWith(".xml") && urls.length < limit) {
-        urls.push(u);
-      }
-    }
+    if (!u.endsWith(".xml") && urls.length < limit) urls.push(u);
   }
   return urls;
 }
 
-// ── Assess slug quality ───────────────────────────────────────────────────────
-function assessSlug(urlStr) {
-  try {
-    const u = new URL(urlStr);
-    const slug = u.pathname.replace(/\/$/, "");
-    const issues = [];
-    if (/[A-Z]/.test(slug))                         issues.push("uppercase letters");
-    if (/[_]/.test(slug))                            issues.push("underscores (use hyphens)");
-    if (/\?/.test(slug))                             issues.push("query params in slug");
-    if (/\d{4,}/.test(slug))                         issues.push("numeric IDs");
-    if (slug.split("/").some((s) => s.length > 60))  issues.push("segment too long (>60 chars)");
-    if (/%[0-9a-f]{2}/i.test(slug))                  issues.push("URL-encoded characters");
-    return {
-      slug,
-      score: issues.length === 0 ? "good" : issues.length <= 1 ? "fair" : "poor",
-      issues,
-    };
-  } catch {
-    return { slug: "", score: "unknown", issues: [] };
+// ── Fetch sub-sitemaps from sitemap index ─────────────────────────────────────
+async function expandSitemapIndex(xml, base, limit = MAX_PAGES) {
+  // Find child sitemap URLs
+  const childSitemaps = [];
+  for (const m of xml.matchAll(/<loc>\s*(https?:\/\/[^<]+\.xml)\s*<\/loc>/gi)) {
+    childSitemaps.push(m[1].trim());
   }
+
+  if (!childSitemaps.length) return parseSitemapXml(xml, limit);
+
+  const urls = [];
+  for (const sm of childSitemaps.slice(0, 4)) {
+    try {
+      const r = await timedFetch(sm);
+      if (r.ok) {
+        const txt = await r.text();
+        const found = parseSitemapXml(txt, limit - urls.length);
+        urls.push(...found);
+        if (urls.length >= limit) break;
+      }
+    } catch { /* next */ }
+  }
+  return urls.slice(0, limit);
 }
 
-// ── Extract text content from a tag using regex ───────────────────────────────
-function matchFirst(html, pattern) {
-  const m = html.match(pattern);
-  return m ? m[1]?.trim() : null;
+// ── Slug quality ──────────────────────────────────────────────────────────────
+function slugQuality(urlStr) {
+  try {
+    const slug = new URL(urlStr).pathname.replace(/\/$/, "");
+    const issues = [];
+    if (/[A-Z]/.test(slug))                          issues.push("uppercase");
+    if (/[_]/.test(slug))                            issues.push("underscores");
+    if (/%[0-9a-f]{2}/i.test(slug))                  issues.push("url-encoded chars");
+    if (slug.split("/").some(s => s.length > 60))    issues.push("segment > 60 chars");
+    if (/\b\d{5,}\b/.test(slug))                     issues.push("numeric IDs");
+    if (/[?&=]/.test(slug))                          issues.push("query params in path");
+    return { slug, score: issues.length === 0 ? "good" : issues.length === 1 ? "fair" : "poor", issues };
+  } catch { return { slug: "", score: "unknown", issues: [] }; }
 }
 
-function matchAll(html, pattern) {
-  return [...html.matchAll(pattern)].map((m) => m[1]?.trim()).filter(Boolean);
-}
-
-// ── Audit a single page's HTML ────────────────────────────────────────────────
-function auditPage(url, html, keywords = []) {
-  const kws = keywords.map((k) => String(k).toLowerCase());
-
-  // Meta title
-  const metaTitle = matchFirst(html, /<title[^>]*>([^<]{1,200})<\/title>/i) || null;
-
-  // Meta description
-  const metaDesc =
-    matchFirst(html, /<meta\s[^>]*name=["']description["'][^>]*content=["']([^"']{1,400})["']/i) ||
-    matchFirst(html, /<meta\s[^>]*content=["']([^"']{1,400})["'][^>]*name=["']description["']/i) ||
-    null;
-
-  // Robots meta (index/noindex)
-  const robotsMeta =
-    matchFirst(html, /<meta\s[^>]*name=["']robots["'][^>]*content=["']([^"']*)["']/i) ||
-    matchFirst(html, /<meta\s[^>]*content=["']([^"']*)["'][^>]*name=["']robots["']/i) ||
-    "index, follow";
-  const isNoindex = /noindex/i.test(robotsMeta);
-
-  // Canonical
-  const canonical =
-    matchFirst(html, /<link\s[^>]*rel=["']canonical["'][^>]*href=["']([^"']*)["']/i) ||
-    matchFirst(html, /<link\s[^>]*href=["']([^"']*)["'][^>]*rel=["']canonical["']/i) ||
-    null;
-
-  // H1 tags
-  const h1s = matchAll(html, /<h1[^>]*>([\s\S]*?)<\/h1>/gi)
-    .map((h) => h.replace(/<[^>]+>/g, "").trim())
-    .filter(Boolean);
-
-  const h1HasKeyword = h1s.some((h) =>
-    kws.some((k) => h.toLowerCase().includes(k))
-  );
-
-  // H2 count
-  const h2Count = (html.match(/<h2[\s>]/gi) || []).length;
-
-  // Images without alt tags
-  const allImgTags = [...html.matchAll(/<img\s([^>]*)>/gi)].map((m) => m[1]);
-  const imgsWithoutAlt = allImgTags.filter((attrs) => {
-    const hasAlt = /alt=["'][^"']*["']/i.test(attrs);
-    const emptyAlt = /alt=["']\s*["']/i.test(attrs);
-    return !hasAlt || emptyAlt;
-  }).length;
-
-  // Schema JSON-LD
-  const schemaBlocks = matchAll(
+// ── Schema depth analysis ─────────────────────────────────────────────────────
+function analyzeSchema(html) {
+  const blocks = all(
     html,
     /<script\s[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
   );
-  const schemaTypes = [];
-  for (const block of schemaBlocks) {
+  const schemas = [];
+  for (const b of blocks) {
     try {
-      const obj = JSON.parse(block);
-      const types = Array.isArray(obj) ? obj.map((o) => o["@type"]) : [obj["@type"]];
-      schemaTypes.push(...types.filter(Boolean));
+      const parsed = JSON.parse(b);
+      const arr = Array.isArray(parsed) ? parsed : [parsed];
+      for (const obj of arr) {
+        const type = obj["@type"] || null;
+        if (!type) continue;
+        const props = {};
+        for (const k of ["name","telephone","email","address","url","description","ratingValue","reviewCount","priceRange","openingHours","geo","sameAs"]) {
+          if (obj[k] !== undefined) props[k] = typeof obj[k] === "object" ? JSON.stringify(obj[k]).slice(0, 80) : String(obj[k]).slice(0, 80);
+        }
+        schemas.push({ type, properties: props, propertyCount: Object.keys(obj).length - 1 });
+      }
     } catch {
-      const typeMatch = block.match(/"@type"\s*:\s*"([^"]+)"/);
-      if (typeMatch) schemaTypes.push(typeMatch[1]);
+      const m = b.match(/"@type"\s*:\s*"([^"]+)"/);
+      if (m) schemas.push({ type: m[1], properties: {}, propertyCount: 0 });
     }
   }
+  return schemas;
+}
 
-  // Open Graph
-  const ogTitle = matchFirst(html, /<meta\s[^>]*property=["']og:title["'][^>]*content=["']([^"']{1,200})["']/i) || null;
-  const ogDesc  = matchFirst(html, /<meta\s[^>]*property=["']og:description["'][^>]*content=["']([^"']{1,400})["']/i) || null;
+// ── Core Web Vitals hints ─────────────────────────────────────────────────────
+function cwvHints(html) {
+  const hints = [];
+  // LCP: large images without loading=eager (might be lazy = bad for LCP)
+  const lazyHeroRisk = /loading=["']lazy["'][^>]*(?:class|id)=["'][^"']*(?:hero|banner|header|above)[^"']*["']/i.test(html)
+    || /(?:class|id)=["'][^"']*(?:hero|banner|header)[^"']*["'][^>]*loading=["']lazy["']/i.test(html);
+  if (lazyHeroRisk) hints.push({ type: "LCP", issue: "Hero/banner image may be lazy-loaded — can delay LCP", severity: "high" });
 
-  // Issues
+  // CLS: images without width+height attributes
+  const imgs = [...html.matchAll(/<img\s([^>]*)>/gi)].map(m => m[1]);
+  const imgsMissingDims = imgs.filter(a => !/width=/i.test(a) || !/height=/i.test(a)).length;
+  if (imgsMissingDims > 0) hints.push({ type: "CLS", issue: `${imgsMissingDims} image(s) missing width/height — causes layout shift`, severity: imgsMissingDims > 3 ? "high" : "medium" });
+
+  // FID/INP: many render-blocking scripts
+  const blockingScripts = count(html, /<script(?!\s[^>]*(?:async|defer|type=["']module["']))[^>]*src=/gi);
+  if (blockingScripts > 3) hints.push({ type: "FID/INP", issue: `${blockingScripts} render-blocking scripts — blocks main thread`, severity: "medium" });
+
+  // Inline styles bloat
+  const inlineStyles = count(html, /style=["'][^"']{100,}["']/gi);
+  if (inlineStyles > 10) hints.push({ type: "CLS", issue: `${inlineStyles} elements with large inline styles`, severity: "low" });
+
+  // Total script count
+  const totalScripts = count(html, /<script/gi);
+  if (totalScripts > 20) hints.push({ type: "INP", issue: `${totalScripts} total script tags — heavy JS payload`, severity: totalScripts > 40 ? "high" : "medium" });
+
+  return hints;
+}
+
+// ── Social meta completeness ──────────────────────────────────────────────────
+function socialMeta(html) {
+  const og = {
+    title:       first(html, /<meta\s[^>]*property=["']og:title["'][^>]*content=["']([^"']{1,200})["']/i),
+    description: first(html, /<meta\s[^>]*property=["']og:description["'][^>]*content=["']([^"']{1,400})["']/i),
+    image:       first(html, /<meta\s[^>]*property=["']og:image["'][^>]*content=["']([^"']{1,500})["']/i),
+    type:        first(html, /<meta\s[^>]*property=["']og:type["'][^>]*content=["']([^"']{1,50})["']/i),
+    url:         first(html, /<meta\s[^>]*property=["']og:url["'][^>]*content=["']([^"']{1,300})["']/i),
+  };
+  const twitter = {
+    card:        first(html, /<meta\s[^>]*name=["']twitter:card["'][^>]*content=["']([^"']{1,50})["']/i),
+    title:       first(html, /<meta\s[^>]*name=["']twitter:title["'][^>]*content=["']([^"']{1,200})["']/i),
+    description: first(html, /<meta\s[^>]*name=["']twitter:description["'][^>]*content=["']([^"']{1,400})["']/i),
+    image:       first(html, /<meta\s[^>]*name=["']twitter:image["'][^>]*content=["']([^"']{1,500})["']/i),
+  };
   const issues = [];
-  if (!metaTitle)                   issues.push("Missing meta title");
-  else if (metaTitle.length < 30)   issues.push("Meta title too short (<30 chars)");
-  else if (metaTitle.length > 60)   issues.push("Meta title too long (>60 chars)");
+  if (!og.title)       issues.push("Missing og:title");
+  if (!og.description) issues.push("Missing og:description");
+  if (!og.image)       issues.push("Missing og:image (social shares won't have preview image)");
+  if (!twitter.card)   issues.push("Missing twitter:card");
+  return { og, twitter, issues, score: Math.round(((4 - issues.length) / 4) * 100) };
+}
 
-  if (!metaDesc)                    issues.push("Missing meta description");
-  else if (metaDesc.length < 50)    issues.push("Meta description too short (<50 chars)");
-  else if (metaDesc.length > 160)   issues.push("Meta description too long (>160 chars)");
+// ── Content quality analysis ──────────────────────────────────────────────────
+function contentQuality(html) {
+  // Strip scripts/styles/nav/header/footer
+  const clean = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<(nav|header|footer|aside)[^>]*>[\s\S]*?<\/\1>/gi, "");
 
-  if (h1s.length === 0)             issues.push("No H1 tag");
-  else if (h1s.length > 1)          issues.push(`Multiple H1 tags (${h1s.length})`);
+  const text = clean.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const wordCount = text.split(/\s+/).filter(w => w.length > 2).length;
 
-  if (kws.length > 0 && !h1HasKeyword) issues.push("H1 doesn't include target keyword");
+  // Heading hierarchy
+  const headings = {};
+  for (const tag of ["h1","h2","h3","h4","h5","h6"]) {
+    const found = all(html, new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "gi"))
+      .map(h => h.replace(/<[^>]+>/g, "").trim())
+      .filter(Boolean);
+    if (found.length) headings[tag] = found;
+  }
 
-  if (imgsWithoutAlt > 0)           issues.push(`${imgsWithoutAlt} image(s) missing alt text`);
-  if (schemaTypes.length === 0)     issues.push("No structured data (Schema.org)");
-  if (isNoindex)                    issues.push("Page is noindex — won't appear in search");
+  const paragraphs = count(html, /<p[\s>]/gi);
+  const lists      = count(html, /<[uo]l[\s>]/gi);
+  const tables     = count(html, /<table[\s>]/gi);
+  const images     = count(html, /<img[\s>]/gi);
 
-  const slugInfo = assessSlug(url);
-  if (slugInfo.issues.length > 0)   issues.push(`Slug issues: ${slugInfo.issues.join(", ")}`);
+  // Estimate reading time (avg 200 words/min)
+  const readingTimeMins = Math.ceil(wordCount / 200);
+
+  // Content richness score
+  let richness = 0;
+  if (wordCount > 300)  richness += 20;
+  if (wordCount > 800)  richness += 15;
+  if (wordCount > 1500) richness += 10;
+  if (headings.h2?.length > 0) richness += 15;
+  if (headings.h3?.length > 0) richness += 10;
+  if (lists > 0)        richness += 10;
+  if (images > 0)       richness += 10;
+  if (tables > 0)       richness += 10;
+
+  return { wordCount, paragraphs, lists, tables, images, readingTimeMins, headings, richness: Math.min(100, richness) };
+}
+
+// ── Internal links extraction ─────────────────────────────────────────────────
+function extractInternalLinks(html, pageUrl, host) {
+  const links = new Set();
+  for (const m of html.matchAll(/<a\s[^>]*href=["']([^"'#?][^"']*)["']/gi)) {
+    const href = m[1].trim();
+    try {
+      const abs = new URL(href, pageUrl).href;
+      const u   = new URL(abs);
+      if (u.hostname.replace(/^www\./, "") === host && u.pathname !== new URL(pageUrl).pathname) {
+        links.add(abs.split("?")[0].split("#")[0]);
+      }
+    } catch { /* ignore */ }
+  }
+  return [...links];
+}
+
+// ── E-E-A-T signals ───────────────────────────────────────────────────────────
+function eatSignals(html, url, host) {
+  const signals = {
+    hasAuthorInfo:    /author|written by|by\s+[A-Z][a-z]+|contributor/i.test(html),
+    hasContactInfo:   /contact\s*us|phone|email|address|reach\s*us/i.test(html),
+    hasAboutPage:     /about\s*us|our\s*team|who\s*we\s*are/i.test(html),
+    hasPrivacyPolicy: /privacy\s*policy/i.test(html),
+    hasTerms:         /terms\s*(of\s*service|and\s*conditions|of\s*use)/i.test(html),
+    hasSocialLinks:   /facebook\.com|twitter\.com|linkedin\.com|instagram\.com|youtube\.com/i.test(html),
+    hasTrustBadges:   /ssl\s*secure|guaranteed|certified|award|featured\s*in|as\s*seen/i.test(html),
+    hasReviews:       /review|testimonial|rating|★|stars/i.test(html),
+    hasLastModified:  false,
+    hasBreadcrumbs:   /breadcrumb|crumb/i.test(html),
+  };
+  const score = Object.values(signals).filter(Boolean).length;
+  const missing = [];
+  if (!signals.hasAuthorInfo)    missing.push("No author/contributor info found");
+  if (!signals.hasContactInfo)   missing.push("No contact information on page");
+  if (!signals.hasTrustBadges)   missing.push("No trust signals/awards/certifications");
+  if (!signals.hasSocialLinks)   missing.push("No social media links");
+  return { ...signals, score, maxScore: Object.keys(signals).length - 1, missing };
+}
+
+// ── SERP preview generator ────────────────────────────────────────────────────
+function serpPreview(url, metaTitle, metaDesc) {
+  const domain = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+  const displayUrl = url.replace(/^https?:\/\//, "").replace(/\/$/, "").slice(0, 60);
+  const titleTrunc = metaTitle ? (metaTitle.length > 60 ? metaTitle.slice(0, 57) + "…" : metaTitle) : null;
+  const descTrunc  = metaDesc  ? (metaDesc.length > 160 ? metaDesc.slice(0, 157) + "…"  : metaDesc)  : null;
+  return { displayUrl, domain, title: titleTrunc, description: descTrunc };
+}
+
+// ── Page speed hints (lightweight) ───────────────────────────────────────────
+function pageSpeedHints(html) {
+  const totalScripts  = count(html, /<script/gi);
+  const totalStyles   = count(html, /<link[^>]*rel=["']stylesheet["']/gi);
+  const totalImages   = count(html, /<img/gi);
+  const lazyImages    = count(html, /loading=["']lazy["']/gi);
+  const nextGenImages = count(html, /\.webp|\.avif/gi);
+  const iframes       = count(html, /<iframe/gi);
+  const preloads      = count(html, /<link[^>]*rel=["']preload["']/gi);
+
+  const hints = [];
+  if (totalScripts > 25) hints.push(`${totalScripts} scripts — consider bundling/deferring`);
+  if (totalStyles > 5)   hints.push(`${totalStyles} stylesheets — consider combining`);
+  if (lazyImages < totalImages / 2 && totalImages > 3) hints.push(`Only ${lazyImages}/${totalImages} images use lazy loading`);
+  if (nextGenImages === 0 && totalImages > 0) hints.push("No WebP/AVIF images found — serve next-gen formats");
+  if (iframes > 3)       hints.push(`${iframes} iframes — may slow down page`);
+  if (preloads === 0)    hints.push("No <link rel=preload> found — consider preloading critical assets");
+
+  return { totalScripts, totalStyles, totalImages, lazyImages, nextGenImages, iframes, preloads, hints };
+}
+
+// ── Full page audit ───────────────────────────────────────────────────────────
+async function auditPage(url, keywords = [], host = "") {
+  let html = "";
+  let statusCode = null;
+  let lastModified = null;
+  let contentType = null;
+  let fetchError = null;
+
+  try {
+    const res = await timedFetch(url);
+    statusCode  = res.status;
+    lastModified = res.headers.get("last-modified") || null;
+    contentType  = res.headers.get("content-type") || "";
+    if (!res.ok) return { url, statusCode, error: `HTTP ${res.status}`, issues: [] };
+    if (!contentType.includes("html")) return { url, statusCode, error: "Not HTML", issues: [] };
+    html = await res.text();
+  } catch (err) {
+    return { url, statusCode, error: err?.message || "fetch failed", issues: [] };
+  }
+
+  const kws = keywords.map(k => String(k).toLowerCase());
+
+  // Meta basics
+  const metaTitle  = first(html, /<title[^>]*>([^<]{1,200})<\/title>/i);
+  const metaDesc   =
+    first(html, /<meta\s[^>]*name=["']description["'][^>]*content=["']([^"']{1,400})["']/i) ||
+    first(html, /<meta\s[^>]*content=["']([^"']{1,400})["'][^>]*name=["']description["']/i);
+  const canonical  =
+    first(html, /<link\s[^>]*rel=["']canonical["'][^>]*href=["']([^"']*)["']/i) ||
+    first(html, /<link\s[^>]*href=["']([^"']*)["'][^>]*rel=["']canonical["']/i);
+  const robotsMeta =
+    first(html, /<meta\s[^>]*name=["']robots["'][^>]*content=["']([^"']*)["']/i) ||
+    first(html, /<meta\s[^>]*content=["']([^"']*)["'][^>]*name=["']robots["']/i) ||
+    "index, follow";
+  const isNoindex = /noindex/i.test(robotsMeta || "");
+  const isNofollow = /nofollow/i.test(robotsMeta || "");
+  const viewport  = first(html, /<meta\s[^>]*name=["']viewport["'][^>]*content=["']([^"']*)["']/i);
+  const charset   = first(html, /<meta\s[^>]*charset=["']([^"']*)["']/i);
+  const hreflang  = all(html, /<link\s[^>]*hreflang=["']([^"']*)["'][^>]*>/gi);
+
+  // H1 tags
+  const h1s = all(html, /<h1[^>]*>([\s\S]*?)<\/h1>/gi)
+    .map(h => h.replace(/<[^>]+>/g, "").trim()).filter(Boolean);
+  const h1HasKeyword = h1s.some(h => kws.some(k => h.toLowerCase().includes(k)));
+
+  // H2s
+  const h2s = all(html, /<h2[^>]*>([\s\S]*?)<\/h2>/gi)
+    .map(h => h.replace(/<[^>]+>/g, "").trim()).filter(Boolean).slice(0, 10);
+
+  // Images audit
+  const allImgs = [...html.matchAll(/<img\s([^>]*)>/gi)].map(m => m[1]);
+  const imgsWithoutAlt  = allImgs.filter(a => !(/alt=["'][^"']+["']/i.test(a)) || /alt=["']\s*["']/i.test(a)).length;
+  const imgsWithoutDims = allImgs.filter(a => !/width=/i.test(a) || !/height=/i.test(a)).length;
+
+  // Internal links
+  const internalLinks = extractInternalLinks(html, url, host);
+
+  // Schema
+  const schemas = analyzeSchema(html);
+
+  // Social meta
+  const social = socialMeta(html);
+
+  // Content quality
+  const content = contentQuality(html);
+
+  // CWV hints
+  const cwv = cwvHints(html);
+
+  // Page speed
+  const speed = pageSpeedHints(html);
+
+  // E-E-A-T signals
+  const eeat = eatSignals(html, url, host);
+
+  // SERP preview
+  const serp = serpPreview(url, metaTitle, metaDesc);
+
+  // Slug
+  const slug = slugQuality(url);
+
+  // Issues list
+  const issues = [];
+  if (!metaTitle)                      issues.push("Missing meta title");
+  else if (metaTitle.length < 30)      issues.push(`Meta title too short (${metaTitle.length} chars, min 30)`);
+  else if (metaTitle.length > 60)      issues.push(`Meta title too long (${metaTitle.length} chars, max 60)`);
+
+  if (!metaDesc)                       issues.push("Missing meta description");
+  else if (metaDesc.length < 50)       issues.push(`Meta description too short (${metaDesc.length} chars, min 50)`);
+  else if (metaDesc.length > 160)      issues.push(`Meta description too long (${metaDesc.length} chars, max 160)`);
+
+  if (h1s.length === 0)                issues.push("No H1 tag found");
+  else if (h1s.length > 1)            issues.push(`Multiple H1 tags (${h1s.length}) — use only one`);
+  if (kws.length > 0 && !h1HasKeyword) issues.push("H1 doesn't include a target keyword");
+
+  if (imgsWithoutAlt > 0)             issues.push(`${imgsWithoutAlt} image(s) missing alt text`);
+  if (imgsWithoutDims > 0)            issues.push(`${imgsWithoutDims} image(s) missing width/height (CLS risk)`);
+  if (schemas.length === 0)           issues.push("No Schema.org structured data");
+  if (isNoindex)                      issues.push("Page is noindex — won't appear in search results");
+  if (!viewport)                      issues.push("No viewport meta tag — not mobile-friendly");
+  if (slug.issues.length > 0)        issues.push(`Slug: ${slug.issues.join(", ")}`);
+  if (content.wordCount < 200)        issues.push(`Thin content (only ${content.wordCount} words)`);
+  if (social.issues.length > 0)      issues.push(...social.issues);
+  if (cwv.length > 0)                 issues.push(...cwv.map(h => `${h.type}: ${h.issue}`));
+  if (!canonical)                     issues.push("No canonical tag");
+  if (speed.hints.length > 0)        issues.push(...speed.hints);
 
   return {
-    url,
-    metaTitle,
-    metaDesc,
-    robotsMeta,
-    isNoindex,
-    canonical,
-    h1s,
-    h1HasKeyword,
-    h2Count,
-    imgsWithoutAlt,
-    schemaTypes,
-    ogTitle,
-    ogDesc,
-    slug: slugInfo,
+    url, statusCode, lastModified, contentType,
+    metaTitle, metaDesc, canonical, robotsMeta, isNoindex, isNofollow,
+    viewport, charset, hreflang,
+    h1s, h1HasKeyword, h2s,
+    imgsWithoutAlt, imgsWithoutDims,
+    internalLinks,
+    schemas,
+    social,
+    content,
+    cwv,
+    speed,
+    eeat,
+    serp,
+    slug,
     issues,
     issueCount: issues.length,
   };
 }
 
-// ── Fetch and crawl a single page ─────────────────────────────────────────────
-async function crawlPage(url, keywords = []) {
-  try {
-    const res = await timedFetch(url);
-    if (!res.ok) return { url, error: `HTTP ${res.status}`, issues: [] };
-    const html = await res.text();
-    return auditPage(url, html, keywords);
-  } catch (err) {
-    return { url, error: err?.message || "fetch failed", issues: [] };
+// ── Duplicate detection ───────────────────────────────────────────────────────
+function detectDuplicates(pages) {
+  const titleMap = {};
+  const descMap  = {};
+  const dupes    = [];
+
+  for (const p of pages) {
+    const t = p.metaTitle?.toLowerCase().trim();
+    const d = p.metaDesc?.toLowerCase().trim();
+    if (t) (titleMap[t] = titleMap[t] || []).push(p.url);
+    if (d) (descMap[d]  = descMap[d]  || []).push(p.url);
   }
+
+  for (const [title, urls] of Object.entries(titleMap)) {
+    if (urls.length > 1) dupes.push({ type: "title", value: title.slice(0, 80), urls });
+  }
+  for (const [desc, urls] of Object.entries(descMap)) {
+    if (urls.length > 1) dupes.push({ type: "description", value: desc.slice(0, 80), urls });
+  }
+  return dupes;
 }
 
-// ── Main crawl function ───────────────────────────────────────────────────────
+// ── Internal link graph + orphan detection ─────────────────────────────────────
+function buildLinkGraph(pages) {
+  const crawledUrls = new Set(pages.map(p => p.url));
+  const linked      = new Set();
+  const graph       = {};
+
+  for (const p of pages) {
+    graph[p.url] = p.internalLinks || [];
+    for (const l of p.internalLinks || []) linked.add(l);
+  }
+
+  const orphans = [...crawledUrls].filter(u => !linked.has(u) && !u.match(/\/(index|home)?\/?$/));
+  return { graph, orphanPages: orphans };
+}
+
+// ── Broken internal links check ────────────────────────────────────────────────
+async function checkBrokenLinks(pages, host) {
+  const allInternal = new Set();
+  for (const p of pages) {
+    for (const l of p.internalLinks || []) allInternal.add(l);
+  }
+
+  const toCheck = [...allInternal]
+    .filter(u => !pages.some(p => p.url === u))
+    .slice(0, 20);
+
+  const broken = [];
+  const BATCH  = 5;
+  for (let i = 0; i < toCheck.length; i += BATCH) {
+    const batch = toCheck.slice(i, i + BATCH);
+    const results = await Promise.all(
+      batch.map(async url => {
+        try {
+          const r = await timedFetch(url, { timeout: 6000 });
+          if (r.status >= 400) return { url, status: r.status };
+          return null;
+        } catch { return { url, status: "unreachable" }; }
+      })
+    );
+    broken.push(...results.filter(Boolean));
+  }
+  return broken;
+}
+
+// ── SEO health score (0-100) ─────────────────────────────────────────────────
+function computeHealthScore(result) {
+  let score = 100;
+  const pages = result.pages || [];
+  const n     = pages.length || 1;
+
+  const pct = k => Math.round((result.summary[k] || 0) / n * 100);
+
+  // Deductions per category
+  if (!result.hasSitemap)                       score -= 10;
+  if (result.crawlBlockedByRobots)              score -= 20;
+
+  const missingTitlePct = pct("pagesMissingMetaTitle");
+  if (missingTitlePct > 50)  score -= 15;
+  else if (missingTitlePct > 20) score -= 8;
+
+  const missingDescPct = pct("pagesMissingMetaDesc");
+  if (missingDescPct > 50)   score -= 12;
+  else if (missingDescPct > 20) score -= 6;
+
+  const missingH1Pct = pct("pagesMissingH1");
+  if (missingH1Pct > 50)     score -= 10;
+  else if (missingH1Pct > 20) score -= 5;
+
+  if ((result.summary?.pagesWithSchemaTypes?.length || 0) === 0) score -= 10;
+  if ((result.summary?.totalImgsWithoutAlt || 0) > 10) score -= 8;
+  if ((result.duplicates || []).length > 2)             score -= 6;
+  if ((result.brokenLinks || []).length > 0)            score -= 5 * Math.min(3, result.brokenLinks.length);
+  if ((result.summary?.pagesNoindex || 0) > n / 2)      score -= 8;
+
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+// ── Sitemap fetch & expand ────────────────────────────────────────────────────
+async function discoverSitemapUrls(base, robotsSitemapHint) {
+  const candidates = [
+    robotsSitemapHint,
+    `${base}/sitemap.xml`,
+    `${base}/sitemap_index.xml`,
+    `${base}/sitemap/sitemap.xml`,
+    `${base}/wp-sitemap.xml`,
+    `${base}/sitemap-index.xml`,
+  ].filter(Boolean);
+
+  for (const url of candidates) {
+    try {
+      const r = await timedFetch(url);
+      if (!r.ok) continue;
+      const xml = await r.text();
+      if (!xml.includes("<url") && !xml.includes("<sitemap")) continue;
+
+      // Check if it's a sitemap index
+      const isSitemapIndex = xml.includes("<sitemapindex") || (
+        (xml.match(/<sitemap>/gi) || []).length > 0
+      );
+
+      const urls = isSitemapIndex
+        ? await expandSitemapIndex(xml, base, MAX_PAGES)
+        : parseSitemapXml(xml, MAX_PAGES);
+
+      return { found: true, url, urls };
+    } catch { /* try next */ }
+  }
+  return { found: false, url: null, urls: [] };
+}
+
+// ── Main crawl ────────────────────────────────────────────────────────────────
 export async function crawlDomain(domain, keywords = []) {
   const host = normHost(domain);
   const base = `https://${host}`;
@@ -233,99 +562,128 @@ export async function crawlDomain(domain, keywords = []) {
     crawlBlockedByRobots: false,
     pageCount: 0,
     pages: [],
+    duplicates: [],
+    brokenLinks: [],
+    orphanPages: [],
+    eeatSummary: {},
+    healthScore: 0,
     summary: {
       pagesMissingMetaTitle: 0,
-      pagesMissingMetaDesc: 0,
-      pagesMissingH1: 0,
-      pagesNoindex: 0,
-      pagesWithSchemaTypes: [],
-      totalImgsWithoutAlt: 0,
-      slugIssuesCount: 0,
-      commonIssues: [],
+      pagesMissingMetaDesc:  0,
+      pagesMissingH1:        0,
+      pagesMultipleH1:       0,
+      pagesNoindex:          0,
+      pagesNoCanonical:      0,
+      pagesWithSchemaTypes:  [],
+      schemaTypes:           {},
+      totalImgsWithoutAlt:   0,
+      totalImgsWithoutDims:  0,
+      slugIssuesCount:       0,
+      thinContentCount:      0,
+      avgWordCount:          0,
+      socialMissing:         0,
+      cwvIssuesCount:        0,
+      commonIssues:          [],
     },
   };
 
-  // ── 1. Fetch robots.txt ───────────────────────────────────────────────────
+  // 1. robots.txt
   try {
-    const robotsRes = await timedFetch(`${base}/robots.txt`);
-    if (robotsRes.ok) {
-      const text = await robotsRes.text();
-      result.hasRobots = true;
-      result.robotsContent = text.slice(0, 2000);
-      result.robotsDisallows = [...text.matchAll(/^Disallow:\s*(.+)$/gm)].map((m) => m[1].trim());
-      // Check if crawlers are blocked
-      if (/^User-agent:\s*\*[\s\S]*?Disallow:\s*\/(?:\s|$)/m.test(text)) {
+    const r = await timedFetch(`${base}/robots.txt`);
+    if (r.ok) {
+      const txt = await r.text();
+      result.hasRobots       = true;
+      result.robotsContent   = txt.slice(0, 3000);
+      result.robotsDisallows = [...txt.matchAll(/^Disallow:\s*(.+)$/gm)].map(m => m[1].trim());
+      if (/^User-agent:\s*\*[\s\S]*?Disallow:\s*\/(?:\s|$)/m.test(txt))
         result.crawlBlockedByRobots = true;
-      }
-      // Extract sitemap URL from robots.txt if present
-      const sitemapFromRobots = text.match(/^Sitemap:\s*(https?:\/\/\S+)/im);
-      if (sitemapFromRobots) result.sitemapUrl = sitemapFromRobots[1].trim();
+
+      const sitemapHint = txt.match(/^Sitemap:\s*(https?:\/\/\S+)/im)?.[1]?.trim();
+      if (sitemapHint) result.sitemapUrl = sitemapHint;
     }
-  } catch (_) {/* ignore */}
+  } catch { /* ignore */ }
 
-  // ── 2. Fetch sitemap ──────────────────────────────────────────────────────
-  const sitemapCandidates = [
-    result.sitemapUrl,
-    `${base}/sitemap.xml`,
-    `${base}/sitemap_index.xml`,
-    `${base}/sitemap/sitemap.xml`,
-    `${base}/wp-sitemap.xml`,
-  ].filter(Boolean);
+  // 2. Sitemap
+  const sitemap = await discoverSitemapUrls(base, result.sitemapUrl);
+  result.hasSitemap = sitemap.found;
+  if (sitemap.found) result.sitemapUrl = sitemap.url;
 
-  let sitemapUrls = [];
-  for (const candidate of sitemapCandidates) {
-    try {
-      const res = await timedFetch(candidate);
-      if (res.ok) {
-        const xml = await res.text();
-        if (xml.includes("<url") || xml.includes("<sitemap")) {
-          result.hasSitemap = true;
-          result.sitemapUrl = candidate;
-          sitemapUrls = parseSitemapXml(xml, base);
-          break;
-        }
-      }
-    } catch (_) {/* try next */}
-  }
+  // 3. Build page list (homepage + sitemap pages)
+  const pagesToCrawl = [base, ...sitemap.urls.filter(u => u !== base)].slice(0, MAX_PAGES);
 
-  // ── 3. Always include homepage ────────────────────────────────────────────
-  const pagesToCrawl = [base, ...sitemapUrls.filter((u) => u !== base)].slice(0, MAX_PAGES_TO_CRAWL);
-
-  // ── 4. Crawl pages with limited concurrency ───────────────────────────────
-  const CONCURRENCY = 3;
+  // 4. Crawl with concurrency
   const pages = [];
   for (let i = 0; i < pagesToCrawl.length; i += CONCURRENCY) {
     const batch = pagesToCrawl.slice(i, i + CONCURRENCY);
-    const results = await Promise.all(batch.map((url) => crawlPage(url, keywords)));
-    pages.push(...results);
+    const res   = await Promise.all(batch.map(u => auditPage(u, keywords, host)));
+    pages.push(...res);
   }
 
-  result.pages = pages;
+  result.pages     = pages;
   result.pageCount = pages.length;
 
-  // ── 5. Build summary ──────────────────────────────────────────────────────
-  const allSchemaTypes = new Set();
-  const issueFreq = {};
+  // 5. Post-processing: duplicates, links, broken links
+  result.duplicates  = detectDuplicates(pages);
+  const { orphanPages } = buildLinkGraph(pages);
+  result.orphanPages = orphanPages;
 
-  for (const page of pages) {
-    if (!page.metaTitle)     result.summary.pagesMissingMetaTitle++;
-    if (!page.metaDesc)      result.summary.pagesMissingMetaDesc++;
-    if ((page.h1s || []).length === 0) result.summary.pagesMissingH1++;
-    if (page.isNoindex)      result.summary.pagesNoindex++;
-    result.summary.totalImgsWithoutAlt += page.imgsWithoutAlt || 0;
-    if ((page.slug?.issues || []).length > 0) result.summary.slugIssuesCount++;
-    (page.schemaTypes || []).forEach((t) => allSchemaTypes.add(t));
-    for (const issue of page.issues || []) {
-      const key = issue.replace(/\d+/g, "N"); // normalise numbers
+  // Broken links check (async, limited)
+  try {
+    result.brokenLinks = await checkBrokenLinks(pages, host);
+  } catch { result.brokenLinks = []; }
+
+  // 6. Summary aggregation
+  const schemaTypeFreq  = {};
+  const schemaTypeAll   = new Set();
+  const issueFreq       = {};
+  let   totalWords      = 0;
+  let   eeatScoreTotal  = 0;
+
+  for (const p of pages) {
+    if (!p.metaTitle)          result.summary.pagesMissingMetaTitle++;
+    if (!p.metaDesc)           result.summary.pagesMissingMetaDesc++;
+    if ((p.h1s||[]).length===0) result.summary.pagesMissingH1++;
+    if ((p.h1s||[]).length > 1) result.summary.pagesMultipleH1++;
+    if (p.isNoindex)           result.summary.pagesNoindex++;
+    if (!p.canonical)          result.summary.pagesNoCanonical++;
+    result.summary.totalImgsWithoutAlt  += p.imgsWithoutAlt  || 0;
+    result.summary.totalImgsWithoutDims += p.imgsWithoutDims || 0;
+    if ((p.slug?.issues||[]).length > 0) result.summary.slugIssuesCount++;
+    if ((p.content?.wordCount||0) < 200) result.summary.thinContentCount++;
+    totalWords += p.content?.wordCount || 0;
+    if ((p.social?.issues||[]).length > 0) result.summary.socialMissing++;
+    if ((p.cwv||[]).length > 0) result.summary.cwvIssuesCount++;
+
+    for (const s of p.schemas || []) {
+      schemaTypeAll.add(s.type);
+      schemaTypeFreq[s.type] = (schemaTypeFreq[s.type] || 0) + 1;
+    }
+
+    eeatScoreTotal += p.eeat?.score || 0;
+
+    for (const issue of p.issues || []) {
+      const key = issue.replace(/\d+/g, "N");
       issueFreq[key] = (issueFreq[key] || 0) + 1;
     }
   }
 
-  result.summary.pagesWithSchemaTypes = [...allSchemaTypes];
-  result.summary.commonIssues = Object.entries(issueFreq)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
+  result.summary.pagesWithSchemaTypes = [...schemaTypeAll];
+  result.summary.schemaTypes          = schemaTypeFreq;
+  result.summary.avgWordCount         = pages.length > 0 ? Math.round(totalWords / pages.length) : 0;
+  result.summary.commonIssues         = Object.entries(issueFreq)
+    .sort((a, b) => b[1] - a[1]).slice(0, 10)
     .map(([issue, count]) => ({ issue, count }));
+
+  // E-E-A-T summary
+  const avgEeat = pages.length > 0 ? (eeatScoreTotal / pages.length).toFixed(1) : 0;
+  result.eeatSummary = {
+    avgScore: Number(avgEeat),
+    maxScore: pages[0]?.eeat?.maxScore || 9,
+    signals: pages[0]?.eeat || {},
+  };
+
+  // 7. Health score
+  result.healthScore = computeHealthScore(result);
 
   return result;
 }
@@ -335,11 +693,7 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { domain, keywords = [] } = body;
-
-    if (!domain) {
-      return NextResponse.json({ error: "domain is required" }, { status: 400 });
-    }
-
+    if (!domain) return NextResponse.json({ error: "domain required" }, { status: 400 });
     const result = await crawlDomain(domain, keywords);
     return NextResponse.json(result);
   } catch (err) {
