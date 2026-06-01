@@ -419,6 +419,77 @@ function mapRowToSchema(row) {
   };
 }
 
+// ── Lightweight markdown → JSX renderer (no extra dependency) ────────────────
+function renderMd(text) {
+  if (!text || typeof text !== "string") return null;
+  const lines = text.split("\n");
+  const elements = [];
+  let listItems = [];
+  let key = 0;
+
+  const flushList = () => {
+    if (!listItems.length) return;
+    elements.push(
+      <ul key={key++} className="list-none space-y-1 my-2">
+        {listItems.map((item, i) => (
+          <li key={i} className="flex items-start gap-2 text-[13px] text-[var(--text)]">
+            <span className="text-[#ffa615] mt-0.5 shrink-0">›</span>
+            <span dangerouslySetInnerHTML={{ __html: inlineMd(item) }} />
+          </li>
+        ))}
+      </ul>
+    );
+    listItems = [];
+  };
+
+  const inlineMd = (s) =>
+    s
+      .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/`(.+?)`/g, "<code class='bg-black/10 dark:bg-white/10 px-1 rounded text-[12px] font-mono'>$1</code>");
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+
+    if (/^###\s+/.test(line)) {
+      flushList();
+      elements.push(
+        <h4 key={key++} className="text-[13px] font-bold text-[#ffa615] mt-4 mb-1"
+          dangerouslySetInnerHTML={{ __html: inlineMd(line.replace(/^###\s+/, "")) }} />
+      );
+    } else if (/^##\s+/.test(line)) {
+      flushList();
+      elements.push(
+        <h3 key={key++} className="text-[14px] font-bold text-[var(--text)] mt-5 mb-1"
+          dangerouslySetInnerHTML={{ __html: inlineMd(line.replace(/^##\s+/, "")) }} />
+      );
+    } else if (/^#\s+/.test(line)) {
+      flushList();
+      elements.push(
+        <h2 key={key++} className="text-[15px] font-extrabold text-[var(--text)] mt-5 mb-2"
+          dangerouslySetInnerHTML={{ __html: inlineMd(line.replace(/^#\s+/, "")) }} />
+      );
+    } else if (/^[-*]\s+/.test(line)) {
+      listItems.push(line.replace(/^[-*]\s+/, ""));
+    } else if (/^---+$/.test(line.trim())) {
+      flushList();
+      elements.push(<hr key={key++} className="border-[var(--border)] my-3" />);
+    } else if (line.trim() === "") {
+      flushList();
+      elements.push(<div key={key++} className="h-2" />);
+    } else {
+      flushList();
+      elements.push(
+        <p key={key++} className="text-[13px] text-[var(--text)] leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: inlineMd(line) }} />
+      );
+    }
+  }
+  flushList();
+  return <div className="space-y-0.5">{elements}</div>;
+}
+
 export default function Dashboard({ onOpenContentEditor }) {
 
   const searchParams = useSearchParams();
@@ -4680,16 +4751,16 @@ const seoTableProg = Math.max(0, prog);
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
                       </svg>
                     </summary>
-                    <div className="px-5 pb-5 pt-2 text-[13px] text-[var(--text)] leading-relaxed whitespace-pre-wrap">
-                      {typeof content === "string" ? content : JSON.stringify(content)}
+                    <div className="px-5 pb-5 pt-2">
+                      {renderMd(typeof content === "string" ? content : JSON.stringify(content))}
                     </div>
                   </details>
                 );
               })}
             </div>
           ) : (
-            <div className="p-5 text-[13px] text-[var(--text)] leading-relaxed whitespace-pre-wrap">
-              {seo.strategicPlan.plan}
+            <div className="p-5">
+              {renderMd(seo.strategicPlan.plan)}
             </div>
           )}
         </section>
