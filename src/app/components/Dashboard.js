@@ -3490,9 +3490,9 @@ const seoTableProg = Math.max(0, prog);
           const commercialHints = ["buy", "price", "deal", "coupon", "discount", "best ", "top ", " vs ", "compare", "near me", "service", "hire", "cost"];
           const localHints = ["near", "in ", "local", "city", "location", "area", "nearby"];
 
-          const tier1 = rankedKws.filter(kw => commercialHints.some(h => kw.keyword.toLowerCase().includes(h)));
-          const tier2 = rankedKws.filter(kw => !commercialHints.some(h => kw.keyword.toLowerCase().includes(h)) && localHints.some(h => kw.keyword.toLowerCase().includes(h)));
-          const tier3 = rankedKws.filter(kw => !commercialHints.some(h => kw.keyword.toLowerCase().includes(h)) && !localHints.some(h => kw.keyword.toLowerCase().includes(h)));
+          const tier1 = rankedKws.filter(kw => commercialHints.some(h => (kw.keyword || "").toLowerCase().includes(h)));
+          const tier2 = rankedKws.filter(kw => !commercialHints.some(h => (kw.keyword || "").toLowerCase().includes(h)) && localHints.some(h => (kw.keyword || "").toLowerCase().includes(h)));
+          const tier3 = rankedKws.filter(kw => !commercialHints.some(h => (kw.keyword || "").toLowerCase().includes(h)) && !localHints.some(h => (kw.keyword || "").toLowerCase().includes(h)));
 
           const tierData = [
             { label: "Tier 1 — Commercial", desc: "High-intent, buying keywords", items: tier1.slice(0, 5), color: "#D12C2C", bg: "#FFF0F4", border: "#FFE1EA" },
@@ -4362,7 +4362,7 @@ const seoTableProg = Math.max(0, prog);
               <div className="space-y-1.5">
                 {seo.websiteCrawl.summary.commonIssues.slice(0, 5).map((item, i) => (
                   <div key={i} className="flex items-center justify-between rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 py-2">
-                    <span className="text-[12px] text-[var(--text)]">{item.issue}</span>
+                    <span className="text-[12px] text-[var(--text)]">{typeof item.issue === "object" ? item.issue?.issue || JSON.stringify(item.issue) : (item.issue ?? item)}</span>
                     <span className="ml-2 shrink-0 rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5">{item.count} pages</span>
                   </div>
                 ))}
@@ -4450,7 +4450,7 @@ const seoTableProg = Math.max(0, prog);
                   <div key={i} className="rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 py-2">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-[#ffa615] text-[12px]">{"★".repeat(Math.round(review.rating || 0))}</span>
-                      <span className="text-[11px] text-[var(--muted)]">{review.author} · {review.date}</span>
+                      <span className="text-[11px] text-[var(--muted)]">{String(review.author ?? "")} · {String(review.date ?? "")}</span>
                       {review.ownerReply && <span className="text-[10px] text-green-600 font-medium">replied</span>}
                     </div>
                     {review.text && <p className="text-[11px] text-[var(--muted)] leading-relaxed">{review.text}</p>}
@@ -4539,9 +4539,9 @@ const seoTableProg = Math.max(0, prog);
                   <div key={i} className={`rounded-[8px] border px-3 py-2 flex items-start justify-between gap-3 ${sig.gap === "high" ? "border-red-200 bg-red-50 dark:bg-red-900/10" : "border-yellow-200 bg-yellow-50 dark:bg-yellow-900/10"}`}>
                     <div>
                       <div className={`text-[11px] font-semibold ${sig.gap === "high" ? "text-red-700" : "text-yellow-700"}`}>{sig.signal}</div>
-                      <div className="text-[11px] text-[var(--muted)] mt-0.5">You: {sig.target} · Competitors: {sig.competitors}</div>
+                      <div className="text-[11px] text-[var(--muted)] mt-0.5">You: {String(sig.target ?? "—")} · Competitors: {String(sig.competitors ?? "—")}</div>
                     </div>
-                    <span className={`shrink-0 rounded-full text-[10px] font-bold px-2 py-0.5 ${sig.gap === "high" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>{sig.gap.toUpperCase()}</span>
+                    <span className={`shrink-0 rounded-full text-[10px] font-bold px-2 py-0.5 ${sig.gap === "high" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>{String(sig.gap ?? "").toUpperCase()}</span>
                   </div>
                 ))}
               </div>
@@ -4575,7 +4575,7 @@ const seoTableProg = Math.max(0, prog);
             <div className="flex flex-wrap gap-2 mb-5">
               {Object.entries(seo.keywordGap.summary.intentBreakdown).map(([intent, cnt]) => (
                 <span key={intent} className="rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-[11px]">
-                  <span className="font-semibold text-[var(--text)]">{cnt}</span>
+                  <span className="font-semibold text-[var(--text)]">{typeof cnt === "object" ? JSON.stringify(cnt) : (cnt ?? "—")}</span>
                   <span className="text-[var(--muted)] ml-1">{intent}</span>
                 </span>
               ))}
@@ -4638,7 +4638,7 @@ const seoTableProg = Math.max(0, prog);
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {seo.keywordGap.paaQuestions.slice(0, 8).map((q, i) => (
                   <div key={i} className="rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] text-[var(--text)]">
-                    {q.question}
+                    {typeof q === "string" ? q : (typeof q?.question === "string" ? q.question : JSON.stringify(q))}
                   </div>
                 ))}
               </div>
@@ -4681,7 +4681,7 @@ const seoTableProg = Math.max(0, prog);
                       </svg>
                     </summary>
                     <div className="px-5 pb-5 pt-2 text-[13px] text-[var(--text)] leading-relaxed whitespace-pre-wrap">
-                      {content}
+                      {typeof content === "string" ? content : JSON.stringify(content)}
                     </div>
                   </details>
                 );
