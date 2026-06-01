@@ -3,19 +3,27 @@
 // Returns structured comparison data against the target domain.
 
 import { NextResponse } from "next/server";
-import { crawlDomain }  from "@/app/api/seo/website-crawl/route";
-import { checkGmb }     from "@/app/api/seo/gmb/route";
 
 export const runtime    = "nodejs";
 export const maxDuration = 120;
 
 const MAX_COMPETITORS = 5;
 
-// ── Audit one domain (crawl + GMB) ────────────────────────────────────────────
-async function auditOneDomain(domain, keywords = [], location = "India") {
+// ── Audit one domain (crawl + GMB) via internal HTTP calls ───────────────────
+async function auditOneDomain(domain, keywords = [], location = "India", baseUrl = "") {
   const [crawlResult, gmbResult] = await Promise.allSettled([
-    crawlDomain(domain, keywords),
-    checkGmb(domain, "", location),
+    fetch(`${baseUrl}/api/seo/website-crawl`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain, keywords }),
+      signal: AbortSignal.timeout(85000),
+    }).then(r => r.ok ? r.json() : Promise.reject(new Error(`crawl ${r.status}`))),
+    fetch(`${baseUrl}/api/seo/gmb`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain, location }),
+      signal: AbortSignal.timeout(55000),
+    }).then(r => r.ok ? r.json() : Promise.reject(new Error(`gmb ${r.status}`))),
   ]);
 
   return {
@@ -99,6 +107,8 @@ export async function POST(request) {
       return NextResponse.json({ error: "targetDomain is required" }, { status: 400 });
     }
 
+    const baseUrl = request.nextUrl.origin; // e.g. "https://drfizz.vercel.app"
+
     const allDomains = [
       targetDomain,
       ...competitors.slice(0, MAX_COMPETITORS - 1),
@@ -106,7 +116,7 @@ export async function POST(request) {
 
     // Run all audits in parallel (target + up to 4 competitors)
     const results = await Promise.all(
-      allDomains.map((d) => auditOneDomain(d, keywords, location))
+      allDomains.map((d) => auditOneDomain(d, keywords, location, baseUrl))
     );
 
     const [targetAudit, ...competitorAudits] = results;

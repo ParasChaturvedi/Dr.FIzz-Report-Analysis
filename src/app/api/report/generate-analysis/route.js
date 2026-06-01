@@ -92,7 +92,7 @@ async function generateWithAI(systemPrompt, userPrompt, fallback = {}) {
 
 // ─── Website-level AI analysis ────────────────────────────────────────────────
 
-async function generateWebsiteAnalysis({ domain, keywords, competitors, businessData, seoData }) {
+async function generateWebsiteAnalysis({ domain, keywords, competitors, businessData, seoData, crawlData, gmbData, keywordGapData }) {
   const primaryKw = (keywords || []).slice(0, 5).join(", ") || domain;
   const competitorList = (competitors || []).slice(0, 5).join(", ") || "major industry players";
   const industry = businessData?.industrySector || businessData?.industry || "business";
@@ -103,25 +103,66 @@ Always return STRICT JSON matching the requested schema.
 For keyword search volumes: always provide realistic industry-knowledge estimates (format: "1K–5K/mo", "500–2K/mo", "200–500/mo", "<200/mo"). Never use "—" for keyword volumes.
 For content blueprint vol/pos fields: provide realistic estimates like "800/mo", "Top 10".
 Only use "—" for site-specific live metrics you cannot know (Domain Rating, referring domains, live traffic counts).
-Do not mention Claude, Anthropic, or any AI provider by name.`;
+Do not mention Claude, Anthropic, or any AI provider by name.
+IMPORTANT: Use ALL the real data provided below — crawl results, GMB status, keyword gaps — to make every recommendation specific and accurate, not generic.`;
 
   const realMetrics = seoData ? `
-Live Metrics (use these real numbers in your analysis):
+Live Domain Metrics:
   Domain Rating:      ${seoData.dr || "—"}
   Referring Domains:  ${seoData.referringDomains || "—"}
   Organic Keywords:   ${seoData.organicKeywords || "—"}
   Organic Traffic:    ${seoData.organicTraffic || "—"}
-  Mobile Score:       ${seoData.performanceMobile || "—"}
-  Desktop Score:      ${seoData.performanceDesktop || "—"}` : "";
+  Mobile PSI Score:   ${seoData.performanceMobile || "—"}
+  Desktop PSI Score:  ${seoData.performanceDesktop || "—"}` : "";
 
-  const userPrompt = `Analyze this business and produce a comprehensive SEO strategy.
+  const crawlContext = crawlData ? `
+
+Website Crawl Results (Health Score: ${crawlData.healthScore ?? "N/A"}/100):
+  Pages Crawled:          ${crawlData.pageCount || 0}
+  Has Sitemap:            ${crawlData.hasSitemap ? "Yes" : "NO — Missing"}
+  Has robots.txt:         ${crawlData.hasRobots ? "Yes" : "No"}
+  Crawl Blocked:          ${crawlData.crawlBlockedByRobots ? "YES — CRITICAL" : "No"}
+  Schema Markup:          ${(crawlData.summary?.pagesWithSchemaTypes || []).join(", ") || "NONE found"}
+  Missing Meta Titles:    ${crawlData.summary?.pagesMissingMetaTitle ?? 0} pages
+  Missing Meta Desc:      ${crawlData.summary?.pagesMissingMetaDesc ?? 0} pages
+  Missing H1 Tags:        ${crawlData.summary?.pagesMissingH1 ?? 0} pages
+  Images Without Alt:     ${crawlData.summary?.totalImgsWithoutAlt ?? 0}
+  Thin Content (<200w):   ${crawlData.summary?.thinContentCount ?? 0} pages
+  Avg Word Count:         ${crawlData.summary?.avgWordCount ?? 0} words/page
+  Broken Links:           ${(crawlData.brokenLinks || []).length}
+  Duplicate Titles:       ${(crawlData.duplicates || []).filter(d => d.type === "title").length}` : "";
+
+  const gmbContext = gmbData ? `
+
+Google My Business Status:
+  Listing Found:      ${gmbData.gmb?.found ? "Yes" : "NO"}
+  Verified:           ${gmbData.gmb?.isVerified ? "Yes" : "No"}
+  Rating:             ${gmbData.gmb?.rating ? `${gmbData.gmb.rating}★ (${gmbData.gmb.reviewCount} reviews)` : "N/A"}
+  Completeness Score: ${gmbData.completeness?.score ?? 0}/100
+  Phone Listed:       ${gmbData.gmb?.phone ? "Yes" : "Missing"}
+  Address Listed:     ${gmbData.gmb?.address ? "Yes" : "Missing"}
+  Hours Set:          ${gmbData.gmb?.hoursAvailable ? "Yes" : "Missing"}
+  Photos:             ${gmbData.gmb?.hasPhotos ? "Yes" : "Missing"}
+  Directory Listings: ${gmbData.listedDirectoryCount ?? 0}/10
+  Key Issues:         ${(gmbData.issues || []).slice(0, 4).map(i => i.issue).join("; ") || "None"}` : "";
+
+  const kgContext = keywordGapData ? `
+
+Keyword Gap Analysis:
+  Gap Keywords Found: ${keywordGapData.summary?.totalGapKeywords ?? 0}
+  Easy Wins:          ${keywordGapData.summary?.totalEasyWins ?? 0}
+  Top Gap Keywords:   ${(keywordGapData.gapKeywords || []).slice(0, 8).map(k => `"${k.keyword}" (vol:${k.volume})`).join(", ")}
+  Easy Win Keywords:  ${(keywordGapData.easyWins || []).slice(0, 5).map(k => `"${k.keyword}"`).join(", ")}
+  PAA Questions:      ${(keywordGapData.paaQuestions || []).slice(0, 5).map(q => q.question).join("; ")}` : "";
+
+  const userPrompt = `Analyze this business and produce a comprehensive SEO strategy based on the REAL data below.
 
 Domain: ${domain}
 Industry: ${industry}
 Primary Keywords: ${primaryKw}
 Competitors: ${competitorList}
 Business Offering: ${businessData?.offeringType || "services"}
-Location: ${businessData?.location || ""}${realMetrics}
+Location: ${businessData?.location || ""}${realMetrics}${crawlContext}${gmbContext}${kgContext}
 
 Return JSON with exactly these keys:
 {
@@ -460,6 +501,9 @@ export async function POST(request) {
           performanceMobile:  mobileScore  != null ? `${mobileScore}/100`  : "—",
           performanceDesktop: desktopScore != null ? `${desktopScore}/100` : "—",
         },
+        crawlData:      prefetchedSeoData?.websiteCrawl   ?? null,
+        gmbData:        prefetchedSeoData?.gmbCheck       ?? null,
+        keywordGapData: prefetchedSeoData?.keywordGap     ?? null,
       });
     } else {
       aiSections = await generatePageAnalysis({
@@ -483,6 +527,12 @@ export async function POST(request) {
       competitors,
       businessData: businessData || {},
       ...aiSections,
+      // Include enriched SEO data so Dashboard can read it from the report cache
+      websiteCrawl:    prefetchedSeoData?.websiteCrawl    ?? null,
+      gmbCheck:        prefetchedSeoData?.gmbCheck        ?? null,
+      competitorAudit: prefetchedSeoData?.competitorAudit ?? null,
+      keywordGap:      prefetchedSeoData?.keywordGap      ?? null,
+      strategicPlan:   prefetchedSeoData?.strategicPlan   ?? null,
     };
 
     // ── Persist to /tmp/reports/{id}.json ────────────────────────────────────

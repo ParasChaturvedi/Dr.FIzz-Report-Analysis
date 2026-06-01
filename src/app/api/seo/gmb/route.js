@@ -206,13 +206,44 @@ function computeCompletenessScore(info, reviews, qa, directories) {
   };
 }
 
+// ── Extract business name from homepage HTML ──────────────────────────────────
+async function extractBusinessName(host) {
+  try {
+    const r = await fetch(`https://${host}`, {
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; DrFizz/2.0)",
+        Accept: "text/html,*/*",
+      },
+    });
+    if (!r.ok) return null;
+    const html = await r.text();
+    // og:site_name is most reliable for business names
+    const ogName =
+      html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']{2,80})["']/i)?.[1]?.trim() ||
+      html.match(/<meta[^>]+content=["']([^"']{2,80})["'][^>]+property=["']og:site_name["']/i)?.[1]?.trim();
+    // Title tag: take the first segment before |, -, :
+    const titleFull = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
+    const title = titleFull ? titleFull.split(/\s*[-|:–]\s*/)[0].trim() : null;
+    return ogName || title || null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Main check function ───────────────────────────────────────────────────────
 export async function checkGmb(domain, businessName = "", location = "India") {
   const auth = getAuth();
   if (!auth) return { error: "DataForSEO credentials not configured", domain };
 
-  const host    = String(domain||"").replace(/^https?:\/\//,"").replace(/^www\./,"").split("/")[0];
-  const keyword = businessName || host;
+  const host = String(domain||"").replace(/^https?:\/\//,"").replace(/^www\./,"").split("/")[0];
+
+  // Resolve best keyword for GMB lookup: provided name → extracted from HTML → domain prefix
+  let keyword = businessName;
+  if (!keyword) {
+    const extracted = await extractBusinessName(host);
+    keyword = extracted || host.split(".")[0];
+  }
 
   // Run all fetches in parallel
   const [gmbRes, reviewRes, qaRes, dirRes] = await Promise.allSettled([

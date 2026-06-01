@@ -184,10 +184,12 @@ export async function claudeChatStream({
 
   const { systemPrompt, userMessages } = separateSystemMessages(messages);
 
+  const isOpus = model.includes("opus");
+
   const stream = await client.messages.stream({
     model,
     max_tokens: Math.max(max_tokens, 2048),
-    thinking: { type: "adaptive" },
+    ...(isOpus ? { thinking: { type: "adaptive" } } : {}),
     messages: userMessages,
     ...(systemPrompt
       ? {
