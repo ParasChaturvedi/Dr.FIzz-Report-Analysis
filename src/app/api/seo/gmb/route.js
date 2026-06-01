@@ -39,44 +39,54 @@ async function dfsPost(endpoint, payload, auth) {
   return res.json();
 }
 
-// ── GMB Info ──────────────────────────────────────────────────────────────────
+// ── GMB Info — tries multiple keyword variants to maximise hit rate ───────────
 async function fetchGmbInfo(keyword, location, auth) {
-  try {
-    const data = await dfsPost(
-      "business_data/google/my_business_info/live",
-      [{ keyword, location_name: location, language_code: "en", depth: 1 }],
-      auth
-    );
-    const items = data?.tasks?.[0]?.result?.[0]?.items || [];
-    if (!items.length) return null;
-    const b = items[0];
+  // Build fallback keyword list: exact → Title Case → first word only
+  const variants = [...new Set([
+    keyword,
+    keyword.replace(/\b\w/g, c => c.toUpperCase()),  // Title Case
+    keyword.split(/\s+/)[0],                          // first word
+  ])].filter(Boolean);
 
-    return {
-      found: true,
-      name:           b.title || null,
-      address:        b.address || null,
-      phone:          b.phone  || null,
-      website:        b.url    || null,
-      category:       b.category || null,
-      additionalCategories: b.additional_categories || [],
-      rating:         b.rating?.value ?? null,
-      reviewCount:    b.rating?.votes_count ?? null,
-      isVerified:     b.is_claimed ?? false,
-      hoursAvailable: Array.isArray(b.work_hours?.timetable) && b.work_hours.timetable.length > 0,
-      hoursDetail:    b.work_hours?.timetable || null,
-      placeId:        b.place_id || null,
-      cid:            b.cid || null,
-      hasPhotos:      b.main_image ? true : false,
-      totalPhotos:    b.photos_count ?? null,
-      priceLevel:     b.price_level || null,
-      popularTimes:   b.popular_times ? true : false,
-      attributes:     Array.isArray(b.attributes) ? b.attributes.slice(0, 10) : [],
-      serpRank:       b.rank || null,
-    };
-  } catch (err) {
-    console.warn("[gmb] fetchGmbInfo:", err?.message);
-    return null;
+  for (const kw of variants) {
+    try {
+      const data = await dfsPost(
+        "business_data/google/my_business_info/live",
+        [{ keyword: kw, location_name: location, language_code: "en", depth: 1 }],
+        auth
+      );
+      const items = data?.tasks?.[0]?.result?.[0]?.items || [];
+      if (!items.length) continue; // try next variant
+      const b = items[0];
+
+      return {
+        found: true,
+        keywordUsed:    kw,
+        name:           b.title || null,
+        address:        b.address || null,
+        phone:          b.phone  || null,
+        website:        b.url    || null,
+        category:       b.category || null,
+        additionalCategories: b.additional_categories || [],
+        rating:         b.rating?.value ?? null,
+        reviewCount:    b.rating?.votes_count ?? null,
+        isVerified:     b.is_claimed ?? false,
+        hoursAvailable: Array.isArray(b.work_hours?.timetable) && b.work_hours.timetable.length > 0,
+        hoursDetail:    b.work_hours?.timetable || null,
+        placeId:        b.place_id || null,
+        cid:            b.cid || null,
+        hasPhotos:      b.main_image ? true : false,
+        totalPhotos:    b.photos_count ?? null,
+        priceLevel:     b.price_level || null,
+        popularTimes:   b.popular_times ? true : false,
+        attributes:     Array.isArray(b.attributes) ? b.attributes.slice(0, 10) : [],
+        serpRank:       b.rank || null,
+      };
+    } catch (err) {
+      console.warn(`[gmb] fetchGmbInfo kw="${kw}":`, err?.message);
+    }
   }
+  return null; // all variants exhausted
 }
 
 // ── GMB Reviews ───────────────────────────────────────────────────────────────
@@ -210,23 +220,41 @@ function computeCompletenessScore(info, reviews, qa, directories) {
 async function extractBusinessName(host) {
   try {
     const r = await fetch(`https://${host}`, {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(12000),
       headers: {
-        "User-Agent": "Mozilla/5.0 (compatible; DrFizz/2.0)",
-        Accept: "text/html,*/*",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
       },
     });
     if (!r.ok) return null;
     const html = await r.text();
-    // og:site_name is most reliable for business names
+
+    // 1. og:site_name — most reliable for business names
     const ogName =
       html.match(/<meta[^>]+property=["']og:site_name["'][^>]+content=["']([^"']{2,80})["']/i)?.[1]?.trim() ||
       html.match(/<meta[^>]+content=["']([^"']{2,80})["'][^>]+property=["']og:site_name["']/i)?.[1]?.trim();
-    // Title tag: take the first segment before |, -, :
+    if (ogName) return ogName;
+
+    // 2. application-name meta tag
+    const appName =
+      html.match(/<meta[^>]+name=["']application-name["'][^>]+content=["']([^"']{2,80})["']/i)?.[1]?.trim() ||
+      html.match(/<meta[^>]+content=["']([^"']{2,80})["'][^>]+name=["']application-name["']/i)?.[1]?.trim();
+    if (appName) return appName;
+
+    // 3. Schema.org Organization/LocalBusiness name
+    const schemaMatch = html.match(/"@type"\s*:\s*"(?:Organization|LocalBusiness|Corporation)"[^}]{0,500}"name"\s*:\s*"([^"]{2,80})"/i) ||
+                        html.match(/"name"\s*:\s*"([^"]{2,80})"[^}]{0,200}"@type"\s*:\s*"(?:Organization|LocalBusiness)"/i);
+    if (schemaMatch?.[1]) return schemaMatch[1].trim();
+
+    // 4. Title tag first segment before |, -, :, »
     const titleFull = html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim();
-    const title = titleFull ? titleFull.split(/\s*[-|:–]\s*/)[0].trim() : null;
-    return ogName || title || null;
-  } catch {
+    const title = titleFull ? titleFull.split(/\s*[-|:–»]\s*/)[0].trim() : null;
+    if (title && title.length >= 2 && title.length <= 60) return title;
+
+    return null;
+  } catch (err) {
+    console.warn("[gmb] extractBusinessName:", err?.message);
     return null;
   }
 }
@@ -292,8 +320,11 @@ export async function checkGmb(domain, businessName = "", location = "India") {
   const unansweredQA = qa.filter(q => !q.hasAnswer).length;
   if (unansweredQA > 0)             issues.push({ severity: "low",  issue: `${unansweredQA} unanswered Q&A on GMB` });
 
+  console.log(`[gmb] domain=${host} searchedAs="${keyword}" found=${!!info?.found} dirs=${listedCount}`);
+
   return {
     domain:         host,
+    searchedAs:     keyword,          // ← debug: shows what name was searched
     gmb:            info || { found: false },
     reviews:        reviews.slice(0, 10),
     reviewCount:    reviews.length,

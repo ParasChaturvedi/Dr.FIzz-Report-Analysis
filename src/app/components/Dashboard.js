@@ -4452,6 +4452,12 @@ const seoTableProg = Math.max(0, prog);
             </svg>
             GMB & Local Presence
           </h2>
+          {seo.gmbCheck.searchedAs && (
+            <p className="text-[11px] text-[var(--muted)] mb-3">
+              Searched GMB as: <span className="font-semibold text-[var(--text)]">"{seo.gmbCheck.searchedAs}"</span>
+              {!seo.gmbCheck.gmb?.found && " — no listing found. Business may not have a Google Business Profile yet."}
+            </p>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             {/* GMB status card */}
