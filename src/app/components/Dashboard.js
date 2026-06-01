@@ -4435,7 +4435,7 @@ const seoTableProg = Math.max(0, prog);
               {seo.gmbCheck.issues.map((issue, i) => (
                 <div key={i} className="flex items-start gap-2 rounded-[8px] border border-orange-200 bg-orange-50 dark:bg-orange-900/10 px-3 py-2">
                   <span className="text-[#d45427] text-[11px] mt-0.5 shrink-0">⚠</span>
-                  <span className="text-[12px] text-[var(--text)]">{issue}</span>
+                  <span className="text-[12px] text-[var(--text)]">{typeof issue === "object" ? issue.issue || JSON.stringify(issue) : issue}</span>
                 </div>
               ))}
             </div>
