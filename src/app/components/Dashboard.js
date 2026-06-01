@@ -4304,6 +4304,276 @@ const seoTableProg = Math.max(0, prog);
   )}
 </section>
 
+      {/* ── Website Crawl & Audit ─────────────────────────────────────────── */}
+      {seo?.websiteCrawl && (
+        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
+          <h2 className="text-[16px] font-bold text-[var(--text)] mb-1 flex items-center gap-2">
+            <svg className="w-4 h-4 text-[#d45427]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
+            </svg>
+            Website Crawl & Audit
+          </h2>
+          <p className="text-[12px] text-[var(--muted)] mb-4">
+            {seo.websiteCrawl.pageCount || 0} pages crawled
+            {seo.websiteCrawl.hasSitemap ? " · sitemap found" : " · no sitemap"}
+            {seo.websiteCrawl.hasRobots  ? " · robots.txt found" : ""}
+            {seo.websiteCrawl.crawlBlockedByRobots ? " · ⚠️ crawl blocked by robots.txt" : ""}
+          </p>
+
+          {/* Crawl stats grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-5">
+            {[
+              { label: "Missing Meta Title",  value: seo.websiteCrawl.summary?.pagesMissingMetaTitle ?? "—", bad: (seo.websiteCrawl.summary?.pagesMissingMetaTitle || 0) > 0 },
+              { label: "Missing Meta Desc",   value: seo.websiteCrawl.summary?.pagesMissingMetaDesc  ?? "—", bad: (seo.websiteCrawl.summary?.pagesMissingMetaDesc  || 0) > 0 },
+              { label: "Missing H1",          value: seo.websiteCrawl.summary?.pagesMissingH1        ?? "—", bad: (seo.websiteCrawl.summary?.pagesMissingH1        || 0) > 0 },
+              { label: "Noindex Pages",       value: seo.websiteCrawl.summary?.pagesNoindex          ?? "—", bad: false },
+              { label: "Images No Alt",       value: seo.websiteCrawl.summary?.totalImgsWithoutAlt   ?? "—", bad: (seo.websiteCrawl.summary?.totalImgsWithoutAlt   || 0) > 0 },
+            ].map((stat) => (
+              <div key={stat.label} className={`rounded-[10px] border p-3 text-center ${stat.bad ? "border-orange-200 bg-orange-50 dark:bg-orange-900/10" : "border-[var(--border)] bg-[var(--card)]"}`}>
+                <div className={`text-[20px] font-bold tabular-nums ${stat.bad ? "text-[#d45427]" : "text-[var(--text)]"}`}>{stat.value}</div>
+                <div className="text-[11px] text-[var(--muted)] mt-0.5">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Schema types found */}
+          {(seo.websiteCrawl.summary?.pagesWithSchemaTypes?.length ?? 0) > 0 && (
+            <div className="mb-4">
+              <div className="text-[12px] font-semibold text-[var(--text)] mb-2">Schema Types Found</div>
+              <div className="flex flex-wrap gap-2">
+                {seo.websiteCrawl.summary.pagesWithSchemaTypes.map((t) => (
+                  <span key={t} className="rounded-full bg-green-50 border border-green-200 text-green-700 px-3 py-1 text-[11px] font-medium">{t}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(seo.websiteCrawl.summary?.pagesWithSchemaTypes?.length ?? 0) === 0 && (
+            <div className="mb-4 rounded-[10px] border border-orange-200 bg-orange-50 dark:bg-orange-900/10 px-4 py-3">
+              <span className="text-[12px] font-semibold text-[#d45427]">⚠️ No Schema.org structured data found — AI engines can't extract entity information</span>
+            </div>
+          )}
+
+          {/* Top issues */}
+          {(seo.websiteCrawl.summary?.commonIssues?.length ?? 0) > 0 && (
+            <div>
+              <div className="text-[12px] font-semibold text-[var(--text)] mb-2">Most Common Issues</div>
+              <div className="space-y-1.5">
+                {seo.websiteCrawl.summary.commonIssues.slice(0, 5).map((item, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 py-2">
+                    <span className="text-[12px] text-[var(--text)]">{item.issue}</span>
+                    <span className="ml-2 shrink-0 rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold px-2 py-0.5">{item.count} pages</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── GMB & Directory Listings ──────────────────────────────────────── */}
+      {seo?.gmbCheck && (
+        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
+          <h2 className="text-[16px] font-bold text-[var(--text)] mb-1 flex items-center gap-2">
+            <svg className="w-4 h-4 text-[#d45427]" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+            GMB & Local Presence
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            {/* GMB status card */}
+            <div className={`rounded-[12px] border p-4 ${seo.gmbCheck.gmb?.found ? "border-green-200 bg-green-50 dark:bg-green-900/10" : "border-red-200 bg-red-50 dark:bg-red-900/10"}`}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className={`w-3 h-3 rounded-full ${seo.gmbCheck.gmb?.found ? "bg-green-500" : "bg-red-500"}`} />
+                <span className="text-[13px] font-bold text-[var(--text)]">
+                  {seo.gmbCheck.gmb?.found ? "Google My Business Found" : "No GMB Listing"}
+                </span>
+              </div>
+              {seo.gmbCheck.gmb?.found && (
+                <div className="space-y-1.5">
+                  {seo.gmbCheck.gmb.rating != null && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[22px] font-bold text-[var(--text)]">{seo.gmbCheck.gmb.rating}</span>
+                      <span className="text-[#ffa615] text-[16px]">★</span>
+                      <span className="text-[12px] text-[var(--muted)]">({seo.gmbCheck.gmb.reviewCount || 0} reviews)</span>
+                    </div>
+                  )}
+                  <div className="text-[12px] text-[var(--muted)]">
+                    {seo.gmbCheck.gmb.isVerified ? "✓ Verified" : "⚠️ Not verified"} ·
+                    {seo.gmbCheck.gmb.phone ? " ✓ Phone" : " ✗ No phone"} ·
+                    {seo.gmbCheck.gmb.hoursAvailable ? " ✓ Hours set" : " ✗ No hours"} ·
+                    {seo.gmbCheck.gmb.photos ? " ✓ Photos" : " ✗ No photos"}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Directory listings */}
+            <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4">
+              <div className="text-[12px] font-semibold text-[var(--text)] mb-3">
+                Business Directories ({seo.gmbCheck.listedDirectoryCount ?? 0}/{(seo.gmbCheck.directories || []).length} listed)
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(seo.gmbCheck.directories || []).map((dir) => (
+                  <div key={dir.name} className="flex items-center gap-1.5">
+                    <span className={`text-[11px] ${dir.listed === true ? "text-green-600" : dir.listed === false ? "text-red-400" : "text-[var(--muted)]"}`}>
+                      {dir.listed === true ? "✓" : dir.listed === false ? "✗" : "?"}
+                    </span>
+                    <span className="text-[11px] text-[var(--muted)]">{dir.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* GMB Issues */}
+          {(seo.gmbCheck.issues?.length ?? 0) > 0 && (
+            <div className="mt-4 space-y-1.5">
+              <div className="text-[12px] font-semibold text-[var(--text)] mb-2">Issues to Fix</div>
+              {seo.gmbCheck.issues.map((issue, i) => (
+                <div key={i} className="flex items-start gap-2 rounded-[8px] border border-orange-200 bg-orange-50 dark:bg-orange-900/10 px-3 py-2">
+                  <span className="text-[#d45427] text-[11px] mt-0.5 shrink-0">⚠</span>
+                  <span className="text-[12px] text-[var(--text)]">{issue}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Recent reviews */}
+          {(seo.gmbCheck.reviews?.length ?? 0) > 0 && (
+            <div className="mt-4">
+              <div className="text-[12px] font-semibold text-[var(--text)] mb-2">Recent Reviews</div>
+              <div className="space-y-2">
+                {seo.gmbCheck.reviews.slice(0, 3).map((review, i) => (
+                  <div key={i} className="rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 py-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[#ffa615] text-[12px]">{"★".repeat(Math.round(review.rating || 0))}</span>
+                      <span className="text-[11px] text-[var(--muted)]">{review.author} · {review.date}</span>
+                      {review.ownerReply && <span className="text-[10px] text-green-600 font-medium">replied</span>}
+                    </div>
+                    {review.text && <p className="text-[11px] text-[var(--muted)] leading-relaxed">{review.text}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Competitor Audit ──────────────────────────────────────────────── */}
+      {seo?.competitorAudit?.competitors?.length > 0 && (
+        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
+          <h2 className="text-[16px] font-bold text-[var(--text)] mb-4 flex items-center gap-2">
+            <svg className="w-4 h-4 text-[#d45427]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Competitor Audit
+          </h2>
+
+          {/* Comparison table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px] border-collapse">
+              <thead>
+                <tr className="border-b border-[var(--border)]">
+                  <th className="text-left py-2 pr-4 font-semibold text-[var(--muted)]">Domain</th>
+                  <th className="text-center py-2 px-3 font-semibold text-[var(--muted)]">Pages</th>
+                  <th className="text-center py-2 px-3 font-semibold text-[var(--muted)]">Sitemap</th>
+                  <th className="text-center py-2 px-3 font-semibold text-[var(--muted)]">Schema</th>
+                  <th className="text-center py-2 px-3 font-semibold text-[var(--muted)]">GMB Rating</th>
+                  <th className="text-center py-2 px-3 font-semibold text-[var(--muted)]">Reviews</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Target domain row */}
+                {seo.competitorAudit.target && (
+                  <tr className="border-b border-[var(--border)] bg-orange-50/40 dark:bg-orange-900/5">
+                    <td className="py-2.5 pr-4 font-bold text-[#d45427]">
+                      {seo.competitorAudit.target.domain} <span className="text-[10px] font-normal text-[var(--muted)]">(you)</span>
+                    </td>
+                    <td className="text-center py-2.5 px-3 text-[var(--text)]">{seo.competitorAudit.target.crawl?.pageCount ?? "—"}</td>
+                    <td className="text-center py-2.5 px-3">{seo.competitorAudit.target.crawl?.hasSitemap ? "✓" : "✗"}</td>
+                    <td className="text-center py-2.5 px-3 text-[11px]">
+                      {(seo.competitorAudit.target.crawl?.summary?.pagesWithSchemaTypes?.length ?? 0) > 0
+                        ? seo.competitorAudit.target.crawl.summary.pagesWithSchemaTypes.join(", ")
+                        : "—"}
+                    </td>
+                    <td className="text-center py-2.5 px-3">
+                      {seo.competitorAudit.target.gmb?.gmb?.rating ? `${seo.competitorAudit.target.gmb.gmb.rating}★` : "—"}
+                    </td>
+                    <td className="text-center py-2.5 px-3 text-[var(--muted)]">
+                      {seo.competitorAudit.target.gmb?.gmb?.reviewCount ?? "—"}
+                    </td>
+                  </tr>
+                )}
+                {/* Competitor rows */}
+                {seo.competitorAudit.competitors.map((comp) => (
+                  <tr key={comp.domain} className="border-b border-[var(--border)]/50">
+                    <td className="py-2.5 pr-4 font-medium text-[var(--text)]">{comp.domain}</td>
+                    <td className="text-center py-2.5 px-3 text-[var(--muted)]">{comp.crawl?.pageCount ?? "—"}</td>
+                    <td className="text-center py-2.5 px-3 text-[var(--muted)]">{comp.crawl?.hasSitemap ? "✓" : "✗"}</td>
+                    <td className="text-center py-2.5 px-3 text-[11px] text-[var(--muted)]">
+                      {(comp.crawl?.summary?.pagesWithSchemaTypes?.length ?? 0) > 0
+                        ? comp.crawl.summary.pagesWithSchemaTypes.join(", ")
+                        : "—"}
+                    </td>
+                    <td className="text-center py-2.5 px-3 text-[var(--muted)]">
+                      {comp.gmb?.gmb?.rating ? `${comp.gmb.gmb.rating}★` : "—"}
+                    </td>
+                    <td className="text-center py-2.5 px-3 text-[var(--muted)]">
+                      {comp.gmb?.gmb?.reviewCount ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Gap analysis signals */}
+          {(seo.competitorAudit.comparison?.length ?? 0) > 0 && (
+            <div className="mt-4">
+              <div className="text-[12px] font-semibold text-[var(--text)] mb-2">Gap Analysis</div>
+              <div className="space-y-2">
+                {seo.competitorAudit.comparison.filter((s) => s.gap !== "none").map((sig, i) => (
+                  <div key={i} className={`rounded-[8px] border px-3 py-2 flex items-start justify-between gap-3 ${sig.gap === "high" ? "border-red-200 bg-red-50 dark:bg-red-900/10" : "border-yellow-200 bg-yellow-50 dark:bg-yellow-900/10"}`}>
+                    <div>
+                      <div className={`text-[11px] font-semibold ${sig.gap === "high" ? "text-red-700" : "text-yellow-700"}`}>{sig.signal}</div>
+                      <div className="text-[11px] text-[var(--muted)] mt-0.5">You: {sig.target} · Competitors: {sig.competitors}</div>
+                    </div>
+                    <span className={`shrink-0 rounded-full text-[10px] font-bold px-2 py-0.5 ${sig.gap === "high" ? "bg-red-100 text-red-700" : "bg-yellow-100 text-yellow-700"}`}>{sig.gap.toUpperCase()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ── Strategic Plan ────────────────────────────────────────────────── */}
+      {seo?.strategicPlan?.plan && (
+        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
+          <h2 className="text-[16px] font-bold text-[var(--text)] mb-1 flex items-center gap-2">
+            <svg className="w-4 h-4 text-[#d45427]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Strategic SEO + GEO Plan
+          </h2>
+          <p className="text-[11px] text-[var(--muted)] mb-4">Generated by Claude AI based on your crawl data, GMB status, and competitor analysis</p>
+          <div
+            className="prose prose-sm max-w-none text-[var(--text)] leading-relaxed"
+            style={{
+              fontSize: "13px",
+              lineHeight: "1.7",
+              whiteSpace: "pre-wrap",
+              fontFamily: "inherit",
+            }}
+          >
+            {seo.strategicPlan.plan}
+          </div>
+          <div className="mt-4 text-[11px] text-[var(--muted)]">
+            Generated at {seo.strategicPlan.generatedAt ? new Date(seo.strategicPlan.generatedAt).toLocaleString() : "—"}
+          </div>
+        </section>
+      )}
 
       </div>
     </main>

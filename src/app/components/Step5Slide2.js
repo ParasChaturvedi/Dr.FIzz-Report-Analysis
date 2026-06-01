@@ -15,13 +15,17 @@ import { prefetchOpportunitiesAndContent } from "@/lib/prefetch-opportunities";
 
 // ─── Stage & check initial state ──────────────────────────────────────────────
 const INITIAL_STAGES = [
-  { id: "opportunities", label: "Content Opportunities",     state: "idle", value: null },
-  { id: "psi",           label: "Performance Score (PSI)",   state: "idle", value: null },
-  { id: "dataforseo",    label: "Domain Metrics",            state: "idle", value: null },
-  { id: "dataforseoExtra", label: "Keyword Rankings",        state: "idle", value: null },
-  { id: "content",       label: "Content Extraction",        state: "idle", value: null },
-  { id: "onpageKeywords", label: "On-Page Keywords",         state: "idle", value: null },
-  { id: "report",        label: "AI Report Generation",      state: "idle", value: null },
+  { id: "opportunities",   label: "Content Opportunities",     state: "idle", value: null },
+  { id: "psi",             label: "Performance Score (PSI)",   state: "idle", value: null },
+  { id: "dataforseo",      label: "Domain Metrics",            state: "idle", value: null },
+  { id: "dataforseoExtra", label: "Keyword Rankings",          state: "idle", value: null },
+  { id: "content",         label: "Content Extraction",        state: "idle", value: null },
+  { id: "onpageKeywords",  label: "On-Page Keywords",          state: "idle", value: null },
+  { id: "websiteCrawl",    label: "Website Crawl & Audit",     state: "idle", value: null },
+  { id: "gmbCheck",        label: "GMB & Directory Listings",  state: "idle", value: null },
+  { id: "competitorAudit", label: "Competitor Audit",          state: "idle", value: null },
+  { id: "strategicPlan",   label: "Strategic Plan (AI)",       state: "idle", value: null },
+  { id: "report",          label: "AI Report Generation",      state: "idle", value: null },
 ];
 
 const INITIAL_CHECKS = [
@@ -414,6 +418,49 @@ export default function Step5Slide2({
         if (cnt != null) updateStage("onpageKeywords", { value: `${cnt} keywords found` });
       }
     } catch { /* ignore */ }
+
+    // Website crawl
+    try {
+      const crawl = json.websiteCrawl;
+      if (crawl) {
+        const pages    = crawl.pageCount ?? 0;
+        const issues   = crawl.summary?.commonIssues?.length ?? 0;
+        const hasSitemap = crawl.hasSitemap ? "sitemap ✓" : "no sitemap";
+        updateStage("websiteCrawl", { value: `${pages} pages · ${hasSitemap}` });
+      }
+    } catch { /* ignore */ }
+
+    // GMB check
+    try {
+      const gmb = json.gmbCheck;
+      if (gmb) {
+        const found  = gmb.gmb?.found;
+        const rating = gmb.gmb?.rating;
+        const revs   = gmb.gmb?.reviewCount;
+        if (found && rating) {
+          updateStage("gmbCheck", { value: `${rating}★ · ${revs || 0} reviews` });
+        } else if (found === false) {
+          updateStage("gmbCheck", { value: "No GMB listing" });
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Competitor audit
+    try {
+      const ca = json.competitorAudit;
+      if (ca) {
+        const count = (ca.competitors || []).length;
+        updateStage("competitorAudit", { value: `${count} competitor${count !== 1 ? "s" : ""} audited` });
+      }
+    } catch { /* ignore */ }
+
+    // Strategic plan
+    try {
+      const sp = json.strategicPlan;
+      if (sp?.plan) {
+        updateStage("strategicPlan", { value: "Plan ready" });
+      }
+    } catch { /* ignore */ }
   }, [updateStage]);
 
   // ── Cross-checks ──────────────────────────────────────────────────────────
@@ -543,6 +590,125 @@ export default function Step5Slide2({
 
       const [, seoJson] = await Promise.all([oppsPromise, seoPromise]);
 
+      // ── Website Crawl ─────────────────────────────────────────────────────
+      updateStage("websiteCrawl", { state: "loading" });
+      let crawlJson = null;
+      const crawlPromise = (async () => {
+        try {
+          const res = await fetch("/api/seo/website-crawl", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain, keywords }),
+          });
+          if (res.ok) {
+            crawlJson = await res.json();
+            const pages = crawlJson?.pageCount ?? 0;
+            const hasSitemap = crawlJson?.hasSitemap ? "sitemap ✓" : "no sitemap";
+            updateStage("websiteCrawl", { state: "done", value: `${pages} pages · ${hasSitemap}` });
+          } else {
+            updateStage("websiteCrawl", { state: "error", value: "Skipped" });
+          }
+        } catch (e) {
+          console.warn("[Step5] Website crawl failed:", e?.message);
+          updateStage("websiteCrawl", { state: "error", value: "Skipped" });
+        }
+      })();
+
+      // ── GMB & Directory Check ─────────────────────────────────────────────
+      updateStage("gmbCheck", { state: "loading" });
+      let gmbJson = null;
+      const gmbPromise = (async () => {
+        try {
+          const businessName = businessData?.businessName || businessData?.name || "";
+          const res = await fetch("/api/seo/gmb", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain, businessName }),
+          });
+          if (res.ok) {
+            gmbJson = await res.json();
+            const found  = gmbJson?.gmb?.found;
+            const rating = gmbJson?.gmb?.rating;
+            const revs   = gmbJson?.gmb?.reviewCount;
+            if (found && rating != null) {
+              updateStage("gmbCheck", { state: "done", value: `${rating}★ · ${revs || 0} reviews` });
+            } else {
+              updateStage("gmbCheck", { state: "done", value: found ? "GMB found" : "No GMB listing" });
+            }
+          } else {
+            updateStage("gmbCheck", { state: "error", value: "Skipped" });
+          }
+        } catch (e) {
+          console.warn("[Step5] GMB check failed:", e?.message);
+          updateStage("gmbCheck", { state: "error", value: "Skipped" });
+        }
+      })();
+
+      // Run crawl + GMB in parallel
+      await Promise.all([crawlPromise, gmbPromise]);
+
+      // ── Competitor Audit ──────────────────────────────────────────────────
+      const allCompetitors = [
+        ...(competitorData?.businessCompetitors || []),
+        ...(competitorData?.searchCompetitors   || []),
+      ].slice(0, 4);
+
+      let competitorAuditJson = null;
+      if (allCompetitors.length > 0) {
+        updateStage("competitorAudit", { state: "loading" });
+        try {
+          const res = await fetch("/api/seo/competitor-audit", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              targetDomain: domain,
+              competitors:  allCompetitors,
+              keywords,
+            }),
+          });
+          if (res.ok) {
+            competitorAuditJson = await res.json();
+            const count = (competitorAuditJson?.competitors || []).length;
+            updateStage("competitorAudit", { state: "done", value: `${count} competitor${count !== 1 ? "s" : ""} audited` });
+          } else {
+            updateStage("competitorAudit", { state: "error", value: "Skipped" });
+          }
+        } catch (e) {
+          console.warn("[Step5] Competitor audit failed:", e?.message);
+          updateStage("competitorAudit", { state: "error", value: "Skipped" });
+        }
+      } else {
+        updateStage("competitorAudit", { state: "done", value: "No competitors selected" });
+      }
+
+      // ── Strategic Plan ────────────────────────────────────────────────────
+      updateStage("strategicPlan", { state: "loading" });
+      let strategicPlanJson = null;
+      try {
+        const res = await fetch("/api/seo/strategic-plan", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            domain,
+            businessData,
+            keywords,
+            seoData:        seoJson,
+            crawlData:      crawlJson,
+            gmbData:        gmbJson,
+            competitorAudit: competitorAuditJson,
+          }),
+        });
+        if (res.ok) {
+          strategicPlanJson = await res.json();
+          updateStage("strategicPlan", { state: "done", value: "Plan ready" });
+        } else {
+          updateStage("strategicPlan", { state: "error", value: "Skipped" });
+        }
+      } catch (e) {
+        console.warn("[Step5] Strategic plan failed:", e?.message);
+        updateStage("strategicPlan", { state: "error", value: "Skipped" });
+      }
+
       // Mark any stage still "loading" as done (safety net)
       setFetchStages((prev) =>
         prev.map((s) =>
@@ -550,8 +716,17 @@ export default function Step5Slide2({
         )
       );
 
+      // Merge new data into seoJson for caching + report generation
+      const enrichedSeoJson = {
+        ...seoJson,
+        websiteCrawl:    crawlJson,
+        gmbCheck:        gmbJson,
+        competitorAudit: competitorAuditJson,
+        strategicPlan:   strategicPlanJson,
+      };
+
       // Extract human-readable values
-      extractStageValues(seoJson);
+      extractStageValues(enrichedSeoJson);
 
       // ── Report generation ─────────────────────────────────────────────────
       updateStage("report", { state: "loading" });
@@ -569,7 +744,7 @@ export default function Step5Slide2({
             businessData,
             keywordData: keywords,
             competitorData,
-            seoData: seoJson, // pre-fetched — avoid double API calls, gives Claude real metrics
+            seoData: enrichedSeoJson, // pre-fetched — includes crawl, GMB, competitor audit + strategic plan
           }),
         });
 
@@ -614,7 +789,7 @@ export default function Step5Slide2({
       // ── Cross-checks ──────────────────────────────────────────────────────
       setLoadingPhase("checking");
       await delay(400);
-      await runCrossChecks(seoJson, reportId);
+      await runCrossChecks(enrichedSeoJson, reportId);
       await delay(600);
 
       setLoadingPhase("redirecting");
@@ -622,14 +797,14 @@ export default function Step5Slide2({
       // Stash for Dashboard — both in-memory (same-tab direct nav) and
       // sessionStorage (survives report-page → dashboard page navigation)
       if (typeof window !== "undefined") {
-        window.__drfizzSeoPrefetch = seoJson;
+        window.__drfizzSeoPrefetch = enrichedSeoJson;
         window.dispatchEvent(new Event("dashboard:open"));
 
-        if (seoJson) {
+        if (enrichedSeoJson) {
           const cacheDomain = resolveDomainFromContext();
           if (cacheDomain) {
             try {
-              const cachePayload = JSON.stringify({ ts: Date.now(), data: seoJson });
+              const cachePayload = JSON.stringify({ ts: Date.now(), data: enrichedSeoJson });
               sessionStorage.setItem(`drfizz:seo:${cacheDomain}`, cachePayload);
               sessionStorage.setItem("drfizz:lastDomain", cacheDomain);
             } catch (_) {} // storage full/blocked — not critical
