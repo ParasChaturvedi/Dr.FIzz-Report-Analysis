@@ -133,6 +133,13 @@ export default function WebsiteReport({ data }) {
   const gf = d.geoFrontier || {};
   const qw = Array.isArray(d.quickWins180) ? d.quickWins180 : [];
   const sp = Array.isArray(d.strategicPriorities) ? d.strategicPriorities : [];
+  const msRows = Array.isArray(d.measuringSuccessRows) ? d.measuringSuccessRows : null;
+
+  // Real enriched data for enhanced sections
+  const gmbInfo = d.gmbCheck?.gmb || null;
+  const gmbScore = d.gmbCheck?.completeness?.score ?? bm.gmbCompletenessScore ?? null;
+  const crawlHealth = d.websiteCrawl?.healthScore ?? bm.crawlHealthScore ?? null;
+  const kwGap = d.keywordGap || null;
 
   const dateStr = d.generatedAt
     ? new Date(d.generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
@@ -251,16 +258,25 @@ export default function WebsiteReport({ data }) {
             ))}
           </div>
 
-          {/* Backlink metrics — shows if available */}
-          <div className="grid grid-cols-3 gap-px bg-gray-200 rounded-xl overflow-hidden mt-px">
+          {/* Backlink + health metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-200 rounded-xl overflow-hidden mt-px">
             {[
               { label: "Referring Domains", value: bm.referringDomains || "—" },
               { label: "404 Errors",        value: bm.errors404        || "—" },
-              { label: "Redirect Chains",   value: bm.redirectChains   || "—" },
-            ].map(({ label, value }) => (
+              {
+                label: "Site Health Score",
+                value: crawlHealth != null ? `${crawlHealth}/100` : "—",
+                color: crawlHealth != null ? (crawlHealth >= 70 ? "#16a34a" : crawlHealth >= 40 ? "#d45427" : "#dc2626") : null,
+              },
+              {
+                label: "GMB Completeness",
+                value: gmbScore != null ? `${gmbScore}/100` : "—",
+                color: gmbScore != null ? (gmbScore >= 70 ? "#16a34a" : gmbScore >= 40 ? "#d45427" : "#dc2626") : null,
+              },
+            ].map(({ label, value, color }) => (
               <div key={label} className="bg-white px-5 py-5">
                 <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1.5">{label}</div>
-                <div className="text-2xl font-black text-gray-900">{value}</div>
+                <div className="text-2xl font-black" style={{ color: color || "#111827" }}>{value}</div>
               </div>
             ))}
           </div>
@@ -344,6 +360,26 @@ export default function WebsiteReport({ data }) {
           <OBar />
           <SHead>KEYWORD STRATEGY</SHead>
           <SSub>Tier 1 — Primary Commercial Keywords</SSub>
+
+          {/* Keyword gap summary banner */}
+          {kwGap && (kwGap.summary?.totalGapKeywords || 0) > 0 && (
+            <div className="flex flex-wrap gap-4 mb-6">
+              <div className="bg-[#090909] text-white rounded-xl px-5 py-3 flex items-center gap-3">
+                <span className="text-2xl font-black text-[#ffa615]">{kwGap.summary.totalGapKeywords}</span>
+                <span className="text-xs text-gray-400">gap keywords<br />competitors rank for</span>
+              </div>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3 flex items-center gap-3">
+                <span className="text-2xl font-black text-emerald-700">{kwGap.summary.totalEasyWins || 0}</span>
+                <span className="text-xs text-emerald-700">easy wins<br />(low difficulty)</span>
+              </div>
+              {(kwGap.paaQuestions || []).length > 0 && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 flex items-center gap-3">
+                  <span className="text-2xl font-black text-blue-700">{kwGap.paaQuestions.length}</span>
+                  <span className="text-xs text-blue-700">People Also Ask<br />content opportunities</span>
+                </div>
+              )}
+            </div>
+          )}
 
           {(ks.tier1 || []).length > 0 ? (
             <div className="rounded-xl overflow-hidden border border-gray-200 mb-10">
@@ -599,10 +635,27 @@ export default function WebsiteReport({ data }) {
             <SHead white>LOCAL SEARCH</SHead>
             <SSub white>Google Business Profile: The Fastest Win</SSub>
 
+            {/* Real GMB status strip */}
+            {gmbInfo && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 rounded-xl overflow-hidden mb-8">
+                {[
+                  { label: "GMB Listing",    value: gmbInfo.found ? "Found ✓" : "Not Found ✗", bad: !gmbInfo.found },
+                  { label: "Verified",       value: gmbInfo.isVerified ? "Yes ✓" : "No ✗", bad: !gmbInfo.isVerified },
+                  { label: "Rating",         value: gmbInfo.rating ? `${gmbInfo.rating}★` : "N/A", bad: !gmbInfo.rating || gmbInfo.rating < 4 },
+                  { label: "Reviews",        value: gmbInfo.reviewCount != null ? String(gmbInfo.reviewCount) : "—", bad: (gmbInfo.reviewCount || 0) < 10 },
+                ].map(({ label, value, bad }) => (
+                  <div key={label} className="bg-white/[0.04] px-5 py-4">
+                    <div className="text-[8px] uppercase tracking-widest text-gray-500 mb-1">{label}</div>
+                    <div className={`text-lg font-black ${bad ? "text-red-400" : "text-[#ffa615]"}`}>{value}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
                 <div className="text-[8px] font-bold uppercase tracking-widest text-[#ffa615] mb-4">
-                  GBP Checklist
+                  GBP Action Checklist
                 </div>
                 <ul className="space-y-3">
                   {(ls.gbpChecklist || []).map((item, i) => (
@@ -618,12 +671,26 @@ export default function WebsiteReport({ data }) {
                   )}
                 </ul>
               </div>
-              {ls.reviewTarget && (
-                <div className="bg-[#ffa615]/10 border border-[#ffa615]/20 rounded-xl p-6">
-                  <div className="text-[8px] font-bold uppercase tracking-widest text-[#ffa615] mb-2">Review Target</div>
-                  <p className="text-sm text-gray-300 leading-relaxed">{ls.reviewTarget}</p>
-                </div>
-              )}
+              <div className="space-y-4">
+                {ls.reviewTarget && (
+                  <div className="bg-[#ffa615]/10 border border-[#ffa615]/20 rounded-xl p-5">
+                    <div className="text-[8px] font-bold uppercase tracking-widest text-[#ffa615] mb-2">Review Target</div>
+                    <p className="text-sm text-gray-300 leading-relaxed">{ls.reviewTarget}</p>
+                  </div>
+                )}
+                {gmbScore != null && (
+                  <div className="bg-white/[0.04] border border-white/10 rounded-xl p-5">
+                    <div className="text-[8px] font-bold uppercase tracking-widest text-gray-500 mb-2">GMB Completeness Score</div>
+                    <div className="flex items-end gap-2">
+                      <span className={`text-3xl font-black ${gmbScore >= 70 ? "text-[#ffa615]" : gmbScore >= 40 ? "text-orange-400" : "text-red-400"}`}>{gmbScore}</span>
+                      <span className="text-gray-500 text-sm mb-1">/100</span>
+                    </div>
+                    <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-[#d45427] to-[#ffa615] rounded-full transition-all" style={{ width: `${gmbScore}%` }} />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </AnimatedSection>
         </div>
@@ -684,18 +751,20 @@ export default function WebsiteReport({ data }) {
                 <thead>
                   <tr className="bg-gray-900 text-white">
                     <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Metric</th>
-                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Now</th>
-                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">6 Months</th>
-                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">12 Months</th>
+                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Baseline (Now)</th>
+                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">6 Months Target</th>
+                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">12 Months Target</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    { metric: "Domain Rating",    now: bm.domainRating    || "—", s6: "Growing", s12: "Target +" },
-                    { metric: "Organic Keywords", now: bm.organicKeywords || "—", s6: "+50%",    s12: "+150%"    },
-                    { metric: "Organic Traffic",  now: bm.organicTraffic  || "—", s6: "+80%",    s12: "+300%"    },
-                    { metric: "Referring Domains", now: bm.referringDomains || "—", s6: "+20",   s12: "+50"      },
-                  ].map((row, i) => (
+                  {(msRows || [
+                    { metric: "Domain Rating",     now: bm.domainRating    || "—", s6: "Growing",  s12: "Target +"  },
+                    { metric: "Organic Keywords",  now: bm.organicKeywords || "—", s6: "+60%",     s12: "+200%"     },
+                    { metric: "Organic Traffic",   now: bm.organicTraffic  || "—", s6: "+80%",     s12: "+300%"     },
+                    { metric: "Referring Domains", now: bm.referringDomains|| "—", s6: "+15",      s12: "+40"       },
+                    { metric: "Site Health Score", now: crawlHealth != null ? `${crawlHealth}/100` : "—", s6: "75/100", s12: "90/100" },
+                    { metric: "GMB Completeness",  now: gmbScore    != null ? `${gmbScore}/100`    : "—", s6: "80/100", s12: "95/100" },
+                  ]).map((row, i) => (
                     <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-[#f4f4f4]"}>
                       <td className="px-4 py-3 font-semibold text-gray-900">{row.metric}</td>
                       <td className="px-4 py-3 text-gray-700">{row.now}</td>

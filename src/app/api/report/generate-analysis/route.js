@@ -71,11 +71,10 @@ async function generateWithAI(systemPrompt, userPrompt, fallback = {}) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      max_tokens: 6000,
+      max_tokens: 7000,
       timeoutMs: 90000,
     });
 
-    // Extract JSON — try direct parse, then largest {...} block
     let parsed = null;
     try {
       parsed = JSON.parse(content);
@@ -90,6 +89,140 @@ async function generateWithAI(systemPrompt, userPrompt, fallback = {}) {
   }
 }
 
+// ─── Real-data builders (no AI needed — derived from collected metrics) ────────
+
+function buildTechnicalPrioritiesFromCrawl(crawlData) {
+  if (!crawlData) return [];
+  const s = crawlData.summary || {};
+  const issues = [];
+
+  if (crawlData.crawlBlockedByRobots)
+    issues.push({ priority: "CRITICAL", issue: "Googlebot blocked by robots.txt", action: "Remove 'Disallow: /' from robots.txt immediately — Google cannot index any page until this is fixed." });
+
+  if (!crawlData.hasSitemap)
+    issues.push({ priority: "HIGH", issue: "XML sitemap is missing", action: "Create /sitemap.xml listing all important URLs and submit it in Google Search Console → Sitemaps." });
+
+  if (!(s.pagesWithSchemaTypes || []).length)
+    issues.push({ priority: "HIGH", issue: "Zero structured data (schema) on any page", action: "Add LocalBusiness + WebSite JSON-LD to homepage, Service schema to service pages, FAQ schema to FAQ sections. Critical for AI Overview (GEO) inclusion." });
+
+  if ((s.pagesMissingMetaTitle || 0) > 0)
+    issues.push({ priority: "HIGH", issue: `${s.pagesMissingMetaTitle} pages missing <title> tags`, action: `Write unique 50–60 character titles formatted "Primary Keyword | Brand". Start with highest-traffic pages.` });
+
+  if ((s.pagesMissingH1 || 0) > 0)
+    issues.push({ priority: "HIGH", issue: `${s.pagesMissingH1} of ${crawlData.pageCount} pages have no H1 heading`, action: "Add exactly one keyword-rich H1 per page. This is the clearest on-page relevance signal for Google." });
+
+  if ((s.pagesMissingMetaDesc || 0) > 0)
+    issues.push({ priority: "MEDIUM", issue: `${s.pagesMissingMetaDesc} pages missing meta descriptions`, action: "Write 150–160 character descriptions with a CTA. Good meta descriptions improve click-through rate by 5–10%." });
+
+  const dupTitles = (crawlData.duplicates || []).filter(d => d.type === "title").length;
+  if (dupTitles > 0)
+    issues.push({ priority: "MEDIUM", issue: `${dupTitles} sets of duplicate meta title tags`, action: "Duplicate titles force Google to choose which URL to rank arbitrarily — make every title unique." });
+
+  if ((crawlData.brokenLinks || []).length > 0)
+    issues.push({ priority: "MEDIUM", issue: `${crawlData.brokenLinks.length} broken internal links found`, action: `Fix or 301-redirect each broken URL. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}` });
+
+  if ((s.thinContentCount || 0) > 0)
+    issues.push({ priority: "MEDIUM", issue: `${s.thinContentCount} pages with thin content (<200 words)`, action: "Expand to 600+ words with FAQs and local context. Thin pages drag down the entire site's quality signal." });
+
+  if ((s.totalImgsWithoutAlt || 0) > 5)
+    issues.push({ priority: "MEDIUM", issue: `${s.totalImgsWithoutAlt} images missing alt text`, action: "Add descriptive alt text to every image using keywords naturally. Affects accessibility score and image search visibility." });
+
+  if ((s.pagesMultipleH1 || 0) > 0)
+    issues.push({ priority: "LOW", issue: `${s.pagesMultipleH1} pages have multiple H1 tags`, action: "Each page should have exactly one H1. Demote extra H1s to H2 or H3." });
+
+  if (!crawlData.hasRobots)
+    issues.push({ priority: "LOW", issue: "robots.txt file not found", action: "Create /robots.txt and include: Sitemap: https://yourdomain.com/sitemap.xml" });
+
+  return issues.slice(0, 8);
+}
+
+function buildLocalSearchFromGmb(gmbData) {
+  if (!gmbData) return null;
+  const gmb = gmbData.gmb || {};
+  const checklist = [];
+
+  if (!gmb.found) {
+    checklist.push("Create Google Business Profile at business.google.com — the single highest-ROI local SEO action");
+    checklist.push("Verify within 5 days via phone or postcard — unverified listings are invisible");
+    checklist.push("Fill NAP (Name, Address, Phone) to exactly match your website footer");
+    checklist.push("Choose the most specific primary category + 2 secondary categories");
+    checklist.push("Upload 10+ photos: exterior, interior, team, products, before/after");
+    checklist.push("Write 750-character business description — put primary keywords in first 250 chars");
+    checklist.push("Set accurate hours including special/holiday hours");
+    checklist.push("Submit NAP to JustDial, Sulekha, IndiaMART, Trustpilot for citation consistency");
+  } else {
+    if (!gmb.isVerified)     checklist.push("URGENT: Verify your GMB listing — unverified profiles rank far below verified ones");
+    if (!gmb.phone)          checklist.push("Add local phone number — missing contact info reduces conversions by ~30%");
+    if (!gmb.address)        checklist.push("Add full street address — required for Local Pack (map pack) ranking");
+    if (!gmb.hoursAvailable) checklist.push("Set business hours including holiday hours — affects when you appear in 'open now' searches");
+    if (!gmb.hasPhotos)      checklist.push("Upload 10+ photos — GMB listings with photos get 42% more direction requests");
+    const reviews = gmb.reviewCount || 0;
+    if (reviews < 25)        checklist.push(`Get to 25 reviews: WhatsApp each recent customer with a direct review link (need ${25 - reviews} more)`);
+    if ((gmbData.unrepliedReviewCount || 0) > 0) checklist.push(`Reply to all ${gmbData.unrepliedReviewCount} unanswered reviews within 24h — Google tracks owner response rate`);
+    if ((gmbData.listedDirectoryCount || 0) < 3)  checklist.push("Build 5+ directory citations (JustDial, Sulekha, IndiaMART, Trustpilot, Facebook) for NAP consistency");
+    checklist.push("Post 1–2 Google Business updates per week (offers, news, new services, team highlights)");
+    const unansweredQA = (gmbData.qa || []).filter(q => !q.hasAnswer).length;
+    if (unansweredQA > 0)    checklist.push(`Answer ${unansweredQA} unanswered Q&As — each answered question adds free long-tail content`);
+  }
+
+  const reviews = gmb.reviewCount || 0;
+  const rating = gmb.rating;
+  const reviewTarget = rating
+    ? `Target: ${Math.max(50, reviews + 25)} reviews at ${rating >= 4.5 ? "4.5★+" : "4.8★"} within 6 months (currently ${reviews} at ${rating}★). Use WhatsApp automation after each job. Template: "Hi [Name], thanks for choosing us! Your honest Google review takes 30 seconds: [link]"`
+    : "First milestone: 25 reviews at 4.8★ within 90 days. Send a post-service WhatsApp with a short Google review link.";
+
+  return { checklist: checklist.slice(0, 8), reviewTarget };
+}
+
+function buildKeywordTiersFromGap(keywordGapData) {
+  if (!keywordGapData) return null;
+  const fmtVol = (v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K/mo` : v > 0 ? `${v}/mo` : "<100/mo";
+
+  const tier1 = (keywordGapData.easyWins || []).slice(0, 5).map(k => ({
+    keyword:        k.keyword,
+    volume:         fmtVol(k.volume),
+    targetPageType: k.intent === "transactional" ? "Service/Landing Page" : k.intent === "commercial" ? "Comparison Page" : "Blog/Guide",
+  }));
+
+  const localKws = (keywordGapData.gapKeywords || [])
+    .filter(k => k.intent === "local" || k.intent === "transactional")
+    .slice(0, 5)
+    .map(k => k.keyword);
+
+  const infoKws = (keywordGapData.paaQuestions || []).slice(0, 5).map(q => q.question);
+
+  if (!tier1.length && !localKws.length) return null;
+  return { tier1, tier2Neighborhood: localKws, tier3Informational: infoKws };
+}
+
+function buildMeasuringSuccessRows(baselineMetrics, crawlData, gmbData) {
+  const toNum = (v) => {
+    if (!v || v === "—") return null;
+    const s = String(v).replace(/[,\s]/g, "");
+    const m = s.match(/^([0-9.]+)([KkMm]?)$/);
+    if (!m) return null;
+    const n = parseFloat(m[1]);
+    const mult = m[2]?.toLowerCase() === "k" ? 1000 : m[2]?.toLowerCase() === "m" ? 1000000 : 1;
+    return Math.round(n * mult);
+  };
+  const fmtN = (n) => n >= 1000000 ? `${(n/1000000).toFixed(1)}M` : n >= 1000 ? `${(n/1000).toFixed(0)}K` : String(n);
+
+  const bm = baselineMetrics || {};
+  const drN = toNum(bm.domainRating);
+  const tN  = toNum(bm.organicTraffic);
+  const kN  = toNum(bm.organicKeywords);
+  const rN  = toNum(bm.referringDomains);
+
+  return [
+    { metric: "Domain Rating",     now: bm.domainRating    || "—", s6: drN != null ? String(Math.min(100, drN + 5))      : "Growing", s12: drN != null ? String(Math.min(100, drN + 15)) : "20+" },
+    { metric: "Organic Keywords",  now: bm.organicKeywords || "—", s6: kN  != null ? fmtN(Math.round(kN * 1.6))          : "+60%",    s12: kN  != null ? fmtN(kN * 3)                   : "+200%" },
+    { metric: "Organic Traffic",   now: bm.organicTraffic  || "—", s6: tN  != null ? `${fmtN(Math.round(tN * 1.8))}/mo`  : "+80%",    s12: tN  != null ? `${fmtN(tN * 4)}/mo`           : "+300%" },
+    { metric: "Referring Domains", now: bm.referringDomains|| "—", s6: rN  != null ? String(rN + 15)                     : "+15",     s12: rN  != null ? String(rN + 40)                : "+40" },
+    { metric: "Site Health Score", now: crawlData?.healthScore  != null ? `${crawlData.healthScore}/100`        : "—", s6: "75/100",  s12: "90/100" },
+    { metric: "GMB Completeness",  now: gmbData?.completeness?.score != null ? `${gmbData.completeness.score}/100` : "—", s6: "80/100", s12: "95/100" },
+  ];
+}
+
 // ─── Website-level AI analysis ────────────────────────────────────────────────
 
 async function generateWebsiteAnalysis({ domain, keywords, competitors, businessData, seoData, crawlData, gmbData, keywordGapData }) {
@@ -98,135 +231,138 @@ async function generateWebsiteAnalysis({ domain, keywords, competitors, business
   const industry = businessData?.industrySector || businessData?.industry || "business";
 
   const systemPrompt = `You are ItzFizz Intelligence, an elite SEO & GEO strategy engine.
-You produce highly specific, actionable SEO strategy for businesses.
-Always return STRICT JSON matching the requested schema.
-For keyword search volumes: always provide realistic industry-knowledge estimates (format: "1K–5K/mo", "500–2K/mo", "200–500/mo", "<200/mo"). Never use "—" for keyword volumes.
-For content blueprint vol/pos fields: provide realistic estimates like "800/mo", "Top 10".
-Only use "—" for site-specific live metrics you cannot know (Domain Rating, referring domains, live traffic counts).
-Do not mention Claude, Anthropic, or any AI provider by name.
-IMPORTANT: Use ALL the real data provided below — crawl results, GMB status, keyword gaps — to make every recommendation specific and accurate, not generic.`;
+You produce ruthlessly specific, data-backed strategy for real businesses. Every item must reference the client's actual data — industry, keywords, competitors, domain metrics.
+Rules:
+- Return STRICT JSON matching the exact schema below.
+- Keyword volumes: use realistic industry estimates (format: "2K–5K/mo", "800/mo"). Never use "—" for volumes.
+- Content blueprint vol/pos: realistic estimates like "1.2K/mo", "Top 5".
+- Do NOT mention Claude, Anthropic, or any AI tool by name.
+- Do NOT give generic advice. Every sentence must be specific to THIS business.`;
 
-  const realMetrics = seoData ? `
-Live Domain Metrics:
+  const domainCtx = seoData ? `
+DOMAIN AUTHORITY & TRAFFIC (live data):
   Domain Rating:      ${seoData.dr || "—"}
   Referring Domains:  ${seoData.referringDomains || "—"}
   Organic Keywords:   ${seoData.organicKeywords || "—"}
-  Organic Traffic:    ${seoData.organicTraffic || "—"}
-  Mobile PSI Score:   ${seoData.performanceMobile || "—"}
-  Desktop PSI Score:  ${seoData.performanceDesktop || "—"}` : "";
+  Monthly Traffic:    ${seoData.organicTraffic || "—"}
+  Mobile PSI:         ${seoData.performanceMobile || "—"}
+  Desktop PSI:        ${seoData.performanceDesktop || "—"}` : "";
 
-  const crawlContext = crawlData ? `
+  const crawlCtx = crawlData ? `
 
-Website Crawl Results (Health Score: ${crawlData.healthScore ?? "N/A"}/100):
-  Pages Crawled:          ${crawlData.pageCount || 0}
-  Has Sitemap:            ${crawlData.hasSitemap ? "Yes" : "NO — Missing"}
-  Has robots.txt:         ${crawlData.hasRobots ? "Yes" : "No"}
-  Crawl Blocked:          ${crawlData.crawlBlockedByRobots ? "YES — CRITICAL" : "No"}
-  Schema Markup:          ${(crawlData.summary?.pagesWithSchemaTypes || []).join(", ") || "NONE found"}
-  Missing Meta Titles:    ${crawlData.summary?.pagesMissingMetaTitle ?? 0} pages
-  Missing Meta Desc:      ${crawlData.summary?.pagesMissingMetaDesc ?? 0} pages
-  Missing H1 Tags:        ${crawlData.summary?.pagesMissingH1 ?? 0} pages
-  Images Without Alt:     ${crawlData.summary?.totalImgsWithoutAlt ?? 0}
-  Thin Content (<200w):   ${crawlData.summary?.thinContentCount ?? 0} pages
-  Avg Word Count:         ${crawlData.summary?.avgWordCount ?? 0} words/page
-  Broken Links:           ${(crawlData.brokenLinks || []).length}
-  Duplicate Titles:       ${(crawlData.duplicates || []).filter(d => d.type === "title").length}` : "";
+SITE HEALTH (crawl audit):
+  Health Score: ${crawlData.healthScore ?? "N/A"}/100  |  Pages: ${crawlData.pageCount || 0}  |  Avg word count: ${crawlData.summary?.avgWordCount ?? 0}
+  Schema types found: ${(crawlData.summary?.pagesWithSchemaTypes || []).join(", ") || "NONE"}
+  Sitemap: ${crawlData.hasSitemap ? "Present" : "MISSING"}  |  Crawl blocked: ${crawlData.crawlBlockedByRobots ? "YES" : "No"}` : "";
 
-  const gmbContext = gmbData ? `
+  const gmbCtx = gmbData ? `
 
-Google My Business Status:
-  Listing Found:      ${gmbData.gmb?.found ? "Yes" : "NO"}
-  Verified:           ${gmbData.gmb?.isVerified ? "Yes" : "No"}
-  Rating:             ${gmbData.gmb?.rating ? `${gmbData.gmb.rating}★ (${gmbData.gmb.reviewCount} reviews)` : "N/A"}
-  Completeness Score: ${gmbData.completeness?.score ?? 0}/100
-  Phone Listed:       ${gmbData.gmb?.phone ? "Yes" : "Missing"}
-  Address Listed:     ${gmbData.gmb?.address ? "Yes" : "Missing"}
-  Hours Set:          ${gmbData.gmb?.hoursAvailable ? "Yes" : "Missing"}
-  Photos:             ${gmbData.gmb?.hasPhotos ? "Yes" : "Missing"}
-  Directory Listings: ${gmbData.listedDirectoryCount ?? 0}/10
-  Key Issues:         ${(gmbData.issues || []).slice(0, 4).map(i => i.issue).join("; ") || "None"}` : "";
+GMB STATUS:
+  Found: ${gmbData.gmb?.found ? "Yes" : "NO"}  |  Rating: ${gmbData.gmb?.rating ? `${gmbData.gmb.rating}★ (${gmbData.gmb.reviewCount} reviews)` : "N/A"}
+  Completeness: ${gmbData.completeness?.score ?? 0}/100  |  Directories listed: ${gmbData.listedDirectoryCount ?? 0}/10` : "";
 
-  const kgContext = keywordGapData ? `
+  const kwCtx = keywordGapData ? `
 
-Keyword Gap Analysis:
-  Gap Keywords Found: ${keywordGapData.summary?.totalGapKeywords ?? 0}
-  Easy Wins:          ${keywordGapData.summary?.totalEasyWins ?? 0}
-  Top Gap Keywords:   ${(keywordGapData.gapKeywords || []).slice(0, 8).map(k => `"${k.keyword}" (vol:${k.volume})`).join(", ")}
-  Easy Win Keywords:  ${(keywordGapData.easyWins || []).slice(0, 5).map(k => `"${k.keyword}"`).join(", ")}
-  PAA Questions:      ${(keywordGapData.paaQuestions || []).slice(0, 5).map(q => q.question).join("; ")}` : "";
+KEYWORD GAP (real competitor data):
+  Gap keywords: ${keywordGapData.summary?.totalGapKeywords ?? 0} found
+  Easy wins: ${(keywordGapData.easyWins || []).slice(0, 6).map(k => `"${k.keyword}" (vol:${k.volume})`).join(", ")}
+  Top gaps: ${(keywordGapData.gapKeywords || []).slice(0, 6).map(k => `"${k.keyword}" (vol:${k.volume})`).join(", ")}
+  People Also Ask: ${(keywordGapData.paaQuestions || []).slice(0, 4).map(q => q.question).join(" | ")}` : "";
 
-  const userPrompt = `Analyze this business and produce a comprehensive SEO strategy based on the REAL data below.
+  const userPrompt = `Generate a deep, data-specific SEO & GEO strategy for this business. Every recommendation must reference the real numbers below.
 
-Domain: ${domain}
-Industry: ${industry}
-Primary Keywords: ${primaryKw}
-Competitors: ${competitorList}
-Business Offering: ${businessData?.offeringType || "services"}
-Location: ${businessData?.location || ""}${realMetrics}${crawlContext}${gmbContext}${kgContext}
+BUSINESS PROFILE:
+  Domain:    ${domain}
+  Industry:  ${industry}
+  Offering:  ${businessData?.offeringType || "services"}
+  Keywords:  ${primaryKw}
+  Competitors listed: ${competitorList}
+  Location:  ${businessData?.location || "India"}
+${domainCtx}${crawlCtx}${gmbCtx}${kwCtx}
 
-Return JSON with exactly these keys:
+NOTE: Technical SEO issues and GMB checklist are computed separately from real crawl data. You handle only the strategic and creative sections below.
+
+Return ONLY this JSON (no markdown, no commentary):
 {
   "competitorLandscape": {
-    "localCompetitors": [{"name": "...", "domain": "...", "description": "...", "strength": "..."}],
-    "nationalPlatforms": [{"name": "...", "description": "...", "threat": "..."}],
-    "localOpening": "one paragraph about the local opportunity"
-  },
-  "keywordStrategy": {
-    "tier1": [{"keyword": "...", "volume": "...", "targetPageType": "..."}],
-    "tier2Neighborhood": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-    "tier3Informational": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+    "localCompetitors": [
+      {"name": "...", "domain": "...", "description": "what makes them strong vs ${domain}", "strength": "High/Medium/Low"},
+      {"name": "...", "domain": "...", "description": "...", "strength": "..."},
+      {"name": "...", "domain": "...", "description": "...", "strength": "..."}
+    ],
+    "nationalPlatforms": [
+      {"name": "...", "description": "why they intercept ${industry} searches", "threat": "High/Medium"},
+      {"name": "...", "description": "...", "threat": "..."}
+    ],
+    "localOpening": "2–3 sentences on the specific local opportunity for ${domain} given the competitor landscape"
   },
   "contentArchitecture": {
-    "siteStructure": [{"page": "...", "url": "...", "purpose": "..."}],
-    "checklist": ["item1", "item2", "item3", "item4", "item5"]
+    "siteStructure": [
+      {"page": "Homepage", "url": "/", "purpose": "..."},
+      {"page": "...", "url": "/slug", "purpose": "..."},
+      {"page": "...", "url": "/slug", "purpose": "..."},
+      {"page": "...", "url": "/slug", "purpose": "..."},
+      {"page": "...", "url": "/slug", "purpose": "..."},
+      {"page": "...", "url": "/slug", "purpose": "..."}
+    ],
+    "checklist": [
+      "specific checklist item for ${domain}",
+      "specific checklist item",
+      "specific checklist item",
+      "specific checklist item",
+      "specific checklist item"
+    ]
   },
   "competitiveIntelligence": {
-    "whatWorksForThem": ["point1", "point2", "point3", "point4"],
-    "gapsYouCanExploit": ["gap1", "gap2", "gap3", "gap4"]
+    "whatWorksForThem": [
+      "specific tactic competitor uses — reference real keyword or content type",
+      "...", "...", "..."
+    ],
+    "gapsYouCanExploit": [
+      "specific gap ${domain} can fill — reference keyword or page type",
+      "...", "...", "..."
+    ]
   },
-  "technicalPriorities": [
-    {"priority": "CRITICAL", "issue": "...", "action": "..."},
-    {"priority": "HIGH", "issue": "...", "action": "..."},
-    {"priority": "MEDIUM", "issue": "...", "action": "..."}
-  ],
   "linkBuilding": {
-    "citationBuilding": ["item1", "item2", "item3"],
-    "contentDrivenLinks": ["item1", "item2", "item3"],
-    "competitorLinkGap": ["item1", "item2", "item3"]
-  },
-  "localSearch": {
-    "gbpChecklist": ["item1", "item2", "item3", "item4", "item5"],
-    "reviewTarget": "specific review target with platform and count"
+    "citationBuilding": ["specific directory or citation source for this industry", "...", "...", "..."],
+    "contentDrivenLinks": ["specific linkable asset idea with target audience", "...", "...", "..."],
+    "competitorLinkGap": ["specific site or domain type competitor has links from that ${domain} doesn't", "...", "...", "..."]
   },
   "roadmap": [
-    {"phase": 1, "title": "...", "duration": "Week 1", "actions": ["...", "...", "..."]},
-    {"phase": 2, "title": "...", "duration": "Week 2", "actions": ["...", "...", "..."]},
-    {"phase": 3, "title": "...", "duration": "Week 3", "actions": ["...", "...", "..."]},
-    {"phase": 4, "title": "...", "duration": "Week 4", "actions": ["...", "...", "..."]}
+    {"phase": 1, "title": "Quick Wins", "duration": "Week 1–2", "actions": ["specific action 1", "specific action 2", "specific action 3"]},
+    {"phase": 2, "title": "On-Page & Content", "duration": "Week 3–4", "actions": ["...", "...", "..."]},
+    {"phase": 3, "title": "Authority & GEO", "duration": "Month 2", "actions": ["...", "...", "..."]},
+    {"phase": 4, "title": "Scale & Compound", "duration": "Month 3–6", "actions": ["...", "...", "..."]}
   ],
   "contentBlueprint": [
+    {"blogPost": "specific title using a real PAA question or gap keyword", "topKeyword": "exact keyword", "vol": "est volume", "pos": "expected position"},
+    {"blogPost": "...", "topKeyword": "...", "vol": "...", "pos": "..."},
     {"blogPost": "...", "topKeyword": "...", "vol": "...", "pos": "..."},
     {"blogPost": "...", "topKeyword": "...", "vol": "...", "pos": "..."},
     {"blogPost": "...", "topKeyword": "...", "vol": "...", "pos": "..."}
   ],
   "uncontested": [
+    {"page": "specific page name for ${domain}", "keyword": "exact target keyword", "volume": "est monthly volume"},
     {"page": "...", "keyword": "...", "volume": "..."},
     {"page": "...", "keyword": "...", "volume": "..."},
     {"page": "...", "keyword": "...", "volume": "..."}
   ],
   "geoFrontier": {
-    "domainAICitations": "number or estimate",
-    "competitorAICitations": "number or estimate",
-    "howToEarnCitations": ["step1", "step2", "step3", "step4", "step5"]
+    "domainAICitations": "realistic current estimate for ${domain}",
+    "competitorAICitations": "realistic estimate for top competitor",
+    "howToEarnCitations": [
+      "specific step for ${industry} business to earn AI citations",
+      "...", "...", "...", "..."
+    ]
   },
   "quickWins180": [
-    {"week": "Week 1–2", "actions": ["...", "...", "..."]},
+    {"week": "Week 1–2", "actions": ["specific action 1 with metric or outcome", "...", "..."]},
     {"week": "Week 3–4", "actions": ["...", "...", "..."]},
-    {"week": "Month 2", "actions": ["...", "...", "..."]},
-    {"week": "Month 3–6", "actions": ["...", "...", "..."]}
+    {"week": "Month 2",  "actions": ["...", "...", "..."]},
+    {"week": "Month 3–6","actions": ["...", "...", "..."]}
   ],
   "strategicPriorities": [
-    {"priority": "01", "title": "...", "description": "..."},
+    {"priority": "01", "title": "Specific Priority for ${domain}", "description": "2 sentences on why this is the #1 lever based on the data"},
     {"priority": "02", "title": "...", "description": "..."},
     {"priority": "03", "title": "...", "description": "..."}
   ]
@@ -234,12 +370,9 @@ Return JSON with exactly these keys:
 
   return generateWithAI(systemPrompt, userPrompt, {
     competitorLandscape: { localCompetitors: [], nationalPlatforms: [], localOpening: "" },
-    keywordStrategy: { tier1: [], tier2Neighborhood: [], tier3Informational: [] },
     contentArchitecture: { siteStructure: [], checklist: [] },
     competitiveIntelligence: { whatWorksForThem: [], gapsYouCanExploit: [] },
-    technicalPriorities: [],
     linkBuilding: { citationBuilding: [], contentDrivenLinks: [], competitorLinkGap: [] },
-    localSearch: { gbpChecklist: [], reviewTarget: "" },
     roadmap: [],
     contentBlueprint: [],
     uncontested: [],
@@ -484,7 +617,17 @@ export async function POST(request) {
       cls: cwvLab?.cls ?? cwvLab?.CLS ?? null, // decimal or null
     };
 
-    // ── Generate AI sections ──────────────────────────────────────────────────
+    // ── Compute real-data sections (no AI needed — derived from collected metrics) ──
+    const crawlRaw   = prefetchedSeoData?.websiteCrawl ?? null;
+    const gmbRaw     = prefetchedSeoData?.gmbCheck     ?? null;
+    const kwGapRaw   = prefetchedSeoData?.keywordGap   ?? null;
+
+    const realTechnical     = buildTechnicalPrioritiesFromCrawl(crawlRaw);
+    const realLocalSearch   = buildLocalSearchFromGmb(gmbRaw);
+    const realKwTiers       = buildKeywordTiersFromGap(kwGapRaw);
+    const measuringSuccessRows = buildMeasuringSuccessRows(baselineMetrics, crawlRaw, gmbRaw);
+
+    // ── Generate AI sections (strategic/creative only) ────────────────────────
     let aiSections = {};
 
     if (reportType === "website") {
@@ -501,10 +644,22 @@ export async function POST(request) {
           performanceMobile:  mobileScore  != null ? `${mobileScore}/100`  : "—",
           performanceDesktop: desktopScore != null ? `${desktopScore}/100` : "—",
         },
-        crawlData:      prefetchedSeoData?.websiteCrawl   ?? null,
-        gmbData:        prefetchedSeoData?.gmbCheck       ?? null,
-        keywordGapData: prefetchedSeoData?.keywordGap     ?? null,
+        crawlData:      crawlRaw,
+        gmbData:        gmbRaw,
+        keywordGapData: kwGapRaw,
       });
+
+      // Override AI placeholders with real computed sections
+      if (realTechnical.length > 0)  aiSections.technicalPriorities = realTechnical;
+      if (realLocalSearch)           aiSections.localSearch          = realLocalSearch;
+      if (realKwTiers) {
+        // Merge: prefer real tier1 (easy wins with real volumes), keep AI tier2/3 as fallback
+        aiSections.keywordStrategy = {
+          tier1:             realKwTiers.tier1.length     ? realKwTiers.tier1             : (aiSections.keywordStrategy?.tier1 || []),
+          tier2Neighborhood: realKwTiers.tier2Neighborhood.length ? realKwTiers.tier2Neighborhood : (aiSections.keywordStrategy?.tier2Neighborhood || []),
+          tier3Informational: realKwTiers.tier3Informational.length ? realKwTiers.tier3Informational : (aiSections.keywordStrategy?.tier3Informational || []),
+        };
+      }
     } else {
       aiSections = await generatePageAnalysis({
         url: safeUrl,
@@ -521,17 +676,23 @@ export async function POST(request) {
       url: safeUrl,
       reportType,
       generatedAt: new Date().toISOString(),
-      baselineMetrics,
+      baselineMetrics: {
+        ...baselineMetrics,
+        // Add crawl health and GMB scores to baseline for display
+        crawlHealthScore: crawlRaw?.healthScore ?? null,
+        gmbCompletenessScore: gmbRaw?.completeness?.score ?? null,
+      },
       psiData,
       keywords,
       competitors,
       businessData: businessData || {},
       ...aiSections,
-      // Include enriched SEO data so Dashboard can read it from the report cache
-      websiteCrawl:    prefetchedSeoData?.websiteCrawl    ?? null,
-      gmbCheck:        prefetchedSeoData?.gmbCheck        ?? null,
+      measuringSuccessRows,
+      // Include enriched SEO data so Dashboard can read it from report cache
+      websiteCrawl:    crawlRaw,
+      gmbCheck:        gmbRaw,
       competitorAudit: prefetchedSeoData?.competitorAudit ?? null,
-      keywordGap:      prefetchedSeoData?.keywordGap      ?? null,
+      keywordGap:      kwGapRaw,
       strategicPlan:   prefetchedSeoData?.strategicPlan   ?? null,
     };
 
