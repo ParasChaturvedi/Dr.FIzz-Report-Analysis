@@ -517,7 +517,7 @@ export function categorizeBacklinks(input = {}) {
   const competitor_gap = (competitorBacklinks || []).slice(0, 15).map(b => ({
     referring_domain:  b.domain_from || b.domain || b.referring_domain || "",
     links_to:          b.competitor || b.links_to || "competitor",
-    link_type:         b.link_type || b.dofollow === false ? "nofollow mention" : "editorial link",
+    link_type:         b.link_type || (b.dofollow === false ? "nofollow mention" : "editorial link"),
     domain_rating:     b.rank ?? b.domain_rating ?? null,
     approach:          `The source already links to ${b.competitor || "a competitor"} — pitch equivalent value (data, quote, or resource) to earn the same link.`,
     category:          "competitor_gap",

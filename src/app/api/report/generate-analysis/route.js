@@ -643,7 +643,7 @@ export async function POST(request) {
 
     const competitorGmbs = Array.isArray(prefetchedSeoData?.competitorAudit?.competitors)
       ? prefetchedSeoData.competitorAudit.competitors
-          .filter(c => c?.gmb)
+          .filter(c => c?.gmb && !c.gmb.error)
           .map(c => ({ domain: c.domain, gmbCheck: c.gmb }))
       : [];
 
@@ -659,7 +659,7 @@ export async function POST(request) {
         clientName: businessData?.businessName || businessData?.name || domain,
         industry:   businessData?.industrySector || businessData?.industry || businessData?.category || "",
         reportType,
-        location:   businessData?.location || countryCode === "in" ? "India" : (businessData?.location || "India"),
+        location:   businessData?.location || (countryCode === "in" ? "India" : "India"),
         baselineRaw: {
           ...baselineMetrics,
           crawlHealthScore:     crawlRaw?.healthScore ?? null,

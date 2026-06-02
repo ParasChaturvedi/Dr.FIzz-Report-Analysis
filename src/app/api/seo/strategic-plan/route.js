@@ -277,7 +277,7 @@ export async function POST(request) {
         ...(keywordGap?.paaQuestions || []).map(q => ({ keyword: q.question, volume: 0, difficulty: 0.2 })),
       ];
       const competitorGmbs = Array.isArray(competitorAudit?.competitors)
-        ? competitorAudit.competitors.filter(c => c?.gmb).map(c => ({ domain: c.domain, gmbCheck: c.gmb }))
+        ? competitorAudit.competitors.filter(c => c?.gmb && !c.gmb.error).map(c => ({ domain: c.domain, gmbCheck: c.gmb }))
         : [];
 
       payload = runBusinessLogic({
