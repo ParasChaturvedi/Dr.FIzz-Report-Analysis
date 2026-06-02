@@ -12,6 +12,8 @@ import {
   fetchDataForSeo,
 } from "@/lib/seo/dataforseo";
 import { fetchPsiForStrategy } from "@/lib/seo/psi";
+import { runBusinessLogic } from "@/lib/seo/doctor-fizz-logic";
+import { runQaGate } from "@/lib/seo/doctor-fizz-qa";
 
 export const runtime     = "nodejs";
 export const maxDuration = 300; // PSI alone can take 90-120 s; Claude adds another 30-60 s
@@ -627,6 +629,62 @@ export async function POST(request) {
     const realKwTiers       = buildKeywordTiersFromGap(kwGapRaw);
     const measuringSuccessRows = buildMeasuringSuccessRows(baselineMetrics, crawlRaw, gmbRaw);
 
+    // ── STAGE 3: Doctor Fizz business logic layer ─────────────────────────────
+    // Classifies keywords, separates content, categorizes backlinks, builds GBP
+    // comparison, validates KPIs, and labels missing data — per the spec Parts 1-2.
+    // This produces the canonical structured payload that drives the report.
+    const rawKeywordsForLogic = [
+      ...(kwGapRaw?.gapKeywords || []),
+      ...(kwGapRaw?.newOpportunities || []),
+      ...(kwGapRaw?.easyWins || []),
+      ...(kwGapRaw?.targetRanked || []),
+      ...(kwGapRaw?.paaQuestions || []).map(q => ({ keyword: q.question, volume: 0, difficulty: 0.2 })),
+    ];
+
+    const competitorGmbs = Array.isArray(prefetchedSeoData?.competitorAudit?.competitors)
+      ? prefetchedSeoData.competitorAudit.competitors
+          .filter(c => c?.gmb)
+          .map(c => ({ domain: c.domain, gmbCheck: c.gmb }))
+      : [];
+
+    const competitorBacklinks = Array.isArray(kwGapRaw?.competitorBacklinks)
+      ? kwGapRaw.competitorBacklinks
+      : [];
+
+    let structuredPayload = null;
+    let qaResult = null;
+    try {
+      structuredPayload = runBusinessLogic({
+        domain,
+        clientName: businessData?.businessName || businessData?.name || domain,
+        industry:   businessData?.industrySector || businessData?.industry || businessData?.category || "",
+        reportType,
+        location:   businessData?.location || countryCode === "in" ? "India" : (businessData?.location || "India"),
+        baselineRaw: {
+          ...baselineMetrics,
+          crawlHealthScore:     crawlRaw?.healthScore ?? null,
+          gbpCompletenessScore: gmbRaw?.completeness?.score ?? null,
+          gbpReviewCount:       gmbRaw?.gmb?.reviewCount ?? gmbRaw?.reviewCount ?? null,
+          gbpRating:            gmbRaw?.gmb?.rating ?? null,
+        },
+        competitors,
+        rawKeywords: rawKeywordsForLogic,
+        clientGmb:   gmbRaw,
+        competitorGmbs,
+        directories: gmbRaw?.directories || [],
+        competitorBacklinks,
+        clientServiceTerms: [
+          businessData?.category, businessData?.specificService,
+          businessData?.offeringType, businessData?.offering,
+        ].filter(Boolean),
+        targetKeywords: keywords,
+      });
+      qaResult = runQaGate(structuredPayload);
+      console.log(`[generate-analysis] business logic: ${structuredPayload.keywords.accepted.length} accepted, ${structuredPayload.keywords.excluded.length} excluded, ${structuredPayload.keywords.brand_monitoring_only.length} brand-monitoring | QA ${qaResult.passedCount}/${qaResult.total} (${qaResult.score}%)`);
+    } catch (logicErr) {
+      console.error("[generate-analysis] business logic failed:", logicErr?.message);
+    }
+
     // ── Generate AI sections (strategic/creative only) ────────────────────────
     let aiSections = {};
 
@@ -688,6 +746,11 @@ export async function POST(request) {
       businessData: businessData || {},
       ...aiSections,
       measuringSuccessRows,
+      // ── Doctor Fizz Stage-3 structured payload + QA result ──
+      // Canonical classified/validated data per spec Part 2. The Dashboard and
+      // strategic-plan consume this for the diagnostic, separated sections.
+      doctorFizz:      structuredPayload,
+      qaResult,
       // Include enriched SEO data so Dashboard can read it from report cache
       websiteCrawl:    crawlRaw,
       gmbCheck:        gmbRaw,

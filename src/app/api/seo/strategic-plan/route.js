@@ -1,228 +1,235 @@
 // src/app/api/seo/strategic-plan/route.js
-// Advanced Claude-powered SEO + GEO strategic plan — v2
-// Uses all collected data: SEO metrics, crawl audit (with per-page details),
-// GMB status + sentiment, competitor comparison, keyword gap, E-E-A-T signals.
-// Returns structured JSON plan for dashboard rendering + markdown for display.
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOCTOR FIZZ — STAGE 4: STRATEGIC NARRATIVE GENERATION
+// ═══════════════════════════════════════════════════════════════════════════════
+// Consumes the Stage-3 structured payload (already classified, filtered, and
+// validated by the business logic layer) and produces the section-by-section
+// diagnostic narrative in Doctor Fizz's style.
+//
+// Claude does NOT classify here — those decisions were made in Stage 3. Claude
+// reasons about what the validated findings mean commercially and communicates
+// them in the locked diagnostic style. Implements the complete prompt pack from
+// Part 3 of the Universal Report Framework.
+// ═══════════════════════════════════════════════════════════════════════════════
 
 import { NextResponse }     from "next/server";
 import { claudeChatStream } from "@/lib/claude/client";
+import { runBusinessLogic } from "@/lib/seo/doctor-fizz-logic";
+import { runQaGate }        from "@/lib/seo/doctor-fizz-qa";
 
 export const runtime    = "nodejs";
 export const maxDuration = 120;
 
-function safe(obj, maxLen = 5000) {
+function safe(obj, maxLen = 6000) {
   const s = typeof obj === "string" ? obj : JSON.stringify(obj || {});
   if (s.length <= maxLen) return s;
   return s.slice(0, maxLen - 3) + "...";
 }
 
-// ── Build ultra-detailed prompt ───────────────────────────────────────────────
-function buildPrompt(params) {
-  const {
-    domain, businessData, keywords,
-    seoData, crawlData, gmbData, competitorAudit, keywordGap,
-  } = params;
+// ── MASTER SYSTEM PROMPT (Part 3 — 12 fundamental rules) ──────────────────────
+const MASTER_SYSTEM_PROMPT = `You are Doctor Fizz, a premium SEO and GEO strategy system. You generate strategic diagnostic reports for businesses seeking to improve their search visibility, content performance, and AI citation footprint.
 
-  const biz  = businessData || {};
-  const kws  = (Array.isArray(keywords) ? keywords : []).slice(0, 10);
-  const seo  = seoData || {};
-  const crawl = crawlData || {};
-  const gmb   = gmbData || {};
-  const ca    = competitorAudit || {};
-  const kg    = keywordGap || {};
+You receive structured JSON data that has ALREADY been classified, filtered, and validated by a business logic layer. Your role is to interpret this data, explain its commercial significance, prioritize actions, and write the report in Doctor Fizz's diagnostic style.
 
-  // SEO metrics
-  const dr = seo?.domainRankOverview?.rank ?? "unknown";
-  const traffic = seo?.domainRankOverview?.organicTraffic ?? "unknown";
-  const mScore  = seo?.technicalSeo?.performanceScoreMobile ?? null;
-  const dScore  = seo?.technicalSeo?.performanceScoreDesktop ?? null;
-  const toScore = v => v != null ? Math.round(v <= 1 ? v * 100 : v) + "/100" : "unknown";
+FUNDAMENTAL RULES:
+1. Write every section in diagnostic style. Open with the specific finding or problem. Explain why it matters commercially. Then prescribe the action with clear priority and effort.
+2. Never recommend content around competitor brand names. If competitor brand terms appear in the data, they are context only — never content targets.
+3. Never recommend content that does not serve the conversion funnel. Every blog post, guide, and page must have an explicit commercial role.
+4. Treat keywords with the intent class passed in the data. Do NOT reclassify. Informational → blog. Transactional → service page. Never mix these.
+5. Separate commercial pages from blog content and local pages. These must appear in distinct named sections.
+6. Separate citation links, editorial links, competitor gap links, and local authority links. Never merge them.
+7. Include the GBP competitor comparison using the data provided. Always follow with biggest gap, fastest win, and trust gap.
+8. If a KPI baseline value is null/missing, state it is unavailable and recommend a capture method. Never output a zero target.
+9. Match all action items to the three-tier tagging system: [SEO] for classic organic, [GEO] for generative/answer-engine, [SEO+GEO] for both.
+10. Do not use filler language, motivational phrases, or agency marketing clichés. Every sentence must advance the diagnosis or prescription.
+11. Format the priority action plan by impact-to-effort ranking. Highest-impact, lowest-effort first, regardless of section order.
+12. Close every major section with a one-sentence summary of the commercial benefit of completing the described actions.
 
-  // Top crawl pages with issues
-  const topIssuePages = (crawl.pages || [])
-    .filter(p => p.issueCount > 0)
-    .sort((a,b) => b.issueCount - a.issueCount)
-    .slice(0, 5)
-    .map(p => `  - ${p.url}\n    Issues: ${(p.issues||[]).slice(0,3).join("; ")}`)
-    .join("\n");
+STYLE CONSTRAINTS:
+- Lead with the finding. State the diagnosis first; do not build up to it.
+- Name specific numbers. Never "performance issues" — write "mobile performance score is 46/100, suppressing ranking across every page."
+- Connect every finding to a commercial outcome. Complete the sentence: "This matters because…"
+- Use the diagnostic vocabulary: throttling, suppressing, dark, blocked, gap, exposed, addressable.
+- No first-person brand voice. Never "we recommend" or "our analysis." Use "the data shows," "the priority action is," "the prescribed fix is."
+- FORBIDDEN: marketing slogans, "We believe", "In our experience", "consider", "you may want to", "It is worth noting that", "As we can see", "In conclusion", "Moving forward", motivational language, paragraph-length intros that delay the finding.`;
 
-  // E-E-A-T signals
-  const eeat = crawl.eeatSummary || {};
-  const eeatSignals = eeat.signals || {};
-  const eeatMissing = (crawl.pages?.[0]?.eeat?.missing || []).join(", ");
+// ── Build the data context block from the structured payload ───────────────────
+function buildDataContext(payload) {
+  const m  = payload.report_meta || {};
+  const b  = payload.baseline || {};
+  const kw = payload.keywords || {};
+  const ca = payload.content_architecture || {};
+  const bl = payload.backlinks || {};
+  const gbp = payload.gbp_comparison || {};
+  const kpis = payload.kpis || {};
 
-  // GMB details
-  const gmbInfo = gmb.gmb || {};
-  const sentiment = gmb.sentiment || null;
-  const gmbIssues = (gmb.issues || []).map(i => `• [${i.severity?.toUpperCase()}] ${i.issue}`).join("\n");
-  const reviewInsights = sentiment ? `
-  Sentiment: ${sentiment.overallSentiment} (${sentiment.sentimentScore}/100)
-  Customers praise: ${(sentiment.topPraises||[]).join(", ")}
-  Customers complain about: ${(sentiment.topComplaints||[]).join(", ")}
-  Urgent: ${(sentiment.urgentIssues||[]).join(", ") || "none"}` : "  Review sentiment analysis not available";
+  const fieldLine = (label, field) => {
+    const f = b[field];
+    if (!f) return `${label}: —`;
+    return `${label}: ${f.value != null ? f.value : `[${f.label}]`}`;
+  };
 
-  const completenessScore = gmb.completeness?.score ?? "N/A";
-
-  // Competitor data
-  const comps = (ca.competitors || []).slice(0, 3).map(c => `
-### ${c.domain}
-  - GMB: ${c.gmb?.gmb?.rating ? `${c.gmb.gmb.rating}★ (${c.gmb.gmb.reviewCount} reviews)` : "no GMB"}
-  - Schema types: ${(c.crawl?.summary?.pagesWithSchemaTypes||[]).join(", ") || "none"}
-  - Health score: ${c.crawl?.healthScore ?? "—"}
-  - Pages: ${c.crawl?.pageCount ?? "—"}
-  - Avg word count: ${c.crawl?.summary?.avgWordCount ?? "—"} words/page
-  - Missing meta titles: ${c.crawl?.summary?.pagesMissingMetaTitle ?? "—"}`).join("\n");
-
-  // Keyword gap
-  const gapKws = (kg.gapKeywords || []).slice(0, 10).map(k =>
-    `  - "${k.keyword}" (vol: ${k.volume}, diff: ${Math.round((k.difficulty||0)*100)}%, intent: ${k.intent}, found in: ${(k.foundIn||[]).join(", ")})`
+  const acceptedKw = (kw.accepted || []).slice(0, 25).map(k =>
+    `  - "${k.keyword}" | vol ${k.global_volume ?? "?"} | diff ${k.keyword_difficulty ?? "?"} | ${k.intent_class} → ${k.recommended_asset_type} | funnel: ${k.funnel_role} | priority: ${k.priority}`
   ).join("\n");
 
-  const easyWins = (kg.easyWins || []).slice(0, 5).map(k =>
-    `  - "${k.keyword}" — vol ${k.volume}, comp rank #${k.position||"?"}`
+  const monitoringKw = (kw.brand_monitoring_only || []).slice(0, 10).map(k =>
+    `  - "${k.keyword}" (${k.reason})`
   ).join("\n");
 
-  const paaQs = (kg.paaQuestions || []).slice(0, 8).map(q => `  - "${q.question}"`).join("\n");
-
-  // Duplicate content
-  const dupes = (crawl.duplicates || []).slice(0, 3).map(d =>
-    `  - Duplicate ${d.type}: "${d.value}" — found on ${d.urls.join(", ")}`
+  const commercialPages = (ca.commercial_pages || []).map(p =>
+    `  - ${p.page_name} (${p.url_slug}) | cluster "${p.keyword_cluster}" vol ${p.primary_volume} | ${p.funnel_role} | ${p.priority}`
   ).join("\n");
 
-  // Broken links
-  const broken = (crawl.brokenLinks || []).map(b =>
-    `  - ${b.url} → ${b.status}`
+  const blogPages = (ca.blog_and_guides || []).map(p =>
+    `  - "${p.proposed_title}" | cluster "${p.keyword_cluster}" vol ${p.primary_volume} | ${p.funnel_role}`
   ).join("\n");
 
-  return `You are a world-class SEO + GEO (Generative Engine Optimisation) strategist with 20 years of experience.
-You are generating a data-specific, ruthlessly actionable strategy for a real client.
-NEVER give generic advice. Every recommendation must reference the actual data.
-Use the client's real numbers, real pages, real keywords. Be direct and specific.
+  const cityPages = (ca.city_pages || []).map(p =>
+    `  - ${p.page_name} (city: ${p.city_target}) | cluster "${p.keyword_cluster}" vol ${p.primary_volume}`
+  ).join("\n");
+
+  const citations = (bl.citation_links || []).map(l =>
+    `  - ${l.platform} (DR ${l.domain_rating}) | listed: ${l.client_listed ? "YES" : "no"} | ${l.effort_hours} | ${l.signal}`
+  ).join("\n");
+
+  const competitorGap = (bl.competitor_gap || []).slice(0, 10).map(l =>
+    `  - ${l.referring_domain} → links to ${l.links_to} | ${l.link_type}`
+  ).join("\n");
+
+  const gbpRows = [gbp.client, ...(gbp.competitors || [])].filter(Boolean).map(r =>
+    `  - ${r.name}: verified=${r.verified} | ${r.review_count} reviews @ ${r.rating ?? "?"}★ | cat: ${r.primary_category ?? "?"} | photos: ${r.photos} | completeness: ${r.completeness ?? "?"}`
+  ).join("\n");
+
+  const kpiRows = (kpis.metrics || []).map(k =>
+    `  - ${k.metric}: baseline ${k.baseline ?? "unavailable"} → 6mo ${k.target_6_months} → 12mo ${k.target_12_months} [${k.validation_status}] ${k.estimation_note || ""}`
+  ).join("\n");
+
+  const competitors = (payload.competitors || []).map(c =>
+    `  - ${c.name} (${c.domain}) | threat: ${c.threat_level}`
+  ).join("\n");
+
+  return `
+═══════════════════════════════════════════════════════
+REPORT META
+═══════════════════════════════════════════════════════
+Client: ${m.client_name} | Domain: ${m.domain} | Industry: ${m.industry}
+Report type: ${m.report_type} | Ref: ${m.report_ref} | Date: ${m.report_date}
 
 ═══════════════════════════════════════════════════════
-CLIENT PROFILE
+BASELINE (validated — labels shown where data unavailable)
 ═══════════════════════════════════════════════════════
-Domain:           ${domain}
-Industry:         ${biz.industry || biz.industrySector || "—"}
-Offering Type:    ${biz.offering || biz.offeringType || "—"}
-Specific Service: ${biz.category || biz.specificService || "—"}
-Target Keywords:  ${kws.join(", ") || "not specified"}
-
-═══════════════════════════════════════════════════════
-DOMAIN AUTHORITY & TRAFFIC
-═══════════════════════════════════════════════════════
-Domain Rating:         ${dr}
-Organic Traffic (est): ${typeof traffic === "number" ? traffic.toLocaleString() : traffic}
-Organic Keywords:      ${seo?.domainRankOverview?.organicKeywords ?? "unknown"}
-Mobile PSI Score:      ${toScore(mScore)}
-Desktop PSI Score:     ${toScore(dScore)}
+${fieldLine("Domain Rating", "domain_rating")}
+${fieldLine("Organic Traffic", "organic_traffic")}
+${fieldLine("Organic Keywords", "organic_keywords")}
+${fieldLine("Referring Domains", "referring_domains")}
+${fieldLine("Mobile Performance", "mobile_performance_score")}
+${fieldLine("Desktop Performance", "desktop_performance_score")}
+${fieldLine("LCP", "lcp")}
+${fieldLine("CLS", "cls")}
+${fieldLine("Site Health Score", "site_health_score")}
+${fieldLine("GBP Completeness", "gbp_completeness")}
+${fieldLine("GBP Reviews", "gbp_review_count")}
+${fieldLine("GBP Rating", "gbp_rating")}
 
 ═══════════════════════════════════════════════════════
-WEBSITE CRAWL — HEALTH SCORE: ${crawl.healthScore ?? "N/A"}/100
+COMPETITORS
 ═══════════════════════════════════════════════════════
-Pages Crawled:              ${crawl.pageCount || 0}
-Has Sitemap:                ${crawl.hasSitemap ? "Yes" : "NO — MISSING"}
-Has robots.txt:             ${crawl.hasRobots ? "Yes" : "No"}
-Crawl Blocked:              ${crawl.crawlBlockedByRobots ? "YES — CRITICAL: Googlebot can't crawl site" : "No"}
-Schema Types Found:         ${(crawl.summary?.pagesWithSchemaTypes||[]).join(", ") || "NONE — Major GEO gap"}
-Missing Meta Titles:        ${crawl.summary?.pagesMissingMetaTitle ?? 0} pages
-Missing Meta Descriptions:  ${crawl.summary?.pagesMissingMetaDesc ?? 0} pages
-Missing H1:                 ${crawl.summary?.pagesMissingH1 ?? 0} pages
-Multiple H1s:               ${crawl.summary?.pagesMultipleH1 ?? 0} pages
-No Canonical Tag:           ${crawl.summary?.pagesNoCanonical ?? 0} pages
-Noindex Pages:              ${crawl.summary?.pagesNoindex ?? 0} pages
-Images Without Alt:         ${crawl.summary?.totalImgsWithoutAlt ?? 0} total
-Images Without Dimensions:  ${crawl.summary?.totalImgsWithoutDims ?? 0} total (CLS risk)
-Thin Content (<200 words):  ${crawl.summary?.thinContentCount ?? 0} pages
-Average Word Count:         ${crawl.summary?.avgWordCount ?? 0} words/page
-Slug Issues:                ${crawl.summary?.slugIssuesCount ?? 0} pages
-Duplicate Meta Titles:      ${(crawl.duplicates||[]).filter(d=>d.type==="title").length}
-Duplicate Meta Desc:        ${(crawl.duplicates||[]).filter(d=>d.type==="description").length}
-Broken Links Found:         ${(crawl.brokenLinks||[]).length}
-Orphan Pages:               ${(crawl.orphanPages||[]).length}
-
-${broken ? `BROKEN LINKS:\n${broken}\n` : ""}
-${dupes  ? `DUPLICATE CONTENT:\n${dupes}\n`  : ""}
-${topIssuePages ? `PAGES WITH MOST ISSUES:\n${topIssuePages}\n` : ""}
-
-E-E-A-T SIGNALS (homepage):
-  Missing: ${eeatMissing || "none detected"}
-  Score: ${eeat.avgScore ?? "—"}/${eeat.maxScore ?? 9}
-
-CWV ISSUES: ${crawl.summary?.cwvIssuesCount ?? 0} pages have Core Web Vital problems
+${competitors || "  None identified"}
 
 ═══════════════════════════════════════════════════════
-GOOGLE MY BUSINESS — Completeness: ${completenessScore}/100
+ACCEPTED KEYWORDS (already classified — do NOT reclassify)
 ═══════════════════════════════════════════════════════
-Found:           ${gmbInfo.found ? "Yes" : "NO"}
-Verified:        ${gmbInfo.isVerified ? "Yes" : "No"}
-Rating:          ${gmbInfo.rating ? `${gmbInfo.rating}★ (${gmbInfo.reviewCount} reviews)` : "N/A"}
-Category:        ${gmbInfo.category || "—"}
-Phone:           ${gmbInfo.phone ? "Yes" : "Missing"}
-Address:         ${gmbInfo.address ? "Yes" : "Missing"}
-Hours Set:       ${gmbInfo.hoursAvailable ? "Yes" : "Missing"}
-Photos:          ${gmbInfo.hasPhotos ? "Yes" : "Missing"}
-Review Velocity: ${gmb.reviewVelocity ? `${gmb.reviewVelocity} reviews/month` : "unknown"}
-Unreplied Reviews: ${gmb.unrepliedReviewCount ?? 0}
-Directory Listings: ${gmb.listedDirectoryCount ?? 0}/${(gmb.directories||[]).length}
+${acceptedKw || "  None"}
 
-REVIEW INSIGHTS:${reviewInsights}
-
-GMB ISSUES:
-${gmbIssues || "None"}
-
-Q&A on GMB: ${(gmb.qa||[]).length} questions, ${(gmb.qa||[]).filter(q=>!q.hasAnswer).length} unanswered
+BRAND MONITORING ONLY (NEVER use as content targets):
+${monitoringKw || "  None"}
 
 ═══════════════════════════════════════════════════════
-COMPETITOR DATA
+CONTENT ARCHITECTURE (keep these three separated)
 ═══════════════════════════════════════════════════════
-${comps || "No competitor data available"}
+CORE COMMERCIAL PAGES:
+${commercialPages || "  None"}
 
-═══════════════════════════════════════════════════════
-KEYWORD GAP (competitors rank, you don't)
-═══════════════════════════════════════════════════════
-Total Gap Keywords Found: ${kg.summary?.totalGapKeywords ?? 0}
-Top Gaps By Volume:
-${gapKws || "  No keyword gap data"}
+BLOG & EDUCATIONAL CONTENT:
+${blogPages || "  None"}
 
-EASY WINS (low competition, good volume):
-${easyWins || "  None identified"}
-
-PEOPLE ALSO ASK (content opportunities):
-${paaQs || "  No PAA data"}
+LOCAL / CITY PAGES:
+${cityPages || "  None"}
 
 ═══════════════════════════════════════════════════════
+BACKLINKS (keep four categories separated)
+═══════════════════════════════════════════════════════
+CITATION & DIRECTORY:
+${citations || "  None"}
 
-Now generate the strategic plan. Follow EXACTLY this structure with section headers:
+COMPETITOR LINK GAP:
+${competitorGap || "  None identified"}
 
-## 🚨 CRITICAL FIXES (Week 1–2)
-[List the top 5–7 issues that are actively hurting rankings RIGHT NOW. Be specific: name the exact page, URL, or file. Explain the measurable impact. State the exact fix.]
+═══════════════════════════════════════════════════════
+GBP COMPARISON
+═══════════════════════════════════════════════════════
+${gbpRows || "  No GBP data"}
+Biggest gap: ${gbp.biggest_gap || "—"}
+Fastest win: ${gbp.fastest_win || "—"}
+Trust gap: ${gbp.trust_gap || "—"}
 
-## 📄 ON-PAGE SEO ACTION PLAN (Week 2–6)
-[Per-page recommendations based on actual crawl data. For each issue type, give the exact fix with examples. Include meta title templates using the target keywords.]
+═══════════════════════════════════════════════════════
+KPI FORECAST (validated — every target improves on baseline)
+═══════════════════════════════════════════════════════
+${kpiRows || "  None"}
+`;
+}
 
-## 🗺️ GOOGLE MY BUSINESS & LOCAL SEO
-[Step-by-step GMB optimisation: what to fill in, how to get more reviews, how to reply. Include exact response templates for negative reviews. Directory submission priority list.]
+// ── Build the section-generation instruction (Part 3 prompts) ─────────────────
+function buildSectionInstructions(payload) {
+  return `Using the validated data above, generate the Doctor Fizz report. Produce EVERY section below with its exact numbered header. Follow the diagnostic style and all 12 fundamental rules.
 
-## 🔑 KEYWORD STRATEGY (based on actual gap data)
-[Map the gap keywords to specific new pages or existing page improvements. Group by intent. Give exact title + URL slug recommendations for the top 5 new pages to create.]
+## 01 · EXECUTIVE SUMMARY
+Diagnosis in short form: the specific problems found, the scale of the opportunity (in concrete numbers), and the 4–6 prescribed actions in priority order. A decision-maker who reads only this must understand the entire strategic situation.
 
-## 📝 CONTENT CALENDAR (next 90 days)
-[Specific article titles, target keywords, word counts, and content type (blog/landing/FAQ) — 12 pieces total, based on the PAA questions and keyword gaps above.]
+## 02 · PRIORITY ACTION PLAN
+Rank ALL actions by impact-to-effort ratio — highest impact, lowest effort first, regardless of section. Group into three tiers: FOUNDATION FIXES (URL/metadata/technical blockers that gate everything else), CONTENT & ON-PAGE WORK, and AUTHORITY & GEO WORK. For each action: one-line description, channel tag [SEO]/[GEO]/[SEO+GEO], priority label (CRITICAL/HIGH/MEDIUM/QUICK WIN), and effort estimate (e.g. "≈30 min", "≈3 hours", "≈1 week"). End with one sentence on why this ordering matters commercially.
 
-## 🤖 GEO — Generative Engine Optimisation
-[How to appear in ChatGPT, Google AI Overviews, Perplexity. What schema types to add, what E-E-A-T signals are missing, how to write content that gets cited by AI. Specific schema templates for this business type.]
+## 03 · BASELINE SNAPSHOT
+Clinical reading of each baseline metric. For every metric with a value, add one sentence on its commercial implication. For every unavailable field, state the unavailability label and what action captures it — never a dash. Example interpretation depth: "mobile performance of 46/100 is a hard ceiling on every page, because the majority of searches arrive on mobile."
 
-## 🏆 COMPETITOR TAKEDOWN PLAN
-[For each competitor: what they do better, what you can leapfrog. Give specific tactics — not "create better content" but "target keyword X with a comparison page at /[slug] because competitor Y ranks #3 with thin 400-word content".]
+## 04 · COMPETITOR LANDSCAPE
+For each competitor: what they do well and why it is hard to replicate, the specific tactics/keywords driving their advantage, and the exploitable gaps the client can win without a head-on contest. Label each by threat level. Identify at least two specific, keyword-or-content-tied gaps. End with a paragraph titled "The Opening" summarizing total addressable opportunity in monthly search-volume terms. Competitor names are diagnostic context only — never content targets.
 
-## 📅 90-DAY PRIORITY ROADMAP
-[Week-by-week action list. Month 1: technical fixes. Month 2: content + GMB. Month 3: link building + schema. Be specific — name the tasks, estimated hours, and expected outcome.]
+## 05 · KEYWORD STRATEGY
+Organize into: (1) Primary commercial keywords — lead with the best 2–3, with volume/difficulty/ranking; (2) Informational & supporting — how each supports a funnel stage; (3) Local & geo-modified — which pages they map to; (4) Long-tail & feature keywords. Use ONLY accepted keywords. Never use brand-monitoring or excluded terms. End with a coverage note on a strategic observation about the keyword set.
 
-## 📊 EXPECTED OUTCOMES
-[Based on the data, what traffic/ranking improvements are realistic in 30/60/90 days? What's the biggest single lever for this specific site?]
+## 06 · CONTENT ARCHITECTURE
+Three clearly separated subsections, never merged:
+SUBSECTION 1 — Core Commercial Pages: page name, URL slug, primary keyword cluster, why it exists commercially, funnel role, priority. No blog content here.
+SUBSECTION 2 — Blog & Educational Content: title, keyword cluster, search intent, funnel fit, how it connects to a commercial page. Every blog must have a stated funnel role.
+SUBSECTION 3 — Local & City Pages: page name + city, keyword cluster, why a separate city page is required, priority.
+Do not include schema additions here — they belong in the GEO section.
 
-Write in a direct, expert tone. Use real numbers from the data. No filler.`;
+## 07 · TECHNICAL FOUNDATION
+Each issue: state the problem precisely with counts/measurements, explain why it matters for SEO (not just that it is an issue), the developer-actionable fix, priority (CRITICAL/HIGH/MEDIUM/LOW), and effort. Rank by priority; criticals first with a directive to fix before new content. For any Core Web Vitals issue, explain ranking impact in terms of % of searches affected. No generic "improve site speed" — say specifically what changes.
+
+## 08 · AUTHORITY & LINK BUILDING
+Four clearly labeled subsections, never merged:
+SUBSECTION 1 — Citation & Directory Links: platform, DR, client listed?, competitors listed?, effort hours, signal. Explain why citations are the fastest baseline authority move.
+SUBSECTION 2 — Editorial & Content-Earned Links: content asset/pitch angle, target publication, production time, link type, why competitors cannot replicate. Explain why these have the highest long-term value.
+SUBSECTION 3 — Competitor Link Gap: referring domain, which competitor has the link, link type, approach to earn it. Explain why these are the most strategically direct.
+SUBSECTION 4 — Local Authority Links: source type, geographic relevance, local signal, effort. Explain why they punch above their DR weight.
+
+## 09 · LOCAL VISIBILITY & GBP COMPARISON
+Begin with the comparison table (client vs every competitor across the provided fields). Then three paragraphs: (1) The biggest visibility gap — the field furthest behind the strongest competitor and why it matters; (2) The fastest win — the field closeable in 48 hours with the exact action; (3) The trust gap — the signal most affecting whether a customer chooses the client when viewing both profiles, with the psychology of the decision. End with a prioritized GBP action list with effort estimates.
+
+## 10 · GEO LAYER & AI VISIBILITY
+Explain current AI citation status vs competitor benchmarks and why the client is under-cited. Prescribe: specific on-page changes that improve AI citation probability; the schema additions required (FAQPage JSON-LD, Organization schema, and type-specific schema for this business). Include a COMPLETE, ready-to-implement JSON-LD code block (not a partial template). Cover the four GEO principles: answer-first formatting, entity clarity, consistent definitional language, vocabulary coverage. Tag the section [SEO+GEO] throughout.
+
+## 11 · KPI FORECAST & MEASUREMENT
+Present the validated KPI table: baseline, 6-month target, 12-month target, and the estimation note for each. For null baselines, state unavailable and the capture action. Flag any metric whose validation_status indicates manual review. After the table, give measurement guidance: which tool tracks each metric, review cadence, and the week 2–4 early signals that indicate the strategy is working before full ranking gains. Name specific tools and signals.
+
+## 12 · IMPLEMENTATION NOTES & SPRINT PLAN
+Time-sequenced sprint plan: Foundation sprint (Day 1 — technical/URL/metadata blockers), Content sprint (Week 1 — content build in priority order), Authority & GEO sprint (Weeks 1–2 — links, schema, AI visibility), and Measurement setup (Week 1 — tools and dashboards). For each sprint: what to do, by when, expected result. Close with a one-sentence framing of the total opportunity and the expected 30/60/90-day outcomes.
+
+Write in direct, expert, diagnostic tone. Use the real numbers from the data above. No filler.`;
 }
 
 // ── Route handler ─────────────────────────────────────────────────────────────
@@ -233,35 +240,96 @@ export async function POST(request) {
       domain, businessData, keywords = [],
       seoData = null, crawlData = null, gmbData = null,
       competitorAudit = null, keywordGap = null,
+      doctorFizz = null, // pre-computed Stage-3 payload (preferred)
     } = body;
 
     if (!domain) return NextResponse.json({ error: "domain required" }, { status: 400 });
 
-    const prompt = buildPrompt({ domain, businessData, keywords, seoData, crawlData, gmbData, competitorAudit, keywordGap });
+    // Prefer a pre-computed structured payload; otherwise build it here so the
+    // strategic plan can be generated standalone (Stage 3 → Stage 4 in one call).
+    let payload = doctorFizz;
+    if (!payload) {
+      const competitors = [
+        ...(Array.isArray(competitorAudit?.competitors) ? competitorAudit.competitors.map(c => ({ name: c.domain, domain: c.domain })) : []),
+      ];
+      const rawKeywords = [
+        ...(keywordGap?.gapKeywords || []),
+        ...(keywordGap?.newOpportunities || []),
+        ...(keywordGap?.easyWins || []),
+        ...(keywordGap?.targetRanked || []),
+        ...(keywordGap?.paaQuestions || []).map(q => ({ keyword: q.question, volume: 0, difficulty: 0.2 })),
+      ];
+      const competitorGmbs = Array.isArray(competitorAudit?.competitors)
+        ? competitorAudit.competitors.filter(c => c?.gmb).map(c => ({ domain: c.domain, gmbCheck: c.gmb }))
+        : [];
+
+      payload = runBusinessLogic({
+        domain,
+        clientName: businessData?.businessName || businessData?.name || domain,
+        industry:   businessData?.industrySector || businessData?.industry || businessData?.category || "",
+        reportType: "website",
+        location:   businessData?.location || "India",
+        baselineRaw: {
+          domainRating:     seoData?.domainRankOverview?.rank ?? null,
+          organicTraffic:   seoData?.domainRankOverview?.organicTraffic ?? null,
+          organicKeywords:  seoData?.domainRankOverview?.organicKeywords ?? null,
+          referringDomains: seoData?.domainRankOverview?.referringDomains ?? null,
+          performanceMobile:  seoData?.technicalSeo?.performanceScoreMobile ?? null,
+          performanceDesktop: seoData?.technicalSeo?.performanceScoreDesktop ?? null,
+          crawlHealthScore:   crawlData?.healthScore ?? null,
+          gbpCompletenessScore: gmbData?.completeness?.score ?? null,
+          gbpReviewCount:     gmbData?.gmb?.reviewCount ?? null,
+          gbpRating:          gmbData?.gmb?.rating ?? null,
+        },
+        competitors,
+        rawKeywords,
+        clientGmb: gmbData,
+        competitorGmbs,
+        directories: gmbData?.directories || [],
+        clientServiceTerms: [businessData?.category, businessData?.specificService, businessData?.offeringType].filter(Boolean),
+        targetKeywords: keywords,
+      });
+    }
+
+    const dataContext = buildDataContext(payload);
+    const instructions = buildSectionInstructions(payload);
+    const userPrompt = `${dataContext}\n\n${instructions}`;
 
     const { content } = await claudeChatStream({
       messages: [
-        { role: "system", content: "You are a senior SEO + GEO strategist. Generate highly specific, data-backed plans using the exact metrics provided. No generic advice." },
-        { role: "user",   content: prompt },
+        { role: "system", content: MASTER_SYSTEM_PROMPT },
+        { role: "user",   content: userPrompt },
       ],
-      max_tokens: 5000,
-      timeoutMs:  90000,
+      max_tokens: 8000,
+      timeoutMs:  110000,
       model: "claude-sonnet-4-6",
     });
 
-    // Parse sections for structured display
+    // Parse numbered sections for structured rendering
     const sections = {};
-    const sectionRe = /^## (.+)$/gm;
-    const parts = content.split(sectionRe);
-    for (let i = 1; i < parts.length; i += 2) {
-      const key = parts[i].replace(/[^\w\s]/g, "").trim().toLowerCase().replace(/\s+/g, "_");
-      sections[key] = parts[i + 1]?.trim() || "";
+    const sectionRe = /^##\s*(\d{2})\s*[·.]\s*(.+)$/gm;
+    let match;
+    const indices = [];
+    while ((match = sectionRe.exec(content)) !== null) {
+      indices.push({ num: match[1], title: match[2].trim(), start: match.index, headerEnd: sectionRe.lastIndex });
     }
+    for (let i = 0; i < indices.length; i++) {
+      const cur = indices[i];
+      const next = indices[i + 1];
+      const bodyText = content.slice(cur.headerEnd, next ? next.start : content.length).trim();
+      const key = cur.title.replace(/[^\w\s]/g, "").trim().toLowerCase().replace(/\s+/g, "_");
+      sections[key] = { number: cur.num, title: cur.title, body: bodyText };
+    }
+
+    // Re-run QA gate WITH the narrative for tone checks
+    const qaResult = runQaGate(payload, content);
 
     return NextResponse.json({
       domain,
       plan: content,
       sections,
+      structuredPayload: payload,
+      qaResult,
       generatedAt: new Date().toISOString(),
       dataSourcesUsed: {
         seo:            !!seoData,
@@ -269,6 +337,7 @@ export async function POST(request) {
         gmb:            !!gmbData,
         competitorAudit:!!competitorAudit,
         keywordGap:     !!keywordGap,
+        businessLogic:  !!payload,
       },
     });
   } catch (err) {
