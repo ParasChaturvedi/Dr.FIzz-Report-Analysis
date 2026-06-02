@@ -62,6 +62,8 @@ function buildDataContext(payload) {
   const bl = payload.backlinks || {};
   const gbp = payload.gbp_comparison || {};
   const kpis = payload.kpis || {};
+  const tech = payload.technical_issues || [];
+  const geo = payload.geo_and_ai_visibility || {};
 
   const fieldLine = (label, field) => {
     const f = b[field];
@@ -175,6 +177,21 @@ Fastest win: ${gbp.fastest_win || "—"}
 Trust gap: ${gbp.trust_gap || "—"}
 
 ═══════════════════════════════════════════════════════
+TECHNICAL ISSUES (ranked, developer-actionable)
+═══════════════════════════════════════════════════════
+${tech.map(t => `  - [${t.priority}] ${t.issue}${t.affected_count ? ` (${t.affected_count})` : ""} | ${t.estimated_effort} → ${t.recommended_action}`).join("\n") || "  None detected"}
+
+═══════════════════════════════════════════════════════
+GEO & AI VISIBILITY
+═══════════════════════════════════════════════════════
+Current AI citation status: ${geo.current_ai_citation_count || "—"}
+Competitor benchmarks: ${(geo.competitor_citation_benchmarks || []).map(c => `${c.competitor}: ${c.estimated_citations}`).join(", ") || "—"}
+Recommended actions:
+${(geo.recommended_actions || []).map(a => `  - ${a}`).join("\n")}
+Schema to implement: ${(geo.schema_additions || []).map(s => s.type).join(", ")}
+(Ready-to-use JSON-LD is generated in the structured payload — reference FAQPage + Organization/LocalBusiness.)
+
+═══════════════════════════════════════════════════════
 KPI FORECAST (validated — every target improves on baseline)
 ═══════════════════════════════════════════════════════
 ${kpiRows || "  None"}
@@ -283,6 +300,7 @@ export async function POST(request) {
         },
         competitors,
         rawKeywords,
+        crawlData,
         clientGmb: gmbData,
         competitorGmbs,
         directories: gmbData?.directories || [],

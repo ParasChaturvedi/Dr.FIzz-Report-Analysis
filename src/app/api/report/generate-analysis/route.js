@@ -669,6 +669,7 @@ export async function POST(request) {
         },
         competitors,
         rawKeywords: rawKeywordsForLogic,
+        crawlData:   crawlRaw,
         clientGmb:   gmbRaw,
         competitorGmbs,
         directories: gmbRaw?.directories || [],

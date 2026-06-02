@@ -121,6 +121,28 @@ export function runQaGate(payload = {}, narrative = "") {
   const gapHasDomains = (bl.competitor_gap || []).every(l => l.referring_domain && l.links_to);
   add("backlink", "Competitor gap links name domain + competitor", gapHasDomains || (bl.competitor_gap || []).length === 0);
 
+  // ── Technical foundation checks ──
+  const tech = payload.technical_issues || [];
+  if (tech.length) {
+    const techRanked = tech.every((t, i) => {
+      const rank = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+      return i === 0 || rank[tech[i - 1].priority] <= rank[t.priority];
+    });
+    add("technical", "Technical issues ranked by priority", techRanked);
+    const techActionable = tech.every(t => t.recommended_action && t.estimated_effort);
+    add("technical", "Every technical issue has action + effort", techActionable);
+  }
+
+  // ── GEO layer checks ──
+  const geo = payload.geo_and_ai_visibility || {};
+  if (geo.recommended_actions) {
+    const hasSchema = (geo.schema_additions || []).some(s => /faqpage/i.test(s.type)) &&
+                      (geo.schema_additions || []).some(s => /organization|localbusiness/i.test(s.type));
+    add("geo", "GEO layer includes FAQPage + Organization JSON-LD", hasSchema);
+    const schemaComplete = (geo.schema_additions || []).every(s => s.jsonld && s.jsonld.includes("@context"));
+    add("geo", "Schema additions are complete JSON-LD blocks", schemaComplete);
+  }
+
   // ── GBP section checks (when in scope) ──
   const gbp = payload.gbp_comparison || {};
   if (gbp.has_competitor_data) {

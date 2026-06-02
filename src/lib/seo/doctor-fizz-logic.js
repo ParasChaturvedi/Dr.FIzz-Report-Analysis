@@ -174,13 +174,23 @@ function hasInformationalIntent(keyword) {
  * Recommended asset type for an accepted keyword, derived from its intent class.
  * (Problem 3 — every keyword maps to a specific asset type)
  */
-function assetTypeForIntent(intentClass, keyword) {
+function assetTypeForIntent(intentClass, keyword, volume) {
+  const k = String(keyword).toLowerCase();
   switch (intentClass) {
-    case "transactional":   return "Service Page";
-    case "local-commercial":return "City Page";
-    case "informational":   return /faq|question|\?$/.test(String(keyword).toLowerCase())
-                                    ? "FAQ Expansion" : "Blog Post";
-    default:                return "Blog Post";
+    case "transactional":
+      // High-volume commercial heads → Landing Page; specific service → Service Page
+      if (/pricing|cost|quote|demo|free|trial|buy|book/.test(k)) return "Landing Page";
+      return "Service Page";
+    case "local-commercial":
+      return "City Page";
+    case "informational":
+      if (/faq|question|\?$/.test(k)) return "FAQ Expansion";
+      // Broad head terms → Pillar Guide; "best/list/resources" → Resource Hub; else Blog Post
+      if (/ultimate guide|complete guide|everything about|^what is/.test(k) || (volume && volume > 5000)) return "Pillar Guide";
+      if (/best|top \d|list of|resources|tools|examples/.test(k)) return "Resource Hub";
+      return "Blog Post";
+    default:
+      return "Blog Post";
   }
 }
 
@@ -272,7 +282,7 @@ export function classifyKeyword(kw, ctx = {}) {
     return {
       ...base,
       intent_class:          "transactional",
-      recommended_asset_type: assetTypeForIntent("transactional", keyword),
+      recommended_asset_type: assetTypeForIntent("transactional", keyword, base.global_volume),
       funnel_role:           "Conversion",
       reason:                "Buying/hiring/vendor-selection intent. Maps to a service or landing page — never a blog post.",
     };
@@ -283,7 +293,7 @@ export function classifyKeyword(kw, ctx = {}) {
     return {
       ...base,
       intent_class:          "informational",
-      recommended_asset_type: assetTypeForIntent("informational", keyword),
+      recommended_asset_type: assetTypeForIntent("informational", keyword, base.global_volume),
       funnel_role:           "Awareness",
       reason:                "Learning/comparison/research intent. Maps to a blog post or guide that feeds the commercial funnel.",
     };
@@ -830,6 +840,143 @@ function parseMetricValue(v) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// TECHNICAL ISSUES (Part 2 schema: technical_issues[])
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build the structured technical_issues array from crawl data.
+ * Each issue: { priority, issue, affected_count, recommended_action, estimated_effort }
+ * Ranked CRITICAL → HIGH → MEDIUM → LOW. Every recommendation is developer-actionable.
+ */
+export function buildTechnicalIssues(crawlData) {
+  if (!crawlData) return [];
+  const s = crawlData.summary || {};
+  const issues = [];
+
+  if (crawlData.crawlBlockedByRobots)
+    issues.push({ priority: "CRITICAL", issue: "Googlebot blocked by robots.txt", affected_count: crawlData.pageCount || null, recommended_action: "Remove 'Disallow: /' from /robots.txt. Google cannot index any page until this is lifted — every other action is dark while this stands.", estimated_effort: "≈15 min" });
+
+  if (!crawlData.hasSitemap)
+    issues.push({ priority: "HIGH", issue: "XML sitemap missing", affected_count: null, recommended_action: "Generate /sitemap.xml listing all canonical URLs and submit in Google Search Console → Sitemaps. Without it, crawl discovery is throttled.", estimated_effort: "≈1 hour" });
+
+  if (!(s.pagesWithSchemaTypes || []).length)
+    issues.push({ priority: "HIGH", issue: "Zero structured data (schema) sitewide", affected_count: crawlData.pageCount || null, recommended_action: "Add LocalBusiness + WebSite JSON-LD to the homepage, Service schema to service pages, FAQPage schema to FAQ blocks. This is the precondition for AI Overview (GEO) inclusion.", estimated_effort: "≈1 day" });
+
+  if ((s.pagesMissingMetaTitle || 0) > 0)
+    issues.push({ priority: "HIGH", issue: `${s.pagesMissingMetaTitle} pages missing <title> tags`, affected_count: s.pagesMissingMetaTitle, recommended_action: 'Write unique 50–60 char titles as "Primary Keyword | Brand", starting with highest-traffic pages.', estimated_effort: "≈3 hours" });
+
+  if ((s.pagesMissingH1 || 0) > 0)
+    issues.push({ priority: "HIGH", issue: `${s.pagesMissingH1} pages with no H1`, affected_count: s.pagesMissingH1, recommended_action: "Add exactly one keyword-rich H1 per page — the clearest on-page relevance signal exposed to Google.", estimated_effort: "≈2 hours" });
+
+  const lcpVal = crawlData.coreWebVitals?.lcp ?? crawlData.coreWebVitals?.LCP;
+  if (lcpVal && Number(lcpVal) > 2500)
+    issues.push({ priority: "HIGH", issue: `Mobile LCP at ${lcpVal}ms (target <2500ms)`, affected_count: crawlData.pageCount || null, recommended_action: "Compress hero images to WebP, preload the LCP element, defer non-critical JS. Poor LCP suppresses the majority of mobile searches regardless of content quality.", estimated_effort: "≈1 week" });
+
+  if ((s.pagesMissingMetaDesc || 0) > 0)
+    issues.push({ priority: "MEDIUM", issue: `${s.pagesMissingMetaDesc} pages missing meta descriptions`, affected_count: s.pagesMissingMetaDesc, recommended_action: "Write 150–160 char descriptions with a CTA. Lifts click-through 5–10% on existing impressions.", estimated_effort: "≈2 hours" });
+
+  const dupTitles = (crawlData.duplicates || []).filter(d => d.type === "title").length;
+  if (dupTitles > 0)
+    issues.push({ priority: "MEDIUM", issue: `${dupTitles} sets of duplicate meta titles`, affected_count: dupTitles, recommended_action: "Make every title unique — duplicates force Google to pick a ranking URL arbitrarily, splitting relevance.", estimated_effort: "≈2 hours" });
+
+  if ((crawlData.brokenLinks || []).length > 0)
+    issues.push({ priority: "MEDIUM", issue: `${crawlData.brokenLinks.length} broken internal links`, affected_count: crawlData.brokenLinks.length, recommended_action: `Fix or 301-redirect each. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}`, estimated_effort: "≈2 hours" });
+
+  if ((s.thinContentCount || 0) > 0)
+    issues.push({ priority: "MEDIUM", issue: `${s.thinContentCount} thin-content pages (<200 words)`, affected_count: s.thinContentCount, recommended_action: "Expand to 600+ words with FAQs and local context. Thin pages drag the sitewide quality signal down.", estimated_effort: "≈1 week" });
+
+  if ((s.totalImgsWithoutAlt || 0) > 5)
+    issues.push({ priority: "MEDIUM", issue: `${s.totalImgsWithoutAlt} images without alt text`, affected_count: s.totalImgsWithoutAlt, recommended_action: "Add descriptive, keyword-natural alt text. Affects accessibility score and image-search visibility.", estimated_effort: "≈2 hours" });
+
+  if ((s.pagesMultipleH1 || 0) > 0)
+    issues.push({ priority: "LOW", issue: `${s.pagesMultipleH1} pages with multiple H1s`, affected_count: s.pagesMultipleH1, recommended_action: "Demote extra H1s to H2/H3 — one H1 per page.", estimated_effort: "≈1 hour" });
+
+  if (!crawlData.hasRobots)
+    issues.push({ priority: "LOW", issue: "robots.txt not found", affected_count: null, recommended_action: "Create /robots.txt with a Sitemap: directive pointing to your sitemap.xml.", estimated_effort: "≈15 min" });
+
+  const rank = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+  return issues.sort((a, b) => rank[a.priority] - rank[b.priority]).slice(0, 12);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GEO & AI VISIBILITY (Part 2 schema: geo_and_ai_visibility) — Section 10
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build the geo_and_ai_visibility object: current citation estimate, competitor
+ * benchmarks, recommended actions, and ready-to-implement schema (JSON-LD).
+ * Schema additions live here per spec (NOT in content_architecture).
+ */
+export function buildGeoVisibility(input = {}) {
+  const { domain, clientName, industry = "", baseline = {}, hasSchema = false, competitors = [] } = input;
+
+  // Citation likelihood is a function of authority + schema presence.
+  const dr = baseline.domain_rating?.value ?? 0;
+  const currentCitations = hasSchema && dr > 20 ? "Low (occasional)" : "Effectively zero — not a citable source yet";
+
+  const competitorBenchmarks = (competitors || []).slice(0, 3).map(c => ({
+    competitor: c.name || c.domain,
+    estimated_citations: (c.gbp_data?.reviewCount || 0) > 100 ? "Moderate" : "Low",
+  }));
+
+  const recommended_actions = [
+    "Add answer-first content blocks: open key pages with a 40–60 word direct answer to the primary question before any preamble — answer engines lift these verbatim.",
+    "Implement FAQPage JSON-LD on every page with a Q&A section so the questions become eligible for AI Overviews and rich results.",
+    "Add Organization + LocalBusiness schema with sameAs links to social/citation profiles so LLMs build a reliable entity graph for the brand.",
+    "Use consistent definitional language — define your category and services the same way across every page so the entity is unambiguous to LLMs.",
+    "Publish original data or statistics with clear attribution — answer engines preferentially cite primary sources.",
+  ];
+
+  const orgSchema = buildOrgSchemaJsonLd({ domain, clientName, industry, baseline });
+  const faqSchema = buildFaqSchemaJsonLd(industry);
+
+  return {
+    current_ai_citation_count: currentCitations,
+    competitor_citation_benchmarks: competitorBenchmarks,
+    recommended_actions,
+    schema_additions: [
+      { type: "Organization + LocalBusiness", jsonld: orgSchema },
+      { type: "FAQPage", jsonld: faqSchema },
+    ],
+    geo_principles: [
+      { title: "Answer-first formatting", detail: "Lead with the direct answer; engines lift the first 40–60 words." },
+      { title: "Entity clarity", detail: "Name the business and category consistently so the knowledge graph is unambiguous." },
+      { title: "Consistent definitional language", detail: "Define services identically across pages to reinforce the entity." },
+      { title: "Vocabulary coverage", detail: "Cover the full topic vocabulary so the page matches more AI sub-queries." },
+    ],
+  };
+}
+
+function buildOrgSchemaJsonLd({ domain, clientName, industry, baseline }) {
+  const url = domain?.includes("://") ? domain : `https://${domain}`;
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": clientName || domain,
+    "url": url,
+    "description": `${clientName || domain} — ${industry || "services"}.`,
+    "address": { "@type": "PostalAddress", "addressCountry": "IN" },
+    "aggregateRating": baseline.gbp_rating?.value ? {
+      "@type": "AggregateRating",
+      "ratingValue": baseline.gbp_rating.value,
+      "reviewCount": baseline.gbp_review_count?.value || 0,
+    } : undefined,
+    "sameAs": [],
+  }, null, 2);
+}
+
+function buildFaqSchemaJsonLd(industry) {
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": `What does a ${industry || "service"} provider do?`,
+        "acceptedAnswer": { "@type": "Answer", "text": "Replace with a 40–60 word direct answer to this question." } },
+    ],
+  }, null, 2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // COMPETITOR BRAND EXTRACTION (helper for Problem 2)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -875,6 +1022,7 @@ export function runBusinessLogic(input = {}) {
     clientGmb = null, competitorGmbs = [],
     directories = [], competitorBacklinks = [],
     clientServiceTerms = [], targetKeywords = [], reportRef = "",
+    crawlData = null,
   } = input;
 
   // ── Competitor brands for exclusion (Problem 2) ──
@@ -909,6 +1057,20 @@ export function runBusinessLogic(input = {}) {
   // ── Baseline with missing-data labels (Problem 7) ──
   const { baseline, missing_fields } = buildBaseline(baselineRaw);
 
+  // ── Technical issues (Section 07) ──
+  const technical_issues = buildTechnicalIssues(crawlData);
+
+  // ── GEO & AI visibility + schema additions (Section 10) ──
+  const hasSchema = !!(crawlData?.summary?.pagesWithSchemaTypes || []).length;
+  const geo_and_ai_visibility = buildGeoVisibility({
+    domain, clientName, industry, baseline, hasSchema,
+    competitors: normalizeCompetitorObjects(competitors, competitorGmbs),
+  });
+  // Schema additions belong to the GEO layer (kept out of content_architecture per spec)
+  content_architecture.schema_additions = geo_and_ai_visibility.schema_additions.map(s => ({
+    type: s.type, note: "Implement the JSON-LD from the GEO layer (Section 10).",
+  }));
+
   // ── KPI validation (Problem 6) ──
   const kpiCtx = {
     acceptedKeywordCount: keywords.accepted.length,
@@ -930,8 +1092,10 @@ export function runBusinessLogic(input = {}) {
     competitors: normalizeCompetitorObjects(competitors, competitorGmbs),
     keywords,
     content_architecture,
+    technical_issues,
     backlinks,
     gbp_comparison,
+    geo_and_ai_visibility,
     kpis,
     _meta: { competitorBrands, kpiCtx },
   };

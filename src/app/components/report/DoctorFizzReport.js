@@ -216,9 +216,27 @@ export default function DoctorFizzReport({ data }) {
   const bl = payload.backlinks || {};
   const gbp = payload.gbp_comparison || {};
   const kpis = payload.kpis?.metrics || [];
+  const tech = payload.technical_issues || [];
+  const geo = payload.geo_and_ai_visibility || {};
 
   // Total sections for the "NN / TT" counter
   const TOTAL = 12;
+
+  // Section 00 — Contents & scope (Part 5)
+  const CONTENTS = [
+    ["01", "Executive Summary", "Short-form diagnosis, scale of opportunity, top prescribed actions"],
+    ["02", "Priority Action Plan", "All actions ranked by impact-to-effort across three tiers"],
+    ["03", "Baseline Snapshot", "Current metrics with commercial interpretation"],
+    ["04", "Competitor Landscape", "Threat levels, advantages, and exploitable gaps"],
+    ["05", "Keyword Strategy", "Classified keyword clusters by intent"],
+    ["06", "Content Architecture", "Commercial pages, blog content, and city pages — separated"],
+    ["07", "Technical Foundation", "Ranked technical issues with developer-actionable fixes"],
+    ["08", "Authority & Link Building", "Citation, editorial, competitor-gap, local authority"],
+    ["09", "Local Visibility & GBP", "Competitor comparison + biggest gap / fastest win / trust gap"],
+    ["10", "GEO Layer & AI Visibility", "AI citation status, schema, and answer-engine optimisation"],
+    ["11", "KPI Forecast & Measurement", "Validated targets with measurement guidance"],
+    ["12", "Implementation & Sprint Plan", "Time-sequenced execution roadmap"],
+  ];
 
   return (
     <div style={{ background: C.ivory }} className="w-full">
@@ -280,6 +298,24 @@ export default function DoctorFizzReport({ data }) {
             </div>
             <span className="text-[11px]" style={{ color: C.greyText }}>{meta.client_name} · {meta.report_type} report</span>
           </div>
+
+          {/* ── 00 · CONTENTS & SCOPE ───────────────────────────────────────── */}
+          <Section number={0} total={TOTAL} title="Contents &amp; Scope">
+            <div className="rounded-lg p-4 mb-3" style={{ background: "#fff", border: `1px solid ${C.warmGrey}25` }}>
+              <div className="text-[11px] mb-3" style={{ color: C.greyText }}>
+                Method: this report draws on live crawl, DataForSEO keyword/SERP/backlink data, Google Business Profile data for {meta.client_name} and identified competitors, and PageSpeed/Core Web Vitals. Keywords are intent-classified and topical-relevance filtered; KPI targets are directionally validated before rendering.
+              </div>
+              <div className="space-y-1">
+                {CONTENTS.map(([n, t, d]) => (
+                  <div key={n} className="flex items-baseline gap-2 text-[12px]">
+                    <span className="font-bold tabular-nums" style={{ color: C.orange }}>{n}</span>
+                    <span className="font-semibold" style={{ color: C.nearBlack }}>{t}</span>
+                    <span className="hidden sm:inline truncate" style={{ color: C.greyText }}>— {d}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Section>
 
           {/* ── 03 · BASELINE SNAPSHOT (data table) ─────────────────────────── */}
           <Section number={3} total={TOTAL} title="Baseline Snapshot">
@@ -344,6 +380,31 @@ export default function DoctorFizzReport({ data }) {
               <ContentSub title="Local &amp; City Pages" rows={ca.city_pages || []} type="city" />
             )}
           </Section>
+
+          {/* ── 07 · TECHNICAL FOUNDATION ───────────────────────────────────── */}
+          {tech.length > 0 && (
+            <Section number={7} total={TOTAL} title="Technical Foundation">
+              <DiagnosisCard>
+                {tech.filter(t => t.priority === "CRITICAL").length > 0
+                  ? `${tech.filter(t => t.priority === "CRITICAL").length} critical blocker(s) are throttling the entire site — fix these before any content or authority work.`
+                  : `${tech.length} technical issue(s) detected, ranked by ranking impact. Resolve in priority order.`}
+              </DiagnosisCard>
+              <div className="space-y-2">
+                {tech.map((t, i) => (
+                  <div key={i} className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.warmGrey}25` }}>
+                    <div className="flex items-center justify-between flex-wrap gap-1.5 mb-1">
+                      <span className="text-[13px] font-semibold" style={{ color: C.nearBlack }}>{t.issue}</span>
+                      <div className="flex items-center gap-1.5">
+                        <PriorityLabel priority={t.priority} />
+                        <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: C.ivory, color: C.greyText }}>{t.estimated_effort}</span>
+                      </div>
+                    </div>
+                    <div className="text-[12px] leading-relaxed" style={{ color: C.greyText }}>{t.recommended_action}</div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
 
           {/* ── 08 · AUTHORITY & LINK BUILDING (4 categories) ───────────────── */}
           <Section number={8} total={TOTAL} title="Authority &amp; Link Building">
@@ -444,6 +505,39 @@ export default function DoctorFizzReport({ data }) {
               <GapBlock label="Biggest Visibility Gap" text={gbp.biggest_gap} />
               <GapBlock label="Fastest Win (48h)" text={gbp.fastest_win} accent />
               <GapBlock label="Trust Gap" text={gbp.trust_gap} />
+            </Section>
+          )}
+
+          {/* ── 10 · GEO LAYER & AI VISIBILITY ──────────────────────────────── */}
+          {geo.recommended_actions?.length > 0 && (
+            <Section number={10} total={TOTAL} title="GEO Layer &amp; AI Visibility">
+              <div className="flex items-center gap-2 mb-3"><TagChip tag="SEO+GEO" /><span className="text-[11px]" style={{ color: C.greyText }}>Same actions strengthen classic ranking and AI citation.</span></div>
+              <DiagnosisCard>
+                Current AI citation status: <strong>{geo.current_ai_citation_count}</strong>. The site is not yet a citable source for ChatGPT, Google AI Overviews, or Perplexity — the prescription below makes the content liftable by answer engines.
+              </DiagnosisCard>
+              <PrescriptionCard>
+                <ul className="space-y-1.5">
+                  {geo.recommended_actions.map((a, i) => (
+                    <li key={i} className="flex gap-2 text-[12px]"><span style={{ color: C.orange }}>▸</span><span>{a}</span></li>
+                  ))}
+                </ul>
+              </PrescriptionCard>
+              {(geo.geo_principles || []).length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                  {geo.geo_principles.map((p, i) => (
+                    <div key={i} className="rounded-lg p-2.5" style={{ background: "#fff", border: `1px solid ${C.warmGrey}25` }}>
+                      <div className="text-[12px] font-bold" style={{ color: C.teal }}>{p.title}</div>
+                      <div className="text-[11px]" style={{ color: C.greyText }}>{p.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(geo.schema_additions || []).map((s, i) => (
+                <div key={i} className="mb-2">
+                  <div className="text-[11px] font-bold mb-1 tracking-wide" style={{ color: C.orange }}>{s.type} — ready-to-implement JSON-LD</div>
+                  <pre className="text-[10px] leading-snug overflow-x-auto rounded-lg p-3" style={{ background: C.nearBlack, color: "#d7e3d8" }}>{s.jsonld}</pre>
+                </div>
+              ))}
             </Section>
           )}
 
