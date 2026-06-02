@@ -659,7 +659,7 @@ function deriveFastestWin(client) {
   if (!client.hours_complete) return "Set complete business hours including holiday hours. ~10 minutes, and it unlocks ‘open now’ visibility immediately.";
   if (!client.website_link)   return "Add the website link to the profile. ~5 minutes; it is a direct conversion path currently missing.";
   if (!client.description_complete) return "Write the 750-character business description with primary keywords in the first 250. ~30 minutes.";
-  if (client.photos === 0 || client.photos === "present" && false) return "Upload 10+ photos (exterior, interior, team, work). ~30 minutes; listings with photos earn 42% more direction requests.";
+  if (client.photos === 0) return "Upload 10+ photos (exterior, interior, team, work). ~30 minutes; listings with photos earn 42% more direction requests.";
   if (client.qa_answered === 0) return "Seed and answer 3–5 Q&A entries. ~20 minutes; each answer becomes free long-tail content.";
   return "Publish a Google Business post this week and commit to 1–2 per week. ~15 minutes each; signals an active, trustworthy profile.";
 }

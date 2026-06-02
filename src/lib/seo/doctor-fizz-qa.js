@@ -8,7 +8,7 @@
 // product owner and developer can see exactly what passed and what failed.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { MISSING_LABELS } from "./doctor-fizz-logic";
+import { MISSING_LABELS } from "./doctor-fizz-logic.js";
 
 const FILLER_PATTERNS = [
   /it is worth noting that/i,
