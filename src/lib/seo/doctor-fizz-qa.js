@@ -27,22 +27,36 @@ export function validateDataCompleteness(datasets = {}) {
   const add = (name, required, ok, detail = "") =>
     modules.push({ name, required, ok: !!ok, detail });
 
-  const present = (d) => d && !d.error && (typeof d !== "object" || Object.keys(d).length > 0);
+  // A module "ran" if it returned a non-null, non-error value. An EMPTY array
+  // (e.g. a brand-new site with 0 ranked keywords) means the module ran and
+  // found nothing — that is a PASS, not a failure. Only null / {error} fails.
+  const present = (d) => {
+    if (d == null) return false;
+    if (typeof d === "object" && d.error) return false;
+    if (Array.isArray(d)) return true;                 // array returned = ran
+    if (typeof d === "object") return Object.keys(d).length > 0;
+    return true;
+  };
 
-  // Required modules — a failure here blocks AI processing
-  add("Website Validation", true, datasets.validation?.valid, datasets.validation?.issues?.join("; "));
-  add("Performance (PSI)",  true, present(datasets.psi) &&
-       (datasets.psi.performanceScoreMobile != null || datasets.psi.performanceScoreDesktop != null),
-       "No PSI scores returned");
+  // Required modules — a failure here blocks AI processing.
+  // PSI: block only if BOTH scores are missing AND the module didn't run at all.
+  const psiRan = present(datasets.psi);
+  const psiHasScore = datasets.psi && (datasets.psi.performanceScoreMobile != null || datasets.psi.performanceScoreDesktop != null);
+  add("Website Validation", true, datasets.validation?.valid !== false, datasets.validation?.issues?.join("; "));
+  add("Performance (PSI)",  true, psiRan && psiHasScore, "No PSI scores returned");
   add("Domain Metrics",     true, present(datasets.domainMetrics), "Domain metrics unavailable");
   add("Website Crawl",      true, present(datasets.crawl) && (datasets.crawl.pageCount || 0) >= 1, "Crawl returned no pages");
+  // Content / on-page / rankings come from the same SSE — gate on the SSE having
+  // produced at least the core objects, not on each nested array being non-empty.
   add("Content Extraction", true, present(datasets.content), "No content extracted");
-  add("On-Page Keywords",   true, present(datasets.onpageKeywords), "No on-page keywords");
-  add("Keyword Rankings",   true, present(datasets.keywordRankings), "No ranking data");
+  add("On-Page Analysis",   true, present(datasets.onpageKeywords), "On-page analysis did not run");
+  add("Keyword Rankings",   true, present(datasets.keywordRankings), "Keyword ranking module did not run");
+  // GMB: a "not found" listing is still a valid result — only the API failing fails.
   add("Local SEO (GMB)",    true, present(datasets.gmb), "GMB module failed");
 
   // Conditionally-required — only blocking if competitors were provided
-  const hasCompetitors = (datasets.competitorAudit?.competitors || []).length > 0;
+  const hasCompetitors = (datasets.competitorAudit?.competitors || []).length > 0
+    || (datasets._competitorsRequested || 0) > 0;
   add("Competitor Audit",   hasCompetitors, !hasCompetitors || present(datasets.competitorAudit), "Competitor audit incomplete");
   add("Keyword Gap",        hasCompetitors, !hasCompetitors || present(datasets.keywordGap), "Keyword gap incomplete");
 

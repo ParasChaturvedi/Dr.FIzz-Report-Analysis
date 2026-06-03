@@ -13,6 +13,39 @@ import {
 
 import { prefetchOpportunitiesAndContent } from "@/lib/prefetch-opportunities";
 
+// ─── Module status state machine ──────────────────────────────────────────────
+const STATUS = {
+  PASS: "PASS", FAILED: "FAILED", PARTIAL: "PARTIAL", TIMEOUT: "TIMEOUT",
+  EMPTY: "EMPTY", LOW_CONFIDENCE: "LOW_CONFIDENCE", BLOCKED: "BLOCKED",
+  RUNNING: "RUNNING", PENDING: "PENDING",
+};
+
+// Retry with exponential backoff (3 attempts → waits 5s, 15s, 30s between them).
+// `validate(result)` returns true when the result is usable; a falsy/throwing
+// result triggers a retry. Returns { ok, data, status, error }.
+async function withRetry(fn, { backoffs = [5000, 15000, 30000], validate, label = "module" } = {}) {
+  let lastErr = null;
+  for (let attempt = 0; attempt <= backoffs.length; attempt++) {
+    try {
+      const data = await fn();
+      if (!validate || validate(data)) {
+        return { ok: true, data, status: STATUS.PASS };
+      }
+      lastErr = new Error(`${label}: result failed validation`);
+    } catch (e) {
+      lastErr = e;
+      if (e?.name === "AbortError" || /timeout/i.test(e?.message || "")) {
+        // timeout — keep retrying
+      }
+    }
+    if (attempt < backoffs.length) {
+      console.warn(`[Step5] ${label} attempt ${attempt + 1} failed (${lastErr?.message}); retrying in ${backoffs[attempt] / 1000}s`);
+      await new Promise((r) => setTimeout(r, backoffs[attempt]));
+    }
+  }
+  return { ok: false, data: null, status: STATUS.FAILED, error: lastErr };
+}
+
 // ─── Crawl status string ──────────────────────────────────────────────────────
 // Shows the site's true size (Google-indexed or sitemap total) and how many
 // pages were deep-audited, instead of just the audited count.
@@ -45,20 +78,20 @@ function formatCrawlValue(crawl) {
 //   Phase 5 — Strategic Plan
 //   Phase 6 — Master Report
 const INITIAL_STAGES = [
-  { id: "websiteValidation", label: "Website Validation",        state: "idle", value: null },
-  { id: "psi",               label: "Performance Score (PSI)",   state: "idle", value: null },
-  { id: "dataforseo",        label: "Domain Intelligence",       state: "idle", value: null },
-  { id: "dataforseoExtra",   label: "Keyword Rankings",          state: "idle", value: null },
-  { id: "content",           label: "Content Extraction",        state: "idle", value: null },
-  { id: "onpageKeywords",    label: "On-Page SEO Analysis",      state: "idle", value: null },
-  { id: "websiteCrawl",      label: "Website Crawl & Audit",     state: "idle", value: null },
-  { id: "gmbCheck",          label: "Local SEO & GMB",           state: "idle", value: null },
-  { id: "competitorAudit",   label: "Competitor Intelligence",   state: "idle", value: null },
-  { id: "keywordGap",        label: "Keyword Gap Analysis",      state: "idle", value: null },
-  { id: "dataValidation",    label: "Data Validation",           state: "idle", value: null },
-  { id: "opportunities",     label: "Content Opportunities",     state: "idle", value: null },
-  { id: "strategicPlan",     label: "Strategic Plan (AI)",       state: "idle", value: null },
-  { id: "report",            label: "AI Report Generation",      state: "idle", value: null },
+  { id: "websiteValidation", label: "Website Validation",        state: "idle", value: null }, // Phase 1
+  { id: "opportunities",     label: "Content Opportunities",     state: "idle", value: null }, // Phase 2
+  { id: "psi",               label: "Performance Score (PSI)",   state: "idle", value: null }, // Phase 3
+  { id: "dataforseo",        label: "Domain Metrics",            state: "idle", value: null }, // Phase 4
+  { id: "dataforseoExtra",   label: "Keyword Rankings",          state: "idle", value: null }, // Phase 5
+  { id: "content",           label: "Content Extraction",        state: "idle", value: null }, // Phase 6
+  { id: "onpageKeywords",    label: "On-Page SEO Analysis",      state: "idle", value: null }, // Phase 7
+  { id: "websiteCrawl",      label: "Website Crawl & Audit",     state: "idle", value: null }, // Phase 8
+  { id: "gmbCheck",          label: "GMB & Directory Listings",  state: "idle", value: null }, // Phase 9
+  { id: "competitorAudit",   label: "Competitor Audit",          state: "idle", value: null }, // Phase 10
+  { id: "keywordGap",        label: "Keyword Gap Analysis",      state: "idle", value: null }, // Phase 11
+  { id: "dataValidation",    label: "Data Validation",           state: "idle", value: null }, // Phase 12
+  { id: "strategicPlan",     label: "Strategic Plan (AI)",       state: "idle", value: null }, // Phase 13
+  { id: "report",            label: "Master Report Generation",  state: "idle", value: null }, // Phase 14
 ];
 
 const INITIAL_CHECKS = [
@@ -161,6 +194,7 @@ export default function Step5Slide2({
   // Live checklist state
   const [fetchStages, setFetchStages] = useState(INITIAL_STAGES);
   const [crossChecks, setCrossChecks]  = useState(INITIAL_CHECKS);
+  const [reportBlocked, setReportBlocked] = useState(null); // { missing, message }
 
   // Fake progress (kept for internal use — not shown)
   const [progressPct, setProgressPct] = useState(0);
@@ -558,6 +592,7 @@ export default function Step5Slide2({
     if (loading) return;
     setLoading(true);
     setLoadingPhase("collecting");
+    setReportBlocked(null);
     setFetchStages(INITIAL_STAGES);
     setCrossChecks(INITIAL_CHECKS);
     setProgressPct(0);
@@ -600,9 +635,35 @@ export default function Step5Slide2({
         updateStage("websiteValidation", { state: "error", value: "Skipped" });
       }
 
-      // ── All raw-data sources in parallel (none depends on another) ──────────
+      // ═══════════════════════════════════════════════════════════════════════
+      // PHASE 2 — CONTENT OPPORTUNITIES (topic discovery, kicked off early)
+      // Runs as a background prefetch in parallel with data collection so it is
+      // ready by the time the report is assembled.
+      // ═══════════════════════════════════════════════════════════════════════
+      updateStage("opportunities", { state: "loading" });
+      const oppsPromise = (async () => {
+        try {
+          const res = await prefetchOpportunitiesAndContent(domain, {
+            concurrency: 2,
+            timeoutMs: 5 * 60 * 1000,
+            countryCode: "in",
+            languageCode: "en",
+          });
+          updateStage("opportunities", {
+            state: res?.ok ? "done" : "error",
+            value: res?.ok ? "Topics ready" : "Skipped",
+          });
+        } catch (e) {
+          console.warn("[Step5] Opportunities failed:", e);
+          updateStage("opportunities", { state: "error", value: "Skipped" });
+        }
+      })();
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // PHASES 3-9 — All raw-data sources in parallel (none depends on another).
       // Wall-clock ≈ the slowest single source (PSI). The SSE streams
       // PSI → metrics → keyword rankings → content → on-page progressively.
+      // ═══════════════════════════════════════════════════════════════════════
       updateStage("psi", { state: "loading" });
       updateStage("websiteCrawl", { state: "loading" });
       updateStage("gmbCheck", { state: "loading" });
@@ -633,56 +694,56 @@ export default function Step5Slide2({
         });
       })();
 
-      // — Website Crawl & Audit (sitemap + index check)
+      // — Website Crawl & Audit (sitemap + index check) — retried on failure
       const crawlPromise = (async () => {
-        try {
+        const r = await withRetry(async () => {
           const res = await fetch("/api/seo/website-crawl", {
             method:  "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ domain, keywords }),
           });
-          if (res.ok) {
-            crawlJson = await res.json();
-            updateStage("websiteCrawl", { state: "done", value: formatCrawlValue(crawlJson) });
-          } else {
-            updateStage("websiteCrawl", { state: "error", value: "Skipped" });
-          }
-        } catch (e) {
-          console.warn("[Step5] Website crawl failed:", e?.message);
-          updateStage("websiteCrawl", { state: "error", value: "Skipped" });
+          if (!res.ok) throw new Error(`crawl ${res.status}`);
+          return res.json();
+        }, { label: "Website Crawl", validate: (d) => d && (d.pageCount || 0) >= 1 });
+
+        if (r.ok) {
+          crawlJson = r.data;
+          updateStage("websiteCrawl", { state: "done", value: formatCrawlValue(crawlJson) });
+        } else {
+          updateStage("websiteCrawl", { state: "error", value: "Failed (3 retries)" });
         }
       })();
 
-      // — GMB & Directory Listings
+      // — GMB & Directory Listings — retried on failure
       const gmbPromise = (async () => {
-        try {
-          const businessName = businessData?.businessName || businessData?.name || "";
+        const businessName = businessData?.businessName || businessData?.name || "";
+        const r = await withRetry(async () => {
           const res = await fetch("/api/seo/gmb", {
             method:  "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ domain, businessName }),
           });
-          if (res.ok) {
-            gmbJson = await res.json();
-            const found  = gmbJson?.gmb?.found;
-            const rating = gmbJson?.gmb?.rating;
-            const revs   = gmbJson?.gmb?.reviewCount;
-            if (found && rating != null) {
-              updateStage("gmbCheck", { state: "done", value: `${rating}★ · ${revs || 0} reviews` });
-            } else {
-              updateStage("gmbCheck", { state: "done", value: found ? "GMB found" : "No GMB listing" });
-            }
+          if (!res.ok) throw new Error(`gmb ${res.status}`);
+          return res.json();
+        }, { label: "GMB", validate: (d) => d && (d.gmb !== undefined || d.directories !== undefined) });
+
+        if (r.ok) {
+          gmbJson = r.data;
+          const found  = gmbJson?.gmb?.found;
+          const rating = gmbJson?.gmb?.rating;
+          const revs   = gmbJson?.gmb?.reviewCount;
+          if (found && rating != null) {
+            updateStage("gmbCheck", { state: "done", value: `${rating}★ · ${revs || 0} reviews` });
           } else {
-            updateStage("gmbCheck", { state: "error", value: "Skipped" });
+            updateStage("gmbCheck", { state: "done", value: found ? "GMB found" : "No GMB listing" });
           }
-        } catch (e) {
-          console.warn("[Step5] GMB check failed:", e?.message);
-          updateStage("gmbCheck", { state: "error", value: "Skipped" });
+        } else {
+          updateStage("gmbCheck", { state: "error", value: "Failed (3 retries)" });
         }
       })();
 
       // Await all data-collection sources together (fastest).
-      const [seoJson] = await Promise.all([seoPromise, crawlPromise, gmbPromise]);
+      const [seoJson] = await Promise.all([seoPromise, crawlPromise, gmbPromise, oppsPromise]);
 
       // ── Competitor Intelligence + Keyword Gap (Phase 1, needs collected data) ──
       // Competitor Audit must run before Keyword Gap — the gap analysis compares
@@ -748,10 +809,10 @@ export default function Step5Slide2({
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // PHASE 2 — DATA VALIDATION LAYER (gate before any AI processing)
-      // Confirms every required module returned usable data. Surfaces failures
-      // and partial-crawl / contradiction warnings so the report never silently
-      // builds on incomplete data.
+      // PHASE 12 — DATA VALIDATION LAYER (gate before ANY AI processing)
+      // Cross-checks every module: no empty datasets, no missing dependencies,
+      // no contradicting metrics, no partial crawls. Per Rule 2, the Strategic
+      // Plan AND Master Report are blocked unless this passes.
       // ═══════════════════════════════════════════════════════════════════════
       updateStage("dataValidation", { state: "loading" });
       let dataValidation = null;
@@ -768,6 +829,7 @@ export default function Step5Slide2({
           gmb:             gmbJson,
           competitorAudit: competitorAuditJson,
           keywordGap:      keywordGapJson,
+          _competitorsRequested: allCompetitors.length,
         });
         const okCount = dataValidation.modules.filter(m => m.ok).length;
         updateStage("dataValidation", {
@@ -782,30 +844,26 @@ export default function Step5Slide2({
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // PHASE 4 — CONTENT OPPORTUNITY ENGINE
-      // Generated ONLY now — after data collection + validation + (downstream)
-      // analysis context exists. Never before the full picture is known.
+      // FINAL VALIDATION GATE (Rule 2 — No Partial Reports)
+      // If any REQUIRED module is not PASS after retries, halt here: do NOT
+      // generate the Strategic Plan or the Master Report.
       // ═══════════════════════════════════════════════════════════════════════
-      updateStage("opportunities", { state: "loading" });
-      try {
-        const res = await prefetchOpportunitiesAndContent(domain, {
-          concurrency: 2,
-          timeoutMs: 5 * 60 * 1000,
-          countryCode: "in",
-          languageCode: "en",
-        });
-        updateStage("opportunities", {
-          state: res?.ok ? "done" : "error",
-          value: res?.ok ? "Topics ready" : "Skipped",
-        });
-      } catch (e) {
-        console.warn("[Step5] Opportunities generation failed:", e);
-        updateStage("opportunities", { state: "error", value: "Skipped" });
+      if (dataValidation && !dataValidation.pass && dataValidation.failures?.length) {
+        const missing = dataValidation.failures.map((f) => f.name).join(", ");
+        console.error(`[Step5] MASTER REPORT BLOCKED — incomplete: ${missing}`);
+        updateStage("strategicPlan", { state: "error", value: "Blocked — incomplete data" });
+        updateStage("report", { state: "error", value: `BLOCKED — missing: ${missing}` });
+        setReportBlocked({ missing, message: "MASTER REPORT BLOCKED - INCOMPLETE DATA DETECTED" });
+        stopFakeProgress();
+        setProgressPct(100);
+        setLoading(false);
+        setLoadingPhase("blocked");
+        return; // DO NOT GENERATE REPORT
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // PHASE 5 — STRATEGIC PLAN (AI) — needs PSI, crawl, on-page, rankings,
-      // competitor audit, keyword gap, GMB. All inputs are now available.
+      // PHASE 13 — STRATEGIC AI ANALYSIS — needs PSI, crawl, on-page, rankings,
+      // competitor audit, keyword gap, GMB. All inputs validated above.
       // ═══════════════════════════════════════════════════════════════════════
       // ── Strategic Plan ────────────────────────────────────────────────────
       updateStage("strategicPlan", { state: "loading" });
@@ -861,8 +919,7 @@ export default function Step5Slide2({
       // ═══════════════════════════════════════════════════════════════════════
       // PHASE 6 — MASTER AI REPORT GENERATION
       // (all modules collected, validated, analysed → assemble the report)
-      // ═══════════════════════════════════════════════════════════════════════
-      // ── Report generation ─────────────────────────────────────────────────
+      // ── Report generation (gate already passed above) ─────────────────────
       updateStage("report", { state: "loading" });
 
       let reportId = null;
@@ -1220,6 +1277,32 @@ export default function Step5Slide2({
                           />
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* MASTER REPORT BLOCKED — incomplete data (Rule 2 gate) */}
+                  {(loadingPhase === "blocked" || reportBlocked) && (
+                    <div className="mt-4 p-4 rounded-xl bg-red-50 border border-red-200">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <svg className="w-5 h-5 text-red-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                        </svg>
+                        <span className="text-[13px] font-bold text-red-700">
+                          {reportBlocked?.message || "MASTER REPORT BLOCKED - INCOMPLETE DATA DETECTED"}
+                        </span>
+                      </div>
+                      {reportBlocked?.missing && (
+                        <p className="text-[12px] text-red-600 ml-7">
+                          Missing / failed module(s): <span className="font-semibold">{reportBlocked.missing}</span>.
+                          These were retried 3× and still did not return usable data. Fix the source or retry to continue.
+                        </p>
+                      )}
+                      <button
+                        onClick={handleDashboard}
+                        className="mt-3 ml-7 px-4 py-2 rounded-full bg-red-600 text-white text-[12px] font-semibold hover:bg-red-700 transition-colors"
+                      >
+                        Retry data collection
+                      </button>
                     </div>
                   )}
 
