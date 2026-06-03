@@ -198,14 +198,26 @@ export default function DoctorFizzReport({ data }) {
   const plan    = data?.strategicPlan;
   const qa      = data?.qaResult || plan?.qaResult;
 
-  // Order the strategic-plan narrative sections by their parsed number
-  const narrativeSections = useMemo(() => {
+  // Map the strategic-plan narrative sections by their parsed number so each
+  // section renders its narrative ONCE, alongside its structured data — instead
+  // of a second "full diagnosis" block that duplicated every section.
+  const narrativeByNum = useMemo(() => {
     const s = plan?.sections;
-    if (!s || typeof s !== "object") return [];
-    return Object.values(s)
-      .filter(v => v && v.number && v.body)
-      .sort((a, b) => Number(a.number) - Number(b.number));
+    const map = {};
+    if (s && typeof s === "object") {
+      for (const v of Object.values(s)) {
+        if (v && v.number && v.body) map[String(v.number).padStart(2, "0")] = v;
+      }
+    }
+    return map;
   }, [plan]);
+
+  // Inline narrative for a given section number (returns null if none).
+  const Narrative = ({ num }) => {
+    const sec = narrativeByNum[String(num).padStart(2, "0")];
+    if (!sec?.body) return null;
+    return <div className="mt-3">{renderNarrative(sec.body)}</div>;
+  };
 
   if (!payload) return null;
 
@@ -356,7 +368,21 @@ export default function DoctorFizzReport({ data }) {
             </div>
           </Section>
 
-          {/* ── 03 · BASELINE SNAPSHOT (data table) ─────────────────────────── */}
+          {/* ── 01 · EXECUTIVE SUMMARY (narrative) ──────────────────────────── */}
+          {narrativeByNum["01"] && (
+            <Section number={1} total={TOTAL} title="Executive Summary">
+              <Narrative num={1} />
+            </Section>
+          )}
+
+          {/* ── 02 · PRIORITY ACTION PLAN (narrative) ───────────────────────── */}
+          {narrativeByNum["02"] && (
+            <Section number={2} total={TOTAL} title="Priority Action Plan">
+              <Narrative num={2} />
+            </Section>
+          )}
+
+          {/* ── 03 · BASELINE SNAPSHOT (data table + narrative) ─────────────── */}
           <Section number={3} total={TOTAL} title="Baseline Snapshot">
             <div className="overflow-x-auto rounded-lg" style={{ border: `1px solid ${C.warmGrey}30` }}>
               <table className="w-full text-[12px]">
@@ -389,9 +415,17 @@ export default function DoctorFizzReport({ data }) {
                 </tbody>
               </table>
             </div>
+            <Narrative num={3} />
           </Section>
 
-          {/* ── 05 · KEYWORD STRATEGY (classified) ──────────────────────────── */}
+          {/* ── 04 · COMPETITOR LANDSCAPE (narrative) ───────────────────────── */}
+          {narrativeByNum["04"] && (
+            <Section number={4} total={TOTAL} title="Competitor Landscape">
+              <Narrative num={4} />
+            </Section>
+          )}
+
+          {/* ── 05 · KEYWORD STRATEGY (classified + narrative) ──────────────── */}
           <Section number={5} total={TOTAL} title="Keyword Strategy">
             <DiagnosisCard>
               {kw.accepted?.length || 0} keywords passed intent classification and topical-relevance filtering.
@@ -409,15 +443,17 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               </div>
             )}
+            <Narrative num={5} />
           </Section>
 
-          {/* ── 06 · CONTENT ARCHITECTURE (3 separated subsections) ─────────── */}
+          {/* ── 06 · CONTENT ARCHITECTURE (3 separated subsections + narrative) ─ */}
           <Section number={6} total={TOTAL} title="Content Architecture">
             <ContentSub title="Core Commercial Pages" rows={ca.commercial_pages || []} type="commercial" />
             <ContentSub title="Blog &amp; Educational Content" rows={ca.blog_and_guides || []} type="blog" />
             {(ca.city_pages || []).length > 0 && (
               <ContentSub title="Local &amp; City Pages" rows={ca.city_pages || []} type="city" />
             )}
+            <Narrative num={6} />
           </Section>
 
           {/* ── 07 · TECHNICAL FOUNDATION ───────────────────────────────────── */}
@@ -442,10 +478,11 @@ export default function DoctorFizzReport({ data }) {
                   </div>
                 ))}
               </div>
+              <Narrative num={7} />
             </Section>
           )}
 
-          {/* ── 08 · AUTHORITY & LINK BUILDING (4 categories) ───────────────── */}
+          {/* ── 08 · AUTHORITY & LINK BUILDING (4 categories + narrative) ────── */}
           <Section number={8} total={TOTAL} title="Authority &amp; Link Building">
             <BacklinkSub title="① Citation &amp; Directory Links" hint="Fastest baseline authority + local signals">
               <table className="w-full text-[12px]">
@@ -502,6 +539,7 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               ))}
             </BacklinkSub>
+            <Narrative num={8} />
           </Section>
 
           {/* ── 09 · GBP COMPARISON ─────────────────────────────────────────── */}
@@ -544,10 +582,11 @@ export default function DoctorFizzReport({ data }) {
               <GapBlock label="Biggest Visibility Gap" text={gbp.biggest_gap} />
               <GapBlock label="Fastest Win (48h)" text={gbp.fastest_win} accent />
               <GapBlock label="Trust Gap" text={gbp.trust_gap} />
+              <Narrative num={9} />
             </Section>
           )}
 
-          {/* ── 10 · GEO LAYER & AI VISIBILITY ──────────────────────────────── */}
+          {/* ── 10 · GEO LAYER & AI VISIBILITY (+ narrative) ────────────────── */}
           {geo.recommended_actions?.length > 0 && (
             <Section number={10} total={TOTAL} title="GEO Layer &amp; AI Visibility">
               <div className="flex items-center gap-2 mb-3"><TagChip tag="SEO+GEO" /><span className="text-[11px]" style={{ color: C.greyText }}>Same actions strengthen classic ranking and AI citation.</span></div>
@@ -577,10 +616,11 @@ export default function DoctorFizzReport({ data }) {
                   <pre className="text-[10px] leading-snug overflow-x-auto rounded-lg p-3" style={{ background: C.nearBlack, color: "#d7e3d8" }}>{s.jsonld}</pre>
                 </div>
               ))}
+              <Narrative num={10} />
             </Section>
           )}
 
-          {/* ── 11 · KPI FORECAST (validated) ───────────────────────────────── */}
+          {/* ── 11 · KPI FORECAST (validated + narrative) ───────────────────── */}
           <Section number={11} total={TOTAL} title="KPI Forecast &amp; Measurement">
             <div className="overflow-x-auto rounded-lg" style={{ border: `1px solid ${C.warmGrey}30` }}>
               <table className="w-full text-[12px]">
@@ -609,21 +649,25 @@ export default function DoctorFizzReport({ data }) {
                 ))}
               </div>
             )}
+            <Narrative num={11} />
           </Section>
 
-          {/* ── STRATEGIC NARRATIVE (Stage-4 sections, diagnostic style) ─────── */}
-          {narrativeSections.length > 0 && (
-            <div className="mt-12 pt-8" style={{ borderTop: `2px solid ${C.orange}` }}>
-              <div className="text-[11px] tracking-[0.3em] uppercase font-bold mb-6" style={{ color: C.orange }}>
-                Strategic Prescription — Full Diagnosis
-              </div>
-              {narrativeSections.map((sec, i) => (
-                <Section key={i} number={sec.number} total={TOTAL} title={cleanTitle(sec.title)}>
-                  <div>{renderNarrative(sec.body)}</div>
-                </Section>
-              ))}
-            </div>
+          {/* ── 12 · IMPLEMENTATION & SPRINT PLAN (narrative) ───────────────── */}
+          {narrativeByNum["12"] && (
+            <Section number={12} total={TOTAL} title="Implementation &amp; Sprint Plan">
+              <Narrative num={12} />
+            </Section>
           )}
+
+          {/* ── Any extra narrative sections not mapped above (safety net) ──── */}
+          {Object.keys(narrativeByNum)
+            .filter((n) => !["01","02","03","04","05","06","07","08","09","10","11","12"].includes(n))
+            .sort()
+            .map((n) => (
+              <Section key={n} number={Number(n)} total={TOTAL} title={cleanTitle(narrativeByNum[n].title)}>
+                <Narrative num={Number(n)} />
+              </Section>
+            ))}
 
           {/* ── FOOTER ──────────────────────────────────────────────────────── */}
           <div className="mt-12 pt-4 flex items-center justify-between text-[10px]" style={{ borderTop: `1px solid ${C.warmGrey}30`, color: C.greyText }}>

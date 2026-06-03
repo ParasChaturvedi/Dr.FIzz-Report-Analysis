@@ -169,11 +169,15 @@ export default function ReportClient({ id }) {
 
       {/* Report content — horizontally scrollable on very small screens */}
       <div id="report-content" className="min-w-0 overflow-x-auto">
-        {/* Doctor Fizz branded diagnostic report (Stage-3 structured payload).
-            Renders above the legacy report when the business-logic layer ran. */}
-        {data?.doctorFizz && <DoctorFizzReport data={data} />}
+        {/* Single source of truth: the Doctor Fizz branded diagnostic report
+            (spec-compliant) renders when the business-logic layer produced a
+            structured payload. The legacy report is used ONLY as a fallback for
+            page reports or when the structured payload is absent — never both,
+            so sections are not duplicated. */}
         {reportType === "page" ? (
           <PageReport data={data} />
+        ) : data?.doctorFizz ? (
+          <DoctorFizzReport data={data} />
         ) : (
           <WebsiteReport data={data} />
         )}
