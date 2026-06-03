@@ -981,6 +981,82 @@ function buildFaqSchemaJsonLd(industry) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// PRIORITY ACTION PLAN (Section 02 — impact-to-effort ranked, 3 tiers)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const EFFORT_HOURS = { "≈15 min": 0.25, "≈5 minutes": 0.1, "≈10 minutes": 0.17, "≈20 minutes": 0.33, "≈30 min": 0.5, "≈1 hour": 1, "≈2 hours": 2, "≈3 hours": 3, "≈1 day": 8, "≈1 week": 40, "≈2 weeks": 80 };
+function effortToHours(e) {
+  if (!e) return 4;
+  const k = Object.keys(EFFORT_HOURS).find(x => String(e).includes(x.replace("≈", "")));
+  if (k) return EFFORT_HOURS[k];
+  const m = String(e).match(/([0-9.]+)\s*(min|hour|day|week)/i);
+  if (!m) return 4;
+  const n = parseFloat(m[1]); const u = m[2].toLowerCase();
+  return u.startsWith("min") ? n / 60 : u.startsWith("hour") ? n : u.startsWith("day") ? n * 8 : n * 40;
+}
+const PRIORITY_IMPACT = { CRITICAL: 5, HIGH: 4, MEDIUM: 2.5, "QUICK WIN": 2, LOW: 1 };
+
+/**
+ * Build the section-02 priority action plan: every major action ranked by
+ * impact-to-effort, grouped into three tiers. (spec Part 3 + Part 5 §02)
+ */
+export function buildPriorityActionPlan({ technical_issues = [], content_architecture = {}, backlinks = {}, geo_and_ai_visibility = {}, gbp_comparison = {} }) {
+  const actions = [];
+  const add = (tier, description, channel, priority, effort) =>
+    actions.push({ tier, description, channel, priority, effort, _impact: PRIORITY_IMPACT[priority] || 2, _hours: effortToHours(effort) });
+
+  // ── Tier 1: Foundation fixes (technical blockers gate everything) ──
+  for (const t of technical_issues) {
+    if (t.priority === "CRITICAL" || t.priority === "HIGH") {
+      add("Foundation Fixes", t.issue + " — " + (t.recommended_action || "").split(".")[0], "SEO", t.priority, t.estimated_effort);
+    }
+  }
+
+  // ── Tier 2: Content & on-page work ──
+  for (const p of (content_architecture.commercial_pages || []).slice(0, 4)) {
+    add("Content & On-Page Work", `Build commercial page: ${p.page_name} (${p.url_slug}) targeting "${p.keyword_cluster}"`, "SEO", p.priority === "HIGH" ? "HIGH" : "MEDIUM", "≈1 week");
+  }
+  for (const p of (content_architecture.city_pages || []).slice(0, 3)) {
+    add("Content & On-Page Work", `Create city page for ${p.city_target}: "${p.keyword_cluster}"`, "SEO", "MEDIUM", "≈3 hours");
+  }
+  for (const p of (content_architecture.blog_and_guides || []).slice(0, 3)) {
+    add("Content & On-Page Work", `Publish guide: "${p.proposed_title}"`, "SEO", "MEDIUM", "≈1 week");
+  }
+
+  // ── Tier 3: Authority & GEO work ──
+  const missingCitations = (backlinks.citation_links || []).filter(l => !l.client_listed).slice(0, 5);
+  if (missingCitations.length) {
+    add("Authority & GEO Work", `Claim ${missingCitations.length} missing citation listings (${missingCitations.map(l => l.platform).join(", ")})`, "SEO", "QUICK WIN", "≈3 hours");
+  }
+  for (const l of (backlinks.editorial_links || []).slice(0, 2)) {
+    add("Authority & GEO Work", `Editorial link: ${l.content_asset}`, "SEO", "MEDIUM", l.effort || "≈2 weeks");
+  }
+  for (const g of (backlinks.competitor_gap || []).slice(0, 2)) {
+    add("Authority & GEO Work", `Pursue competitor-gap link from ${g.referring_domain}`, "SEO", "MEDIUM", "≈1 week");
+  }
+  if ((geo_and_ai_visibility.schema_additions || []).length) {
+    add("Authority & GEO Work", `Implement ${geo_and_ai_visibility.schema_additions.map(s => s.type).join(" + ")} JSON-LD for AI citation`, "SEO+GEO", "HIGH", "≈3 hours");
+  }
+  for (const a of (geo_and_ai_visibility.recommended_actions || []).slice(0, 2)) {
+    add("Authority & GEO Work", a.split(".")[0], "GEO", "MEDIUM", "≈1 day");
+  }
+  if (gbp_comparison?.client && gbp_comparison.fastest_win) {
+    add("Authority & GEO Work", `GBP fastest win: ${gbp_comparison.fastest_win.split(".")[0]}`, "SEO", "QUICK WIN", "≈30 min");
+  }
+
+  // Rank within each tier by impact-to-effort (higher = do first)
+  const score = (a) => a._impact / Math.max(0.1, a._hours);
+  const tiers = ["Foundation Fixes", "Content & On-Page Work", "Authority & GEO Work"];
+  const grouped = tiers.map(tier => ({
+    tier,
+    actions: actions.filter(a => a.tier === tier).sort((x, y) => score(y) - score(x))
+      .map(({ _impact, _hours, ...rest }) => rest),
+  })).filter(g => g.actions.length);
+
+  return grouped;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SEO SCORES (Phase 3 — Deep AI Analysis Engine)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1206,6 +1282,12 @@ export function runBusinessLogic(input = {}) {
   // ── SEO scores (Phase 3) ──
   const scores = computeScores({ baseline, crawlData, gmbData: clientGmb, gbpComparison: gbp_comparison });
 
+  // ── Priority action plan (Section 02) — impact-to-effort ranked, 3 tiers ──
+  const priority_action_plan = buildPriorityActionPlan({
+    technical_issues, content_architecture, backlinks,
+    geo_and_ai_visibility, gbp_comparison,
+  });
+
   return {
     report_meta: {
       client_name: clientName || domain,
@@ -1225,6 +1307,7 @@ export function runBusinessLogic(input = {}) {
     geo_and_ai_visibility,
     kpis,
     scores,
+    priority_action_plan,
     _meta: { competitorBrands, kpiCtx },
   };
 }

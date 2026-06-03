@@ -85,7 +85,7 @@ function Section({ number, total, title, children }) {
           <span className="text-[11px] font-extrabold tracking-[0.25em] uppercase" style={{ color: C.orange }}>
             {String(number).padStart(2, "0")} ·
           </span>
-          <h2 className="text-[17px] sm:text-[19px] font-bold tracking-tight" style={{ color: C.nearBlack, fontFamily: "Georgia, 'Times New Roman', serif" }}>
+          <h2 className="text-[17px] sm:text-[19px] font-bold tracking-tight" style={{ color: C.nearBlack, fontFamily: "var(--font-playfair), Georgia, serif" }}>
             {title}
           </h2>
         </div>
@@ -231,6 +231,7 @@ export default function DoctorFizzReport({ data }) {
   const tech = payload.technical_issues || [];
   const geo = payload.geo_and_ai_visibility || {};
   const scores = payload.scores || null;
+  const pap = payload.priority_action_plan || [];
 
   // Total sections for the "NN / TT" counter
   const TOTAL = 12;
@@ -264,7 +265,7 @@ export default function DoctorFizzReport({ data }) {
           <div className="text-[11px] tracking-[0.35em] uppercase font-semibold mb-4" style={{ color: C.orangeLite }}>
             SEO &amp; GEO Prescription
           </div>
-          <h1 className="text-3xl sm:text-5xl font-bold leading-tight mb-4 text-white" style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>
+          <h1 className="text-3xl sm:text-5xl font-bold leading-tight mb-4 text-white" style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}>
             On-Page SEO &amp; GEO<br />Diagnostic Report
           </h1>
           <p className="text-[13px] sm:text-[15px] leading-relaxed mb-10 max-w-xl" style={{ color: "#c9c2b8" }}>
@@ -375,9 +376,26 @@ export default function DoctorFizzReport({ data }) {
             </Section>
           )}
 
-          {/* ── 02 · PRIORITY ACTION PLAN (narrative) ───────────────────────── */}
-          {narrativeByNum["02"] && (
+          {/* ── 02 · PRIORITY ACTION PLAN (ranked table, 3 tiers) ───────────── */}
+          {(pap.length > 0 || narrativeByNum["02"]) && (
             <Section number={2} total={TOTAL} title="Priority Action Plan">
+              {pap.map((tier) => (
+                <div key={tier.tier} className="mb-4">
+                  <h4 className="text-[12px] font-bold tracking-wide mb-2 uppercase" style={{ color: C.orange }}>{tier.tier}</h4>
+                  <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                    {tier.actions.map((a, i) => (
+                      <div key={i} className="flex items-start gap-2 px-3 py-2 flex-wrap" style={{ background: i % 2 ? "#fff" : C.ivory, borderBottom: i < tier.actions.length - 1 ? `1px solid ${C.warmGrey}20` : "none" }}>
+                        <span className="text-[12px] flex-1 min-w-[180px]" style={{ color: C.nearBlack }}>{a.description}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <TagChip tag={a.channel} />
+                          <PriorityLabel priority={a.priority} />
+                          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: C.ivory, color: C.greyText }}>{a.effort}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
               <Narrative num={2} />
             </Section>
           )}
@@ -432,7 +450,24 @@ export default function DoctorFizzReport({ data }) {
               {kw.excluded?.length ? ` ${kw.excluded.length} high-volume but irrelevant term(s) were suppressed (no conversion path).` : ""}
               {kw.brand_monitoring_only?.length ? ` ${kw.brand_monitoring_only.length} competitor/brand term(s) routed to monitoring — never content targets.` : ""}
             </DiagnosisCard>
-            <KeywordTable rows={kw.accepted || []} />
+            {/* Grouped by intent class per spec: primary commercial,
+                informational & supporting, local & geo, long-tail feature. */}
+            {(() => {
+              const acc = kw.accepted || [];
+              const groups = [
+                { key: "transactional",    title: "1 · Primary Commercial Keywords",      rows: acc.filter(k => k.intent_class === "transactional") },
+                { key: "informational",    title: "2 · Informational & Supporting",        rows: acc.filter(k => k.intent_class === "informational") },
+                { key: "local-commercial", title: "3 · Local & Geo-Modified Keywords",      rows: acc.filter(k => k.intent_class === "local-commercial") },
+                { key: "other",            title: "4 · Long-Tail & Feature Keywords",       rows: acc.filter(k => !["transactional","informational","local-commercial"].includes(k.intent_class)) },
+              ].filter(g => g.rows.length);
+              if (!groups.length) return <KeywordTable rows={acc} />;
+              return groups.map(g => (
+                <div key={g.key} className="mb-4">
+                  <h4 className="text-[12px] font-bold tracking-wide mb-1.5" style={{ color: C.orange }}>{g.title}</h4>
+                  <KeywordTable rows={g.rows} />
+                </div>
+              ));
+            })()}
             {kw.brand_monitoring_only?.length > 0 && (
               <div className="mt-4 p-3 rounded-lg" style={{ background: "#f0ede8" }}>
                 <div className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: C.warmGrey }}>Brand Monitoring Only — track share-of-voice, do not target</div>
@@ -560,13 +595,19 @@ export default function DoctorFizzReport({ data }) {
                     {[
                       ["Verified", "verified", v => v ? "✓" : "✗"],
                       ["Primary Category", "primary_category", v => v || "—"],
+                      ["Secondary Categories", "secondary_categories", v => v ?? 0],
                       ["Reviews", "review_count", v => v ?? 0],
                       ["Rating", "rating", v => v ? `${v}★` : "—"],
+                      ["Review Recency", "review_recency", v => v || "—"],
+                      ["Post Frequency", "post_frequency", v => v || "—"],
                       ["Photos", "photos", v => v ?? 0],
+                      ["Services Populated", "services_populated", v => v == null ? "—" : (v ? "✓" : "✗")],
+                      ["Q&A Active", "qa_active", v => v ? "✓" : "✗"],
+                      ["Hours Complete", "hours_complete", v => v ? "✓" : "✗"],
                       ["Completeness", "completeness", v => v != null ? `${v}/100` : "—"],
-                      ["Hours Set", "hours_complete", v => v ? "✓" : "✗"],
                       ["Website Link", "website_link", v => v ? "✓" : "✗"],
                       ["Booking Link", "booking_link", v => v ? "✓" : "✗"],
+                      ["Description", "description_complete", v => v ? "✓" : "✗"],
                     ].map(([label, key, fmt], i) => (
                       <tr key={key} style={{ background: i % 2 ? "#fff" : C.ivory }}>
                         <td className="px-2 py-1.5 font-medium" style={{ color: C.greyText }}>{label}</td>
