@@ -323,6 +323,7 @@ export function classifyKeywords(rawKeywords, ctx = {}) {
   const seen = new Set();
 
   for (const kw of rawKeywords || []) {
+    if (!kw || typeof kw !== "object") continue; // skip null/malformed entries
     const keyword = String(kw.keyword || "").trim().toLowerCase();
     if (!keyword || seen.has(keyword)) continue; // dedupe
     seen.add(keyword);
@@ -1032,8 +1033,8 @@ export function computeScores(input = {}) {
   const rd = val("referring_domains");
   if (dr != null || rd != null) {
     let a = 0, parts = 0;
-    if (dr != null) { a += Math.min(100, dr); parts++; }
-    if (rd != null) { a += Math.min(100, Math.log10(rd + 1) * 33); parts++; } // 10→33, 100→66, 1000→100
+    if (dr != null) { a += Math.min(100, Math.max(0, dr)); parts++; }
+    if (rd != null) { a += Math.min(100, Math.log10(Math.max(0, rd) + 1) * 33); parts++; } // 10→33, 100→66, 1000→100
     authority = parts ? clamp(a / parts) : null;
   }
 

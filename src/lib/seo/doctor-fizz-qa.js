@@ -149,7 +149,11 @@ export function runQaGate(payload = {}, narrative = "") {
 
   // ── Keyword quality checks ──
   const kw = payload.keywords || {};
-  const brandSet = new Set((payload._meta?.competitorBrands || []).map(b => b.toLowerCase()));
+  const brandSet = new Set(
+    (payload._meta?.competitorBrands || [])
+      .filter(b => typeof b === "string")
+      .map(b => b.toLowerCase())
+  );
   const contentKw = [
     ...(payload.content_architecture?.commercial_pages || []),
     ...(payload.content_architecture?.blog_and_guides || []),
