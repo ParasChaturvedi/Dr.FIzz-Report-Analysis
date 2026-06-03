@@ -38,14 +38,17 @@ function formatCrawlValue(crawl) {
 }
 
 // ─── Stage & check initial state ──────────────────────────────────────────────
+// Order mirrors execution: site understanding (crawl, sitemap/index, on-page
+// keywords, metrics) is collected FIRST, then Content Opportunities are
+// identified from it, then local/competitive data, then the AI report.
 const INITIAL_STAGES = [
-  { id: "opportunities",   label: "Content Opportunities",     state: "idle", value: null },
+  { id: "websiteCrawl",    label: "Website Crawl & Audit",     state: "idle", value: null },
+  { id: "onpageKeywords",  label: "On-Page Keywords",          state: "idle", value: null },
   { id: "psi",             label: "Performance Score (PSI)",   state: "idle", value: null },
   { id: "dataforseo",      label: "Domain Metrics",            state: "idle", value: null },
   { id: "dataforseoExtra", label: "Keyword Rankings",          state: "idle", value: null },
   { id: "content",         label: "Content Extraction",        state: "idle", value: null },
-  { id: "onpageKeywords",  label: "On-Page Keywords",          state: "idle", value: null },
-  { id: "websiteCrawl",    label: "Website Crawl & Audit",     state: "idle", value: null },
+  { id: "opportunities",   label: "Content Opportunities",     state: "idle", value: null },
   { id: "gmbCheck",        label: "GMB & Directory Listings",  state: "idle", value: null },
   { id: "competitorAudit", label: "Competitor Audit",          state: "idle", value: null },
   { id: "keywordGap",      label: "Keyword Gap Analysis",      state: "idle", value: null },
@@ -562,31 +565,12 @@ export default function Step5Slide2({
       let   keyword = domain;
       if (keywords.length > 0 && typeof keywords[0] === "string") keyword = keywords[0];
 
-      // ── Opportunities prefetch ────────────────────────────────────────────
-      updateStage("opportunities", { state: "loading" });
+      // ═══ PHASE 1 — Site understanding ═══════════════════════════════════════
+      // Crawl & audit, on-page keywords, sitemap & index are checked FIRST so
+      // Content Opportunities can be identified from a real understanding of the
+      // site (not the other way around).
 
-      const oppsPromise = (async () => {
-        try {
-          const res = await prefetchOpportunitiesAndContent(domain, {
-            concurrency: 2,
-            timeoutMs: 5 * 60 * 1000,
-            countryCode: "in",
-            languageCode: "en",
-          });
-          if (res?.ok) {
-            updateStage("opportunities", { state: "done", value: "Topics ready" });
-          } else {
-            updateStage("opportunities", { state: "error", value: "Skipped" });
-          }
-          return { ok: !!res?.ok };
-        } catch (e) {
-          console.warn("[Step5] Opportunities prefetch failed:", e);
-          updateStage("opportunities", { state: "error", value: "Skipped" });
-          return { ok: false };
-        }
-      })();
-
-      // ── SEO SSE fetch ─────────────────────────────────────────────────────
+      // ── SEO SSE fetch (PSI, domain metrics, content, on-page keywords) ────
       updateStage("psi", { state: "loading" });
 
       const seoPromise = (async () => {
@@ -620,9 +604,7 @@ export default function Step5Slide2({
         return json;
       })();
 
-      const [, seoJson] = await Promise.all([oppsPromise, seoPromise]);
-
-      // ── Website Crawl ─────────────────────────────────────────────────────
+      // ── Website Crawl & Audit (sitemap + index check) ────────────────────
       updateStage("websiteCrawl", { state: "loading" });
       let crawlJson = null;
       const crawlPromise = (async () => {
@@ -644,6 +626,30 @@ export default function Step5Slide2({
         }
       })();
 
+      // Wait for site understanding before identifying opportunities
+      const [seoJson] = await Promise.all([seoPromise, crawlPromise]);
+
+      // ═══ PHASE 2 — Content Opportunities (derived from Phase 1) ══════════════
+      // Now that the crawl, sitemap/index, and on-page keywords are known,
+      // identify content opportunities against that real site picture.
+      updateStage("opportunities", { state: "loading" });
+      try {
+        const res = await prefetchOpportunitiesAndContent(domain, {
+          concurrency: 2,
+          timeoutMs: 5 * 60 * 1000,
+          countryCode: "in",
+          languageCode: "en",
+        });
+        updateStage("opportunities", {
+          state: res?.ok ? "done" : "error",
+          value: res?.ok ? "Topics ready" : "Skipped",
+        });
+      } catch (e) {
+        console.warn("[Step5] Opportunities prefetch failed:", e);
+        updateStage("opportunities", { state: "error", value: "Skipped" });
+      }
+
+      // ═══ PHASE 3 — Local presence & competitive data ════════════════════════
       // ── GMB & Directory Check ─────────────────────────────────────────────
       updateStage("gmbCheck", { state: "loading" });
       let gmbJson = null;
@@ -674,8 +680,8 @@ export default function Step5Slide2({
         }
       })();
 
-      // Run crawl + GMB in parallel
-      await Promise.all([crawlPromise, gmbPromise]);
+      // Crawl already completed in Phase 1; just await GMB here.
+      await gmbPromise;
 
       // ── Competitor Audit ──────────────────────────────────────────────────
       const allCompetitors = [
