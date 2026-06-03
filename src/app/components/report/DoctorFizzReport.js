@@ -218,6 +218,7 @@ export default function DoctorFizzReport({ data }) {
   const kpis = payload.kpis?.metrics || [];
   const tech = payload.technical_issues || [];
   const geo = payload.geo_and_ai_visibility || {};
+  const scores = payload.scores || null;
 
   // Total sections for the "NN / TT" counter
   const TOTAL = 12;
@@ -298,6 +299,44 @@ export default function DoctorFizzReport({ data }) {
             </div>
             <span className="text-[11px]" style={{ color: C.greyText }}>{meta.client_name} · {meta.report_type} report</span>
           </div>
+
+          {/* ── SEO SCORE PANEL (Phase 3 — Deep AI Analysis) ────────────────── */}
+          {scores && scores.seo_health != null && (
+            <div className="mb-10">
+              <div className="rounded-xl p-5 mb-4" style={{ background: C.nearBlack }}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-[11px] tracking-[0.25em] uppercase font-bold" style={{ color: C.orangeLite }}>SEO Health Score</span>
+                  <span className="text-[10px] tracking-widest" style={{ color: C.warmGrey }}>Phase 3 · Deep Analysis</span>
+                </div>
+                <div className="flex items-end gap-4 mb-2">
+                  <span className="text-5xl font-black leading-none" style={{ color: scoreColor(scores.seo_health) }}>{scores.seo_health}</span>
+                  <span className="text-lg font-bold mb-1" style={{ color: C.warmGrey }}>/100</span>
+                  {scores.grade && (
+                    <span className="ml-auto text-3xl font-black" style={{ color: scoreColor(scores.seo_health) }}>{scores.grade}</span>
+                  )}
+                </div>
+                <div className="h-2 rounded-full overflow-hidden" style={{ background: "#ffffff20" }}>
+                  <div className="h-2 rounded-full" style={{ width: `${scores.seo_health}%`, background: scoreColor(scores.seo_health) }} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {[
+                  ["Technical", scores.technical],
+                  ["Content", scores.content],
+                  ["Authority", scores.authority],
+                  ["Local", scores.local],
+                  ["Competitive", scores.competitive],
+                ].map(([label, val]) => (
+                  <div key={label} className="rounded-lg p-3 text-center" style={{ background: "#fff", border: `1px solid ${C.warmGrey}25` }}>
+                    <div className="text-2xl font-black leading-none mb-1" style={{ color: val != null ? scoreColor(val) : C.warmGrey }}>
+                      {val != null ? val : "—"}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-wide font-semibold" style={{ color: C.greyText }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── 00 · CONTENTS & SCOPE ───────────────────────────────────────── */}
           <Section number={0} total={TOTAL} title="Contents &amp; Scope">
@@ -716,4 +755,12 @@ function fmtTarget(v) {
 
 function cleanTitle(t) {
   return String(t || "").replace(/^\d+\s*[·.]\s*/, "").trim();
+}
+
+function scoreColor(s) {
+  if (s == null) return C.warmGrey;
+  if (s >= 80) return "#3f7d4a"; // green
+  if (s >= 60) return "#b8860b"; // amber
+  if (s >= 40) return C.orange;  // burnt orange
+  return "#c0341a";              // red
 }

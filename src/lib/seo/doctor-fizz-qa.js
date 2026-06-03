@@ -10,6 +10,76 @@
 
 import { MISSING_LABELS } from "./doctor-fizz-logic.js";
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// PHASE 2 — DATA VALIDATION LAYER
+// ═══════════════════════════════════════════════════════════════════════════════
+// Runs after data collection, BEFORE any AI processing. Confirms every required
+// dataset is present and internally consistent. If a required module is missing
+// or failed, the caller must STOP and retry — not proceed to AI.
+//
+// @param {object} datasets {
+//   validation, psi, domainMetrics, crawl, content, onpageKeywords,
+//   keywordRankings, gmb, competitorAudit, keywordGap
+// }  // each is the raw module result or null/{error}
+// @returns {{ pass, blocking, modules[], failures[], warnings[] }}
+export function validateDataCompleteness(datasets = {}) {
+  const modules = [];
+  const add = (name, required, ok, detail = "") =>
+    modules.push({ name, required, ok: !!ok, detail });
+
+  const present = (d) => d && !d.error && (typeof d !== "object" || Object.keys(d).length > 0);
+
+  // Required modules — a failure here blocks AI processing
+  add("Website Validation", true, datasets.validation?.valid, datasets.validation?.issues?.join("; "));
+  add("Performance (PSI)",  true, present(datasets.psi) &&
+       (datasets.psi.performanceScoreMobile != null || datasets.psi.performanceScoreDesktop != null),
+       "No PSI scores returned");
+  add("Domain Metrics",     true, present(datasets.domainMetrics), "Domain metrics unavailable");
+  add("Website Crawl",      true, present(datasets.crawl) && (datasets.crawl.pageCount || 0) >= 1, "Crawl returned no pages");
+  add("Content Extraction", true, present(datasets.content), "No content extracted");
+  add("On-Page Keywords",   true, present(datasets.onpageKeywords), "No on-page keywords");
+  add("Keyword Rankings",   true, present(datasets.keywordRankings), "No ranking data");
+  add("Local SEO (GMB)",    true, present(datasets.gmb), "GMB module failed");
+
+  // Conditionally-required — only blocking if competitors were provided
+  const hasCompetitors = (datasets.competitorAudit?.competitors || []).length > 0;
+  add("Competitor Audit",   hasCompetitors, !hasCompetitors || present(datasets.competitorAudit), "Competitor audit incomplete");
+  add("Keyword Gap",        hasCompetitors, !hasCompetitors || present(datasets.keywordGap), "Keyword gap incomplete");
+
+  // Partial-crawl warning (not blocking, but flagged)
+  const warnings = [];
+  if (datasets.crawl && (datasets.crawl.pageCount || 0) === 1 && (datasets.crawl.totalPagesEstimate || 0) > 1) {
+    warnings.push(`Only 1 of ~${datasets.crawl.totalPagesEstimate} pages were deep-audited (sampled crawl).`);
+  }
+
+  // Contradicting metrics check: traffic > 0 but 0 keywords (or vice versa) is suspicious
+  const dm = datasets.domainMetrics || {};
+  const traffic = num(dm.organicTraffic ?? datasets.psi?.organicTraffic);
+  const kwds    = num(dm.organicKeywords);
+  if (traffic > 100 && kwds === 0) {
+    warnings.push("Contradiction: organic traffic > 0 but 0 organic keywords. Verify data source.");
+  }
+
+  const failures = modules.filter(m => m.required && !m.ok);
+  return {
+    pass: failures.length === 0,
+    blocking: failures.length > 0,
+    modules,
+    failures,
+    warnings,
+  };
+}
+
+function num(v) {
+  if (v == null) return 0;
+  const s = String(v).replace(/[,\s]/g, "");
+  const m = s.match(/^([0-9.]+)([KkMm]?)/);
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  const mult = m[2]?.toLowerCase() === "k" ? 1000 : m[2]?.toLowerCase() === "m" ? 1e6 : 1;
+  return n * mult;
+}
+
 const FILLER_PATTERNS = [
   /it is worth noting that/i,
   /as we can see/i,

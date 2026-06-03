@@ -980,6 +980,123 @@ function buildFaqSchemaJsonLd(industry) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SEO SCORES (Phase 3 — Deep AI Analysis Engine)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Compute the six headline scores deterministically from collected data.
+ * Each is 0-100. The SEO Health Score is a weighted composite of the others.
+ * Returns { seo_health, technical, content, authority, local, competitive, breakdown }.
+ */
+export function computeScores(input = {}) {
+  const { baseline = {}, crawlData = null, gmbData = null, gbpComparison = null, contentData = null } = input;
+
+  const val = (k) => baseline[k]?.value ?? null;
+  const clamp = (n) => Math.max(0, Math.min(100, Math.round(n)));
+
+  // ── Technical: crawl health + PSI + indexability ──
+  let technical = 0, techParts = 0;
+  if (crawlData?.healthScore != null) { technical += crawlData.healthScore; techParts++; }
+  const mob = val("mobile_performance_score");
+  const desk = val("desktop_performance_score");
+  if (mob != null)  { technical += mob;  techParts++; }
+  if (desk != null) { technical += desk; techParts++; }
+  if (crawlData) {
+    let t = 100;
+    if (!crawlData.hasSitemap)            t -= 10;
+    if (crawlData.crawlBlockedByRobots)   t -= 30;
+    if (!(crawlData.summary?.pagesWithSchemaTypes || []).length) t -= 10;
+    if ((crawlData.brokenLinks || []).length) t -= 10;
+    technical += clamp(t); techParts++;
+  }
+  technical = techParts ? clamp(technical / techParts) : null;
+
+  // ── Content: word count, thin pages, meta completeness ──
+  let content = null;
+  if (crawlData) {
+    const s = crawlData.summary || {};
+    let c = 100;
+    const avgWords = s.avgWordCount || 0;
+    if (avgWords < 300)      c -= 25;
+    else if (avgWords < 600) c -= 10;
+    if ((s.thinContentCount || 0) > 0)     c -= Math.min(20, s.thinContentCount * 2);
+    if ((s.pagesMissingMetaTitle || 0) > 0) c -= Math.min(15, s.pagesMissingMetaTitle * 2);
+    if ((s.pagesMissingMetaDesc || 0) > 0)  c -= Math.min(10, s.pagesMissingMetaDesc);
+    if ((s.pagesMissingH1 || 0) > 0)        c -= Math.min(15, s.pagesMissingH1 * 3);
+    content = clamp(c);
+  }
+
+  // ── Authority: DR + referring domains + backlinks ──
+  let authority = null;
+  const dr = val("domain_rating");
+  const rd = val("referring_domains");
+  if (dr != null || rd != null) {
+    let a = 0, parts = 0;
+    if (dr != null) { a += Math.min(100, dr); parts++; }
+    if (rd != null) { a += Math.min(100, Math.log10(rd + 1) * 33); parts++; } // 10→33, 100→66, 1000→100
+    authority = parts ? clamp(a / parts) : null;
+  }
+
+  // ── Local: GMB completeness + reviews + rating + directories ──
+  let local = null;
+  if (gmbData) {
+    let l = 0, parts = 0;
+    if (gmbData.completeness?.score != null) { l += gmbData.completeness.score; parts++; }
+    const reviews = gmbData.gmb?.reviewCount ?? gmbData.reviewCount ?? 0;
+    l += Math.min(100, reviews * 2); parts++; // 50 reviews → 100
+    const rating = gmbData.gmb?.rating ?? 0;
+    if (rating) { l += (rating / 5) * 100; parts++; }
+    const dirs = gmbData.listedDirectoryCount ?? 0;
+    l += Math.min(100, dirs * 20); parts++; // 5 dirs → 100
+    local = parts ? clamp(l / parts) : null;
+  }
+
+  // ── Competitive: how the client stacks vs competitors (GBP + authority proxy) ──
+  let competitive = null;
+  if (gbpComparison?.has_competitor_data) {
+    const client = gbpComparison.client || {};
+    const comps  = gbpComparison.competitors || [];
+    if (comps.length) {
+      const clientReviews = client.review_count || 0;
+      const avgCompReviews = comps.reduce((s, c) => s + (c.review_count || 0), 0) / comps.length;
+      const reviewRatio = avgCompReviews > 0 ? clientReviews / avgCompReviews : 1;
+      const clientComplete = client.completeness || 0;
+      const avgCompComplete = comps.reduce((s, c) => s + (c.completeness || 0), 0) / comps.length || 1;
+      const completeRatio = clientComplete / avgCompComplete;
+      competitive = clamp(((reviewRatio * 0.5) + (completeRatio * 0.5)) * 100);
+    }
+  }
+
+  // ── SEO Health: weighted composite of available scores ──
+  const weights = { technical: 0.3, content: 0.2, authority: 0.25, local: 0.15, competitive: 0.1 };
+  let healthSum = 0, weightSum = 0;
+  const scores = { technical, content, authority, local, competitive };
+  for (const [k, w] of Object.entries(weights)) {
+    if (scores[k] != null) { healthSum += scores[k] * w; weightSum += w; }
+  }
+  const seo_health = weightSum ? clamp(healthSum / weightSum) : null;
+
+  return {
+    seo_health,
+    technical,
+    content,
+    authority,
+    local,
+    competitive,
+    grade: gradeForScore(seo_health),
+  };
+}
+
+function gradeForScore(s) {
+  if (s == null) return null;
+  if (s >= 90) return "A";
+  if (s >= 80) return "B";
+  if (s >= 70) return "C";
+  if (s >= 60) return "D";
+  return "F";
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // COMPETITOR BRAND EXTRACTION (helper for Problem 2)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1057,6 +1174,9 @@ export function runBusinessLogic(input = {}) {
   // ── GBP comparison (Problem 5) ──
   const gbp_comparison = buildGbpComparison(clientGmb, competitorGmbs);
 
+  // ── SEO scores (Phase 3) — computed after baseline so they reflect real data ──
+  // (baseline is built below; scores assembled at the end before return)
+
   // ── Baseline with missing-data labels (Problem 7) ──
   const { baseline, missing_fields } = buildBaseline(baselineRaw);
 
@@ -1082,6 +1202,9 @@ export function runBusinessLogic(input = {}) {
   };
   const kpis = { metrics: validateKpis(buildKpiSeeds(baseline, missing_fields), kpiCtx) };
 
+  // ── SEO scores (Phase 3) ──
+  const scores = computeScores({ baseline, crawlData, gmbData: clientGmb, gbpComparison: gbp_comparison });
+
   return {
     report_meta: {
       client_name: clientName || domain,
@@ -1100,6 +1223,7 @@ export function runBusinessLogic(input = {}) {
     gbp_comparison,
     geo_and_ai_visibility,
     kpis,
+    scores,
     _meta: { competitorBrands, kpiCtx },
   };
 }

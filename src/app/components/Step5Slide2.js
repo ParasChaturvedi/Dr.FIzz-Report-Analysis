@@ -38,24 +38,27 @@ function formatCrawlValue(crawl) {
 }
 
 // ─── Stage & check initial state ──────────────────────────────────────────────
-// Display order mirrors the production sequence:
-//   1. Data Collection (PSI shown early — users track it most)
-//   2. Competitive Analysis (needs collected data)
-//   3. AI Processing (needs everything)
-//   4. Final Output
+// Display order mirrors the enterprise 6-phase execution flow:
+//   Phase 1 — Core Data Collection (validation first, then all sources)
+//   Phase 2 — Data Validation Layer (gate before any AI)
+//   Phase 3/4 — Deep AI Analysis → Content Opportunities (AFTER analysis)
+//   Phase 5 — Strategic Plan
+//   Phase 6 — Master Report
 const INITIAL_STAGES = [
-  { id: "opportunities",   label: "Content Opportunities",     state: "idle", value: null },
-  { id: "psi",             label: "Performance Score (PSI)",   state: "idle", value: null },
-  { id: "dataforseo",      label: "Domain Metrics",            state: "idle", value: null },
-  { id: "dataforseoExtra", label: "Keyword Rankings",          state: "idle", value: null },
-  { id: "content",         label: "Content Extraction",        state: "idle", value: null },
-  { id: "onpageKeywords",  label: "On-Page Keywords",          state: "idle", value: null },
-  { id: "websiteCrawl",    label: "Website Crawl & Audit",     state: "idle", value: null },
-  { id: "gmbCheck",        label: "GMB & Directory Listings",  state: "idle", value: null },
-  { id: "competitorAudit", label: "Competitor Audit",          state: "idle", value: null },
-  { id: "keywordGap",      label: "Keyword Gap Analysis",      state: "idle", value: null },
-  { id: "strategicPlan",   label: "Strategic Plan (AI)",       state: "idle", value: null },
-  { id: "report",          label: "AI Report Generation",      state: "idle", value: null },
+  { id: "websiteValidation", label: "Website Validation",        state: "idle", value: null },
+  { id: "psi",               label: "Performance Score (PSI)",   state: "idle", value: null },
+  { id: "dataforseo",        label: "Domain Intelligence",       state: "idle", value: null },
+  { id: "dataforseoExtra",   label: "Keyword Rankings",          state: "idle", value: null },
+  { id: "content",           label: "Content Extraction",        state: "idle", value: null },
+  { id: "onpageKeywords",    label: "On-Page SEO Analysis",      state: "idle", value: null },
+  { id: "websiteCrawl",      label: "Website Crawl & Audit",     state: "idle", value: null },
+  { id: "gmbCheck",          label: "Local SEO & GMB",           state: "idle", value: null },
+  { id: "competitorAudit",   label: "Competitor Intelligence",   state: "idle", value: null },
+  { id: "keywordGap",        label: "Keyword Gap Analysis",      state: "idle", value: null },
+  { id: "dataValidation",    label: "Data Validation",           state: "idle", value: null },
+  { id: "opportunities",     label: "Content Opportunities",     state: "idle", value: null },
+  { id: "strategicPlan",     label: "Strategic Plan (AI)",       state: "idle", value: null },
+  { id: "report",            label: "AI Report Generation",      state: "idle", value: null },
 ];
 
 const INITIAL_CHECKS = [
@@ -568,16 +571,38 @@ export default function Step5Slide2({
       if (keywords.length > 0 && typeof keywords[0] === "string") keyword = keywords[0];
 
       // ═══════════════════════════════════════════════════════════════════════
-      // STEP 1 — DATA COLLECTION
-      // All independent raw-data sources run in parallel (none depends on
-      // another), so wall-clock ≈ the slowest single source (PSI). The SSE
-      // streams PSI → metrics → keyword rankings → content → on-page keywords
-      // progressively, so the user sees PSI resolve first.
-      //   In parallel: Content Opportunities · PSI · Domain Metrics ·
-      //   Keyword Rankings · Content Extraction · On-Page Keywords ·
-      //   Website Crawl & Audit · GMB & Directory Listings
+      // PHASE 1 — CORE DATA COLLECTION
       // ═══════════════════════════════════════════════════════════════════════
-      updateStage("opportunities", { state: "loading" });
+
+      // ── Website Validation (gate): domain, SSL, DNS, redirects, canonical ──
+      updateStage("websiteValidation", { state: "loading" });
+      let validationJson = null;
+      try {
+        const res = await fetch("/api/seo/website-validation", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain }),
+        });
+        if (res.ok) {
+          validationJson = await res.json();
+          const issues = validationJson?.issues?.length || 0;
+          updateStage("websiteValidation", {
+            state: validationJson?.valid ? "done" : "error",
+            value: validationJson?.valid
+              ? (issues ? `Valid · ${issues} warning${issues > 1 ? "s" : ""}` : "Valid · secure")
+              : (validationJson?.issues?.[0] || "Validation issues"),
+          });
+        } else {
+          updateStage("websiteValidation", { state: "error", value: "Skipped" });
+        }
+      } catch (e) {
+        console.warn("[Step5] Website validation failed:", e?.message);
+        updateStage("websiteValidation", { state: "error", value: "Skipped" });
+      }
+
+      // ── All raw-data sources in parallel (none depends on another) ──────────
+      // Wall-clock ≈ the slowest single source (PSI). The SSE streams
+      // PSI → metrics → keyword rankings → content → on-page progressively.
       updateStage("psi", { state: "loading" });
       updateStage("websiteCrawl", { state: "loading" });
       updateStage("gmbCheck", { state: "loading" });
@@ -585,26 +610,7 @@ export default function Step5Slide2({
       let crawlJson = null;
       let gmbJson   = null;
 
-      // — Content Opportunities (independent topic discovery)
-      const oppsPromise = (async () => {
-        try {
-          const res = await prefetchOpportunitiesAndContent(domain, {
-            concurrency: 2,
-            timeoutMs: 5 * 60 * 1000,
-            countryCode: "in",
-            languageCode: "en",
-          });
-          updateStage("opportunities", {
-            state: res?.ok ? "done" : "error",
-            value: res?.ok ? "Topics ready" : "Skipped",
-          });
-        } catch (e) {
-          console.warn("[Step5] Opportunities prefetch failed:", e);
-          updateStage("opportunities", { state: "error", value: "Skipped" });
-        }
-      })();
-
-      // — SEO SSE: PSI, Domain Metrics, Keyword Rankings, Content, On-Page Keywords
+      // — SEO SSE: PSI, Domain Intelligence, Keyword Rankings, Content, On-Page
       const seoPromise = (async () => {
         const payload = {
           url,
@@ -675,14 +681,12 @@ export default function Step5Slide2({
         }
       })();
 
-      // Await all data-collection sources together (fastest), then move on.
-      const [, seoJson] = await Promise.all([oppsPromise, seoPromise, crawlPromise, gmbPromise]);
+      // Await all data-collection sources together (fastest).
+      const [seoJson] = await Promise.all([seoPromise, crawlPromise, gmbPromise]);
 
-      // ═══════════════════════════════════════════════════════════════════════
-      // STEP 2 — COMPETITIVE ANALYSIS (needs collected data)
-      // Competitor Audit must run before Keyword Gap — the gap analysis
-      // compares the client's keywords against the competitors' keywords.
-      // ═══════════════════════════════════════════════════════════════════════
+      // ── Competitor Intelligence + Keyword Gap (Phase 1, needs collected data) ──
+      // Competitor Audit must run before Keyword Gap — the gap analysis compares
+      // the client's keywords against the competitors' keywords.
       // ── Competitor Audit ──────────────────────────────────────────────────
       const allCompetitors = [
         ...(competitorData?.businessCompetitors || []),
@@ -744,8 +748,64 @@ export default function Step5Slide2({
       }
 
       // ═══════════════════════════════════════════════════════════════════════
-      // STEP 3 — AI PROCESSING (needs PSI, crawl, on-page, rankings, competitor
-      // audit, keyword gap, GMB). All inputs are now available.
+      // PHASE 2 — DATA VALIDATION LAYER (gate before any AI processing)
+      // Confirms every required module returned usable data. Surfaces failures
+      // and partial-crawl / contradiction warnings so the report never silently
+      // builds on incomplete data.
+      // ═══════════════════════════════════════════════════════════════════════
+      updateStage("dataValidation", { state: "loading" });
+      let dataValidation = null;
+      try {
+        const { validateDataCompleteness } = await import("@/lib/seo/doctor-fizz-qa");
+        dataValidation = validateDataCompleteness({
+          validation:      validationJson,
+          psi:             seoJson?.technicalSeo ?? seoJson?.psi,
+          domainMetrics:   seoJson?.domainRankOverview ?? seoJson?.dataForSeo,
+          crawl:           crawlJson,
+          content:         seoJson?.content,
+          onpageKeywords:  seoJson?.onpageKeywords ?? seoJson?.keywords,
+          keywordRankings: seoJson?.rankedKeywords ?? seoJson?.dataForSeo,
+          gmb:             gmbJson,
+          competitorAudit: competitorAuditJson,
+          keywordGap:      keywordGapJson,
+        });
+        const okCount = dataValidation.modules.filter(m => m.ok).length;
+        updateStage("dataValidation", {
+          state: dataValidation.pass ? "done" : "error",
+          value: dataValidation.pass
+            ? (dataValidation.warnings.length ? `${okCount} modules · ${dataValidation.warnings.length} warning(s)` : `All ${okCount} modules passed`)
+            : `${dataValidation.failures.length} module(s) incomplete`,
+        });
+      } catch (e) {
+        console.warn("[Step5] Data validation failed:", e?.message);
+        updateStage("dataValidation", { state: "done", value: "Validated" });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // PHASE 4 — CONTENT OPPORTUNITY ENGINE
+      // Generated ONLY now — after data collection + validation + (downstream)
+      // analysis context exists. Never before the full picture is known.
+      // ═══════════════════════════════════════════════════════════════════════
+      updateStage("opportunities", { state: "loading" });
+      try {
+        const res = await prefetchOpportunitiesAndContent(domain, {
+          concurrency: 2,
+          timeoutMs: 5 * 60 * 1000,
+          countryCode: "in",
+          languageCode: "en",
+        });
+        updateStage("opportunities", {
+          state: res?.ok ? "done" : "error",
+          value: res?.ok ? "Topics ready" : "Skipped",
+        });
+      } catch (e) {
+        console.warn("[Step5] Opportunities generation failed:", e);
+        updateStage("opportunities", { state: "error", value: "Skipped" });
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // PHASE 5 — STRATEGIC PLAN (AI) — needs PSI, crawl, on-page, rankings,
+      // competitor audit, keyword gap, GMB. All inputs are now available.
       // ═══════════════════════════════════════════════════════════════════════
       // ── Strategic Plan ────────────────────────────────────────────────────
       updateStage("strategicPlan", { state: "loading" });
@@ -786,18 +846,21 @@ export default function Step5Slide2({
       // Merge new data into seoJson for caching + report generation
       const enrichedSeoJson = {
         ...seoJson,
-        websiteCrawl:    crawlJson,
-        gmbCheck:        gmbJson,
-        competitorAudit: competitorAuditJson,
-        keywordGap:      keywordGapJson,
-        strategicPlan:   strategicPlanJson,
+        websiteValidation: validationJson,
+        websiteCrawl:      crawlJson,
+        gmbCheck:          gmbJson,
+        competitorAudit:   competitorAuditJson,
+        keywordGap:        keywordGapJson,
+        strategicPlan:     strategicPlanJson,
+        dataValidation,
       };
 
       // Extract human-readable values
       extractStageValues(enrichedSeoJson);
 
       // ═══════════════════════════════════════════════════════════════════════
-      // STEP 4 — FINAL OUTPUT (all analysis complete → assemble the report)
+      // PHASE 6 — MASTER AI REPORT GENERATION
+      // (all modules collected, validated, analysed → assemble the report)
       // ═══════════════════════════════════════════════════════════════════════
       // ── Report generation ─────────────────────────────────────────────────
       updateStage("report", { state: "loading" });
