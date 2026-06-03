@@ -39,21 +39,48 @@ export async function fetchPsiForStrategy(url, strategy = "mobile") {
 
   const apiUrl =
     "https://www.googleapis.com/pagespeedonline/v5/runPagespeed" +
-    `?url=${encodeURIComponent(url)}&strategy=${strategy}&key=${PSI_API_KEY}`;
+    `?url=${encodeURIComponent(url)}&strategy=${strategy}&key=${PSI_API_KEY}` +
+    `&category=performance`;
 
-  // No client-side timeout — Google PSI can take 60-120 s for slow/large sites.
-  // The Vercel route sets maxDuration = 300 s which acts as the hard ceiling.
-  // Both mobile + desktop are fetched in parallel so total wait ≈ the slower one.
-  const res = await fetch(apiUrl, { cache: "no-store" });
+  // PSI is flaky: rate limits (429), transient 500s, and occasional timeouts on
+  // slow sites. Retry up to 3 times with backoff and a per-attempt timeout so a
+  // single transient failure doesn't mark the whole stage as "Failed".
+  const MAX_ATTEMPTS = 3;
+  const PER_ATTEMPT_TIMEOUT = 75000; // 75s/attempt; route ceiling is 300s
+  let lastErr = null;
+  let data = null;
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => String(res.status));
-    throw new Error(
-      `PageSpeed Insights (${strategy}) failed: ${res.status} — ${text}`
-    );
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(apiUrl, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(PER_ATTEMPT_TIMEOUT),
+      });
+
+      if (res.ok) {
+        data = await res.json();
+        break;
+      }
+
+      // Retry on rate-limit / server errors; fail fast on 4xx client errors
+      const retryable = res.status === 429 || res.status >= 500;
+      const text = await res.text().catch(() => String(res.status));
+      lastErr = new Error(`PageSpeed Insights (${strategy}) failed: ${res.status} — ${text.slice(0, 200)}`);
+      if (!retryable) throw lastErr;
+    } catch (err) {
+      lastErr = err;
+      // AbortError (timeout) and network errors are retryable
+    }
+
+    if (attempt < MAX_ATTEMPTS) {
+      const backoff = 1500 * attempt; // 1.5s, 3s
+      await new Promise(r => setTimeout(r, backoff));
+    }
   }
 
-  const data = await res.json();
+  if (!data) {
+    throw lastErr || new Error(`PageSpeed Insights (${strategy}) failed after ${MAX_ATTEMPTS} attempts`);
+  }
   const lighthouse = data.lighthouseResult || {};
   const audits = lighthouse.audits || {};
   const categories = lighthouse.categories || {};

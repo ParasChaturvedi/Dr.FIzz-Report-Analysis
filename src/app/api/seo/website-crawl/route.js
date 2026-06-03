@@ -10,8 +10,47 @@ export const runtime    = "nodejs";
 export const maxDuration = 90;
 
 const FETCH_TIMEOUT_MS  = 10000;
-const MAX_PAGES         = 15;
-const CONCURRENCY       = 4;
+const MAX_PAGES         = 25;     // pages we deep-audit (HTML parsed)
+const SITEMAP_SCAN_CAP  = 5000;   // sitemap URLs we count for the total estimate
+const CONCURRENCY       = 5;
+
+// ── DataForSEO: total indexed pages via `site:domain` ─────────────────────────
+function dfsAuth() {
+  const login    = process.env.DATAFORSEO_LOGIN    || "";
+  const password = process.env.DATAFORSEO_PASSWORD || "";
+  if (!login || !password) return null;
+  return "Basic " + Buffer.from(`${login}:${password}`).toString("base64");
+}
+
+// Returns the approximate number of pages Google has indexed for the domain,
+// using a `site:domain` SERP query — exactly what `site:itzfizz.com` shows.
+async function fetchIndexedPageCount(host) {
+  const auth = dfsAuth();
+  if (!auth) return null;
+  try {
+    const res = await fetch("https://api.dataforseo.com/v3/serp/google/organic/live/advanced", {
+      method:  "POST",
+      headers: { Authorization: auth, "Content-Type": "application/json" },
+      body:    JSON.stringify([{
+        keyword:       `site:${host}`,
+        location_name: "India",
+        language_code: "en",
+        device:        "desktop",
+        depth:         10,
+      }]),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const result = data?.tasks?.[0]?.result?.[0];
+    // se_results_count = Google's reported total for the query
+    const total = result?.se_results_count ?? null;
+    return total != null ? Number(total) : null;
+  } catch (err) {
+    console.warn("[website-crawl] indexed count failed:", err?.message);
+    return null;
+  }
+}
 
 // ── Timed fetch ───────────────────────────────────────────────────────────────
 async function timedFetch(url, opts = {}) {
@@ -48,13 +87,17 @@ const first  = (html, re)  => { const m = html.match(re); return m?.[1]?.trim() 
 const all    = (html, re)  => [...html.matchAll(re)].map(m => m[1]?.trim()).filter(Boolean);
 const count  = (html, re)  => (html.match(re) || []).length;
 
-// ── Parse sitemap XML → page URLs ─────────────────────────────────────────────
+// ── Parse sitemap XML → page URLs (also returns the TOTAL count, uncapped) ─────
 function parseSitemapXml(xml, limit = MAX_PAGES) {
   const urls = [];
+  let total = 0;
   for (const m of xml.matchAll(/<loc>\s*(https?:\/\/[^<]+)\s*<\/loc>/gi)) {
     const u = m[1].trim();
-    if (!u.endsWith(".xml") && urls.length < limit) urls.push(u);
+    if (u.endsWith(".xml")) continue;
+    total++;
+    if (urls.length < limit) urls.push(u);
   }
+  urls.total = total; // attach total for callers that want the real page count
   return urls;
 }
 
@@ -69,18 +112,23 @@ async function expandSitemapIndex(xml, base, limit = MAX_PAGES) {
   if (!childSitemaps.length) return parseSitemapXml(xml, limit);
 
   const urls = [];
-  for (const sm of childSitemaps.slice(0, 4)) {
+  let total = 0;
+  // Scan more child sitemaps (up to 10) to get a realistic total page estimate,
+  // but only KEEP up to `limit` URLs for the deep audit.
+  for (const sm of childSitemaps.slice(0, 10)) {
     try {
       const r = await timedFetch(sm);
       if (r.ok) {
         const txt = await r.text();
-        const found = parseSitemapXml(txt, limit - urls.length);
-        urls.push(...found);
-        if (urls.length >= limit) break;
+        const found = parseSitemapXml(txt, Math.max(0, limit - urls.length));
+        total += found.total || found.length;
+        for (const u of found) if (urls.length < limit) urls.push(u);
       }
     } catch { /* next */ }
   }
-  return urls.slice(0, limit);
+  const out = urls.slice(0, limit);
+  out.total = total;
+  return out;
 }
 
 // ── Slug quality ──────────────────────────────────────────────────────────────
@@ -541,10 +589,52 @@ async function discoverSitemapUrls(base, robotsSitemapHint) {
         ? await expandSitemapIndex(xml, base, MAX_PAGES)
         : parseSitemapXml(xml, MAX_PAGES);
 
-      return { found: true, url, urls };
+      return { found: true, url, urls, total: urls.total || urls.length };
     } catch { /* try next */ }
   }
-  return { found: false, url: null, urls: [] };
+  return { found: false, url: null, urls: [], total: 0 };
+}
+
+// ── BFS internal-link crawl (fallback when sitemap is missing/thin) ────────────
+// Fetches the homepage, extracts internal links, and breadth-first discovers
+// more pages up to `limit`. This is how we recover when a site has no sitemap
+// but hundreds of pages reachable via navigation.
+async function discoverViaLinks(base, host, seedUrls, limit) {
+  const queue   = [...seedUrls];
+  const visited = new Set(seedUrls);
+  const found   = [];
+
+  while (queue.length && found.length < limit) {
+    const batch = queue.splice(0, CONCURRENCY);
+    const results = await Promise.all(batch.map(async (u) => {
+      try {
+        const r = await timedFetch(u);
+        if (!r.ok) return null;
+        const ct = r.headers.get("content-type") || "";
+        if (!ct.includes("html")) return null;
+        const html = await r.text();
+        return { url: u, links: extractInternalLinks(html, u, host) };
+      } catch { return null; }
+    }));
+
+    for (const res of results) {
+      if (!res) continue;
+      found.push(res.url);
+      for (const link of res.links) {
+        if (found.length + queue.length >= limit * 3) break; // bound the frontier
+        if (!visited.has(link) && sameHost(link, host)) {
+          visited.add(link);
+          queue.push(link);
+        }
+      }
+    }
+  }
+  return found.slice(0, limit);
+}
+
+function sameHost(url, host) {
+  try { return new URL(url).hostname.replace(/^www\./, "") === host; }
+  catch { return false; }
 }
 
 // ── Main crawl ────────────────────────────────────────────────────────────────
@@ -560,7 +650,11 @@ export async function crawlDomain(domain, keywords = []) {
     robotsContent: null,
     robotsDisallows: [],
     crawlBlockedByRobots: false,
-    pageCount: 0,
+    pageCount: 0,           // pages we deep-audited
+    sitemapUrlCount: 0,     // total URLs listed in the sitemap(s)
+    indexedPages: null,     // Google-indexed page count via site:domain
+    totalPagesEstimate: 0,  // best estimate of the site's true page count
+    discoveryMethod: null,  // "sitemap" | "links" | "homepage-only"
     pages: [],
     duplicates: [],
     brokenLinks: [],
@@ -603,13 +697,31 @@ export async function crawlDomain(domain, keywords = []) {
     }
   } catch { /* ignore */ }
 
-  // 2. Sitemap
-  const sitemap = await discoverSitemapUrls(base, result.sitemapUrl);
-  result.hasSitemap = sitemap.found;
+  // 2. Sitemap discovery + Google-indexed page count (in parallel)
+  const [sitemap, indexedCount] = await Promise.all([
+    discoverSitemapUrls(base, result.sitemapUrl),
+    fetchIndexedPageCount(host),
+  ]);
+  result.hasSitemap      = sitemap.found;
+  result.sitemapUrlCount = sitemap.total || sitemap.urls.length || 0;
+  result.indexedPages    = indexedCount;
   if (sitemap.found) result.sitemapUrl = sitemap.url;
 
-  // 3. Build page list (homepage + sitemap pages)
-  const pagesToCrawl = [base, ...sitemap.urls.filter(u => u !== base)].slice(0, MAX_PAGES);
+  // 3. Build the deep-audit page list.
+  //    Prefer sitemap URLs; if the sitemap is missing or thin, fall back to a
+  //    breadth-first crawl of internal links so we don't report "1 page" for a
+  //    site that actually has hundreds.
+  let pagesToCrawl;
+  const sitemapPages = sitemap.urls.filter(u => u !== base);
+  if (sitemapPages.length >= 3) {
+    pagesToCrawl = [base, ...sitemapPages].slice(0, MAX_PAGES);
+    result.discoveryMethod = "sitemap";
+  } else {
+    // Seed BFS from homepage (+ any few sitemap URLs we did find)
+    const discovered = await discoverViaLinks(base, host, [base, ...sitemapPages], MAX_PAGES);
+    pagesToCrawl = discovered.length > 1 ? discovered : [base];
+    result.discoveryMethod = discovered.length > 1 ? "links" : "homepage-only";
+  }
 
   // 4. Crawl with concurrency
   const pages = [];
@@ -621,6 +733,13 @@ export async function crawlDomain(domain, keywords = []) {
 
   result.pages     = pages;
   result.pageCount = pages.length;
+  // Best estimate of the site's true size: prefer Google index, then sitemap,
+  // then the number of pages we actually reached.
+  result.totalPagesEstimate = Math.max(
+    result.indexedPages || 0,
+    result.sitemapUrlCount || 0,
+    pages.length
+  );
 
   // 5. Post-processing: duplicates, links, broken links
   result.duplicates  = detectDuplicates(pages);

@@ -852,15 +852,18 @@ export function buildTechnicalIssues(crawlData) {
   if (!crawlData) return [];
   const s = crawlData.summary || {};
   const issues = [];
+  // True site size for sitewide framing: prefer Google-indexed / sitemap total
+  // over the number of pages we deep-audited (a sample).
+  const siteSize = crawlData.totalPagesEstimate || crawlData.indexedPages || crawlData.sitemapUrlCount || crawlData.pageCount || null;
 
   if (crawlData.crawlBlockedByRobots)
-    issues.push({ priority: "CRITICAL", issue: "Googlebot blocked by robots.txt", affected_count: crawlData.pageCount || null, recommended_action: "Remove 'Disallow: /' from /robots.txt. Google cannot index any page until this is lifted — every other action is dark while this stands.", estimated_effort: "≈15 min" });
+    issues.push({ priority: "CRITICAL", issue: "Googlebot blocked by robots.txt", affected_count: siteSize, recommended_action: "Remove 'Disallow: /' from /robots.txt. Google cannot index any page until this is lifted — every other action is dark while this stands.", estimated_effort: "≈15 min" });
 
   if (!crawlData.hasSitemap)
-    issues.push({ priority: "HIGH", issue: "XML sitemap missing", affected_count: null, recommended_action: "Generate /sitemap.xml listing all canonical URLs and submit in Google Search Console → Sitemaps. Without it, crawl discovery is throttled.", estimated_effort: "≈1 hour" });
+    issues.push({ priority: "HIGH", issue: "XML sitemap missing", affected_count: siteSize, recommended_action: `Generate /sitemap.xml listing all canonical URLs${siteSize ? ` (≈${siteSize} pages detected)` : ""} and submit in Google Search Console → Sitemaps. Without it, crawl discovery of a large site is throttled.`, estimated_effort: "≈1 hour" });
 
   if (!(s.pagesWithSchemaTypes || []).length)
-    issues.push({ priority: "HIGH", issue: "Zero structured data (schema) sitewide", affected_count: crawlData.pageCount || null, recommended_action: "Add LocalBusiness + WebSite JSON-LD to the homepage, Service schema to service pages, FAQPage schema to FAQ blocks. This is the precondition for AI Overview (GEO) inclusion.", estimated_effort: "≈1 day" });
+    issues.push({ priority: "HIGH", issue: "Zero structured data (schema) sitewide", affected_count: siteSize, recommended_action: "Add LocalBusiness + WebSite JSON-LD to the homepage, Service schema to service pages, FAQPage schema to FAQ blocks. This is the precondition for AI Overview (GEO) inclusion.", estimated_effort: "≈1 day" });
 
   if ((s.pagesMissingMetaTitle || 0) > 0)
     issues.push({ priority: "HIGH", issue: `${s.pagesMissingMetaTitle} pages missing <title> tags`, affected_count: s.pagesMissingMetaTitle, recommended_action: 'Write unique 50–60 char titles as "Primary Keyword | Brand", starting with highest-traffic pages.', estimated_effort: "≈3 hours" });

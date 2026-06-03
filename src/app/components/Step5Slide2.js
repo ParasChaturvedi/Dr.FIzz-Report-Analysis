@@ -13,6 +13,30 @@ import {
 
 import { prefetchOpportunitiesAndContent } from "@/lib/prefetch-opportunities";
 
+// ─── Crawl status string ──────────────────────────────────────────────────────
+// Shows the site's true size (Google-indexed or sitemap total) and how many
+// pages were deep-audited, instead of just the audited count.
+function formatCrawlValue(crawl) {
+  if (!crawl) return "—";
+  const audited = crawl.pageCount ?? 0;
+  const total   = crawl.totalPagesEstimate ?? 0;
+  const indexed = crawl.indexedPages;
+  const fmt = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
+
+  let sizeLabel;
+  if (indexed != null && indexed > audited) {
+    sizeLabel = `~${fmt(indexed)} indexed`;
+  } else if (total > audited) {
+    sizeLabel = `${fmt(total)} pages`;
+  } else {
+    sizeLabel = `${audited} page${audited === 1 ? "" : "s"}`;
+  }
+  const sitemap = crawl.hasSitemap ? "sitemap ✓" : "no sitemap";
+  // When we audited fewer than the site total, note how many were sampled.
+  const sampled = total > audited ? ` · ${audited} audited` : "";
+  return `${sizeLabel}${sampled} · ${sitemap}`;
+}
+
 // ─── Stage & check initial state ──────────────────────────────────────────────
 const INITIAL_STAGES = [
   { id: "opportunities",   label: "Content Opportunities",     state: "idle", value: null },
@@ -424,10 +448,7 @@ export default function Step5Slide2({
     try {
       const crawl = json.websiteCrawl;
       if (crawl) {
-        const pages    = crawl.pageCount ?? 0;
-        const issues   = crawl.summary?.commonIssues?.length ?? 0;
-        const hasSitemap = crawl.hasSitemap ? "sitemap ✓" : "no sitemap";
-        updateStage("websiteCrawl", { value: `${pages} pages · ${hasSitemap}` });
+        updateStage("websiteCrawl", { value: formatCrawlValue(crawl) });
       }
     } catch { /* ignore */ }
 
@@ -613,9 +634,7 @@ export default function Step5Slide2({
           });
           if (res.ok) {
             crawlJson = await res.json();
-            const pages = crawlJson?.pageCount ?? 0;
-            const hasSitemap = crawlJson?.hasSitemap ? "sitemap ✓" : "no sitemap";
-            updateStage("websiteCrawl", { state: "done", value: `${pages} pages · ${hasSitemap}` });
+            updateStage("websiteCrawl", { state: "done", value: formatCrawlValue(crawlJson) });
           } else {
             updateStage("websiteCrawl", { state: "error", value: "Skipped" });
           }
