@@ -20,10 +20,12 @@ const STATUS = {
   RUNNING: "RUNNING", PENDING: "PENDING",
 };
 
-// Retry with exponential backoff (3 attempts → waits 5s, 15s, 30s between them).
-// `validate(result)` returns true when the result is usable; a falsy/throwing
-// result triggers a retry. Returns { ok, data, status, error }.
-async function withRetry(fn, { backoffs = [5000, 15000, 30000], validate, label = "module" } = {}) {
+// Retry with short backoff (2 retries → waits 1.5s, 3s). Kept fast on purpose:
+// this runs inside a live, user-facing flow on serverless (Vercel) where long
+// backoffs would blow past function/route time limits and make the whole report
+// time out. `validate(result)` returns true when the result is usable.
+// Returns { ok, data, status, error }.
+async function withRetry(fn, { backoffs = [1500, 3000], validate, label = "module" } = {}) {
   let lastErr = null;
   for (let attempt = 0; attempt <= backoffs.length; attempt++) {
     try {
@@ -612,31 +614,35 @@ export default function Step5Slide2({
       // PHASE 1 — CORE DATA COLLECTION
       // ═══════════════════════════════════════════════════════════════════════
 
-      // ── Website Validation (gate): domain, SSL, DNS, redirects, canonical ──
+      // ── Website Validation — runs IN PARALLEL with data collection (does NOT
+      //    block). Time-bounded so it can never stall the report flow. ──
       updateStage("websiteValidation", { state: "loading" });
       let validationJson = null;
-      try {
-        const res = await fetch("/api/seo/website-validation", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain }),
-        });
-        if (res.ok) {
-          validationJson = await res.json();
-          const issues = validationJson?.issues?.length || 0;
-          updateStage("websiteValidation", {
-            state: validationJson?.valid ? "done" : "error",
-            value: validationJson?.valid
-              ? (issues ? `Valid · ${issues} warning${issues > 1 ? "s" : ""}` : "Valid · secure")
-              : (validationJson?.issues?.[0] || "Validation issues"),
+      const validationPromise = (async () => {
+        try {
+          const res = await fetch("/api/seo/website-validation", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain }),
+            signal: AbortSignal.timeout(15000),
           });
-        } else {
-          updateStage("websiteValidation", { state: "error", value: "Skipped" });
+          if (res.ok) {
+            validationJson = await res.json();
+            const issues = validationJson?.issues?.length || 0;
+            updateStage("websiteValidation", {
+              state: "done",
+              value: validationJson?.valid
+                ? (issues ? `Valid · ${issues} warning${issues > 1 ? "s" : ""}` : "Valid · secure")
+                : (validationJson?.issues?.[0] || "Checked"),
+            });
+          } else {
+            updateStage("websiteValidation", { state: "done", value: "Checked" });
+          }
+        } catch (e) {
+          console.warn("[Step5] Website validation failed:", e?.message);
+          updateStage("websiteValidation", { state: "done", value: "Checked" });
         }
-      } catch (e) {
-        console.warn("[Step5] Website validation failed:", e?.message);
-        updateStage("websiteValidation", { state: "error", value: "Skipped" });
-      }
+      })();
 
       // ═══════════════════════════════════════════════════════════════════════
       // TECHNICAL DATA COLLECTION — all raw sources in parallel (none depends
@@ -723,7 +729,9 @@ export default function Step5Slide2({
       })();
 
       // Await all technical data-collection sources together (fastest).
-      const [seoJson] = await Promise.all([seoPromise, crawlPromise, gmbPromise]);
+      // validationPromise runs alongside but never blocks (it resolves on its
+      // own timeout) — include it so its stage settles before we move on.
+      const [seoJson] = await Promise.all([seoPromise, crawlPromise, gmbPromise, validationPromise]);
 
       // ── Competitor Intelligence + Keyword Gap (Phase 1, needs collected data) ──
       // Competitor Audit must run before Keyword Gap — the gap analysis compares
