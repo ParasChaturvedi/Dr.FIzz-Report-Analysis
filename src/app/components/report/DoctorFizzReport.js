@@ -369,12 +369,20 @@ export default function DoctorFizzReport({ data }) {
             </div>
           </Section>
 
-          {/* ── 01 · EXECUTIVE SUMMARY (narrative) ──────────────────────────── */}
-          {narrativeByNum["01"] && (
-            <Section number={1} total={TOTAL} title="Executive Summary">
-              <Narrative num={1} />
-            </Section>
-          )}
+          {/* ── 01 · EXECUTIVE SUMMARY (narrative, with structured fallback) ── */}
+          <Section number={1} total={TOTAL} title="Executive Summary">
+            {narrativeByNum["01"] ? <Narrative num={1} /> : (
+              <DiagnosisCard>
+                {meta.client_name} carries an SEO health score of {scores?.seo_health ?? "—"}/100
+                {scores?.grade ? ` (grade ${scores.grade})` : ""}.
+                {gbp.biggest_gap ? ` ${gbp.biggest_gap.split(".")[0]}.` : ""}
+                {" "}The prescribed sequence below — {pap.map(t => t.tier.toLowerCase()).join(", ")} — addresses the highest-impact, lowest-effort actions first.
+                {kw.accepted?.length ? ` ${kw.accepted.length} qualified keyword opportunities and ${(ca.commercial_pages||[]).length + (ca.city_pages||[]).length} commercial pages are mapped for capture.` : ""}
+              </DiagnosisCard>
+            )}
+          </Section>
+
+          {/* ── 02 placeholder removed; structured plan renders below ───────── */}
 
           {/* ── 02 · PRIORITY ACTION PLAN (ranked table, 3 tiers) ───────────── */}
           {(pap.length > 0 || narrativeByNum["02"]) && (
@@ -436,9 +444,28 @@ export default function DoctorFizzReport({ data }) {
             <Narrative num={3} />
           </Section>
 
-          {/* ── 04 · COMPETITOR LANDSCAPE (narrative) ───────────────────────── */}
-          {narrativeByNum["04"] && (
+          {/* ── 04 · COMPETITOR LANDSCAPE (narrative, with structured fallback) ─ */}
+          {(narrativeByNum["04"] || (payload.competitors || []).length > 0) && (
             <Section number={4} total={TOTAL} title="Competitor Landscape">
+              {(payload.competitors || []).length > 0 && (
+                <div className="overflow-x-auto rounded-lg mb-3" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                  <table className="w-full text-[12px]">
+                    <thead><tr style={{ background: C.nearBlack }}>
+                      <Th white>Competitor</Th><Th white>Threat</Th><Th white right>GMB Rating</Th><Th white right>Reviews</Th>
+                    </tr></thead>
+                    <tbody>
+                      {payload.competitors.map((c, i) => (
+                        <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
+                          <Td>{c.name || c.domain}</Td>
+                          <Td><PriorityLabel priority={c.threat_level === "HIGH" ? "HIGH" : c.threat_level === "LOW" ? "LOW" : "MEDIUM"} /></Td>
+                          <Td right>{c.gbp_data?.rating ? `${c.gbp_data.rating}★` : "—"}</Td>
+                          <Td right>{c.gbp_data?.reviewCount ?? "—"}</Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               <Narrative num={4} />
             </Section>
           )}
@@ -491,14 +518,17 @@ export default function DoctorFizzReport({ data }) {
             <Narrative num={6} />
           </Section>
 
-          {/* ── 07 · TECHNICAL FOUNDATION ───────────────────────────────────── */}
-          {tech.length > 0 && (
-            <Section number={7} total={TOTAL} title="Technical Foundation">
+          {/* ── 07 · TECHNICAL FOUNDATION (always renders) ──────────────────── */}
+          <Section number={7} total={TOTAL} title="Technical Foundation">
+            {tech.length === 0 ? (
+              <DiagnosisCard>No blocking technical issues detected in the crawl. Maintain current configuration and re-audit after any major site change.</DiagnosisCard>
+            ) : (
               <DiagnosisCard>
                 {tech.filter(t => t.priority === "CRITICAL").length > 0
                   ? `${tech.filter(t => t.priority === "CRITICAL").length} critical blocker(s) are throttling the entire site — fix these before any content or authority work.`
                   : `${tech.length} technical issue(s) detected, ranked by ranking impact. Resolve in priority order.`}
               </DiagnosisCard>
+            )}
               <div className="space-y-2">
                 {tech.map((t, i) => (
                   <div key={i} className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.warmGrey}25` }}>
@@ -514,8 +544,7 @@ export default function DoctorFizzReport({ data }) {
                 ))}
               </div>
               <Narrative num={7} />
-            </Section>
-          )}
+          </Section>
 
           {/* ── 08 · AUTHORITY & LINK BUILDING (4 categories + narrative) ────── */}
           <Section number={8} total={TOTAL} title="Authority &amp; Link Building">
@@ -693,12 +722,37 @@ export default function DoctorFizzReport({ data }) {
             <Narrative num={11} />
           </Section>
 
-          {/* ── 12 · IMPLEMENTATION & SPRINT PLAN (narrative) ───────────────── */}
-          {narrativeByNum["12"] && (
-            <Section number={12} total={TOTAL} title="Implementation &amp; Sprint Plan">
-              <Narrative num={12} />
-            </Section>
-          )}
+          {/* ── 12 · IMPLEMENTATION & SPRINT PLAN (narrative + structured fallback) */}
+          <Section number={12} total={TOTAL} title="Implementation &amp; Sprint Plan">
+            {!narrativeByNum["12"] && pap.length > 0 && (
+              <div className="space-y-2 mb-3">
+                {[
+                  ["Day 1 — Foundation Sprint", "Foundation Fixes"],
+                  ["Week 1 — Content Sprint", "Content & On-Page Work"],
+                  ["Weeks 1–2 — Authority & GEO Sprint", "Authority & GEO Work"],
+                ].map(([label, tierName]) => {
+                  const tier = pap.find(t => t.tier === tierName);
+                  if (!tier) return null;
+                  return (
+                    <div key={label} className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.warmGrey}25` }}>
+                      <div className="text-[12px] font-bold mb-1" style={{ color: C.orange }}>{label}</div>
+                      <ul className="space-y-0.5">
+                        {tier.actions.slice(0, 5).map((a, i) => (
+                          <li key={i} className="flex gap-2 text-[11px]" style={{ color: C.greyText }}>
+                            <span style={{ color: C.orange }}>▸</span><span>{a.description} <span className="opacity-70">({a.effort})</span></span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+                <p className="text-[12px] mt-2" style={{ color: C.nearBlack }}>
+                  Completing this sequence captures the mapped keyword and local-search opportunity while removing the technical ceilings that currently suppress every page.
+                </p>
+              </div>
+            )}
+            <Narrative num={12} />
+          </Section>
 
           {/* ── Any extra narrative sections not mapped above (safety net) ──── */}
           {Object.keys(narrativeByNum)

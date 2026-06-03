@@ -448,3 +448,21 @@ html.dark .fixthis-title {
   50%  { width: 65%; }
   100% { transform: translateX(250%); width: 45%; }
 }
+
+/* ── Doctor Fizz report — print / PDF pagination (Part 4 footer page number) ── */
+@media print {
+  @page {
+    margin: 14mm 12mm 16mm 12mm;
+  }
+  /* Page number in the bottom-right margin box (current of total). */
+  @page {
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-size: 9px;
+      color: #6b6359;
+      font-family: var(--font-geist-sans), system-ui, sans-serif;
+    }
+  }
+  /* Avoid breaking section cards across pages where possible. */
+  #report-content section { break-inside: avoid; }
+}
