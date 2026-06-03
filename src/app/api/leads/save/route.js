@@ -1,46 +1,68 @@
 import { NextResponse } from "next/server";
+import { appendFile, mkdir } from "fs/promises";
+import { join } from "path";
 
 export const runtime = "nodejs";
 
-// ─── Google Sheets webhook (Apps Script Web App URL) ─────────────────────────
-// Set LEADS_SHEET_WEBHOOK in Vercel env vars → Project Settings → Environment Variables
-// See instructions below for how to create this URL (one-time 5 min setup).
-const SHEET_WEBHOOK = process.env.LEADS_SHEET_WEBHOOK || "";
+// ─── Lead destinations ────────────────────────────────────────────────────────
+// 1. Google Sheets Apps Script webhook (set LEADS_SHEET_WEBHOOK) — survives on Vercel
+// 2. Generic webhook (set LEADS_WEBHOOK_URL) — e.g. Zapier/Make/n8n/Slack
+// 3. File append (local dev → ./leads.json, serverless → /tmp/leads.json)
+// 4. Structured console log (always) — recoverable from Vercel runtime logs
+const SHEET_WEBHOOK   = process.env.LEADS_SHEET_WEBHOOK || "";
+const GENERIC_WEBHOOK = process.env.LEADS_WEBHOOK_URL  || "";
 
-// ─── Fire-and-forget POST to Google Sheets Apps Script ───────────────────────
-async function sendToGoogleSheet(lead) {
-  if (!SHEET_WEBHOOK) {
-    console.warn("[ItzFizz Leads] LEADS_SHEET_WEBHOOK not set — skipping Google Sheets sync");
-    return;
-  }
+function isServerless() {
+  return !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+}
+
+async function postWebhook(url, lead) {
   try {
-    const res = await fetch(SHEET_WEBHOOK, {
+    const res = await fetch(url, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(lead),
+      signal:  AbortSignal.timeout(8000),
     });
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      console.error(`[ItzFizz Leads] Google Sheets webhook error ${res.status}: ${text}`);
-    } else {
-      console.log(`[ItzFizz Leads] ✅ Lead synced to Google Sheets for ${lead.email}`);
+      console.error(`[ItzFizz Leads] webhook ${url.slice(0, 40)}… → ${res.status}: ${(await res.text().catch(() => "")).slice(0, 120)}`);
+      return false;
     }
+    return true;
   } catch (err) {
-    console.error("[ItzFizz Leads] Google Sheets fetch failed:", err?.message);
+    console.error("[ItzFizz Leads] webhook failed:", err?.message);
+    return false;
+  }
+}
+
+async function appendToFile(lead) {
+  try {
+    const dir  = isServerless() ? "/tmp" : process.cwd();
+    const file = join(dir, "leads.json");
+    if (isServerless()) { try { await mkdir("/tmp", { recursive: true }); } catch {} }
+    // JSON-Lines: one lead per line — easy to append and to parse later.
+    await appendFile(file, JSON.stringify(lead) + "\n", "utf8");
+    return true;
+  } catch (err) {
+    console.error("[ItzFizz Leads] file append failed:", err?.message);
+    return false;
   }
 }
 
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { name, email, mobile, address, message, domain, reportUrl } = body;
+    const body = await request.json().catch(() => ({}));
+    const { name, email, mobile, address, message, domain, reportUrl } = body || {};
 
-    // Basic server-side validation
+    // Server-side validation
     if (!name?.trim() || !email?.trim() || !mobile?.trim()) {
       return NextResponse.json(
-        { error: "name, email and mobile are required" },
+        { error: "name, email and mobile are required", success: false },
         { status: 400 }
       );
+    }
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      return NextResponse.json({ error: "invalid email", success: false }, { status: 400 });
     }
 
     const lead = {
@@ -55,14 +77,31 @@ export async function POST(request) {
       reportUrl: reportUrl || "",
     };
 
-    console.log(`[ItzFizz Leads] New lead: ${lead.name} <${lead.email}> | domain: ${lead.domain} | id: ${lead.id}`);
+    // 4. ALWAYS log a structured, greppable line so no lead is ever lost — even
+    //    with zero destinations configured, this is recoverable from logs.
+    console.log("[ItzFizz Leads] LEAD_CAPTURE " + JSON.stringify(lead));
 
-    // Send to Google Sheets (non-blocking — doesn't affect PDF download)
-    sendToGoogleSheet(lead);
+    // Fan out to every configured destination (in parallel, best-effort).
+    const [fileOk, sheetOk, webhookOk] = await Promise.all([
+      appendToFile(lead),
+      SHEET_WEBHOOK   ? postWebhook(SHEET_WEBHOOK, lead)   : Promise.resolve(null),
+      GENERIC_WEBHOOK ? postWebhook(GENERIC_WEBHOOK, lead) : Promise.resolve(null),
+    ]);
 
-    return NextResponse.json({ success: true, id: lead.id });
+    const persisted = {
+      file:    fileOk,
+      sheet:   sheetOk,
+      webhook: webhookOk,
+      log:     true,
+    };
+    const anyDurable = sheetOk === true || webhookOk === true;
+    if (!anyDurable && !SHEET_WEBHOOK && !GENERIC_WEBHOOK) {
+      console.warn("[ItzFizz Leads] No durable destination configured (set LEADS_SHEET_WEBHOOK or LEADS_WEBHOOK_URL). Lead saved to file + logs only.");
+    }
+
+    return NextResponse.json({ success: true, id: lead.id, persisted });
   } catch (err) {
     console.error("[ItzFizz Leads] Save error:", err);
-    return NextResponse.json({ error: "Failed to save lead" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to save lead", success: false }, { status: 500 });
   }
 }

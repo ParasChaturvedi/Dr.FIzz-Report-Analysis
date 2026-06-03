@@ -244,17 +244,33 @@ export default function DownloadReportModal({ domain, onClose }) {
     setErrors({});
     setDownloading(true);
 
-    // Save lead — fire-and-forget
-    fetch("/api/leads/save", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name:      form.name,   email:   form.email,
-        mobile:    form.mobile, address: form.address,
-        message:   form.message, domain,
-        reportUrl: window.location.href,
-      }),
-    }).catch(() => {});
+    // ── Save lead FIRST and await it (with one retry). This is the user's
+    //    primary goal — capturing the lead must not depend on PDF success. ──
+    const leadPayload = {
+      name:      form.name,   email:   form.email,
+      mobile:    form.mobile, address: form.address,
+      message:   form.message, domain,
+      reportUrl: window.location.href,
+    };
+    const saveLead = async () => {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const r = await fetch("/api/leads/save", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body:    JSON.stringify(leadPayload),
+          });
+          if (r.ok) return true;
+          if (r.status === 400) return false; // validation — don't retry
+        } catch { /* network — retry */ }
+        if (attempt < 2) await new Promise((res) => setTimeout(res, 1200));
+      }
+      return false;
+    };
+    const leadSaved = await saveLead();
+    if (!leadSaved) {
+      console.warn("[DownloadReportModal] Lead save did not confirm; continuing to PDF.");
+    }
 
     try {
       const isLocalhost =
