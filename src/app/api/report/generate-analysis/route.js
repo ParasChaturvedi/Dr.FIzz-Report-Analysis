@@ -674,6 +674,10 @@ export async function POST(request) {
         competitorGmbs,
         directories: gmbRaw?.directories || [],
         competitorBacklinks,
+        // Ground-truth Google data when the client has connected GSC/GA4.
+        verifiedData: (prefetchedSeoData?.gsc || prefetchedSeoData?.ga4)
+          ? { gsc: prefetchedSeoData?.gsc || null, ga4: prefetchedSeoData?.ga4 || null }
+          : null,
         clientServiceTerms: [
           businessData?.category, businessData?.specificService,
           businessData?.offeringType, businessData?.offering,

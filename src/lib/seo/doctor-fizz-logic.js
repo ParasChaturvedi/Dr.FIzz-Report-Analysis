@@ -1219,8 +1219,18 @@ export function runBusinessLogic(input = {}) {
     clientGmb = null, competitorGmbs = [],
     directories = [], competitorBacklinks = [],
     clientServiceTerms = [], targetKeywords = [], reportRef = "",
-    crawlData = null,
+    crawlData = null, verifiedData = null,
   } = input;
+
+  // ── Ground-truth override: when the client has connected Google Search Console
+  //    / Analytics, their OWN site numbers are FACT, not estimates. Prefer them. ──
+  const verifiedSources = {};
+  let baselineRawResolved = baselineRaw;
+  if (verifiedData) {
+    if (verifiedData.ga4?.organicTraffic != null) { baselineRawResolved = { ...baselineRawResolved, organicTraffic: verifiedData.ga4.organicTraffic }; verifiedSources.organic_traffic = "verified"; }
+    const gscRanked = verifiedData.gsc?.summary?.top100 ?? verifiedData.gsc?.top100;
+    if (gscRanked != null) { baselineRawResolved = { ...baselineRawResolved, organicKeywords: gscRanked }; verifiedSources.organic_keywords = "verified"; }
+  }
 
   // ── Competitor brands for exclusion (Problem 2) ──
   const competitorBrands = deriveCompetitorBrands(competitors);
@@ -1255,7 +1265,7 @@ export function runBusinessLogic(input = {}) {
   // (baseline is built below; scores assembled at the end before return)
 
   // ── Baseline with missing-data labels (Problem 7) ──
-  const { baseline, missing_fields } = buildBaseline(baselineRaw);
+  const { baseline, missing_fields } = buildBaseline(baselineRawResolved);
 
   // ── Technical issues (Section 07) ──
   const technical_issues = buildTechnicalIssues(crawlData);
@@ -1290,9 +1300,10 @@ export function runBusinessLogic(input = {}) {
 
   // ── V2 STORYTELLING LAYER — formatting, interpretation, opportunity, frames ──
   const v2_additions = buildV2Additions({
-    clientName: clientName || domain, baseline, baselineRaw, keywords,
+    clientName: clientName || domain, baseline, baselineRaw: baselineRawResolved, keywords,
     content_architecture, technical_issues, kpis, scores, gbp_comparison,
     competitors: normalizeCompetitorObjects(competitors, competitorGmbs),
+    verifiedSources,
   });
 
   return {
@@ -1434,8 +1445,23 @@ function benchmarkAndInterpretation(key, value, clientName, gbp) {
   return { benchmark_label: "current reading", commercial_interpretation: "", what_this_unlocks: "" };
 }
 
+// Each metric's default data source + confidence (honesty = trust).
+//   measured  = we observed it directly (PSI, our crawl, Google's public GMB) — high confidence
+//   estimate  = third-party model (DataForSEO keyword/traffic/authority) — modeled, ±range
+//   verified  = the client's own Google data (GSC/GA4) — ground truth
+const METRIC_SOURCE = {
+  domain_rating: "estimate", organic_traffic: "estimate", organic_keywords: "estimate", referring_domains: "estimate",
+  mobile_performance_score: "measured", desktop_performance_score: "measured", lcp: "measured", cls: "measured",
+  site_health_score: "measured", gbp_completeness: "measured", gbp_review_count: "measured", gbp_rating: "measured",
+};
+const SOURCE_META = {
+  measured: { label: "Measured", confidence: "high",   note: "Observed directly from the live site / Google Business Profile." },
+  estimate: { label: "Estimate", confidence: "modeled", note: "Third-party model (DataForSEO). Treat as a ±15% range, not an exact figure." },
+  verified: { label: "Verified", confidence: "high",   note: "From the client's connected Google Search Console / Analytics — ground truth." },
+};
+
 function buildV2Additions(input) {
-  const { clientName, baseline = {}, baselineRaw = {}, keywords = {}, content_architecture = {}, technical_issues = [], kpis = {}, gbp_comparison = {} } = input;
+  const { clientName, baseline = {}, baselineRaw = {}, keywords = {}, content_architecture = {}, technical_issues = [], kpis = {}, gbp_comparison = {}, verifiedSources = {} } = input;
 
   // formatted_baseline (L1 + L2)
   const rawMap = {
@@ -1447,12 +1473,14 @@ function buildV2Additions(input) {
   };
   const labelFor = { domain_rating: "Domain Rating", organic_traffic: "Organic Traffic", organic_keywords: "Organic Keywords", referring_domains: "Referring Domains", mobile_performance_score: "Mobile Performance", desktop_performance_score: "Desktop Performance", lcp: "LCP (page load)", cls: "Layout Shift (CLS)", site_health_score: "Site Health", gbp_completeness: "GBP Completeness", gbp_review_count: "GBP Reviews", gbp_rating: "GBP Rating" };
   const formatted_baseline = Object.entries(rawMap).map(([metric, raw]) => {
+    const sourceKey = verifiedSources[metric] || METRIC_SOURCE[metric] || "estimate";
+    const sm = SOURCE_META[sourceKey] || SOURCE_META.estimate;
     const field = baseline[metric] || {};
     if (field.value == null) {
-      return { metric, label: labelFor[metric] || metric, raw_value: null, formatted_value: null, unavailable_label: field.label || MISSING_LABELS.EMPTY, benchmark_label: "", commercial_interpretation: "", what_this_unlocks: "" };
+      return { metric, label: labelFor[metric] || metric, raw_value: null, formatted_value: null, unavailable_label: field.label || MISSING_LABELS.EMPTY, benchmark_label: "", commercial_interpretation: "", what_this_unlocks: "", source: sourceKey, source_label: sm.label, confidence: sm.confidence, source_note: sm.note };
     }
     const bi = benchmarkAndInterpretation(metric, raw, clientName, gbp_comparison);
-    return { metric, label: labelFor[metric] || metric, raw_value: raw, formatted_value: formatMetricValue(metric, raw), ...bi };
+    return { metric, label: labelFor[metric] || metric, raw_value: raw, formatted_value: formatMetricValue(metric, raw), ...bi, source: sourceKey, source_label: sm.label, confidence: sm.confidence, source_note: sm.note };
   });
 
   // opportunity_summary (L4) — realistic CTR-based traffic projection.

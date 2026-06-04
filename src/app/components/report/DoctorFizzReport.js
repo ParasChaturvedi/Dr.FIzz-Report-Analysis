@@ -148,6 +148,21 @@ function DiagnosisCard({ children }) {
   );
 }
 
+// ── Source / confidence badge (data-honesty layer) ───────────────────────────
+function SourceBadge({ source, label }) {
+  const map = {
+    verified: { bg: "#D6EAD7", fg: "#2D6B32", icon: "✓" },
+    measured: { bg: "#D4E8F0", fg: "#1A5C76", icon: "◉" },
+    estimate: { bg: "#F2EEE9", fg: "#6B6B6B", icon: "≈" },
+  };
+  const s = map[source] || map.estimate;
+  return (
+    <span className="inline-flex items-center gap-1 uppercase" title={label} style={{ background: s.bg, color: s.fg, fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "0.5px", padding: "1px 6px", borderRadius: "3px" }}>
+      {s.icon} {label}
+    </span>
+  );
+}
+
 // ── "What Ranking Pages Do" context block — V2 Part 2 component ───────────────
 function WhatRankingPagesDo({ children }) {
   return (
@@ -501,7 +516,7 @@ export default function DoctorFizzReport({ data }) {
               <table className="w-full" style={{ borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ background: C.tableHead }}>
-                    <Th>Metric</Th><Th right>Value</Th><Th>What It Means</Th>
+                    <Th>Metric</Th><Th right>Value</Th><Th>Source</Th><Th>What It Means</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -511,11 +526,18 @@ export default function DoctorFizzReport({ data }) {
                       <Td right>{b.formatted_value != null
                         ? <span style={{ fontWeight: 600, color: C.textDark }}>{b.formatted_value}</span>
                         : <span style={{ fontStyle: "italic", fontSize: "11px", color: C.greyText }}>{b.unavailable_label}</span>}</Td>
+                      <Td>{b.source ? <SourceBadge source={b.source} label={b.source_label} /> : "—"}</Td>
                       <Td><span style={{ fontSize: "12px", color: C.greyText }}>{b.benchmark_label || (b.commercial_interpretation ? b.commercial_interpretation.slice(0, 80) + "…" : "—")}</span></Td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+            {/* Data-confidence legend (builds trust — premium tools disclose sources) */}
+            <div className="flex flex-wrap items-center gap-3 mt-2" style={{ fontFamily: SANS, fontSize: "11px", color: C.greyText }}>
+              <span className="inline-flex items-center gap-1"><SourceBadge source="verified" label="Verified" /> client's Google data (ground truth)</span>
+              <span className="inline-flex items-center gap-1"><SourceBadge source="measured" label="Measured" /> observed live on the site</span>
+              <span className="inline-flex items-center gap-1"><SourceBadge source="estimate" label="Estimate" /> third-party model (±15%)</span>
             </div>
             {/* "The Technical Ceiling" paragraph */}
             {(() => {
