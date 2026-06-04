@@ -1288,6 +1288,13 @@ export function runBusinessLogic(input = {}) {
     geo_and_ai_visibility, gbp_comparison,
   });
 
+  // ── V2 STORYTELLING LAYER — formatting, interpretation, opportunity, frames ──
+  const v2_additions = buildV2Additions({
+    clientName: clientName || domain, baseline, baselineRaw, keywords,
+    content_architecture, technical_issues, kpis, scores, gbp_comparison,
+    competitors: normalizeCompetitorObjects(competitors, competitorGmbs),
+  });
+
   return {
     report_meta: {
       client_name: clientName || domain,
@@ -1308,8 +1315,195 @@ export function runBusinessLogic(input = {}) {
     kpis,
     scores,
     priority_action_plan,
+    v2_additions,
     _meta: { competitorBrands, kpiCtx },
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// V2 STORYTELLING LAYER (spec V2 — Parts 1, 3, 5)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// L1 — Human-readable formatting gate.
+export function formatMetricValue(key, value) {
+  if (value == null) return null;
+  const k = String(key).toLowerCase();
+  // Timing metrics in ms → seconds when ≥ 1000ms
+  if (/lcp|fcp|ttfb|inp|tti|load|timing|_ms/.test(k)) {
+    const n = Number(value);
+    if (isNaN(n)) return String(value);
+    return n >= 1000 ? `${(n / 1000).toFixed(1)} seconds` : `${Math.round(n)} ms`;
+  }
+  // CLS — small decimal
+  if (k === "cls") return Number(value).toFixed(2);
+  // Scores out of 100
+  if (/score|performance|completeness|health|rating(?!_count)/.test(k) && !/review/.test(k)) {
+    if (k.includes("rating") && Number(value) <= 5) return `${Number(value).toFixed(1)}★`;
+    return `${Math.round(Number(value))}/100`;
+  }
+  // Ratings (gbp_rating ≤ 5)
+  if (k.includes("rating")) return `${Number(value).toFixed(1)}★`;
+  // Volumes & counts → commas (+/mo for volume)
+  const n = Number(value);
+  if (isNaN(n)) return String(value);
+  const withCommas = n.toLocaleString("en-US");
+  if (/traffic|volume/.test(k)) return n === 0 ? "0/mo" : `${withCommas}/mo`;
+  return withCommas;
+}
+
+// Benchmark + commercial interpretation per metric (L1 + L2).
+function benchmarkAndInterpretation(key, value, clientName, gbp) {
+  const k = String(key).toLowerCase();
+  const name = clientName || "the site";
+  if (value == null) return { benchmark_label: "", commercial_interpretation: "", what_this_unlocks: "" };
+
+  if (k === "mobile_performance_score" || k === "desktop_performance_score") {
+    const dev = k.startsWith("mobile") ? "mobile" : "desktop";
+    const v = Number(value);
+    if (v < 50) return {
+      benchmark_label: "below the 50-point ranking-eligibility threshold — suppressing all pages",
+      commercial_interpretation: `Every page on ${name} is loading slowly enough on ${dev} to trigger Google's ranking suppression, so the majority of potential clients searching from their ${dev === "mobile" ? "phones" : "desktops"} hit a degraded experience before they ever see the content.`,
+      what_this_unlocks: "Lifting this above 50 moves the whole site out of the penalty zone into the eligible ranking tier.",
+    };
+    if (v < 90) return {
+      benchmark_label: "needs improvement — below the 90-point 'good' band",
+      commercial_interpretation: `${name}'s ${dev} experience is functional but not competitive; faster rivals are rewarded with higher placement for the same queries.`,
+      what_this_unlocks: "Reaching 90+ removes a ranking handicap applied to every page.",
+    };
+    return { benchmark_label: "good — in the top performance band", commercial_interpretation: `${name}'s ${dev} performance is a competitive asset, not a liability.`, what_this_unlocks: "" };
+  }
+  if (k === "lcp") {
+    const sec = Number(value) / 1000;
+    return {
+      benchmark_label: sec > 4 ? "in the penalty zone (target: under 2.5 seconds)" : sec > 2.5 ? "above the 2.5-second 'good' threshold" : "good",
+      commercial_interpretation: sec > 2.5 ? `The main content takes ${sec.toFixed(1)} seconds to appear; most visitors abandon a page that makes them wait this long, so paid and organic traffic alike is leaking before it converts.` : "Main content loads fast enough to keep visitors engaged.",
+      what_this_unlocks: sec > 2.5 ? "Cutting load time directly reduces bounce and recovers conversions already being paid for." : "",
+    };
+  }
+  if (k === "domain_rating") {
+    const v = Number(value);
+    return {
+      benchmark_label: v < 20 ? "low authority — few sites vouch for this domain" : v < 40 ? "developing authority" : "established authority",
+      commercial_interpretation: v < 20 ? `${name} has almost no referrals on record from other websites, which caps how high it can rank for competitive commercial terms regardless of content quality.` : `${name} carries enough trust to compete, but higher-authority rivals still outrank it on the most valuable terms.`,
+      what_this_unlocks: v < 40 ? "Building authority raises the ceiling on every keyword the site can realistically win." : "",
+    };
+  }
+  if (k === "organic_traffic") {
+    const v = Number(value);
+    return {
+      benchmark_label: v === 0 ? "no organic visitors yet" : "current organic baseline",
+      commercial_interpretation: v === 0 ? `${name} is effectively invisible in organic search today — every customer currently comes from paid or referral channels, leaving the entire search market uncontested.` : `${name} captures ${v.toLocaleString()} organic visits a month, a base that the prescribed work is designed to multiply.`,
+      what_this_unlocks: v === 0 ? "Establishing organic traffic creates a compounding, no-cost-per-click acquisition channel." : "",
+    };
+  }
+  if (k === "organic_keywords") {
+    const v = Number(value);
+    return { benchmark_label: v < 50 ? "thin keyword footprint" : "established footprint", commercial_interpretation: `${name} currently surfaces for ${v.toLocaleString()} search terms; expanding this set is how new customers discover the business without paying per click.`, what_this_unlocks: "" };
+  }
+  if (k === "referring_domains") {
+    const v = Number(value);
+    return { benchmark_label: v < 25 ? "few external endorsements" : "growing link profile", commercial_interpretation: `${v.toLocaleString()} other websites link to ${name}; search engines read these as votes of confidence, and more of them lifts ranking power across the whole site.`, what_this_unlocks: "" };
+  }
+  if (k === "gbp_completeness") {
+    const v = Number(value);
+    return {
+      benchmark_label: `${100 - v} points below the completeness top-ranking local businesses maintain`,
+      commercial_interpretation: `${name}'s Google Business Profile is ${v}% complete; every unfilled field is a trust and relevance signal left dark while competitors with fuller profiles win the local pack.`,
+      what_this_unlocks: "Completing the profile is the fastest, cheapest lever for local visibility.",
+    };
+  }
+  if (k === "gbp_review_count") {
+    const v = Number(value);
+    const compMax = Math.max(0, ...((gbp?.competitors || []).map(c => c.review_count || 0)));
+    return {
+      benchmark_label: compMax > v ? `the leading competitor holds ${compMax}` : "current review base",
+      commercial_interpretation: compMax > v ? `${name} has ${v} reviews while the category leader has ${compMax}; when a customer sees both profiles side by side, review volume is the single biggest factor in who they trust and click.` : `${name} has ${v} reviews — a credible base of social proof.`,
+      what_this_unlocks: compMax > v ? "Closing the review gap directly shifts the click decision in the client's favour." : "",
+    };
+  }
+  if (k === "gbp_rating") {
+    return { benchmark_label: Number(value) >= 4.5 ? "strong" : "below the 4.5★ local-trust threshold", commercial_interpretation: `A ${Number(value).toFixed(1)}★ rating is the first number a searcher judges; it sets expectations before they read a single review.`, what_this_unlocks: "" };
+  }
+  if (k === "site_health_score") {
+    return { benchmark_label: Number(value) < 80 ? "below the 80-point healthy-site band" : "healthy", commercial_interpretation: `The crawl found enough technical friction to hold the site below a clean bill of health; these issues quietly cap the return on every other improvement.`, what_this_unlocks: "" };
+  }
+  if (k === "cls") {
+    const v = Number(value);
+    return { benchmark_label: v > 0.1 ? "above the 0.1 'good' threshold — layout shifts on load" : "stable layout", commercial_interpretation: v > 0.1 ? `The page visibly jumps as it loads, which makes visitors mis-tap and erodes trust before they read anything.` : `The layout holds steady as it loads, which keeps visitors oriented.`, what_this_unlocks: v > 0.1 ? "Stabilising the layout reduces accidental bounces and improves the Core Web Vitals score Google rewards." : "" };
+  }
+  return { benchmark_label: "current reading", commercial_interpretation: "", what_this_unlocks: "" };
+}
+
+function buildV2Additions(input) {
+  const { clientName, baseline = {}, baselineRaw = {}, keywords = {}, content_architecture = {}, technical_issues = [], kpis = {}, gbp_comparison = {} } = input;
+
+  // formatted_baseline (L1 + L2)
+  const rawMap = {
+    domain_rating: baselineRaw.domainRating, organic_traffic: baselineRaw.organicTraffic,
+    organic_keywords: baselineRaw.organicKeywords, referring_domains: baselineRaw.referringDomains,
+    mobile_performance_score: baselineRaw.performanceMobile, desktop_performance_score: baselineRaw.performanceDesktop,
+    lcp: baselineRaw.lcp, cls: baselineRaw.cls, site_health_score: baselineRaw.crawlHealthScore,
+    gbp_completeness: baselineRaw.gbpCompletenessScore, gbp_review_count: baselineRaw.gbpReviewCount, gbp_rating: baselineRaw.gbpRating,
+  };
+  const labelFor = { domain_rating: "Domain Rating", organic_traffic: "Organic Traffic", organic_keywords: "Organic Keywords", referring_domains: "Referring Domains", mobile_performance_score: "Mobile Performance", desktop_performance_score: "Desktop Performance", lcp: "LCP (page load)", cls: "Layout Shift (CLS)", site_health_score: "Site Health", gbp_completeness: "GBP Completeness", gbp_review_count: "GBP Reviews", gbp_rating: "GBP Rating" };
+  const formatted_baseline = Object.entries(rawMap).map(([metric, raw]) => {
+    const field = baseline[metric] || {};
+    if (field.value == null) {
+      return { metric, label: labelFor[metric] || metric, raw_value: null, formatted_value: null, unavailable_label: field.label || MISSING_LABELS.EMPTY, benchmark_label: "", commercial_interpretation: "", what_this_unlocks: "" };
+    }
+    const bi = benchmarkAndInterpretation(metric, raw, clientName, gbp_comparison);
+    return { metric, label: labelFor[metric] || metric, raw_value: raw, formatted_value: formatMetricValue(metric, raw), ...bi };
+  });
+
+  // opportunity_summary (L4)
+  const accepted = keywords.accepted || [];
+  const commercial = accepted.filter(k => k.intent_class === "transactional" || k.intent_class === "local-commercial");
+  const sumVol = (arr) => arr.reduce((s, k) => s + (Number(k.global_volume) || 0), 0);
+  const cityPages = content_architecture.city_pages || [];
+  const trafficKpi = (kpis.metrics || []).find(m => (m.key || "").includes("organic_traffic"));
+  const opportunity_summary = {
+    total_monthly_search_volume:        sumVol(accepted),
+    commercial_keyword_count:           commercial.length,
+    commercial_keyword_monthly_volume:  sumVol(commercial),
+    city_pages_needed:                  cityPages.length,
+    city_pages_monthly_volume:          sumVol(cityPages.map(p => ({ global_volume: p.primary_volume }))),
+    quick_wins_available:               accepted.filter(k => k.priority === "HIGH").length,
+    estimated_traffic_uplift_6m:        toNumOrNull(trafficKpi?.target_6_months),
+    estimated_traffic_uplift_12m:       toNumOrNull(trafficKpi?.target_12_months),
+  };
+
+  // narrative_connections (L3)
+  const narrative_connections = [
+    { section: "executive_summary",  narrative_connection: "The sections that follow break this prescription down: what is broken, why it matters commercially, and the exact order to fix it." },
+    { section: "baseline_snapshot",  narrative_connection: "These metrics set the ceiling. Section 07 shows precisely which technical issues to remove first and why the order matters." },
+    { section: "competitor_landscape", narrative_connection: "Knowing where rivals are strong sets up the keyword territory the next section claims." },
+    { section: "keyword_strategy",   narrative_connection: "Each keyword cluster needs a home; the content architecture section maps every cluster to a specific page." },
+    { section: "content_architecture", narrative_connection: "None of these pages will reach their potential until the technical ceiling in the next section is lifted." },
+    { section: "technical_foundation", narrative_connection: "With the technical ceiling addressed, off-site authority becomes the next growth lever." },
+    { section: "authority_link_building", narrative_connection: "Local authority and reviews feed directly into the Google Business Profile picture examined next." },
+    { section: "local_visibility_gbp", narrative_connection: "Winning locally and organically also positions the site to be cited by AI answer engines — the focus of the GEO section." },
+    { section: "geo_ai_visibility",  narrative_connection: "All of this work is only worth doing if it moves the numbers; the forecast section sets the targets." },
+    { section: "kpi_forecast",       narrative_connection: "The final section sequences every action into a week-by-week plan the team can execute immediately." },
+  ];
+
+  // non_expert_section_frames (Part 1 story frames)
+  const totalVolFmt = opportunity_summary.total_monthly_search_volume.toLocaleString();
+  const bestKw = accepted[0];
+  const non_expert_section_frames = {
+    keyword_strategy_intro: `These ${accepted.length} keyword clusters represent the searches your potential customers make when looking for what you offer — together about ${totalVolFmt} searches a month. They split into three groups: searches ready to buy (commercial), searches researching before buying (informational), and searches tied to a specific city (local). Each group needs a different type of content to turn the searcher into a customer.${bestKw ? ` The single best opportunity is "${bestKw.keyword}" — it pairs strong demand with attainable difficulty.` : ""}`,
+    technical_issues_intro: `Search engines read technical signals before they read any content. The ${technical_issues.length} issue${technical_issues.length === 1 ? "" : "s"} below act as a ceiling — no amount of good content reaches its full ranking potential until these are resolved. They are ordered by the size of that ceiling.`,
+    gbp_intro: `Google's local results are won by the profile that best signals trust and relevance. This comparison shows exactly where ${clientName} stands against the competitors appearing above them in local search — and where a few hours of work would immediately change the competitive picture.`,
+    authority_intro: `Authority is the web's version of word of mouth: the more credible sites that point to ${clientName}, the more search engines trust it. The opportunities below are grouped from fastest-and-easiest to highest-long-term-value.`,
+  };
+
+  return { opportunity_summary, formatted_baseline, narrative_connections, non_expert_section_frames };
+}
+
+function toNumOrNull(v) {
+  if (v == null) return null;
+  if (typeof v === "number") return v;
+  const n = parseMetricValue(v);
+  return n;
 }
 
 function buildBaseline(raw) {

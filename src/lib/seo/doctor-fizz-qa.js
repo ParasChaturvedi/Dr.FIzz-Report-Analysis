@@ -239,6 +239,20 @@ export function runQaGate(payload = {}, narrative = "") {
       !!gbp.biggest_gap && !!gbp.fastest_win && !!gbp.trust_gap);
   }
 
+  // ── V2 storytelling checks ──
+  const v2 = payload.v2_additions || {};
+  add("v2", "Opportunity summary present", !!v2.opportunity_summary && v2.opportunity_summary.total_monthly_search_volume != null);
+  const fb = v2.formatted_baseline || [];
+  add("v2", "Baseline metrics carry formatted values", fb.length > 0 && fb.filter(b => b.formatted_value != null).every(b => !/^\d+\.\d{4,}/.test(String(b.formatted_value))));
+  add("v2", "Available baseline metrics have a commercial interpretation",
+    fb.filter(b => b.formatted_value != null).every(b => b.commercial_interpretation || b.benchmark_label));
+  add("v2", "Non-expert section frames present",
+    !!v2.non_expert_section_frames?.keyword_strategy_intro && !!v2.non_expert_section_frames?.gbp_intro);
+  add("v2", "Section narrative bridges present", (v2.narrative_connections || []).length >= 5);
+  // No raw multi-decimal values leaked into formatted output
+  const noRawDecimals = fb.every(b => b.formatted_value == null || !/\.\d{4,}/.test(String(b.formatted_value)));
+  add("v2", "No raw multi-decimal API values in formatted baseline", noRawDecimals);
+
   // ── Tone & style checks (on narrative, if supplied) ──
   if (narrative) {
     const fillerHits = FILLER_PATTERNS.filter(re => re.test(narrative)).map(re => re.source);

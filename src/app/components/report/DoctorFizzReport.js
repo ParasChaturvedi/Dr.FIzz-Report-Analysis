@@ -13,108 +13,157 @@
 import { useMemo } from "react";
 
 const LOGO_URL = "https://doctorfizz.com/wp-content/uploads/2025/09/doctorfizzlogo_1-scaled.png";
+const SERIF = "var(--font-playfair), 'Cormorant Garamond', Georgia, serif";
+const SANS  = "var(--font-inter), 'DM Sans', system-ui, sans-serif";
 
-// ── Color palette (Part 4) ────────────────────────────────────────────────────
+// ── Color palette — EXACT V2 spec values (Part 2) ─────────────────────────────
 const C = {
-  nearBlack:  "#1a1714",
-  ivory:      "#faf8f4",
-  orange:     "#d45427",  // burnt orange / terracotta — signature accent
-  orangeLite: "#ffa615",
-  sage:       "#7d9b7f",  // SEO chip
-  teal:       "#4f8a9b",  // GEO chip
-  warmGrey:   "#9c9488",  // SEO+GEO chip, borders, dividers
-  greyText:   "#6b6359",
+  nearBlack:  "#141414",  // cover background
+  ivory:      "#F9F7F4",  // body background (warm ivory)
+  orange:     "#D4541A",  // burnt orange — signature accent (emphasis only)
+  orangeLite: "#D4541A",
+  diagTint:   "#FDF1EB",  // diagnosis card background (orange tint)
+  rxGreen:    "#2D6B32",  // prescription label
+  border:     "#E8E4DF",  // borders, dividers
+  tableHead:  "#F2EEE9",  // table header bg
+  rowEven:    "#F9F7F4",  // even table row
+  textDark:   "#1A1A1A",  // primary text
+  greyText:   "#6B6B6B",  // secondary text
+  greyMid:    "#A8A8A8",  // dot separator, tertiary
+  sage:       "#2D6B32",  // SEO chip text
+  teal:       "#1A5C76",  // GEO chip text
+  warmGrey:   "#5A5550",  // SEO+GEO chip text
 };
 
-// ── Tag chip (SEO / GEO / SEO+GEO) ────────────────────────────────────────────
+// ── Tag chip (SEO / GEO / SEO+GEO) — exact V2 colors ──────────────────────────
 function TagChip({ tag }) {
   const t = String(tag || "").toUpperCase().replace(/\s+/g, "");
   const map = {
-    "SEO":     { bg: "#eaf0ea", fg: C.sage,   label: "SEO" },
-    "GEO":     { bg: "#e6eff2", fg: C.teal,   label: "GEO" },
-    "SEO+GEO": { bg: "#f0ede8", fg: C.warmGrey, label: "SEO + GEO" },
+    "SEO":     { bg: "#D6EAD7", fg: "#2D6B32", bd: "#B8D9BA", label: "SEO" },
+    "GEO":     { bg: "#D4E8F0", fg: "#1A5C76", bd: "#B0D4E4", label: "GEO" },
+    "SEO+GEO": { bg: "#E8E4DF", fg: "#5A5550", bd: "#D0CBC5", label: "SEO + GEO" },
   };
   const s = map[t] || map["SEO+GEO"];
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase"
-      style={{ background: s.bg, color: s.fg }}>
+    <span className="inline-flex items-center uppercase" style={{ background: s.bg, color: s.fg, border: `1px solid ${s.bd}`, fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1.5px", padding: "2px 8px", borderRadius: "3px" }}>
       {s.label}
     </span>
   );
 }
 
-// ── Priority label (CRITICAL / HIGH / MEDIUM / QUICK WIN) ──────────────────────
+// ── Priority chip — exact V2 colors ───────────────────────────────────────────
 function PriorityLabel({ priority }) {
   const p = String(priority || "").toUpperCase();
   const map = {
-    "CRITICAL":  { bg: "#fde8e3", fg: "#c0341a" },
-    "HIGH":      { bg: "#fdeede", fg: "#d45427" },
-    "MEDIUM":    { bg: "#fdf6e3", fg: "#b8860b" },
-    "QUICK WIN": { bg: "#e9f3ea", fg: "#3f7d4a" },
-    "LOW":       { bg: "#f0ede8", fg: C.greyText },
+    "CRITICAL":  { bg: "#F8DDD4", fg: "#B83A1A" },
+    "HIGH":      { bg: "#FBE7D6", fg: "#D4541A" },
+    "MEDIUM":    { bg: "#FBF1D9", fg: "#9A6A12" },
+    "QUICK WIN": { bg: "#D6EAD7", fg: "#2D6B32" },
+    "LOW":       { bg: "#E8E4DF", fg: "#6B6B6B" },
   };
   const s = map[p] || map["MEDIUM"];
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase"
-      style={{ background: s.bg, color: s.fg }}>
-      {s.label || p}
+    <span className="inline-flex items-center uppercase" style={{ background: s.bg, color: s.fg, fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1px", padding: "2px 8px", borderRadius: "3px" }}>
+      {p}
     </span>
   );
 }
 
-// ── Difficulty chip (red high / amber medium / green low) ─────────────────────
+// ── Keyword difficulty chip — exact V2 (red high / amber med / green low) ──────
 function DiffChip({ value }) {
-  if (value == null) return <span className="text-gray-400">—</span>;
+  if (value == null) return <span style={{ color: C.greyMid }}>—</span>;
   const v = Number(value);
-  const s = v >= 60 ? { bg: "#fde8e3", fg: "#c0341a", t: "High" }
-          : v >= 35 ? { bg: "#fdf6e3", fg: "#b8860b", t: "Med" }
-          :           { bg: "#e9f3ea", fg: "#3f7d4a", t: "Low" };
+  const s = v >= 60 ? { bg: "#F8DDD4", fg: "#B83A1A", t: "Hard" }
+          : v >= 35 ? { bg: "#FBF1D9", fg: "#9A6A12", t: "Med" }
+          :           { bg: "#D6EAD7", fg: "#2D6B32", t: "Easy" };
   return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold" style={{ background: s.bg, color: s.fg }}>
-      {v}<span className="opacity-70">{s.t}</span>
+    <span className="inline-flex items-center gap-1" style={{ background: s.bg, color: s.fg, fontFamily: SANS, fontWeight: 600, fontSize: "10px", padding: "2px 6px", borderRadius: "3px" }}>
+      {v}<span style={{ opacity: 0.7 }}>{s.t}</span>
     </span>
+  );
+}
+
+// ── Callout stat block (exec summary big numbers) — V2 Part 2 ─────────────────
+function CalloutStat({ number, suffix, label, description }) {
+  return (
+    <div className="rounded-lg p-5" style={{ background: "#FFFFFF", border: `1px solid ${C.border}` }}>
+      <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "40px", color: C.textDark, lineHeight: 1 }}>
+        {number}{suffix && <span style={{ fontFamily: SANS, fontWeight: 500, fontSize: "18px", color: C.greyText }}> {suffix}</span>}
+      </div>
+      <div className="mt-2 uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>{label}</div>
+      {description && <div className="mt-1" style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText, lineHeight: 1.4 }}>{description}</div>}
+    </div>
+  );
+}
+
+// ── Action Item Row — V2 Part 2 (step badge + chips + effort) ─────────────────
+function ActionRow({ step, title, description, channel, priority, effort }) {
+  return (
+    <div className="flex items-start gap-3 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+      <div className="shrink-0 grid place-items-center rounded-full" style={{ width: 26, height: 26, background: C.textDark, color: "#fff", fontFamily: SANS, fontWeight: 700, fontSize: "13px" }}>{step}</div>
+      <div className="flex-1 min-w-0">
+        <div style={{ fontFamily: SANS, fontWeight: 600, fontSize: "14px", color: C.textDark }}>{title}</div>
+        {description && <div style={{ fontFamily: SANS, fontSize: "13px", color: C.greyText }}>{description}</div>}
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+        {channel && <TagChip tag={channel} />}
+        {priority && <PriorityLabel priority={priority} />}
+        {effort && <span style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText, whiteSpace: "nowrap" }}>{effort}</span>}
+      </div>
+    </div>
   );
 }
 
 // ── Section shell with numbering (01 · NAME) ──────────────────────────────────
-function Section({ number, total, title, children }) {
+// ── Section header block — V2: "01 · SECTION NAME" + Playfair title + opening line
+function Section({ number, total, title, opening, children }) {
+  const nn = String(number).padStart(2, "0");
   return (
-    <section className="mb-10 scroll-mt-6">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-baseline gap-2">
-          <span className="text-[11px] font-extrabold tracking-[0.25em] uppercase" style={{ color: C.orange }}>
-            {String(number).padStart(2, "0")} ·
-          </span>
-          <h2 className="text-[17px] sm:text-[19px] font-bold tracking-tight" style={{ color: C.nearBlack, fontFamily: "var(--font-playfair), Georgia, serif" }}>
-            {title}
-          </h2>
-        </div>
-        <span className="text-[10px] tracking-widest font-medium" style={{ color: C.warmGrey }}>
-          {String(number).padStart(2, "0")} / {String(total).padStart(2, "0")}
-        </span>
+    <section className="mb-12 scroll-mt-6" style={{ marginTop: "8px" }}>
+      {/* 01 · SECTION NAME */}
+      <div className="flex items-baseline gap-1.5 mb-2">
+        <span className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", color: C.orange }}>{nn}</span>
+        <span style={{ fontFamily: SANS, fontWeight: 400, fontSize: "11px", color: C.greyMid }}>·</span>
+        <span className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "2px", color: C.textDark }}
+          dangerouslySetInnerHTML={{ __html: title }} />
+        <span className="ml-auto" style={{ fontFamily: SANS, fontSize: "10px", letterSpacing: "1px", color: C.greyMid }}>{nn} / {String(total).padStart(2, "0")}</span>
       </div>
-      <div className="h-px w-full mb-5" style={{ background: `linear-gradient(90deg, ${C.orange} 0%, transparent 60%)` }} />
+      {/* Section title in Playfair */}
+      <h2 style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "30px", lineHeight: 1.15, color: C.textDark, marginBottom: opening ? "6px" : "20px" }}
+        dangerouslySetInnerHTML={{ __html: title }} />
+      {/* Opening diagnosis line in Playfair italic */}
+      {opening && <p style={{ fontFamily: SERIF, fontWeight: 500, fontStyle: "italic", fontSize: "19px", lineHeight: 1.3, color: C.textDark, marginBottom: "28px" }}>{opening}</p>}
       {children}
     </section>
   );
 }
 
-// ── Diagnosis card (left orange border) ───────────────────────────────────────
+// ── Diagnosis card — V2: #FDF1EB tint, 3px orange left border ──────────────────
 function DiagnosisCard({ children }) {
   return (
-    <div className="rounded-r-lg p-4 mb-4" style={{ background: "#fff", borderLeft: `3px solid ${C.orange}`, boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-      <div className="text-[10px] font-bold tracking-widest uppercase mb-1.5" style={{ color: C.orange }}>Diagnosis</div>
-      <div className="text-[13px] leading-relaxed" style={{ color: C.nearBlack }}>{children}</div>
+    <div style={{ background: C.diagTint, borderLeft: `3px solid ${C.orange}`, borderRadius: "4px", padding: "16px 20px", marginBottom: "16px" }}>
+      <div className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange, marginBottom: "6px" }}>Diagnosis</div>
+      <div style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{children}</div>
     </div>
   );
 }
 
-// ── Prescription card (outlined) ──────────────────────────────────────────────
+// ── Narrative bridge to next section (V2 Rule 15 narrative_connection) ────────
+function BridgeNote({ text }) {
+  if (!text) return null;
+  return (
+    <p className="mt-4" style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: "14px", color: C.greyText, lineHeight: 1.5, borderTop: `1px solid ${C.border}`, paddingTop: "12px" }}>
+      {text}
+    </p>
+  );
+}
+
+// ── Prescription card — V2: white, green label ────────────────────────────────
 function PrescriptionCard({ children }) {
   return (
-    <div className="rounded-lg p-4 mb-4" style={{ background: C.ivory, border: `1px solid ${C.warmGrey}40` }}>
-      <div className="text-[10px] font-bold tracking-widest uppercase mb-1.5" style={{ color: C.greyText }}>Prescription</div>
-      <div className="text-[13px] leading-relaxed" style={{ color: C.nearBlack }}>{children}</div>
+    <div style={{ background: "#FFFFFF", border: `1px solid ${C.border}`, borderRadius: "4px", padding: "16px 20px", marginBottom: "16px" }}>
+      <div className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.rxGreen, marginBottom: "6px" }}>Prescription</div>
+      <div style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{children}</div>
     </div>
   );
 }
@@ -232,6 +281,12 @@ export default function DoctorFizzReport({ data }) {
   const geo = payload.geo_and_ai_visibility || {};
   const scores = payload.scores || null;
   const pap = payload.priority_action_plan || [];
+  const v2 = payload.v2_additions || {};
+  const oppSummary = v2.opportunity_summary || {};
+  const formattedBaseline = v2.formatted_baseline || [];
+  const frames = v2.non_expert_section_frames || {};
+  const narrativeBridge = (section) => (v2.narrative_connections || []).find(n => n.section === section)?.narrative_connection || null;
+  const fmtNum = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US"));
 
   // Total sections for the "NN / TT" counter
   const TOTAL = 12;
@@ -253,7 +308,7 @@ export default function DoctorFizzReport({ data }) {
   ];
 
   return (
-    <div style={{ background: C.ivory }} className="w-full">
+    <div style={{ background: C.ivory, fontFamily: SANS, color: C.textDark }} className="w-full">
       {/* ── COVER ─────────────────────────────────────────────────────────── */}
       <div className="relative px-6 sm:px-10 py-12 sm:py-16" style={{ background: C.nearBlack }}>
         <div className="max-w-4xl mx-auto">
@@ -369,79 +424,101 @@ export default function DoctorFizzReport({ data }) {
             </div>
           </Section>
 
-          {/* ── 01 · EXECUTIVE SUMMARY (narrative, with structured fallback) ── */}
-          <Section number={1} total={TOTAL} title="Executive Summary">
-            {narrativeByNum["01"] ? <Narrative num={1} /> : (
-              <DiagnosisCard>
-                {meta.client_name} carries an SEO health score of {scores?.seo_health ?? "—"}/100
-                {scores?.grade ? ` (grade ${scores.grade})` : ""}.
-                {gbp.biggest_gap ? ` ${gbp.biggest_gap.split(".")[0]}.` : ""}
-                {" "}The prescribed sequence below — {pap.map(t => t.tier.toLowerCase()).join(", ")} — addresses the highest-impact, lowest-effort actions first.
-                {kw.accepted?.length ? ` ${kw.accepted.length} qualified keyword opportunities and ${(ca.commercial_pages||[]).length + (ca.city_pages||[]).length} commercial pages are mapped for capture.` : ""}
-              </DiagnosisCard>
+          {/* ── 01 · EXECUTIVE SUMMARY (V2: diagnosis + callout stats + actions) ─ */}
+          <Section number={1} total={TOTAL} title="Executive Summary"
+            opening={scores?.seo_health != null ? `An SEO health score of ${scores.seo_health}/100 places ${meta.client_name} ${scores.seo_health < 50 ? "in the penalty tier" : scores.seo_health < 80 ? "below the competitive band" : "in a strong position"} — here is what that costs, and the fastest path out.` : null}>
+            {/* BLOCK 1 — diagnosis */}
+            <DiagnosisCard>
+              {narrativeByNum["01"] ? <Narrative num={1} /> : (
+                <>
+                  {meta.client_name} carries an SEO health score of {scores?.seo_health ?? "—"}/100{scores?.grade ? ` (grade ${scores.grade})` : ""}.
+                  {gbp.biggest_gap ? ` ${gbp.biggest_gap.split(".")[0]}.` : ""}
+                  {" "}{kw.accepted?.length ? `${kw.accepted.length} qualified keyword opportunities worth ~${fmtNum(oppSummary.total_monthly_search_volume)} monthly searches are mapped for capture, ` : ""}
+                  and the prescription below sequences the highest-impact, lowest-effort work first.
+                </>
+              )}
+            </DiagnosisCard>
+
+            {/* BLOCK 2 — callout stat blocks (V2 Rule R4: 3-5 blocks) */}
+            {(oppSummary.total_monthly_search_volume != null) && (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                <CalloutStat number={fmtNum(oppSummary.total_monthly_search_volume)} label="Monthly Searches You Could Be Winning" description="Total addressable search demand" />
+                <CalloutStat number={fmtNum(oppSummary.commercial_keyword_count)} label="Commercial Pages To Build" description="Buyer-intent keyword clusters" />
+                <CalloutStat number={fmtNum(oppSummary.quick_wins_available)} label="Quick Wins — Under 1 Week Each" description="High-impact, low-effort actions" />
+                <CalloutStat number={fmtNum(oppSummary.estimated_traffic_uplift_12m)} suffix="/mo" label="Projected Monthly Visitors In 12 Months" description="If the prescription is executed" />
+              </div>
             )}
+
+            {/* BLOCK 3 — what this prescription fixes (Action Item Rows) */}
+            {pap.length > 0 && (
+              <div>
+                <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>What This Prescription Fixes</div>
+                {pap.flatMap(t => t.actions).slice(0, 6).map((a, i) => (
+                  <ActionRow key={i} step={i + 1} title={a.description} channel={a.channel} priority={a.priority} effort={a.effort} />
+                ))}
+              </div>
+            )}
+            {narrativeBridge("executive_summary") && <BridgeNote text={narrativeBridge("executive_summary")} />}
           </Section>
 
           {/* ── 02 placeholder removed; structured plan renders below ───────── */}
 
-          {/* ── 02 · PRIORITY ACTION PLAN (ranked table, 3 tiers) ───────────── */}
+          {/* ── 02 · PRIORITY ACTION PLAN (V2: Action Item Rows, 3 tiers) ────── */}
           {(pap.length > 0 || narrativeByNum["02"]) && (
-            <Section number={2} total={TOTAL} title="Priority Action Plan">
-              {pap.map((tier) => (
-                <div key={tier.tier} className="mb-4">
-                  <h4 className="text-[12px] font-bold tracking-wide mb-2 uppercase" style={{ color: C.orange }}>{tier.tier}</h4>
-                  <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.warmGrey}30` }}>
-                    {tier.actions.map((a, i) => (
-                      <div key={i} className="flex items-start gap-2 px-3 py-2 flex-wrap" style={{ background: i % 2 ? "#fff" : C.ivory, borderBottom: i < tier.actions.length - 1 ? `1px solid ${C.warmGrey}20` : "none" }}>
-                        <span className="text-[12px] flex-1 min-w-[180px]" style={{ color: C.nearBlack }}>{a.description}</span>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <TagChip tag={a.channel} />
-                          <PriorityLabel priority={a.priority} />
-                          <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: C.ivory, color: C.greyText }}>{a.effort}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            <Section number={2} total={TOTAL} title="Priority Action Plan"
+              opening="Ranked by impact-to-effort — the highest-return, lowest-cost work comes first, regardless of which section it belongs to.">
+              {(() => { let step = 0; return pap.map((tier) => (
+                <div key={tier.tier} className="mb-5">
+                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>{tier.tier}</div>
+                  {tier.actions.map((a) => { step += 1; return (
+                    <ActionRow key={step} step={step} title={a.description} channel={a.channel} priority={a.priority} effort={a.effort} />
+                  ); })}
                 </div>
-              ))}
+              )); })()}
               <Narrative num={2} />
+              {narrativeBridge("executive_summary") && null}
             </Section>
           )}
 
-          {/* ── 03 · BASELINE SNAPSHOT (data table + narrative) ─────────────── */}
-          <Section number={3} total={TOTAL} title="Baseline Snapshot">
-            <div className="overflow-x-auto rounded-lg" style={{ border: `1px solid ${C.warmGrey}30` }}>
-              <table className="w-full text-[12px]">
+          {/* ── 03 · BASELINE SNAPSHOT (V2: formatted values + commercial reading) */}
+          <Section number={3} total={TOTAL} title="Baseline Snapshot"
+            opening={frames.technical_issues_intro ? null : undefined}>
+            {(() => {
+              const mostImpactful = formattedBaseline.find(b => b.commercial_interpretation) || formattedBaseline[0];
+              return mostImpactful?.commercial_interpretation ? <DiagnosisCard>{mostImpactful.commercial_interpretation}</DiagnosisCard> : null;
+            })()}
+            <div className="overflow-x-auto rounded-lg" style={{ border: `1px solid ${C.border}` }}>
+              <table className="w-full" style={{ borderCollapse: "collapse" }}>
                 <thead>
-                  <tr style={{ background: C.nearBlack }}>
-                    <th className="text-left px-3 py-2 font-bold tracking-wider uppercase text-[10px] text-white">Metric</th>
-                    <th className="text-right px-3 py-2 font-bold tracking-wider uppercase text-[10px] text-white">Value</th>
+                  <tr style={{ background: C.tableHead }}>
+                    <Th>Metric</Th><Th right>Value</Th><Th>What It Means</Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    ["Domain Rating", "domain_rating", ""],
-                    ["Organic Traffic", "organic_traffic", "/mo"],
-                    ["Organic Keywords", "organic_keywords", ""],
-                    ["Referring Domains", "referring_domains", ""],
-                    ["Mobile Performance", "mobile_performance_score", "/100"],
-                    ["Desktop Performance", "desktop_performance_score", "/100"],
-                    ["LCP", "lcp", " ms"],
-                    ["CLS", "cls", ""],
-                    ["Site Health Score", "site_health_score", "/100"],
-                    ["GBP Completeness", "gbp_completeness", "/100"],
-                    ["GBP Reviews", "gbp_review_count", ""],
-                    ["GBP Rating", "gbp_rating", "★"],
-                  ].map(([label, field, suffix], i) => (
-                    <tr key={field} style={{ background: i % 2 ? "#fff" : C.ivory }}>
-                      <td className="px-3 py-2" style={{ color: C.greyText }}>{label}</td>
-                      <td className="px-3 py-2 text-right"><FieldValue field={baseline[field]} suffix={suffix} /></td>
+                  {formattedBaseline.map((b, i) => (
+                    <tr key={b.metric} style={{ background: i % 2 ? "#fff" : C.rowEven, borderBottom: `1px solid ${C.border}` }}>
+                      <Td>{b.label}</Td>
+                      <Td right>{b.formatted_value != null
+                        ? <span style={{ fontWeight: 600, color: C.textDark }}>{b.formatted_value}</span>
+                        : <span style={{ fontStyle: "italic", fontSize: "11px", color: C.greyText }}>{b.unavailable_label}</span>}</Td>
+                      <Td><span style={{ fontSize: "12px", color: C.greyText }}>{b.benchmark_label || (b.commercial_interpretation ? b.commercial_interpretation.slice(0, 80) + "…" : "—")}</span></Td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {/* "The Technical Ceiling" paragraph */}
+            {(() => {
+              const worst = formattedBaseline.filter(b => /below|penalty|suppress|throttl/i.test(b.benchmark_label || "")).slice(0, 3);
+              if (!worst.length) return null;
+              return (
+                <p className="mt-3" style={{ fontFamily: SANS, fontSize: "13px", color: C.textDark, lineHeight: 1.7 }}>
+                  <strong style={{ color: C.orange }}>The Technical Ceiling.</strong> {worst.map(w => w.label).join(", ")} are not isolated faults — together they cap the return on every other improvement. Until they are cleared, new content and links push against a hard limit.
+                </p>
+              );
+            })()}
             <Narrative num={3} />
+            {narrativeBridge("baseline_snapshot") && <BridgeNote text={narrativeBridge("baseline_snapshot")} />}
           </Section>
 
           {/* ── 04 · COMPETITOR LANDSCAPE (narrative, with structured fallback) ─ */}
@@ -470,13 +547,17 @@ export default function DoctorFizzReport({ data }) {
             </Section>
           )}
 
-          {/* ── 05 · KEYWORD STRATEGY (classified + narrative) ──────────────── */}
+          {/* ── 05 · KEYWORD STRATEGY (V2: non-expert frame + grouped tables) ─ */}
           <Section number={5} total={TOTAL} title="Keyword Strategy">
             <DiagnosisCard>
               {kw.accepted?.length || 0} keywords passed intent classification and topical-relevance filtering.
               {kw.excluded?.length ? ` ${kw.excluded.length} high-volume but irrelevant term(s) were suppressed (no conversion path).` : ""}
               {kw.brand_monitoring_only?.length ? ` ${kw.brand_monitoring_only.length} competitor/brand term(s) routed to monitoring — never content targets.` : ""}
             </DiagnosisCard>
+            {/* Non-expert narrative frame (V2 — entry point for non-SEO readers) */}
+            {frames.keyword_strategy_intro && (
+              <p className="mb-4" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{frames.keyword_strategy_intro}</p>
+            )}
             {/* Grouped by intent class per spec: primary commercial,
                 informational & supporting, local & geo, long-tail feature. */}
             {(() => {
@@ -529,6 +610,9 @@ export default function DoctorFizzReport({ data }) {
                   : `${tech.length} technical issue(s) detected, ranked by ranking impact. Resolve in priority order.`}
               </DiagnosisCard>
             )}
+            {tech.length > 0 && frames.technical_issues_intro && (
+              <p className="mb-4" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{frames.technical_issues_intro}</p>
+            )}
               <div className="space-y-2">
                 {tech.map((t, i) => (
                   <div key={i} className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.warmGrey}25` }}>
@@ -548,6 +632,7 @@ export default function DoctorFizzReport({ data }) {
 
           {/* ── 08 · AUTHORITY & LINK BUILDING (4 categories + narrative) ────── */}
           <Section number={8} total={TOTAL} title="Authority &amp; Link Building">
+            {frames.authority_intro && <p className="mb-4" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{frames.authority_intro}</p>}
             <BacklinkSub title="① Citation &amp; Directory Links" hint="Fastest baseline authority + local signals">
               <table className="w-full text-[12px]">
                 <thead><tr style={{ borderBottom: `1px solid ${C.warmGrey}30` }}>
@@ -609,6 +694,7 @@ export default function DoctorFizzReport({ data }) {
           {/* ── 09 · GBP COMPARISON ─────────────────────────────────────────── */}
           {gbp.client && (
             <Section number={9} total={TOTAL} title="Local Visibility &amp; GBP Comparison">
+              {frames.gbp_intro && <p className="mb-4" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{frames.gbp_intro}</p>}
               <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
                 <table className="w-full text-[11px]">
                   <thead>
@@ -786,10 +872,10 @@ function Meta({ label, value }) {
 }
 
 function Th({ children, right, white }) {
-  return <th className={`px-3 py-2 text-[10px] font-bold tracking-wider uppercase ${right ? "text-right" : "text-left"}`} style={{ color: white ? "#fff" : C.greyText }}>{children}</th>;
+  return <th className={`uppercase ${right ? "text-right" : "text-left"}`} style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: white ? "#fff" : "#5A5550", padding: "10px 12px", borderBottom: `1.5px solid #D0CBC5` }}>{children}</th>;
 }
 function Td({ children, right }) {
-  return <td className={`px-3 py-2 ${right ? "text-right" : "text-left"}`} style={{ color: C.nearBlack }}>{children}</td>;
+  return <td className={`${right ? "text-right" : "text-left"}`} style={{ fontFamily: SANS, fontSize: "13px", color: C.textDark, padding: "10px 12px" }}>{children}</td>;
 }
 
 function KeywordTable({ rows }) {

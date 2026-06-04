@@ -26,10 +26,15 @@ function safe(obj, maxLen = 6000) {
   return s.slice(0, maxLen - 3) + "...";
 }
 
-// ── MASTER SYSTEM PROMPT (Part 3 — 12 fundamental rules) ──────────────────────
+// ── MASTER SYSTEM PROMPT (V2 — Part 4: 12 fundamental rules + 8 storytelling) ──
 const MASTER_SYSTEM_PROMPT = `You are Doctor Fizz, a premium SEO and GEO strategy system. You generate strategic diagnostic reports for businesses seeking to improve their search visibility, content performance, and AI citation footprint.
 
 You receive structured JSON data that has ALREADY been classified, filtered, and validated by a business logic layer. Your role is to interpret this data, explain its commercial significance, prioritize actions, and write the report in Doctor Fizz's diagnostic style.
+
+The report is read by two audiences simultaneously:
+  (a) The business owner — not an SEO expert; needs plain-language translation of every finding.
+  (b) The implementation team — needs precise, developer-actionable instructions.
+Every section must serve both. Use the four-beat arc (Diagnosis → Commercial Stakes → Prescription → Expected Outcome) as your structural unit.
 
 FUNDAMENTAL RULES:
 1. Write every section in diagnostic style. Open with the specific finding or problem. Explain why it matters commercially. Then prescribe the action with clear priority and effort.
@@ -44,6 +49,18 @@ FUNDAMENTAL RULES:
 10. Do not use filler language, motivational phrases, or agency marketing clichés. Every sentence must advance the diagnosis or prescription.
 11. Format the priority action plan by impact-to-effort ranking. Highest-impact, lowest-effort first, regardless of section order.
 12. Close every major section with a one-sentence summary of the commercial benefit of completing the described actions.
+
+STORYTELLING RULES (V2):
+13. Every section follows the four-beat arc: Beat 1 — Diagnosis (specific finding first, no preamble); Beat 2 — Commercial stakes (what this costs the client, in plain English); Beat 3 — Prescription (exact action, not a category); Beat 4 — Expected outcome (the measurable result after the fix).
+14. Translate every metric for a non-SEO reader. When the data payload provides a commercial_interpretation field for a metric, use it verbatim as the interpretation sentence. Do NOT invent interpretations.
+15. Use the narrative_connection field at the end of each section as a one-sentence bridge to the next section.
+16. Write the executive summary to pass the 60-second test: a business owner must learn what is wrong, how big the opportunity is, the three most important actions, how long results take, and why to trust the diagnosis — reading only that section.
+17. Use the opportunity_summary data to populate the executive-summary callout stats. Every callout label is written for a business owner. CORRECT: "MONTHLY SEARCHES YOU COULD BE WINNING". WRONG: "TOTAL KEYWORD SEARCH VOLUME".
+18. Never write a section that is only a table. Every table has at least one paragraph before it (the narrative frame) and one after (the commercial takeaway).
+19. Apply the patient-doctor analogy at most once per section, only where it genuinely clarifies a concept for a non-technical reader.
+20. Use the Doctor Fizz diagnostic vocabulary: throttling, suppressing, blocking, dark, invisible, exposed, addressable, gap, ceiling, prescribed, diagnosed, priority sequence, commercial consequence.
+
+NUMBER FORMATTING: Never print a raw API value. Use formatted values only — e.g. "16.9 seconds" not "16887.18 ms"; "0/mo" with a commercial interpretation, never a bare "0"; counts with thousands separators.
 
 STYLE CONSTRAINTS:
 - Lead with the finding. State the diagnosis first; do not build up to it.
@@ -64,11 +81,18 @@ function buildDataContext(payload) {
   const kpis = payload.kpis || {};
   const tech = payload.technical_issues || [];
   const geo = payload.geo_and_ai_visibility || {};
+  const v2 = payload.v2_additions || {};
 
+  // V2: use formatted values + commercial interpretations (never raw values)
+  const fmtMap = Object.fromEntries((v2.formatted_baseline || []).map(b2 => [b2.metric, b2]));
   const fieldLine = (label, field) => {
+    const fb = fmtMap[field];
+    if (fb && fb.formatted_value != null) {
+      return `${label}: ${fb.formatted_value}${fb.benchmark_label ? ` (${fb.benchmark_label})` : ""}${fb.commercial_interpretation ? `\n    → ${fb.commercial_interpretation}` : ""}`;
+    }
     const f = b[field];
-    if (!f) return `${label}: —`;
-    return `${label}: ${f.value != null ? f.value : `[${f.label}]`}`;
+    if (!f || f.value == null) return `${label}: [${f?.label || "unavailable"}]`;
+    return `${label}: ${f.value}`;
   };
 
   const acceptedKw = (kw.accepted || []).slice(0, 25).map(k =>
@@ -133,6 +157,24 @@ ${fieldLine("Site Health Score", "site_health_score")}
 ${fieldLine("GBP Completeness", "gbp_completeness")}
 ${fieldLine("GBP Reviews", "gbp_review_count")}
 ${fieldLine("GBP Rating", "gbp_rating")}
+
+═══════════════════════════════════════════════════════
+OPPORTUNITY SUMMARY (for executive-summary callout stats — V2)
+═══════════════════════════════════════════════════════
+Total addressable monthly searches: ${(v2.opportunity_summary?.total_monthly_search_volume ?? 0).toLocaleString()}
+Commercial keyword clusters: ${v2.opportunity_summary?.commercial_keyword_count ?? 0}
+Quick wins available: ${v2.opportunity_summary?.quick_wins_available ?? 0}
+Projected monthly visitors (12m): ${(v2.opportunity_summary?.estimated_traffic_uplift_12m ?? 0).toLocaleString()}
+City pages needed: ${v2.opportunity_summary?.city_pages_needed ?? 0}
+
+NON-EXPERT SECTION FRAMES (use as the opening narrative paragraph for each section):
+  Keyword strategy: ${v2.non_expert_section_frames?.keyword_strategy_intro || "—"}
+  Technical issues: ${v2.non_expert_section_frames?.technical_issues_intro || "—"}
+  GBP: ${v2.non_expert_section_frames?.gbp_intro || "—"}
+  Authority: ${v2.non_expert_section_frames?.authority_intro || "—"}
+
+SECTION BRIDGES (use verbatim as the last sentence of each section):
+${(v2.narrative_connections || []).map(n => `  ${n.section}: ${n.narrative_connection}`).join("\n")}
 
 ═══════════════════════════════════════════════════════
 COMPETITORS
