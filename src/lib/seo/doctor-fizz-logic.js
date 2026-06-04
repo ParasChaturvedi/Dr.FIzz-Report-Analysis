@@ -1455,12 +1455,26 @@ function buildV2Additions(input) {
     return { metric, label: labelFor[metric] || metric, raw_value: raw, formatted_value: formatMetricValue(metric, raw), ...bi };
   });
 
-  // opportunity_summary (L4)
+  // opportunity_summary (L4) — realistic CTR-based traffic projection.
+  // Models capturable demand per keyword: volume × achievable-position CTR,
+  // ramped over time (6m = early ranking footprint, 12m = matured). This is the
+  // industry-standard "addressable traffic" model rather than a flat multiplier.
   const accepted = keywords.accepted || [];
   const commercial = accepted.filter(k => k.intent_class === "transactional" || k.intent_class === "local-commercial");
   const sumVol = (arr) => arr.reduce((s, k) => s + (Number(k.global_volume) || 0), 0);
   const cityPages = content_architecture.city_pages || [];
+
+  // Per-keyword achievable CTR by difficulty (where on page 1 it can realistically land):
+  //   easy (KD<30) → ~pos 3-5 ≈ 9% CTR; medium (KD<55) → ~pos 6-8 ≈ 3%; hard → ~pos 9-12 ≈ 1.2%.
+  const ctrFor = (kd) => (kd == null ? 0.03 : kd < 30 ? 0.09 : kd < 55 ? 0.03 : 0.012);
+  const capturable = accepted.reduce((s, k) => s + (Number(k.global_volume) || 0) * ctrFor(k.keyword_difficulty), 0);
+  // 6-month: ~40% of mature footprint live; 12-month: ~95%. Floor to the KPI projection.
   const trafficKpi = (kpis.metrics || []).find(m => (m.key || "").includes("organic_traffic"));
+  const kpi6 = toNumOrNull(trafficKpi?.target_6_months) || 0;
+  const kpi12 = toNumOrNull(trafficKpi?.target_12_months) || 0;
+  const uplift6  = Math.max(Math.round(capturable * 0.4), kpi6);
+  const uplift12 = Math.max(Math.round(capturable * 0.95), kpi12, uplift6 * 2);
+
   const opportunity_summary = {
     total_monthly_search_volume:        sumVol(accepted),
     commercial_keyword_count:           commercial.length,
@@ -1468,8 +1482,13 @@ function buildV2Additions(input) {
     city_pages_needed:                  cityPages.length,
     city_pages_monthly_volume:          sumVol(cityPages.map(p => ({ global_volume: p.primary_volume }))),
     quick_wins_available:               accepted.filter(k => k.priority === "HIGH").length,
-    estimated_traffic_uplift_6m:        toNumOrNull(trafficKpi?.target_6_months),
-    estimated_traffic_uplift_12m:       toNumOrNull(trafficKpi?.target_12_months),
+    estimated_traffic_uplift_6m:        uplift6,
+    estimated_traffic_uplift_12m:       uplift12,
+    // SaaS extras — richer opportunity framing
+    addressable_capturable_monthly:     Math.round(capturable),
+    informational_keyword_count:        accepted.filter(k => k.intent_class === "informational").length,
+    pages_to_build:                     (content_architecture.commercial_pages || []).length + cityPages.length,
+    blog_posts_to_write:                (content_architecture.blog_and_guides || []).length,
   };
 
   // narrative_connections (L3)

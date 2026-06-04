@@ -148,6 +148,16 @@ function DiagnosisCard({ children }) {
   );
 }
 
+// ── "What Ranking Pages Do" context block — V2 Part 2 component ───────────────
+function WhatRankingPagesDo({ children }) {
+  return (
+    <div style={{ background: C.ivory, borderLeft: `2px solid ${C.greyMid}`, padding: "12px 16px", margin: "16px 0" }}>
+      <div className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.greyText, marginBottom: "4px" }}>What Ranking Pages Do</div>
+      <div style={{ fontFamily: SANS, fontSize: "13px", color: C.textDark, lineHeight: 1.6 }}>{children}</div>
+    </div>
+  );
+}
+
 // ── Narrative bridge to next section (V2 Rule 15 narrative_connection) ────────
 function BridgeNote({ text }) {
   if (!text) return null;
@@ -544,6 +554,7 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               )}
               <Narrative num={4} />
+              {narrativeBridge("competitor_landscape") && <BridgeNote text={narrativeBridge("competitor_landscape")} />}
             </Section>
           )}
 
@@ -587,16 +598,21 @@ export default function DoctorFizzReport({ data }) {
               </div>
             )}
             <Narrative num={5} />
+              {narrativeBridge("keyword_strategy") && <BridgeNote text={narrativeBridge("keyword_strategy")} />}
           </Section>
 
           {/* ── 06 · CONTENT ARCHITECTURE (3 separated subsections + narrative) ─ */}
           <Section number={6} total={TOTAL} title="Content Architecture">
+            <WhatRankingPagesDo>
+              Pages that rank do one job extremely well: they match a single search intent, answer it completely, and link to the next logical step. Each page below targets one keyword cluster — commercial pages convert buyers, blog content captures researchers and funnels them inward, and city pages own local intent. Spreading one page across many intents is why most sites stall.
+            </WhatRankingPagesDo>
             <ContentSub title="Core Commercial Pages" rows={ca.commercial_pages || []} type="commercial" />
             <ContentSub title="Blog &amp; Educational Content" rows={ca.blog_and_guides || []} type="blog" />
             {(ca.city_pages || []).length > 0 && (
               <ContentSub title="Local &amp; City Pages" rows={ca.city_pages || []} type="city" />
             )}
             <Narrative num={6} />
+              {narrativeBridge("content_architecture") && <BridgeNote text={narrativeBridge("content_architecture")} />}
           </Section>
 
           {/* ── 07 · TECHNICAL FOUNDATION (always renders) ──────────────────── */}
@@ -628,6 +644,7 @@ export default function DoctorFizzReport({ data }) {
                 ))}
               </div>
               <Narrative num={7} />
+              {narrativeBridge("technical_foundation") && <BridgeNote text={narrativeBridge("technical_foundation")} />}
           </Section>
 
           {/* ── 08 · AUTHORITY & LINK BUILDING (4 categories + narrative) ────── */}
@@ -689,6 +706,7 @@ export default function DoctorFizzReport({ data }) {
               ))}
             </BacklinkSub>
             <Narrative num={8} />
+              {narrativeBridge("authority_link_building") && <BridgeNote text={narrativeBridge("authority_link_building")} />}
           </Section>
 
           {/* ── 09 · GBP COMPARISON ─────────────────────────────────────────── */}
@@ -739,6 +757,7 @@ export default function DoctorFizzReport({ data }) {
               <GapBlock label="Fastest Win (48h)" text={gbp.fastest_win} accent />
               <GapBlock label="Trust Gap" text={gbp.trust_gap} />
               <Narrative num={9} />
+              {narrativeBridge("local_visibility_gbp") && <BridgeNote text={narrativeBridge("local_visibility_gbp")} />}
             </Section>
           )}
 
@@ -749,13 +768,12 @@ export default function DoctorFizzReport({ data }) {
               <DiagnosisCard>
                 Current AI citation status: <strong>{geo.current_ai_citation_count}</strong>. The site is not yet a citable source for ChatGPT, Google AI Overviews, or Perplexity — the prescription below makes the content liftable by answer engines.
               </DiagnosisCard>
-              <PrescriptionCard>
-                <ul className="space-y-1.5">
-                  {geo.recommended_actions.map((a, i) => (
-                    <li key={i} className="flex gap-2 text-[12px]"><span style={{ color: C.orange }}>▸</span><span>{a}</span></li>
-                  ))}
-                </ul>
-              </PrescriptionCard>
+              {/* Action Item Rows (Rule R3 — no plain bullets for actions) */}
+              <div className="mb-3">
+                {geo.recommended_actions.map((a, i) => (
+                  <ActionRow key={i} step={i + 1} title={a.split(":")[0]} description={a.includes(":") ? a.split(":").slice(1).join(":").trim() : ""} channel={/schema|json-ld|faqpage|organization/i.test(a) ? "SEO+GEO" : "GEO"} priority={i < 2 ? "HIGH" : "MEDIUM"} effort={/schema|json-ld/i.test(a) ? "~3 hrs" : "~1 day"} />
+                ))}
+              </div>
               {(geo.geo_principles || []).length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                   {geo.geo_principles.map((p, i) => (
@@ -773,6 +791,7 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               ))}
               <Narrative num={10} />
+              {narrativeBridge("geo_ai_visibility") && <BridgeNote text={narrativeBridge("geo_ai_visibility")} />}
             </Section>
           )}
 
@@ -806,6 +825,21 @@ export default function DoctorFizzReport({ data }) {
               </div>
             )}
             <Narrative num={11} />
+            {/* "What Good Looks Like" — closing narrative anchor (V2 KPI prompt) */}
+            {(() => {
+              const v12 = oppSummary.estimated_traffic_uplift_12m;
+              if (v12 == null) return null;
+              const enquiries = Math.round(v12 * 0.02);
+              return (
+                <div className="mt-4 rounded-lg p-4" style={{ background: C.diagTint, borderLeft: `3px solid ${C.orange}` }}>
+                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>What Good Looks Like</div>
+                  <p style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>
+                    In 12 months, executing this prescription puts {meta.client_name} on track for roughly <strong>{fmtNum(v12)} organic visitors a month</strong> from people actively searching for what the business offers. At a conservative 2% conversion rate, that is about <strong>{fmtNum(enquiries)} new enquiries every month</strong> from a channel that costs nothing per click — compounding month over month as the content and authority mature.
+                  </p>
+                </div>
+              );
+            })()}
+            {narrativeBridge("kpi_forecast") && <BridgeNote text={narrativeBridge("kpi_forecast")} />}
           </Section>
 
           {/* ── 12 · IMPLEMENTATION & SPRINT PLAN (narrative + structured fallback) */}
