@@ -148,6 +148,152 @@ function DiagnosisCard({ children }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHARTS — lightweight inline SVG (vector, no dependency, PDF-crisp via Puppeteer)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Horizontal bar chart — best for comparisons (scores, metrics, reviews).
+function HBarChart({ data, unit = "", height = 16, gap = 8, labelWidth = 130 }) {
+  const rows = (data || []).filter(d => d && d.value != null);
+  if (!rows.length) return null;
+  const max = Math.max(...rows.map(d => Number(d.value) || 0), 1);
+  return (
+    <div style={{ width: "100%" }}>
+      {rows.map((d, i) => {
+        const pct = Math.max(2, Math.round(((Number(d.value) || 0) / max) * 100));
+        const color = d.color || C.orange;
+        return (
+          <div key={i} className="flex items-center" style={{ gap: "8px", marginBottom: `${gap}px` }}>
+            <span className="truncate" style={{ width: `${labelWidth}px`, fontFamily: SANS, fontSize: "11px", color: C.greyText, textAlign: "right", flexShrink: 0 }}>{d.label}</span>
+            <div style={{ flex: 1, background: C.tableHead, borderRadius: "3px", height: `${height}px`, position: "relative", overflow: "hidden" }}>
+              <div style={{ width: `${pct}%`, height: "100%", background: color, borderRadius: "3px" }} />
+            </div>
+            <span style={{ width: "62px", fontFamily: SANS, fontSize: "11px", fontWeight: 600, color: C.textDark, flexShrink: 0 }}>{d.display ?? `${d.value}${unit}`}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Grouped two-bar comparison (You vs Best competitor) per row, normalised.
+function CompareBars({ rows, labelWidth = 120 }) {
+  const data = (rows || []).filter(r => r && (r.you != null || r.them != null));
+  if (!data.length) return null;
+  return (
+    <div style={{ width: "100%" }}>
+      {data.map((r, i) => {
+        const max = Math.max(Number(r.you) || 0, Number(r.them) || 0, 1);
+        const youPct = Math.max(2, Math.round(((Number(r.you) || 0) / max) * 100));
+        const themPct = Math.max(2, Math.round(((Number(r.them) || 0) / max) * 100));
+        const youWins = (Number(r.you) || 0) >= (Number(r.them) || 0);
+        return (
+          <div key={i} style={{ marginBottom: "10px" }}>
+            <div className="flex items-center justify-between" style={{ marginBottom: "2px" }}>
+              <span style={{ fontFamily: SANS, fontSize: "11px", fontWeight: 600, color: C.textDark }}>{r.label}</span>
+              <span style={{ fontFamily: SANS, fontSize: "10px", color: C.greyMid }}>you {r.youDisplay ?? r.you} · best {r.themDisplay ?? r.them}</span>
+            </div>
+            <div className="flex items-center" style={{ gap: "6px" }}>
+              <span style={{ width: "34px", fontFamily: SANS, fontSize: "9px", color: C.orange, textAlign: "right" }}>YOU</span>
+              <div style={{ flex: 1, background: C.tableHead, borderRadius: "2px", height: "12px", overflow: "hidden" }}><div style={{ width: `${youPct}%`, height: "100%", background: youWins ? "#2D6B32" : C.orange }} /></div>
+            </div>
+            <div className="flex items-center" style={{ gap: "6px", marginTop: "2px" }}>
+              <span style={{ width: "34px", fontFamily: SANS, fontSize: "9px", color: C.greyMid, textAlign: "right" }}>THEM</span>
+              <div style={{ flex: 1, background: C.tableHead, borderRadius: "2px", height: "12px", overflow: "hidden" }}><div style={{ width: `${themPct}%`, height: "100%", background: C.greyMid }} /></div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Donut chart — best for composition (keyword intent split).
+function Donut({ segments, size = 120, thickness = 22, centerLabel, centerSub }) {
+  const segs = (segments || []).filter(s => s && Number(s.value) > 0);
+  const total = segs.reduce((a, s) => a + Number(s.value), 0);
+  if (!total) return null;
+  const r = (size - thickness) / 2;
+  const cx = size / 2, cy = size / 2;
+  const circ = 2 * Math.PI * r;
+  let offset = 0;
+  return (
+    <div className="flex items-center gap-4">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={C.tableHead} strokeWidth={thickness} />
+        {segs.map((s, i) => {
+          const frac = Number(s.value) / total;
+          const dash = frac * circ;
+          const el = (
+            <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={s.color} strokeWidth={thickness}
+              strokeDasharray={`${dash} ${circ - dash}`} strokeDashoffset={-offset}
+              transform={`rotate(-90 ${cx} ${cy})`} />
+          );
+          offset += dash;
+          return el;
+        })}
+        {centerLabel != null && (
+          <text x={cx} y={cy - 2} textAnchor="middle" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "20px", fill: C.textDark }}>{centerLabel}</text>
+        )}
+        {centerSub && (
+          <text x={cx} y={cy + 14} textAnchor="middle" style={{ fontFamily: SANS, fontSize: "8px", fill: C.greyText, letterSpacing: "1px" }}>{centerSub}</text>
+        )}
+      </svg>
+      <div className="space-y-1">
+        {segs.map((s, i) => (
+          <div key={i} className="flex items-center gap-1.5" style={{ fontFamily: SANS, fontSize: "11px", color: C.textDark }}>
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: s.color, display: "inline-block" }} />
+            <span style={{ fontWeight: 600 }}>{s.value}</span>
+            <span style={{ color: C.greyText }}>{s.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Rating distribution bars (5★ → 1★).
+function RatingBars({ dist }) {
+  if (!dist) return null;
+  const total = Object.values(dist).reduce((a, b) => a + (Number(b) || 0), 0);
+  if (!total) return null;
+  const colorFor = (star) => star >= 4 ? "#2D6B32" : star === 3 ? "#9A6A12" : "#B83A1A";
+  return (
+    <div style={{ width: "100%" }}>
+      {[5, 4, 3, 2, 1].map((star) => {
+        const n = Number(dist[star]) || 0;
+        const pct = Math.round((n / total) * 100);
+        return (
+          <div key={star} className="flex items-center" style={{ gap: "6px", marginBottom: "3px" }}>
+            <span style={{ width: "26px", fontFamily: SANS, fontSize: "10px", color: C.greyText, textAlign: "right" }}>{star}★</span>
+            <div style={{ flex: 1, background: C.tableHead, borderRadius: "2px", height: "11px", overflow: "hidden" }}><div style={{ width: `${Math.max(pct ? 2 : 0, pct)}%`, height: "100%", background: colorFor(star) }} /></div>
+            <span style={{ width: "34px", fontFamily: SANS, fontSize: "10px", color: C.greyText }}>{n}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// KPI trajectory — baseline → 6mo → 12mo as a 3-step ascending bar set.
+function TrajectoryBars({ baseline, m6, m12, unit = "" }) {
+  const vals = [Number(baseline) || 0, Number(m6) || 0, Number(m12) || 0];
+  const max = Math.max(...vals, 1);
+  const labels = ["Now", "6 mo", "12 mo"];
+  const colors = [C.greyMid, C.orange, "#2D6B32"];
+  return (
+    <div className="flex items-end gap-2" style={{ height: "56px" }}>
+      {vals.map((v, i) => (
+        <div key={i} className="flex flex-col items-center" style={{ flex: 1 }}>
+          <span style={{ fontFamily: SANS, fontSize: "9px", fontWeight: 600, color: C.textDark }}>{v.toLocaleString()}{unit}</span>
+          <div style={{ width: "100%", height: `${Math.max(4, Math.round((v / max) * 40))}px`, background: colors[i], borderRadius: "2px 2px 0 0", marginTop: "2px" }} />
+          <span style={{ fontFamily: SANS, fontSize: "8px", color: C.greyMid, marginTop: "2px" }}>{labels[i]}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Mini stat (compact number block for review intelligence) ─────────────────
 function MiniStat({ label, value, sub }) {
   return (
@@ -424,7 +570,7 @@ export default function DoctorFizzReport({ data }) {
                   <div className="h-2 rounded-full" style={{ width: `${scores.seo_health}%`, background: scoreColor(scores.seo_health) }} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
                 {[
                   ["Technical", scores.technical],
                   ["Content", scores.content],
@@ -439,6 +585,17 @@ export default function DoctorFizzReport({ data }) {
                     <div className="text-[10px] uppercase tracking-wide font-semibold" style={{ color: C.greyText }}>{label}</div>
                   </div>
                 ))}
+              </div>
+              {/* Score breakdown chart */}
+              <div className="rounded-lg p-4" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                <div className="uppercase mb-3" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.greyText }}>Score Breakdown (out of 100)</div>
+                <HBarChart labelWidth={90} data={[
+                  { label: "Technical",   value: scores.technical,   color: scoreColor(scores.technical) },
+                  { label: "Content",     value: scores.content,     color: scoreColor(scores.content) },
+                  { label: "Authority",   value: scores.authority,   color: scoreColor(scores.authority) },
+                  { label: "Local",       value: scores.local,       color: scoreColor(scores.local) },
+                  { label: "Competitive", value: scores.competitive, color: scoreColor(scores.competitive) },
+                ].filter(d => d.value != null)} />
               </div>
             </div>
           )}
@@ -616,6 +773,14 @@ export default function DoctorFizzReport({ data }) {
                     </div>
                   </div>
 
+                  {/* You-vs-best comparison chart (normalised per dimension) */}
+                  <div className="rounded-lg p-4 mb-4" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                    <div className="uppercase mb-3" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.greyText }}>You vs Best Competitor</div>
+                    <CompareBars rows={compAnalysis.dimensions.filter(d => d.client_value != null && d.competitor_best != null && typeof d.client_value === "number").map(d => ({
+                      label: d.dimension, you: d.client_value, them: d.competitor_best, youDisplay: d.client_display, themDisplay: d.competitor_best_display,
+                    }))} />
+                  </div>
+
                   {/* ── How to improve — prioritised roadmap (Action Item Rows) ── */}
                   {compAnalysis.improvement_roadmap.length > 0 && (
                     <div className="mb-3">
@@ -664,6 +829,26 @@ export default function DoctorFizzReport({ data }) {
             {frames.keyword_strategy_intro && (
               <p className="mb-4" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{frames.keyword_strategy_intro}</p>
             )}
+            {/* Keyword intent split — donut */}
+            {(() => {
+              const acc = kw.accepted || [];
+              if (acc.length < 2) return null;
+              const counts = { transactional: 0, informational: 0, "local-commercial": 0, other: 0 };
+              acc.forEach(k => { counts[counts[k.intent_class] !== undefined ? k.intent_class : "other"]++; });
+              const segs = [
+                { label: "Commercial (buyers)", value: counts.transactional, color: C.orange },
+                { label: "Informational", value: counts.informational, color: C.teal },
+                { label: "Local / geo", value: counts["local-commercial"], color: "#2D6B32" },
+                { label: "Other", value: counts.other, color: C.greyMid },
+              ].filter(s => s.value > 0);
+              if (segs.length < 2) return null;
+              return (
+                <div className="rounded-lg p-4 mb-4" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                  <div className="uppercase mb-3" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.greyText }}>Keyword Intent Split</div>
+                  <Donut segments={segs} centerLabel={acc.length} centerSub="KEYWORDS" />
+                </div>
+              );
+            })()}
             {/* Grouped by intent class per spec: primary commercial,
                 informational & supporting, local & geo, long-tail feature. */}
             {(() => {
@@ -942,6 +1127,24 @@ export default function DoctorFizzReport({ data }) {
                     <MiniStat label="Unreplied" value={gbp.review_intel.unreplied_count ?? "—"} sub="Google tracks response rate" />
                     <MiniStat label="Sentiment" value={gbp.review_intel.sentiment ? `${gbp.review_intel.sentiment.score}/100` : "—"} sub={gbp.review_intel.sentiment?.overall || ""} />
                   </div>
+                  {/* Charts: rating distribution + reviews vs competitors */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    {gbp.review_intel.rating_distribution && (
+                      <div className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                        <div className="uppercase mb-2" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1px", color: C.greyText }}>Your Rating Distribution</div>
+                        <RatingBars dist={gbp.review_intel.rating_distribution} />
+                      </div>
+                    )}
+                    {(gbp.competitors || []).length > 0 && (
+                      <div className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                        <div className="uppercase mb-2" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1px", color: C.greyText }}>Reviews — You vs Competitors</div>
+                        <HBarChart labelWidth={90} data={[
+                          { label: gbp.client.name || "You", value: gbp.client.review_count || 0, color: C.orange },
+                          ...gbp.competitors.map(c => ({ label: c.name, value: c.review_count || 0, color: C.greyMid })),
+                        ]} />
+                      </div>
+                    )}
+                  </div>
                   {gbp.review_intel.sentiment && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
                       {gbp.review_intel.sentiment.praises?.length > 0 && (
@@ -1049,6 +1252,25 @@ export default function DoctorFizzReport({ data }) {
               </div>
             )}
             <Narrative num={11} />
+            {/* KPI trajectory charts — baseline → 6mo → 12mo for numeric metrics */}
+            {(() => {
+              const trend = kpis.filter(k => typeof k.baseline === "number" && (typeof k.target_6_months === "number" || typeof k.target_12_months === "number")).slice(0, 4);
+              if (!trend.length) return null;
+              return (
+                <div className="rounded-lg p-4 mt-3" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                  <div className="uppercase mb-3" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.greyText }}>Projected Trajectory</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {trend.map((k, i) => (
+                      <div key={i}>
+                        <div className="mb-1" style={{ fontFamily: SANS, fontSize: "10px", fontWeight: 600, color: C.textDark }}>{k.metric}</div>
+                        <TrajectoryBars baseline={k.baseline} m6={typeof k.target_6_months === "number" ? k.target_6_months : k.baseline} m12={typeof k.target_12_months === "number" ? k.target_12_months : k.target_6_months} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* "What Good Looks Like" — closing narrative anchor (V2 KPI prompt) */}
             {(() => {
               const v12 = oppSummary.estimated_traffic_uplift_12m;
