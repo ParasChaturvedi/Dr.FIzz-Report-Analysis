@@ -627,17 +627,105 @@ export function buildGbpComparison(clientGmb, competitorGmbs = []) {
   const competitor_analysis = competitors.map(c => analyseCompetitorGbp(client, c));
   // Per-FIELD analysis: who's best, who's missing it, and how the client improves.
   const field_analysis = buildGbpFieldAnalysis(client, competitors);
+  // Review intelligence (sentiment, velocity, unreplied, distribution) from the
+  // client's live GMB — surfaces the data the GMB collector already computes.
+  const review_intel = buildReviewIntel(clientGmb, competitors);
+  // Prioritised GBP action plan (V1 spec: action list with effort) as four-beat
+  // actions derived from the field gaps, ranked by impact-to-effort.
+  const gbp_action_plan = buildGbpActionPlan(field_analysis, client, competitors);
+  // "What Good Looks Like" — the expected local outcome after the work.
+  const what_good_looks_like = buildLocalOutcome(client, competitors, gbp_action_plan);
 
   return {
     client,
     competitors,
     competitor_analysis,
     field_analysis,
+    review_intel,
+    gbp_action_plan,
+    what_good_looks_like,
     biggest_gap:  analysis.biggestGap,
     fastest_win:  analysis.fastestWin,
     trust_gap:    analysis.trustGap,
     has_competitor_data: competitors.length > 0,
   };
+}
+
+// Review intelligence from the client's live GMB result (sentiment, velocity,
+// unreplied count, rating distribution) + a benchmark vs the strongest rival.
+function buildReviewIntel(clientGmb, competitors) {
+  if (!clientGmb) return null;
+  const s = clientGmb.sentiment || null;
+  const dist = clientGmb.ratingDistribution || null;
+  const velocity = clientGmb.reviewVelocity ?? null;
+  const unreplied = clientGmb.unrepliedReviewCount ?? null;
+  const totalReviews = clientGmb.gmb?.reviewCount ?? clientGmb.reviewCount ?? 0;
+  const compBestReviews = Math.max(0, ...competitors.map(c => c.review_count || 0));
+  if (!s && dist == null && velocity == null && unreplied == null) return null;
+  return {
+    total_reviews: totalReviews,
+    competitor_best_reviews: compBestReviews,
+    review_gap: compBestReviews > totalReviews ? compBestReviews - totalReviews : 0,
+    velocity_per_month: velocity,
+    unreplied_count: unreplied,
+    rating_distribution: dist,
+    sentiment: s ? {
+      overall: s.overallSentiment, score: s.sentimentScore,
+      praises: s.topPraises || [], complaints: s.topComplaints || [],
+      urgent: s.urgentIssues || [],
+    } : null,
+    // Commercial interpretation (V2 Rule 14)
+    commercial_reading: compBestReviews > totalReviews
+      ? `When a customer compares profiles side by side, ${compBestReviews} reviews reads as established and safe while ${totalReviews} reads as unproven — review volume is the single biggest factor in who they call.`
+      : `${totalReviews} reviews is a credible base of social proof; the focus now is freshness and response rate.`,
+  };
+}
+
+// Prioritised GBP action plan from the field gaps (four-beat, effort-tagged).
+function buildGbpActionPlan(fieldAnalysis, client, competitors) {
+  const effortFor = (field) => ({
+    verified: "≈15 min", website_link: "≈5 min", booking_link: "≈10 min", hours_complete: "≈10 min",
+    primary_category: "≈10 min", secondary_categories: "≈10 min", description_complete: "≈30 min",
+    photos: "≈30 min", services_populated: "≈45 min", qa_active: "≈30 min",
+    review_count: "≈6–8 weeks", rating: "ongoing", review_recency: "ongoing", post_frequency: "≈15 min/wk", completeness: "≈1 hour",
+  }[field] || "≈30 min");
+  const priorityFor = (field) => /verified|review_count|completeness/.test(field) ? "HIGH" : /photos|description|hours|website/.test(field) ? "QUICK WIN" : "MEDIUM";
+
+  const actions = (fieldAnalysis || [])
+    .filter(f => f.client_status !== "best" && f.improvement)
+    .map(f => ({
+      area: f.label,
+      action: f.improvement,
+      outcome: outcomeFor(f.field, client, competitors),
+      priority: priorityFor(f.field),
+      effort: effortFor(f.field),
+      _impact: f.client_status === "missing" ? 3 : 2,
+      _hours: /week/.test(effortFor(f.field)) ? 40 : /hour/.test(effortFor(f.field)) ? 1 : 0.4,
+    }));
+  // Rank by impact-to-effort (quick wins + high-impact first)
+  return actions.sort((a, b) => (b._impact / Math.max(0.1, b._hours)) - (a._impact / Math.max(0.1, a._hours)))
+    .map(({ _impact, _hours, ...rest }) => rest);
+}
+
+function outcomeFor(field, client, competitors) {
+  const compBestReviews = Math.max(0, ...competitors.map(c => c.review_count || 0));
+  switch (field) {
+    case "verified": return "Unlocks full ranking eligibility — verified profiles sit above unverified ones.";
+    case "review_count": return `Closes the trust gap with the local leader (${compBestReviews} reviews) and lifts local-pack ranking.`;
+    case "completeness": return "Each filled field adds a relevance signal Google rewards in local results.";
+    case "photos": return "Listings with photos earn ~42% more direction requests.";
+    case "hours_complete": return "Makes the business eligible for 'open now' searches.";
+    case "qa_active": return "Each answered question becomes free long-tail content on the profile.";
+    case "booking_link": return "Converts profile views into booked appointments on the spot.";
+    default: return "Strengthens the profile's trust and relevance signals.";
+  }
+}
+
+// Expected local outcome after the prescription (V2 "What Good Looks Like").
+function buildLocalOutcome(client, competitors, actions) {
+  const compBest = Math.max(0, ...competitors.map(c => c.review_count || 0));
+  const target = Math.max(client.review_count + 25, Math.round(compBest * 0.6), 25);
+  return `Completed, the profile reaches roughly ${target} reviews at 4.5★+, a 100% category-and-services fill, weekly posts, and answered Q&A — the configuration that wins the local pack. At that point the business appears in the top local results for its core service-in-city searches, where the majority of high-intent local clicks happen.`;
 }
 
 /**

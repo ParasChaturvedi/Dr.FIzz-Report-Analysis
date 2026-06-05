@@ -148,6 +148,17 @@ function DiagnosisCard({ children }) {
   );
 }
 
+// ── Mini stat (compact number block for review intelligence) ─────────────────
+function MiniStat({ label, value, sub }) {
+  return (
+    <div className="rounded-lg p-2.5 text-center" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+      <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "22px", color: C.textDark, lineHeight: 1 }}>{value}</div>
+      <div className="uppercase mt-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "8px", letterSpacing: "1px", color: C.orange }}>{label}</div>
+      {sub && <div style={{ fontFamily: SANS, fontSize: "9px", color: C.greyText }}>{sub}</div>}
+    </div>
+  );
+}
+
 // ── Source / confidence badge (data-honesty layer) ───────────────────────────
 function SourceBadge({ source, label }) {
   const map = {
@@ -918,6 +929,54 @@ export default function DoctorFizzReport({ data }) {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* ── REVIEW INTELLIGENCE — sentiment, velocity, unreplied, dist ── */}
+              {gbp.review_intel && (gbp.review_intel.sentiment || gbp.review_intel.velocity_per_month != null) && (
+                <div className="mt-6">
+                  <div className="uppercase mb-2" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>Review Intelligence</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                    <MiniStat label="Your Reviews" value={gbp.review_intel.total_reviews} sub={gbp.review_intel.review_gap ? `${gbp.review_intel.review_gap} behind leader` : "category base"} />
+                    <MiniStat label="Velocity" value={gbp.review_intel.velocity_per_month != null ? `${gbp.review_intel.velocity_per_month}/mo` : "—"} sub="new reviews / month" />
+                    <MiniStat label="Unreplied" value={gbp.review_intel.unreplied_count ?? "—"} sub="Google tracks response rate" />
+                    <MiniStat label="Sentiment" value={gbp.review_intel.sentiment ? `${gbp.review_intel.sentiment.score}/100` : "—"} sub={gbp.review_intel.sentiment?.overall || ""} />
+                  </div>
+                  {gbp.review_intel.sentiment && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+                      {gbp.review_intel.sentiment.praises?.length > 0 && (
+                        <div className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                          <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1px", color: "#2D6B32" }}>Customers Praise</div>
+                          <ul className="space-y-0.5">{gbp.review_intel.sentiment.praises.map((x, i) => <li key={i} style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText }}>+ {x}</li>)}</ul>
+                        </div>
+                      )}
+                      {gbp.review_intel.sentiment.complaints?.length > 0 && (
+                        <div className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                          <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1px", color: "#B83A1A" }}>Customers Complain About</div>
+                          <ul className="space-y-0.5">{gbp.review_intel.sentiment.complaints.map((x, i) => <li key={i} style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText }}>− {x} <span style={{ color: C.greyMid }}>(fix to lift rating)</span></li>)}</ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <p style={{ fontFamily: SANS, fontSize: "12px", color: C.textDark, lineHeight: 1.6 }}>{gbp.review_intel.commercial_reading}</p>
+                </div>
+              )}
+
+              {/* ── PRIORITISED GBP ACTION PLAN (Action Item Rows + outcome) ── */}
+              {gbp.gbp_action_plan?.length > 0 && (
+                <div className="mt-6">
+                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>GBP Action Plan — Priority Order</div>
+                  {gbp.gbp_action_plan.slice(0, 10).map((a, i) => (
+                    <ActionRow key={i} step={i + 1} title={a.area} description={`${a.action}${a.outcome ? ` → ${a.outcome}` : ""}`} channel="SEO" priority={a.priority} effort={a.effort} />
+                  ))}
+                </div>
+              )}
+
+              {/* ── WHAT GOOD LOOKS LIKE (local outcome) ── */}
+              {gbp.what_good_looks_like && (
+                <div className="mt-4 rounded-lg p-4" style={{ background: C.diagTint, borderLeft: `3px solid ${C.orange}` }}>
+                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>What Good Looks Like</div>
+                  <p style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{gbp.what_good_looks_like}</p>
                 </div>
               )}
 
