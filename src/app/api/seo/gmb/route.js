@@ -39,14 +39,49 @@ async function dfsPost(endpoint, payload, auth) {
   return res.json();
 }
 
+// Build a progressive list of name variants, most-specific → least-specific.
+// e.g. "Itzfizz Digital Private Limited" →
+//   ["Itzfizz Digital Private Limited", "Itzfizz Digital Pvt Ltd",
+//    "Itzfizz Digital", "Itzfizz"]
+// This is exported so the variant set is testable and reused.
+export function gmbNameVariants(rawName) {
+  const name = String(rawName || "").trim();
+  if (!name) return [];
+  const titled = (s) => s.replace(/\b\w/g, c => c.toUpperCase());
+  // Strip only formal legal-entity suffixes (NOT "co/corp/company" — those are
+  // usually part of the brand). Trailing-only so mid-name words are preserved.
+  const stripped = name
+    .replace(/[\s,]+(private\s+limited|pvt\.?\s*ltd\.?|p\.?\s*ltd\.?|limited|ltd\.?|inc\.?|incorporated|llc|llp)\.?\s*$/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  const words = stripped.split(/\s+/).filter(Boolean);
+  const variants = [
+    name,                                   // full as entered
+    titled(name),                           // Title Case full
+    stripped,                               // legal suffix removed → "Itzfizz Digital"
+    titled(stripped),
+    words.slice(0, 3).join(" "),            // first 3 significant words
+    words.slice(0, 2).join(" "),            // first 2 → "Itzfizz Digital"
+    words[0],                               // first word → "Itzfizz"
+  ];
+  // Dedupe (case-insensitive), drop empties and 1-char tokens.
+  const seen = new Set();
+  const out = [];
+  for (const v of variants) {
+    const t = String(v || "").trim();
+    if (t.length < 2) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  return out;
+}
+
 // ── GMB Info — tries multiple keyword variants to maximise hit rate ───────────
 async function fetchGmbInfo(keyword, location, auth) {
-  // Build fallback keyword list: exact → Title Case → first word only
-  const variants = [...new Set([
-    keyword,
-    keyword.replace(/\b\w/g, c => c.toUpperCase()),  // Title Case
-    keyword.split(/\s+/)[0],                          // first word
-  ])].filter(Boolean);
+  // Progressive variants: full → suffix-stripped → first-2-words → first word.
+  const variants = gmbNameVariants(keyword);
 
   for (const kw of variants) {
     try {
@@ -332,15 +367,18 @@ export async function checkGmb(domain, businessName = "", location = "India") {
     keyword = extracted || host.split(".")[0];
   }
 
-  // Run all fetches in parallel
-  const [gmbRes, reviewRes, qaRes, dirRes] = await Promise.allSettled([
-    fetchGmbInfo(keyword, location, auth),
-    fetchGmbReviews(keyword, location, auth),
-    fetchGmbQA(keyword, location, auth),
-    checkDirectoryListings(host, auth, keyword),
+  // 1) Find the listing first (tries every name variant). 2) Then fetch reviews,
+  //    Q&A and directories under the EXACT name that matched — so a listing found
+  //    as "Itzfizz Digital" doesn't get its reviews searched as the full legal name.
+  const info = await fetchGmbInfo(keyword, location, auth).catch(() => null);
+  const matchedKeyword = info?.keywordUsed || info?.name || keyword;
+
+  const [reviewRes, qaRes, dirRes] = await Promise.allSettled([
+    info?.found ? fetchGmbReviews(matchedKeyword, location, auth) : Promise.resolve([]),
+    info?.found ? fetchGmbQA(matchedKeyword, location, auth)      : Promise.resolve([]),
+    checkDirectoryListings(host, auth, matchedKeyword),
   ]);
 
-  const info    = gmbRes.status    === "fulfilled" ? gmbRes.value    : null;
   const reviews = reviewRes.status === "fulfilled" ? reviewRes.value : [];
   const qa      = qaRes.status     === "fulfilled" ? qaRes.value     : [];
   const dirs    = dirRes.status    === "fulfilled" ? dirRes.value    : DIRECTORIES.map(d => ({ ...d, listed: null }));
@@ -379,11 +417,13 @@ export async function checkGmb(domain, businessName = "", location = "India") {
   const unansweredQA = qa.filter(q => !q.hasAnswer).length;
   if (unansweredQA > 0)             issues.push({ severity: "low",  issue: `${unansweredQA} unanswered Q&A on GMB` });
 
-  console.log(`[gmb] domain=${host} searchedAs="${keyword}" found=${!!info?.found} dirs=${listedCount}`);
+  const variantsTried = gmbNameVariants(keyword);
+  console.log(`[gmb] domain=${host} input="${keyword}" matched="${info?.keywordUsed || "-"}" found=${!!info?.found} variants=[${variantsTried.join(" | ")}] dirs=${listedCount}`);
 
   return {
     domain:         host,
-    searchedAs:     keyword,          // ← debug: shows what name was searched
+    searchedAs:     info?.keywordUsed || keyword,   // the variant that matched
+    variantsTried,                                  // ← debug: all names searched
     gmb:            info || { found: false },
     reviews:        reviews.slice(0, 10),
     reviewCount:    reviews.length,
