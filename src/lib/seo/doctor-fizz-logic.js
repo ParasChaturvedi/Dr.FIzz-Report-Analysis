@@ -761,6 +761,125 @@ function deriveTrustGap(client, strongest) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// COMPREHENSIVE COMPETITIVE ANALYSIS (us vs them across every dimension)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Full head-to-head competitive intelligence: compares the client against every
+ * competitor across Technical, Content, Schema/GEO, Authority, and Local/GMB —
+ * stating where the CLIENT wins (edges), where COMPETITORS win (gaps), and a
+ * prioritised, specific improvement roadmap to close each gap.
+ *
+ * @param {object} input {
+ *   client: { crawl, gmb, baseline },          // baseline = formatted metric values map
+ *   competitorAudits: [{ name, domain, crawl, gmb }],
+ * }
+ */
+export function buildCompetitiveAnalysis(input = {}) {
+  const { client = {}, competitorAudits = [] } = input;
+  const comps = (competitorAudits || []).filter(c => c && (c.crawl || c.gmb) && !(c.crawl?.error && c.gmb?.error));
+  if (!comps.length) return null;
+
+  const cCrawl = client.crawl || {};
+  const cGmb   = client.gmb || {};
+  const cBase  = client.baseline || {};
+  const val    = (k) => cBase[k]?.value ?? null;
+
+  // Extract a comparable metric from a competitor audit.
+  const compMetric = (c, fn) => { try { return fn(c); } catch { return null; } };
+  const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+  const best = (arr, dir = "high") => arr.length ? (dir === "high" ? Math.max(...arr) : Math.min(...arr)) : null;
+
+  const dimensions = [];
+  const addDim = (dimension, clientValue, compValues, dir, fmt, improveFn) => {
+    const vals = compValues.filter(v => v != null);
+    if (clientValue == null && !vals.length) return;
+    const compBestVal = vals.length ? best(vals, dir) : null;
+    const compAvgVal  = vals.length ? Math.round(avg(vals) * 10) / 10 : null;
+    const bestIdx = vals.length ? compValues.findIndex(v => v === compBestVal) : -1;
+    const compBestName = bestIdx >= 0 ? comps[bestIdx]?.name : null;
+    let winner = "tie";
+    if (clientValue != null && compBestVal != null) {
+      const clientBetter = dir === "high" ? clientValue >= compBestVal : clientValue <= compBestVal;
+      winner = clientBetter ? "you" : "them";
+    } else if (clientValue != null) winner = "you";
+    else if (compBestVal != null) winner = "them";
+    dimensions.push({
+      dimension,
+      client_value: clientValue, client_display: fmt(clientValue),
+      competitor_best: compBestVal, competitor_best_display: fmt(compBestVal), competitor_best_name: compBestName,
+      competitor_avg: compAvgVal,
+      winner,
+      improvement: winner === "them" ? improveFn(clientValue, compBestVal, compBestName) : null,
+    });
+  };
+
+  // ── Technical health ──
+  addDim("Site Health", cCrawl.healthScore ?? null,
+    comps.map(c => compMetric(c, x => x.crawl?.healthScore)), "high",
+    (v) => v == null ? "—" : `${v}/100`,
+    (cv, bv, bn) => `Raise site health from ${cv ?? "—"} to beat ${bn || "the leader"}'s ${bv}: clear the crawl errors, broken links, and duplicate tags first.`);
+
+  // ── Schema / GEO readiness ──
+  const clientSchema = (cCrawl.summary?.pagesWithSchemaTypes || []).length;
+  addDim("Structured Data (GEO)", clientSchema,
+    comps.map(c => compMetric(c, x => (x.crawl?.summary?.pagesWithSchemaTypes || []).length)), "high",
+    (v) => v == null ? "—" : `${v} types`,
+    (cv, bv, bn) => `${bn || "A competitor"} ships ${bv} schema types vs your ${cv}. Add LocalBusiness + FAQPage + Service JSON-LD to become citable in AI answers.`);
+
+  // ── Content depth ──
+  addDim("Avg Content Depth", cCrawl.summary?.avgWordCount ?? null,
+    comps.map(c => compMetric(c, x => x.crawl?.summary?.avgWordCount)), "high",
+    (v) => v == null ? "—" : `${v} words/page`,
+    (cv, bv, bn) => `${bn || "The leader"} averages ${bv} words/page vs your ${cv ?? "—"}. Expand thin pages to 800+ words with FAQs and local context.`);
+
+  // ── Page footprint ──
+  addDim("Indexable Pages", cCrawl.totalPagesEstimate || cCrawl.pageCount || null,
+    comps.map(c => compMetric(c, x => x.crawl?.totalPagesEstimate || x.crawl?.pageCount)), "high",
+    (v) => v == null ? "—" : `${v} pages`,
+    (cv, bv, bn) => `${bn || "A competitor"} covers ${bv} pages vs your ${cv ?? "—"} — build the missing commercial and city pages mapped in the content section.`);
+
+  // ── Local: reviews ──
+  addDim("Google Reviews", cGmb.gmb?.reviewCount ?? cGmb.reviewCount ?? null,
+    comps.map(c => compMetric(c, x => x.gmb?.gmb?.reviewCount ?? x.gmb?.reviewCount)), "high",
+    (v) => v == null ? "—" : `${v}`,
+    (cv, bv, bn) => `${bn || "The local leader"} holds ${bv} reviews vs your ${cv ?? 0} — run a post-job WhatsApp/SMS review drive to close the trust gap.`);
+
+  // ── Local: rating ──
+  addDim("Google Rating", cGmb.gmb?.rating ?? null,
+    comps.map(c => compMetric(c, x => x.gmb?.gmb?.rating)), "high",
+    (v) => v == null ? "—" : `${v}★`,
+    (cv, bv, bn) => `Lift rating toward ${bn || "the leader"}'s ${bv}★ by resolving the themes in negative reviews and replying to every one.`);
+
+  // ── Local: completeness ──
+  addDim("GBP Completeness", cGmb.completeness?.score ?? null,
+    comps.map(c => compMetric(c, x => x.gmb?.completeness?.score)), "high",
+    (v) => v == null ? "—" : `${v}/100`,
+    (cv, bv, bn) => `${bn || "A competitor"} runs a ${bv}/100 profile vs your ${cv ?? "—"} — fill categories, services, hours, photos and Q&A to overtake.`);
+
+  const your_edges  = dimensions.filter(d => d.winner === "you").map(d => ({ dimension: d.dimension, advantage: `You lead on ${d.dimension.toLowerCase()} (${d.client_display}${d.competitor_best_display !== "—" ? ` vs best competitor ${d.competitor_best_display}` : ""}) — defend and promote this.` }));
+  const their_edges = dimensions.filter(d => d.winner === "them").map(d => ({ dimension: d.dimension, gap: `${d.competitor_best_name || "A competitor"} leads on ${d.dimension.toLowerCase()} (${d.competitor_best_display} vs your ${d.client_display}).`, improvement: d.improvement }));
+
+  // Improvement roadmap — biggest, most strategic gaps first.
+  const priorityOf = (dim) => /review|completeness|health|schema/i.test(dim) ? "HIGH" : "MEDIUM";
+  const effortOf   = (dim) => /review/i.test(dim) ? "≈6–8 weeks" : /schema/i.test(dim) ? "≈1 day" : /completeness|rating/i.test(dim) ? "≈3 hours" : "≈1–2 weeks";
+  const improvement_roadmap = their_edges.map(g => ({
+    priority: priorityOf(g.dimension), area: g.dimension, gap: g.gap, action: g.improvement, effort: effortOf(g.dimension),
+  })).sort((a, b) => (a.priority === "HIGH" ? 0 : 1) - (b.priority === "HIGH" ? 0 : 1));
+
+  const winCount = your_edges.length, gapCount = their_edges.length;
+  const overall_verdict = gapCount === 0
+    ? `Across every measured dimension, the site matches or leads its competitors — the work now is widening the lead.`
+    : winCount > gapCount
+      ? `The site leads on ${winCount} of ${dimensions.length} dimensions and trails on ${gapCount}. Closing those ${gapCount} gaps converts a competitive position into a dominant one.`
+      : winCount === 0
+        ? `Competitors currently lead on every measured dimension — the roadmap below is the catch-up sequence, ordered by impact.`
+        : `Competitors lead on ${gapCount} of ${dimensions.length} dimensions vs your ${winCount}. The roadmap below closes the gaps in priority order.`;
+
+  return { dimensions, your_edges, their_edges, improvement_roadmap, overall_verdict, competitor_count: comps.length };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // KPI DIRECTIONAL VALIDATION (Problem 6)
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1292,7 +1411,7 @@ export function runBusinessLogic(input = {}) {
     clientGmb = null, competitorGmbs = [],
     directories = [], competitorBacklinks = [],
     clientServiceTerms = [], targetKeywords = [], reportRef = "",
-    crawlData = null, verifiedData = null,
+    crawlData = null, verifiedData = null, competitorAudits = [],
   } = input;
 
   // ── Ground-truth override: when the client has connected Google Search Console
@@ -1333,6 +1452,12 @@ export function runBusinessLogic(input = {}) {
 
   // ── GBP comparison (Problem 5) ──
   const gbp_comparison = buildGbpComparison(clientGmb, competitorGmbs);
+
+  // ── Comprehensive competitive analysis (us vs them, all dimensions) ──
+  const competitive_analysis = buildCompetitiveAnalysis({
+    client: { crawl: crawlData, gmb: clientGmb, baseline: buildBaseline(baselineRawResolved).baseline },
+    competitorAudits,
+  });
 
   // ── SEO scores (Phase 3) — computed after baseline so they reflect real data ──
   // (baseline is built below; scores assembled at the end before return)
@@ -1395,6 +1520,7 @@ export function runBusinessLogic(input = {}) {
     technical_issues,
     backlinks,
     gbp_comparison,
+    competitive_analysis,
     geo_and_ai_visibility,
     kpis,
     scores,

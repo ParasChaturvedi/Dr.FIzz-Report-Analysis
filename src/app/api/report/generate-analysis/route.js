@@ -672,6 +672,9 @@ export async function POST(request) {
         crawlData:   crawlRaw,
         clientGmb:   gmbRaw,
         competitorGmbs,
+        competitorAudits: Array.isArray(prefetchedSeoData?.competitorAudit?.competitors)
+          ? prefetchedSeoData.competitorAudit.competitors
+          : [],
         directories: gmbRaw?.directories || [],
         competitorBacklinks,
         // Ground-truth Google data when the client has connected GSC/GA4.

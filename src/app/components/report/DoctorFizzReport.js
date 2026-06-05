@@ -306,6 +306,7 @@ export default function DoctorFizzReport({ data }) {
   const geo = payload.geo_and_ai_visibility || {};
   const scores = payload.scores || null;
   const pap = payload.priority_action_plan || [];
+  const compAnalysis = payload.competitive_analysis || null;
   const v2 = payload.v2_additions || {};
   const oppSummary = v2.opportunity_summary || {};
   const formattedBaseline = v2.formatted_baseline || [];
@@ -553,11 +554,72 @@ export default function DoctorFizzReport({ data }) {
             {narrativeBridge("baseline_snapshot") && <BridgeNote text={narrativeBridge("baseline_snapshot")} />}
           </Section>
 
-          {/* ── 04 · COMPETITOR LANDSCAPE (narrative, with structured fallback) ─ */}
-          {(narrativeByNum["04"] || (payload.competitors || []).length > 0) && (
-            <Section number={4} total={TOTAL} title="Competitor Landscape">
-              {(payload.competitors || []).length > 0 && (
-                <div className="overflow-x-auto rounded-lg mb-3" style={{ border: `1px solid ${C.warmGrey}30` }}>
+          {/* ── 04 · COMPETITOR LANDSCAPE (full head-to-head intelligence) ──── */}
+          {(narrativeByNum["04"] || (payload.competitors || []).length > 0 || compAnalysis) && (
+            <Section number={4} total={TOTAL} title="Competitor Landscape"
+              opening={compAnalysis?.overall_verdict || undefined}>
+
+              {/* ── Head-to-head scorecard: you vs best competitor on every dimension ── */}
+              {compAnalysis?.dimensions?.length > 0 && (
+                <>
+                  <DiagnosisCard>{compAnalysis.overall_verdict}</DiagnosisCard>
+                  <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.border}` }}>
+                    <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                      <thead><tr style={{ background: C.tableHead }}>
+                        <Th>Dimension</Th><Th right>You</Th><Th right>Best Competitor</Th><Th>Verdict</Th>
+                      </tr></thead>
+                      <tbody>
+                        {compAnalysis.dimensions.map((d, i) => (
+                          <tr key={i} style={{ background: i % 2 ? "#fff" : C.rowEven, borderBottom: `1px solid ${C.border}` }}>
+                            <Td>{d.dimension}</Td>
+                            <Td right><span style={{ fontWeight: 600, color: d.winner === "you" ? "#2D6B32" : C.textDark }}>{d.client_display}</span></Td>
+                            <Td right>{d.competitor_best_display}{d.competitor_best_name ? <span style={{ fontSize: "10px", color: C.greyMid }}> · {d.competitor_best_name}</span> : ""}</Td>
+                            <Td>{d.winner === "you"
+                              ? <span style={{ color: "#2D6B32", fontWeight: 600, fontSize: "11px" }}>✓ You lead</span>
+                              : d.winner === "them"
+                                ? <span style={{ color: "#B83A1A", fontWeight: 600, fontSize: "11px" }}>▼ Gap</span>
+                                : <span style={{ color: C.greyMid, fontSize: "11px" }}>Tie</span>}</Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* ── Your edges vs their edges ── */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                    <div className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                      <div className="uppercase mb-1.5" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: "#2D6B32" }}>Where You Win</div>
+                      {compAnalysis.your_edges.length ? (
+                        <ul className="space-y-1">{compAnalysis.your_edges.map((e, j) => (
+                          <li key={j} className="flex gap-1.5" style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText, lineHeight: 1.5 }}><span style={{ color: "#2D6B32" }}>✓</span><span>{e.advantage}</span></li>
+                        ))}</ul>
+                      ) : <p style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText }}>No clear lead yet on the measured dimensions — the roadmap fixes that.</p>}
+                    </div>
+                    <div className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                      <div className="uppercase mb-1.5" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: "#B83A1A" }}>Where They Win (Your Gaps)</div>
+                      {compAnalysis.their_edges.length ? (
+                        <ul className="space-y-1">{compAnalysis.their_edges.map((e, j) => (
+                          <li key={j} className="flex gap-1.5" style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText, lineHeight: 1.5 }}><span style={{ color: "#B83A1A" }}>▼</span><span>{e.gap}</span></li>
+                        ))}</ul>
+                      ) : <p style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText }}>No competitor leads on any measured dimension.</p>}
+                    </div>
+                  </div>
+
+                  {/* ── How to improve — prioritised roadmap (Action Item Rows) ── */}
+                  {compAnalysis.improvement_roadmap.length > 0 && (
+                    <div className="mb-3">
+                      <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>How To Close The Gaps — Priority Order</div>
+                      {compAnalysis.improvement_roadmap.map((r, i) => (
+                        <ActionRow key={i} step={i + 1} title={`${r.area}: ${r.action}`} channel={/schema|geo/i.test(r.area) ? "SEO+GEO" : "SEO"} priority={r.priority} effort={r.effort} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Basic competitor table (fallback / supplementary) */}
+              {!compAnalysis && (payload.competitors || []).length > 0 && (
+                <div className="overflow-x-auto rounded-lg mb-3" style={{ border: `1px solid ${C.border}` }}>
                   <table className="w-full text-[12px]">
                     <thead><tr style={{ background: C.nearBlack }}>
                       <Th white>Competitor</Th><Th white>Threat</Th><Th white right>GMB Rating</Th><Th white right>Reviews</Th>
