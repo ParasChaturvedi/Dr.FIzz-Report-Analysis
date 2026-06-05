@@ -644,7 +644,7 @@ export async function POST(request) {
     const competitorGmbs = Array.isArray(prefetchedSeoData?.competitorAudit?.competitors)
       ? prefetchedSeoData.competitorAudit.competitors
           .filter(c => c?.gmb && !c.gmb.error)
-          .map(c => ({ domain: c.domain, gmbCheck: c.gmb }))
+          .map(c => ({ domain: c.domain, name: c.name || c.domain, gmbCheck: c.gmb }))
       : [];
 
     const competitorBacklinks = Array.isArray(kwGapRaw?.competitorBacklinks)

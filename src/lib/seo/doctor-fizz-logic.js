@@ -620,17 +620,90 @@ export function buildGbpComparison(clientGmb, competitorGmbs = []) {
   const client = toRow("Your Business", clientGmb);
   const competitors = (competitorGmbs || [])
     .filter(c => c?.gmbCheck)
-    .map(c => toRow(c.domain || "Competitor", c.gmbCheck));
+    .map(c => toRow(c.name || c.domain || "Competitor", c.gmbCheck));
 
   const analysis = computeGbpGaps(client, competitors);
+  // Detailed per-competitor breakdown (the dedicated "Competitor Analysis").
+  const competitor_analysis = competitors.map(c => analyseCompetitorGbp(client, c));
 
   return {
     client,
     competitors,
+    competitor_analysis,
     biggest_gap:  analysis.biggestGap,
     fastest_win:  analysis.fastestWin,
     trust_gap:    analysis.trustGap,
     has_competitor_data: competitors.length > 0,
+  };
+}
+
+/**
+ * Detailed head-to-head GBP analysis of one competitor vs the client:
+ * what they do better, where they are vulnerable, a verdict, and the exact
+ * play to overtake them. This is the per-competitor depth a premium tool gives.
+ */
+function analyseCompetitorGbp(client, comp) {
+  const strengths = [];   // where the competitor beats the client
+  const weaknesses = [];  // where the competitor is exposed
+  const num = (v) => (typeof v === "number" ? v : (v === "present" ? 1 : 0));
+
+  // Reviews
+  const cr = comp.review_count || 0, ur = client.review_count || 0;
+  if (cr > ur) strengths.push(`Holds ${cr} reviews vs your ${ur} (a ${cr - ur}-review lead) — the strongest local-trust and ranking signal.`);
+  else if (cr < ur) weaknesses.push(`Only ${cr} reviews vs your ${ur} — you already lead on social proof here.`);
+
+  // Rating
+  if ((comp.rating || 0) > (client.rating || 0)) strengths.push(`Higher rating: ${comp.rating}★ vs your ${client.rating ?? "—"}★.`);
+  else if ((comp.rating || 0) < (client.rating || 0) && comp.rating) weaknesses.push(`Lower rating (${comp.rating}★) than you (${client.rating}★) — exploit this in messaging.`);
+
+  // Verification
+  if (comp.verified && !client.verified) strengths.push("Verified profile while yours is not — a structural ranking advantage.");
+  if (!comp.verified) weaknesses.push("Profile is unverified — vulnerable to being outranked by a verified, complete profile.");
+
+  // Completeness
+  if ((comp.completeness || 0) > (client.completeness || 0)) strengths.push(`Profile ${comp.completeness}% complete vs your ${client.completeness ?? "—"}% — more relevance signals filled in.`);
+  else if ((comp.completeness || 0) < (client.completeness || 0)) weaknesses.push(`Profile only ${comp.completeness}% complete — gaps you can out-fill.`);
+
+  // Photos / posts / Q&A
+  if (num(comp.photos) > num(client.photos)) strengths.push("Deeper photo set — drives more direction requests and dwell.");
+  if (!comp.qa_active) weaknesses.push("No active Q&A — an easy content/visibility gap to claim first.");
+  if (!comp.post_frequency) weaknesses.push("No regular Google Posts — freshness signal left on the table.");
+  if (!comp.booking_link) weaknesses.push("No booking/appointment link — a conversion path they are not using.");
+
+  // Threat score (0-100): how dominant this competitor's GBP is vs the client
+  let threat = 50;
+  threat += (cr - ur) > 0 ? Math.min(25, (cr - ur) / 8) : -10;
+  threat += (comp.rating || 0) > (client.rating || 0) ? 8 : -5;
+  threat += (comp.completeness || 0) > (client.completeness || 0) ? 8 : -5;
+  threat += comp.verified && !client.verified ? 9 : 0;
+  threat = Math.max(0, Math.min(100, Math.round(threat)));
+  const threat_level = threat >= 70 ? "HIGH" : threat >= 45 ? "MEDIUM" : "LOW";
+
+  // The overtake play — the single most leveraged move against this competitor
+  let overtake_play;
+  if (cr - ur > 10) overtake_play = `Close the review gap: a 6–8 week WhatsApp/SMS review drive after each job narrows ${cr - ur} reviews fastest — review volume is what their lead rests on.`;
+  else if (comp.verified && !client.verified) overtake_play = "Verify and fully complete your profile — until then this competitor is structurally ahead regardless of other work.";
+  else if ((client.completeness || 0) < (comp.completeness || 0)) overtake_play = `Out-complete them: fill every field they have and the ones they don't (Q&A, services, posts) to pass ${comp.completeness}% completeness.`;
+  else overtake_play = "Out-publish them: weekly Google Posts, fresh photos, and answered Q&A will compound a freshness edge they are not maintaining.";
+
+  const verdict = threat >= 70
+    ? `${comp.name} is the GBP benchmark to beat in this market.`
+    : threat >= 45
+      ? `${comp.name} is a credible local rival with clear, closable gaps.`
+      : `${comp.name} is beatable now — their profile has more weaknesses than strengths versus yours.`;
+
+  return {
+    name: comp.name,
+    threat_score: threat,
+    threat_level,
+    verdict,
+    review_count: comp.review_count,
+    rating: comp.rating,
+    completeness: comp.completeness,
+    verified: comp.verified,
+    strengths: strengths.length ? strengths : ["No standout GBP advantages over your profile."],
+    weaknesses: weaknesses.length ? weaknesses : ["A well-maintained profile with few obvious gaps."],
+    overtake_play,
   };
 }
 

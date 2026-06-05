@@ -778,6 +778,59 @@ export default function DoctorFizzReport({ data }) {
               <GapBlock label="Biggest Visibility Gap" text={gbp.biggest_gap} />
               <GapBlock label="Fastest Win (48h)" text={gbp.fastest_win} accent />
               <GapBlock label="Trust Gap" text={gbp.trust_gap} />
+
+              {/* ── COMPETITOR ANALYSIS — detailed per-competitor GMB breakdown ── */}
+              {(gbp.competitor_analysis || []).length > 0 && (
+                <div className="mt-6">
+                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>Competitor Analysis</div>
+                  <p className="mb-3" style={{ fontFamily: SANS, fontSize: "13px", color: C.textDark, lineHeight: 1.6 }}>
+                    Each business competitor's live Google Business Profile, analysed head-to-head against yours — where they win, where they are exposed, and the single most effective way to overtake them.
+                  </p>
+                  <div className="space-y-3">
+                    {gbp.competitor_analysis.map((ca2, i) => (
+                      <div key={i} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.border}` }}>
+                        {/* Header: name + threat */}
+                        <div className="flex items-center justify-between px-4 py-2.5" style={{ background: C.tableHead }}>
+                          <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "16px", color: C.textDark }}>{ca2.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span style={{ fontFamily: SANS, fontSize: "11px", color: C.greyText }}>
+                              {ca2.review_count ?? 0} reviews · {ca2.rating ? `${ca2.rating}★` : "—"} · {ca2.completeness != null ? `${ca2.completeness}/100` : "—"}
+                            </span>
+                            <PriorityLabel priority={ca2.threat_level} />
+                            <span style={{ fontFamily: SANS, fontSize: "11px", color: C.greyMid }}>threat {ca2.threat_score}</span>
+                          </div>
+                        </div>
+                        <div className="px-4 py-3">
+                          <p className="mb-2" style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: "14px", color: C.textDark }}>{ca2.verdict}</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1px", color: "#B83A1A" }}>Where They Beat You</div>
+                              <ul className="space-y-1">
+                                {ca2.strengths.map((s, j) => (
+                                  <li key={j} className="flex gap-1.5" style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText, lineHeight: 1.5 }}><span style={{ color: "#B83A1A" }}>▲</span><span>{s}</span></li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1px", color: "#2D6B32" }}>Where They Are Exposed</div>
+                              <ul className="space-y-1">
+                                {ca2.weaknesses.map((w, j) => (
+                                  <li key={j} className="flex gap-1.5" style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText, lineHeight: 1.5 }}><span style={{ color: "#2D6B32" }}>▼</span><span>{w}</span></li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                          <div className="mt-3 rounded p-2.5" style={{ background: C.diagTint, borderLeft: `3px solid ${C.orange}` }}>
+                            <span className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1px", color: C.orange }}>Overtake Play: </span>
+                            <span style={{ fontFamily: SANS, fontSize: "13px", color: C.textDark }}>{ca2.overtake_play}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <Narrative num={9} />
               {narrativeBridge("local_visibility_gbp") && <BridgeNote text={narrativeBridge("local_visibility_gbp")} />}
             </Section>

@@ -9,27 +9,45 @@ export const maxDuration = 120;
 
 const MAX_COMPETITORS = 5;
 
-// ── Audit one domain (crawl + GMB) via internal HTTP calls ───────────────────
-async function auditOneDomain(domain, keywords = [], location = "India", baseUrl = "") {
+// A competitor entry can be a domain ("acme.com") OR a business name ("Acme Corp").
+function looksLikeDomain(s) {
+  return /^([a-z0-9-]+\.)+[a-z]{2,}(\/.*)?$/i.test(String(s || "").replace(/^https?:\/\//, "").trim());
+}
+
+// ── Audit one competitor (crawl + GMB) via internal HTTP calls ───────────────
+// Works whether the competitor is a domain or a plain business name: the GMB
+// lookup is searched by businessName so Step-4 business competitors (often
+// entered as names) are GMB-analysed in real time just like the client.
+async function auditOneDomain(competitor, keywords = [], location = "India", baseUrl = "") {
+  const isDomain = looksLikeDomain(competitor);
+  const domain   = isDomain ? String(competitor).replace(/^https?:\/\//, "").trim() : "";
+  const name     = isDomain ? "" : String(competitor).trim();
+
+  const gmbBody = isDomain ? { domain, location } : { domain: "", businessName: name, location };
+
   const [crawlResult, gmbResult] = await Promise.allSettled([
-    fetch(`${baseUrl}/api/seo/website-crawl`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain, keywords }),
-      signal: AbortSignal.timeout(85000),
-    }).then(r => r.ok ? r.json() : Promise.reject(new Error(`crawl ${r.status}`))),
+    // Crawl only makes sense for a real domain.
+    isDomain
+      ? fetch(`${baseUrl}/api/seo/website-crawl`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain, keywords }),
+          signal: AbortSignal.timeout(85000),
+        }).then(r => r.ok ? r.json() : Promise.reject(new Error(`crawl ${r.status}`)))
+      : Promise.resolve({ skipped: "no domain — business name only" }),
     fetch(`${baseUrl}/api/seo/gmb`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ domain, location }),
+      body: JSON.stringify(gmbBody),
       signal: AbortSignal.timeout(55000),
     }).then(r => r.ok ? r.json() : Promise.reject(new Error(`gmb ${r.status}`))),
   ]);
 
   return {
-    domain,
-    crawl: crawlResult.status === "fulfilled"  ? crawlResult.value  : { error: crawlResult.reason?.message },
-    gmb:   gmbResult.status   === "fulfilled"  ? gmbResult.value    : { error: gmbResult.reason?.message },
+    domain: domain || competitor,
+    name:   name || domain || competitor,
+    crawl:  crawlResult.status === "fulfilled" ? crawlResult.value : { error: crawlResult.reason?.message },
+    gmb:    gmbResult.status   === "fulfilled" ? gmbResult.value   : { error: gmbResult.reason?.message },
   };
 }
 
