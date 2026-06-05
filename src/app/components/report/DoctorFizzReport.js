@@ -797,46 +797,74 @@ export default function DoctorFizzReport({ data }) {
           {gbp.client && (
             <Section number={9} total={TOTAL} title="Local Visibility &amp; GBP Comparison">
               {frames.gbp_intro && <p className="mb-4" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{frames.gbp_intro}</p>}
-              <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
-                <table className="w-full text-[11px]">
-                  <thead>
-                    <tr style={{ background: C.nearBlack }}>
-                      <th className="text-left px-2 py-2 font-bold uppercase text-[9px] text-white">Field</th>
-                      <th className="text-center px-2 py-2 font-bold uppercase text-[9px]" style={{ color: C.orangeLite }}>You</th>
-                      {(gbp.competitors || []).map((c, i) => (
-                        <th key={i} className="text-center px-2 py-2 font-bold uppercase text-[9px] text-white truncate max-w-[100px]">{c.name}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      ["Verified", "verified", v => v ? "✓" : "✗"],
-                      ["Primary Category", "primary_category", v => v || "—"],
-                      ["Secondary Categories", "secondary_categories", v => v ?? 0],
-                      ["Reviews", "review_count", v => v ?? 0],
-                      ["Rating", "rating", v => v ? `${v}★` : "—"],
-                      ["Review Recency", "review_recency", v => v || "—"],
-                      ["Post Frequency", "post_frequency", v => v || "—"],
-                      ["Photos", "photos", v => v ?? 0],
-                      ["Services Populated", "services_populated", v => v == null ? "—" : (v ? "✓" : "✗")],
-                      ["Q&A Active", "qa_active", v => v ? "✓" : "✗"],
-                      ["Hours Complete", "hours_complete", v => v ? "✓" : "✗"],
-                      ["Completeness", "completeness", v => v != null ? `${v}/100` : "—"],
-                      ["Website Link", "website_link", v => v ? "✓" : "✗"],
-                      ["Booking Link", "booking_link", v => v ? "✓" : "✗"],
-                      ["Description", "description_complete", v => v ? "✓" : "✗"],
-                    ].map(([label, key, fmt], i) => (
-                      <tr key={key} style={{ background: i % 2 ? "#fff" : C.ivory }}>
-                        <td className="px-2 py-1.5 font-medium" style={{ color: C.greyText }}>{label}</td>
-                        <td className="px-2 py-1.5 text-center font-semibold" style={{ color: C.orange }}>{fmt(gbp.client[key])}</td>
-                        {(gbp.competitors || []).map((c, j) => (
-                          <td key={j} className="px-2 py-1.5 text-center" style={{ color: C.nearBlack }}>{fmt(c[key])}</td>
+
+              {/* ── ONE DETAILED GMB TABLE: you + all competitors, colour-coded
+                   best/missing per field, with a How-To-Improve column ── */}
+              {(() => {
+                const fa = gbp.field_analysis || [];
+                const comps = gbp.competitors || [];
+                const allProfiles = [{ ...gbp.client, name: gbp.client.name || "You", _isClient: true }, ...comps];
+                const fmtField = (val, type) => {
+                  if (type === "bool") return val ? "✓" : "✗";
+                  if (type === "num")  return val == null ? "—" : (val === "present" ? "✓" : String(val));
+                  return val || "—";
+                };
+                // best holder per field (by name) to highlight the winning cell
+                const bestNameByField = Object.fromEntries(fa.map(f => [f.field, f.best_name]));
+                const statusColor = { best: "#2D6B32", good: "#9A6A12", behind: "#9A6A12", missing: "#B83A1A" };
+                const statusBg    = { best: "#D6EAD7", good: "#FBF1D9", behind: "#FBF1D9", missing: "#F8DDD4" };
+                if (!fa.length) return null;
+                return (
+                  <div className="overflow-x-auto rounded-lg mb-3" style={{ border: `1px solid ${C.border}` }}>
+                    <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: C.nearBlack }}>
+                          <th className="text-left uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1px", color: "#fff", padding: "8px 10px" }}>Field</th>
+                          <th className="text-center uppercase" style={{ fontFamily: SANS, fontWeight: 700, fontSize: "9px", letterSpacing: "1px", color: C.orangeLite, padding: "8px 10px" }}>You</th>
+                          {comps.map((c, i) => (
+                            <th key={i} className="text-center uppercase truncate" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "0.5px", color: "#fff", padding: "8px 10px", maxWidth: "110px" }}>{c.name}</th>
+                          ))}
+                          <th className="text-left uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1px", color: C.orangeLite, padding: "8px 10px", minWidth: "200px" }}>How To Improve</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fa.map((f, i) => (
+                          <tr key={f.field} style={{ background: i % 2 ? "#fff" : C.rowEven, borderBottom: `1px solid ${C.border}` }}>
+                            <td style={{ fontFamily: SANS, fontSize: "11px", fontWeight: 500, color: C.greyText, padding: "8px 10px" }}>{f.label}</td>
+                            {/* client cell — coloured by status */}
+                            <td className="text-center" style={{ fontFamily: SANS, fontSize: "11px", fontWeight: 700, padding: "6px 8px" }}>
+                              <span style={{ background: statusBg[f.client_status] || "transparent", color: statusColor[f.client_status] || C.textDark, padding: "1px 6px", borderRadius: "3px" }}>
+                                {fmtField(f.client_value, f.type)}
+                              </span>
+                            </td>
+                            {/* competitor cells — highlight the best holder */}
+                            {comps.map((c, j) => {
+                              const isBest = bestNameByField[f.field] && bestNameByField[f.field] === c.name;
+                              return (
+                                <td key={j} className="text-center" style={{ fontFamily: SANS, fontSize: "11px", fontWeight: isBest ? 700 : 400, color: isBest ? "#2D6B32" : C.textDark, padding: "8px 10px" }}>
+                                  {isBest ? "★ " : ""}{fmtField(c[f.field], f.type)}
+                                </td>
+                              );
+                            })}
+                            {/* how to improve */}
+                            <td style={{ fontFamily: SANS, fontSize: "11px", color: f.client_status === "best" ? "#2D6B32" : C.greyText, padding: "8px 10px", lineHeight: 1.4 }}>
+                              {f.client_status === "best" ? "✓ You lead — maintain" : (f.gap_note ? f.gap_note + " " : "") + (f.improvement || "")}
+                            </td>
+                          </tr>
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+              {/* Legend */}
+              <div className="flex flex-wrap items-center gap-3 mb-4" style={{ fontFamily: SANS, fontSize: "10px", color: C.greyText }}>
+                <span><span style={{ background: "#D6EAD7", color: "#2D6B32", padding: "1px 5px", borderRadius: "3px", fontWeight: 700 }}>green</span> you lead / best</span>
+                <span><span style={{ background: "#FBF1D9", color: "#9A6A12", padding: "1px 5px", borderRadius: "3px", fontWeight: 700 }}>amber</span> behind</span>
+                <span><span style={{ background: "#F8DDD4", color: "#B83A1A", padding: "1px 5px", borderRadius: "3px", fontWeight: 700 }}>red</span> missing</span>
+                <span>★ = best in market for that field</span>
               </div>
+
               <GapBlock label="Biggest Visibility Gap" text={gbp.biggest_gap} />
               <GapBlock label="Fastest Win (48h)" text={gbp.fastest_win} accent />
               <GapBlock label="Trust Gap" text={gbp.trust_gap} />

@@ -625,16 +625,83 @@ export function buildGbpComparison(clientGmb, competitorGmbs = []) {
   const analysis = computeGbpGaps(client, competitors);
   // Detailed per-competitor breakdown (the dedicated "Competitor Analysis").
   const competitor_analysis = competitors.map(c => analyseCompetitorGbp(client, c));
+  // Per-FIELD analysis: who's best, who's missing it, and how the client improves.
+  const field_analysis = buildGbpFieldAnalysis(client, competitors);
 
   return {
     client,
     competitors,
     competitor_analysis,
+    field_analysis,
     biggest_gap:  analysis.biggestGap,
     fastest_win:  analysis.fastestWin,
     trust_gap:    analysis.trustGap,
     has_competitor_data: competitors.length > 0,
   };
+}
+
+/**
+ * Row-by-row (field-by-field) GMB analysis across the client + all competitors.
+ * For each profile field: who holds the best value, the client's standing
+ * (best / good / behind / missing), and the exact improvement action.
+ * Drives a single detailed, colour-coded comparison table.
+ */
+function buildGbpFieldAnalysis(client, competitors) {
+  const all = [client, ...competitors];
+  const num = (v) => (typeof v === "number" ? v : v === "present" ? 1 : 0);
+  const boolBest = (key) => all.some(p => p[key]); // at least one has it
+  const FIELDS = [
+    { key: "verified",            label: "Verified",             type: "bool",   tip: "Verify the listing via postcard or phone within 5 days — unverified profiles rank below verified ones." },
+    { key: "primary_category",    label: "Primary Category",     type: "text",   tip: "Choose the single most specific category that matches the core service." },
+    { key: "secondary_categories",label: "Secondary Categories", type: "num",    tip: "Add 2–3 relevant secondary categories to surface for more searches." },
+    { key: "review_count",        label: "Reviews",              type: "num",    tip: "Run a post-job WhatsApp/SMS review drive to close the volume gap — the #1 local-trust signal." },
+    { key: "rating",              label: "Rating",               type: "num",    tip: "Reply to every review and fix recurring complaint themes to lift the average." },
+    { key: "review_recency",      label: "Review Recency",       type: "text",   tip: "Keep a steady trickle of fresh reviews — recency is a ranking and trust factor." },
+    { key: "post_frequency",      label: "Google Posts",         type: "text",   tip: "Publish 1–2 Google Posts per week (offers, news, work) to signal an active profile." },
+    { key: "photos",              label: "Photos",               type: "num",    tip: "Upload 10+ photos — exterior, interior, team, and work; profiles with photos get 42% more direction requests." },
+    { key: "services_populated",  label: "Services Listed",      type: "bool",   tip: "List every service with a short description — feeds relevance for service searches." },
+    { key: "qa_active",           label: "Q&A Active",           type: "bool",   tip: "Seed and answer 3–5 Q&As — each answer is free long-tail content." },
+    { key: "hours_complete",      label: "Hours (incl. holidays)",type: "bool",  tip: "Set complete hours including holidays to appear in 'open now' searches." },
+    { key: "completeness",        label: "Profile Completeness", type: "num",    tip: "Fill every remaining field — each one is a relevance signal left dark." },
+    { key: "website_link",        label: "Website Link",         type: "bool",   tip: "Add the website URL — a direct conversion path." },
+    { key: "booking_link",        label: "Booking Link",         type: "bool",   tip: "Add a booking/appointment link to capture intent on the spot." },
+    { key: "description_complete",label: "Description",          type: "bool",   tip: "Write a 750-char description with primary keywords in the first 250 characters." },
+  ];
+
+  return FIELDS.map(f => {
+    const values = all.map(p => p[f.key]);
+    let bestVal, bestIdx = -1, clientStatus;
+    if (f.type === "num") {
+      bestVal = Math.max(...values.map(num));
+      bestIdx = values.map(num).indexOf(bestVal);
+      const cv = num(client[f.key]);
+      clientStatus = cv === 0 ? "missing" : cv >= bestVal ? "best" : cv >= bestVal * 0.6 ? "good" : "behind";
+    } else if (f.type === "bool") {
+      bestVal = values.some(v => v) ? true : false;
+      bestIdx = values.findIndex(v => v);
+      clientStatus = client[f.key] ? "best" : (competitors.some(c => c[f.key]) ? "missing" : "behind");
+    } else { // text
+      const cv = client[f.key];
+      clientStatus = cv ? "good" : "missing";
+      bestIdx = values.findIndex(v => !!v);
+      bestVal = bestIdx >= 0 ? values[bestIdx] : null;
+    }
+    const best_name = bestIdx >= 0 ? all[bestIdx]?.name : null;
+    // Specific gap context for numeric fields
+    let gap_note = "";
+    if (f.type === "num" && clientStatus !== "best") {
+      const lead = bestVal - num(client[f.key]);
+      if (lead > 0) gap_note = `${best_name} leads by ${Math.round(lead)}.`;
+    }
+    return {
+      field: f.key, label: f.label, type: f.type,
+      client_value: client[f.key],
+      best_name, best_value: bestVal,
+      client_status: clientStatus,     // best | good | behind | missing
+      improvement: clientStatus === "best" ? "" : f.tip,
+      gap_note,
+    };
+  });
 }
 
 /**
