@@ -124,6 +124,64 @@ async function fetchGmbInfo(keyword, location, auth) {
   return null; // all variants exhausted
 }
 
+// ── GMB via Google Maps SERP (FALLBACK) ───────────────────────────────────────
+// my_business_info needs a tight keyword+location match and can miss local
+// businesses when the location is country-level. The Maps SERP is what actually
+// powers the knowledge panel — searching it by name reliably surfaces the
+// listing (rating, reviews, address, phone) even for a city-level business.
+async function fetchGmbViaMaps(keyword, location, auth) {
+  const variants = gmbNameVariants(keyword);
+  const hostWords = variants.map(v => v.toLowerCase());
+  for (const kw of variants) {
+    try {
+      const data = await dfsPost(
+        "serp/google/maps/live/advanced",
+        [{ keyword: kw, location_name: location, language_code: "en", depth: 10 }],
+        auth
+      );
+      const items = data?.tasks?.[0]?.result?.[0]?.items || [];
+      const maps = items.filter(i => i.type === "maps_search" || i.type === "local_pack" || i.title);
+      if (!maps.length) continue;
+      // Pick the result whose title best matches the searched name.
+      const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+      const target = norm(variants[0]);
+      const firstWord = target.split(" ")[0];
+      let b = maps.find(m => norm(m.title) === target)
+           || maps.find(m => norm(m.title).includes(firstWord))
+           || maps[0];
+      if (!b) continue;
+
+      return {
+        found: true,
+        keywordUsed:    kw,
+        source:         "maps_serp",
+        name:           b.title || null,
+        address:        b.address || b.address_info?.address || null,
+        phone:          b.phone || null,
+        website:        b.url || b.domain || null,
+        category:       b.category || (Array.isArray(b.category_ids) ? b.category_ids[0] : null) || null,
+        additionalCategories: b.additional_categories || [],
+        rating:         b.rating?.value ?? null,
+        reviewCount:    b.rating?.votes_count ?? b.rating?.reviews_count ?? null,
+        isVerified:     b.is_claimed ?? true,           // appearing in Maps ⇒ effectively live
+        hoursAvailable: !!(b.work_hours?.timetable || b.work_time),
+        hoursDetail:    b.work_hours?.timetable || null,
+        placeId:        b.place_id || null,
+        cid:            b.cid || null,
+        hasPhotos:      b.main_image ? true : !!b.total_photos,
+        totalPhotos:    b.total_photos ?? null,
+        latitude:       b.latitude ?? null,
+        longitude:      b.longitude ?? null,
+        attributes:     Array.isArray(b.attributes) ? b.attributes.slice(0, 10) : [],
+        serpRank:       b.rank_absolute || b.rank_group || null,
+      };
+    } catch (err) {
+      console.warn(`[gmb] fetchGmbViaMaps kw="${kw}":`, err?.message);
+    }
+  }
+  return null;
+}
+
 // ── GMB Reviews ───────────────────────────────────────────────────────────────
 async function fetchGmbReviews(keyword, location, auth) {
   try {
@@ -367,10 +425,14 @@ export async function checkGmb(domain, businessName = "", location = "India") {
     keyword = extracted || host.split(".")[0];
   }
 
-  // 1) Find the listing first (tries every name variant). 2) Then fetch reviews,
-  //    Q&A and directories under the EXACT name that matched — so a listing found
-  //    as "Itzfizz Digital" doesn't get its reviews searched as the full legal name.
-  const info = await fetchGmbInfo(keyword, location, auth).catch(() => null);
+  // 1) Find the listing: my_business_info (each name variant) → Maps SERP
+  //    fallback (more reliable for city-level businesses). 2) Then fetch reviews,
+  //    Q&A and directories under the EXACT name that matched.
+  let info = await fetchGmbInfo(keyword, location, auth).catch(() => null);
+  if (!info?.found) {
+    const viaMaps = await fetchGmbViaMaps(keyword, location, auth).catch(() => null);
+    if (viaMaps?.found) info = viaMaps;
+  }
   const matchedKeyword = info?.keywordUsed || info?.name || keyword;
 
   const [reviewRes, qaRes, dirRes] = await Promise.allSettled([
