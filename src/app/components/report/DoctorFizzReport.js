@@ -661,6 +661,9 @@ export default function DoctorFizzReport({ data }) {
           {(pap.length > 0 || narrativeByNum["02"]) && (
             <Section number={2} total={TOTAL} title="Priority Action Plan"
               opening="Ranked by impact-to-effort — the highest-return, lowest-cost work comes first, regardless of which section it belongs to.">
+              <DiagnosisCard>
+                {pap.reduce((n, t) => n + t.actions.length, 0)} prescribed actions, sequenced so that foundation fixes clear the ceiling before content and authority work begins — every action below is tagged by channel, priority, and effort so the team can execute in order.
+              </DiagnosisCard>
               {(() => { let step = 0; return pap.map((tier) => (
                 <div key={tier.tier} className="mb-5">
                   <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>{tier.tier}</div>
@@ -883,6 +886,9 @@ export default function DoctorFizzReport({ data }) {
 
           {/* ── 06 · CONTENT ARCHITECTURE (3 separated subsections + narrative) ─ */}
           <Section number={6} total={TOTAL} title="Content Architecture">
+            <DiagnosisCard>
+              {(ca.commercial_pages || []).length + (ca.city_pages || []).length} commercial/local pages and {(ca.blog_and_guides || []).length} supporting articles are mapped from the accepted keywords — each to a single intent, so buyers, researchers, and local searchers each land on a page built to convert them rather than a generic catch-all.
+            </DiagnosisCard>
             <WhatRankingPagesDo>
               Pages that rank do one job extremely well: they match a single search intent, answer it completely, and link to the next logical step. Each page below targets one keyword cluster — commercial pages convert buyers, blog content captures researchers and funnels them inward, and city pages own local intent. Spreading one page across many intents is why most sites stall.
             </WhatRankingPagesDo>
@@ -929,6 +935,9 @@ export default function DoctorFizzReport({ data }) {
 
           {/* ── 08 · AUTHORITY & LINK BUILDING (4 categories + narrative) ────── */}
           <Section number={8} total={TOTAL} title="Authority &amp; Link Building">
+            <DiagnosisCard>
+              Off-site authority is the ceiling on how high the site can rank for competitive terms. The four link categories below run from fastest-and-easiest (citations) to highest-long-term-value (editorial) — built in that order, they compound trust the way nothing on-page can.
+            </DiagnosisCard>
             {frames.authority_intro && <p className="mb-4" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{frames.authority_intro}</p>}
             <BacklinkSub title="① Citation &amp; Directory Links" hint="Fastest baseline authority + local signals">
               <table className="w-full text-[12px]">
@@ -992,6 +1001,7 @@ export default function DoctorFizzReport({ data }) {
           {/* ── 09 · GBP COMPARISON ─────────────────────────────────────────── */}
           {gbp.client && (
             <Section number={9} total={TOTAL} title="Local Visibility &amp; GBP Comparison">
+              <DiagnosisCard>{gbp.biggest_gap || "This profile is benchmarked field-by-field against every competitor appearing above it in local search — the comparison below shows exactly where a few hours of work changes the competitive picture."}</DiagnosisCard>
               {frames.gbp_intro && <p className="mb-4" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{frames.gbp_intro}</p>}
 
               {/* ── ONE DETAILED GMB TABLE: you + all competitors, colour-coded
@@ -1224,6 +1234,9 @@ export default function DoctorFizzReport({ data }) {
 
           {/* ── 11 · KPI FORECAST (validated + narrative) ───────────────────── */}
           <Section number={11} total={TOTAL} title="KPI Forecast &amp; Measurement">
+            <DiagnosisCard>
+              Every target below is directionally validated against its baseline — no flat or zero forecasts. The numbers model what the prescribed work realistically returns at 6 and 12 months, and the guidance names the exact tools and early signals to watch from week two.
+            </DiagnosisCard>
             <div className="overflow-x-auto rounded-lg" style={{ border: `1px solid ${C.warmGrey}30` }}>
               <table className="w-full text-[12px]">
                 <thead>
@@ -1290,6 +1303,9 @@ export default function DoctorFizzReport({ data }) {
 
           {/* ── 12 · IMPLEMENTATION & SPRINT PLAN (narrative + structured fallback) */}
           <Section number={12} total={TOTAL} title="Implementation &amp; Sprint Plan">
+            <DiagnosisCard>
+              The prescription is sequenced into time-boxed sprints — foundation fixes on day one, content in week one, authority and GEO across weeks one to two — so the team knows exactly what to do, in what order, and what each sprint unlocks.
+            </DiagnosisCard>
             {!narrativeByNum["12"] && pap.length > 0 && (
               <div className="space-y-2 mb-3">
                 {[
