@@ -113,8 +113,8 @@ function buildDataContext(payload) {
     `  - "${p.proposed_title}" | cluster "${p.keyword_cluster}" vol ${p.primary_volume} | ${p.funnel_role}`
   ).join("\n");
 
-  const cityPages = (ca.city_pages || []).map(p =>
-    `  - ${p.page_name} (city: ${p.city_target}) | cluster "${p.keyword_cluster}" vol ${p.primary_volume}`
+  const cityPages = (ca.geography_pages || ca.city_pages || []).map(p =>
+    `  - ${p.page_name} (${p.page_type || "geography page"}${(p.geo_target || p.city_target) ? `: ${p.geo_target || p.city_target}` : ""}) | cluster "${p.keyword_cluster}" vol ${p.primary_volume}`
   ).join("\n");
 
   const citations = (bl.citation_links || []).map(l =>
@@ -200,7 +200,7 @@ ${commercialPages || "  None"}
 BLOG & EDUCATIONAL CONTENT:
 ${blogPages || "  None"}
 
-LOCAL / CITY PAGES:
+GEOGRAPHY PAGES (country / region / city — use the narrowest scope per cluster, never default to "city"):
 ${cityPages || "  None"}
 
 ═══════════════════════════════════════════════════════
@@ -265,7 +265,7 @@ Organize into: (1) Primary commercial keywords — lead with the best 2–3, wit
 Three clearly separated subsections, never merged:
 SUBSECTION 1 — Core Commercial Pages: page name, URL slug, primary keyword cluster, why it exists commercially, funnel role, priority. No blog content here.
 SUBSECTION 2 — Blog & Educational Content: title, keyword cluster, search intent, funnel fit, how it connects to a commercial page. Every blog must have a stated funnel role.
-SUBSECTION 3 — Local & City Pages: page name + city, keyword cluster, why a separate city page is required, priority.
+SUBSECTION 3 — Geography Pages: page name + geography target and its scope (country / region / city — use the narrowest scope the demand supports, do NOT default everything to "city"), keyword cluster, why a separate geography page is required, priority.
 Do not include schema additions here — they belong in the GEO section.
 
 ## 07 · TECHNICAL FOUNDATION

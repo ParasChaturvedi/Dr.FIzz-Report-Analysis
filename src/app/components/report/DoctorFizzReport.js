@@ -951,13 +951,23 @@ export default function DoctorFizzReport({ data }) {
               {(ca.commercial_pages || []).length + (ca.city_pages || []).length} commercial/local pages and {(ca.blog_and_guides || []).length} supporting articles are mapped from the accepted keywords — each to a single intent, so buyers, researchers, and local searchers each land on a page built to convert them rather than a generic catch-all.
             </DiagnosisCard>
             <WhatRankingPagesDo>
-              Pages that rank do one job extremely well: they match a single search intent, answer it completely, and link to the next logical step. Each page below targets one keyword cluster — commercial pages convert buyers, blog content captures researchers and funnels them inward, and city pages own local intent. Spreading one page across many intents is why most sites stall.
+              Pages that rank do one job extremely well: they match a single search intent, answer it completely, and link to the next logical step. Each page below targets one keyword cluster — commercial pages convert buyers, blog content captures researchers and funnels them inward, and geography pages own local intent at the right scope. Spreading one page across many intents is why most sites stall.
             </WhatRankingPagesDo>
             <ContentSub title="Core Commercial Pages" rows={ca.commercial_pages || []} type="commercial" />
             <ContentSub title="Blog &amp; Educational Content" rows={ca.blog_and_guides || []} type="blog" />
-            {(ca.city_pages || []).length > 0 && (
-              <ContentSub title="Local &amp; City Pages" rows={ca.city_pages || []} type="city" />
-            )}
+            {/* V3 Part 7.3/7.4 — Geography Pages parent, broken into country/region/city scope */}
+            {(() => {
+              const geo = ca.geography_pages || ca.city_pages || [];
+              if (!geo.length) return null;
+              const groups = [
+                { scope: "country", title: "Geography Pages — Country" },
+                { scope: "region",  title: "Geography Pages — Region / State" },
+                { scope: "city",    title: "Geography Pages — City" },
+              ].map(g => ({ ...g, rows: geo.filter(p => (p.geo_scope || "city") === g.scope) })).filter(g => g.rows.length);
+              // If scope wasn't resolved for any page, fall back to a single Geography Pages block.
+              if (!groups.length) return <ContentSub title="Geography Pages" rows={geo} type="city" />;
+              return groups.map(g => <ContentSub key={g.scope} title={g.title} rows={g.rows} type="city" />);
+            })()}
             <Narrative num={6} />
               {narrativeBridge("content_architecture") && <BridgeNote text={narrativeBridge("content_architecture")} />}
           </Section>
@@ -1485,7 +1495,7 @@ function ContentSub({ title, rows, type }) {
               </div>
               <div className="text-[11px] mt-1" style={{ color: C.greyText }}>
                 {p.url_slug && <span className="font-mono">{p.url_slug}</span>}
-                {p.city_target && <span> · City: {p.city_target}</span>}
+                {(p.geo_target || p.city_target) && <span> · {p.geo_scope === "country" ? "Country" : p.geo_scope === "region" ? "Region" : "City"}: {p.geo_target || p.city_target}</span>}
                 {" · "}cluster: <span style={{ color: C.nearBlack }}>"{p.keyword_cluster}"</span>
                 {p.primary_volume != null && <span> ({p.primary_volume.toLocaleString()}/mo)</span>}
               </div>

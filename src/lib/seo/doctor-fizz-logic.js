@@ -94,6 +94,19 @@ const KNOWN_LOCATIONS = [
   "chicago", "san francisco", "boston", "seattle", "austin", "miami", "dallas",
 ];
 
+// Regions/states + countries — so local demand can resolve to the NARROWEST
+// appropriate geography scope (city → region → country), per V3 Part 7.3.
+const KNOWN_REGIONS = [
+  "maharashtra", "karnataka", "tamil nadu", "telangana", "kerala", "gujarat", "rajasthan",
+  "uttar pradesh", "madhya pradesh", "west bengal", "punjab", "haryana", "bihar", "odisha",
+  "andhra pradesh", "assam", "jharkhand", "chhattisgarh", "uttarakhand", "goa", "delhi ncr", "ncr",
+  "california", "texas", "florida", "new york state", "ontario", "england", "scotland",
+];
+const KNOWN_COUNTRIES = [
+  "india", "usa", "united states", "uk", "united kingdom", "uae", "canada", "australia",
+  "singapore", "germany", "france", "saudi arabia", "south africa",
+];
+
 /**
  * Step 1 of the decision tree: does the keyword contain a competitor brand name?
  */
@@ -140,8 +153,8 @@ function isTopicallyRelevant(keyword, relevanceTerms) {
  */
 function hasLocationModifier(keyword) {
   const k = String(keyword).toLowerCase();
-  // Known city/region name present?
-  for (const loc of KNOWN_LOCATIONS) {
+  // Known city / region / country name present? (V3 Part 7.3 — any geo scope)
+  for (const loc of [...KNOWN_LOCATIONS, ...KNOWN_REGIONS, ...KNOWN_COUNTRIES]) {
     if (new RegExp(`\\b${escapeRegex(loc)}\\b`).test(k)) return true;
   }
   // "X in <place>" or "near me" pattern with a commercial term present
@@ -182,7 +195,8 @@ function assetTypeForIntent(intentClass, keyword, volume) {
       if (/pricing|cost|quote|demo|free|trial|buy|book/.test(k)) return "Landing Page";
       return "Service Page";
     case "local-commercial":
-      return "City Page";
+      // V3 Part 7.3 — narrowest geography scope, not always "city".
+      return extractGeography(keyword).page_type || "City Page";
     case "informational":
       if (/faq|question|\?$/.test(k)) return "FAQ Expansion";
       // Broad head terms → Pillar Guide; "best/list/resources" → Resource Hub; else Blog Post
@@ -268,12 +282,13 @@ export function classifyKeyword(kw, ctx = {}) {
 
   // ── Step 3: Location modifier + commercial term? → local-commercial ──
   if (hasLocationModifier(keyword) && hasCommercialTerm(keyword)) {
+    const geo = extractGeography(keyword);
     return {
       ...base,
       intent_class:          "local-commercial",
-      recommended_asset_type: "City Page",
+      recommended_asset_type: geo.page_type || "City Page",
       funnel_role:           "Conversion",
-      reason:                "Geo-modifier combined with a commercial term. Maps to a city/geo landing page, not a generic service page.",
+      reason:                `Geo-modifier combined with a commercial term. Maps to a ${(geo.page_type || "geography page").toLowerCase()} at the ${geo.scope} level, not a generic service page.`,
     };
   }
 
@@ -402,7 +417,7 @@ function computeKeywordPriority(k) {
 export function buildContentArchitecture(accepted = []) {
   const commercial_pages = [];
   const blog_and_guides  = [];
-  const city_pages       = [];
+  const geography_pages  = [];
 
   const slugify = (s) => String(s).toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60);
@@ -425,10 +440,16 @@ export function buildContentArchitecture(accepted = []) {
         commercial_reason: `Captures "${k.keyword}" buyers with conversion intent — a blog cannot convert this query.`,
       });
     } else if (k.intent_class === "local-commercial") {
-      city_pages.push({
+      // V3 Part 7.3 — map to the NARROWEST geography scope (city/region/country),
+      // not a hardcoded city page.
+      const geo = extractGeography(k.keyword);
+      geography_pages.push({
         ...fundamentals,
         page_name:        toTitle(k.keyword),
-        city_target:      extractCity(k.keyword),
+        geo_scope:        geo.scope,            // city | region | country
+        geo_target:       geo.place,
+        page_type:        geo.page_type,        // City Page | Region Page | Country Page
+        city_target:      geo.scope === "city" ? geo.place : "",  // backward-compat
         url_slug:         "/" + slugify(k.keyword),
         why_separate_page: `Local intent demands its own destination — a generic service page modifier will not rank for "${k.keyword}".`,
       });
@@ -445,7 +466,8 @@ export function buildContentArchitecture(accepted = []) {
   return {
     commercial_pages,
     blog_and_guides,
-    city_pages,
+    geography_pages,                 // V3 Part 7.3 — parent category (city/region/country)
+    city_pages: geography_pages,     // backward-compatible alias for existing consumers
     schema_additions: [], // populated by the GEO layer, kept separate per spec
   };
 }
@@ -454,12 +476,27 @@ function toTitle(s) {
   return String(s).replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function extractCity(keyword) {
+/**
+ * Resolve the geography of a local keyword to the narrowest matching scope.
+ * @returns {{ place: string, scope: "city"|"region"|"country", page_type: string }}
+ */
+function extractGeography(keyword) {
   const k = String(keyword).toLowerCase();
-  for (const loc of KNOWN_LOCATIONS) {
-    if (new RegExp(`\\b${escapeRegex(loc)}\\b`).test(k)) return toTitle(loc);
+  for (const loc of KNOWN_LOCATIONS) {                       // city (most specific)
+    if (new RegExp(`\\b${escapeRegex(loc)}\\b`).test(k)) return { place: toTitle(loc), scope: "city", page_type: "City Page" };
   }
-  return "";
+  for (const reg of KNOWN_REGIONS) {                         // region / state
+    if (new RegExp(`\\b${escapeRegex(reg)}\\b`).test(k)) return { place: toTitle(reg), scope: "region", page_type: "Region Page" };
+  }
+  for (const country of KNOWN_COUNTRIES) {                   // country
+    if (new RegExp(`\\b${escapeRegex(country)}\\b`).test(k)) return { place: toTitle(country), scope: "country", page_type: "Country Page" };
+  }
+  return { place: "", scope: "city", page_type: "Geography Page" };
+}
+// Backward-compatible city extractor (city scope only).
+function extractCity(keyword) {
+  const g = extractGeography(keyword);
+  return g.scope === "city" ? g.place : "";
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1376,8 +1413,9 @@ export function buildPriorityActionPlan({ technical_issues = [], content_archite
   for (const p of (content_architecture.commercial_pages || []).slice(0, 4)) {
     add("Content & On-Page Work", `Build commercial page: ${p.page_name} (${p.url_slug}) targeting "${p.keyword_cluster}"`, "SEO", p.priority === "HIGH" ? "HIGH" : "MEDIUM", "≈1 week");
   }
-  for (const p of (content_architecture.city_pages || []).slice(0, 3)) {
-    add("Content & On-Page Work", `Create city page for ${p.city_target}: "${p.keyword_cluster}"`, "SEO", "MEDIUM", "≈3 hours");
+  for (const p of (content_architecture.geography_pages || content_architecture.city_pages || []).slice(0, 3)) {
+    const where = p.geo_target || p.city_target;
+    add("Content & On-Page Work", `Create ${(p.page_type || "geography page").toLowerCase()}${where ? ` for ${where}` : ""}: "${p.keyword_cluster}"`, "SEO", "MEDIUM", "≈3 hours");
   }
   for (const p of (content_architecture.blog_and_guides || []).slice(0, 3)) {
     add("Content & On-Page Work", `Publish guide: "${p.proposed_title}"`, "SEO", "MEDIUM", "≈1 week");
