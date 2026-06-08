@@ -1537,6 +1537,107 @@ function gradeForScore(s) {
 // COMPETITOR BRAND EXTRACTION (helper for Problem 2)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// V3 COMPETITOR LOGIC — categories + validation gate (Part 4)
+// ═══════════════════════════════════════════════════════════════════════════════
+// V3 requires four formal competitor categories and a hard rule that only
+// validated BUSINESS competitors enter direct comparison. Search competitors and
+// platform interceptors (directories, marketplaces, review sites, publishers,
+// aggregators) are confined to search-context sections only.
+
+// Known platform-interceptor domains + generic patterns. A domain matching any of
+// these is a directory/marketplace/review/publisher/aggregator — never a direct rival.
+const PLATFORM_INTERCEPTOR_DOMAINS = [
+  // directories / B2B listings
+  "justdial.com", "sulekha.com", "indiamart.com", "tradeindia.com", "yellowpages.in", "yellowpages.com",
+  // review / rating aggregators
+  "yelp.com", "trustpilot.com", "glassdoor.com", "clutch.co", "goodfirms.co", "g2.com", "capterra.com",
+  "designrush.com", "ambitionbox.com", "mouthshut.com",
+  // marketplaces
+  "amazon.com", "amazon.in", "flipkart.com", "alibaba.com", "etsy.com", "indiamart.com", "ebay.com",
+  // maps / social citation surfaces
+  "google.com", "facebook.com", "instagram.com", "linkedin.com", "youtube.com", "twitter.com", "x.com",
+  // publishers / encyclopaedias / Q&A / forums
+  "wikipedia.org", "quora.com", "reddit.com", "medium.com", "youtube.com",
+  "forbes.com", "businessinsider.com", "techcrunch.com", "entrepreneur.com", "inc.com",
+];
+// Substring signals that mark a generic directory / aggregator even on an unknown TLD.
+const PLATFORM_INTERCEPTOR_SIGNALS = [
+  "directory", "listings", "topratedlocal", "bestof", "reviews", "aggregat", "marketplace",
+  "yellowpages", "justdial", "sulekha", "clutch", "goodfirms",
+];
+
+function bareHost(domainOrName) {
+  return String(domainOrName || "")
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split("/")[0]
+    .trim();
+}
+
+/**
+ * Classify a single competitor entry into a V3 category.
+ * Returns "platform_interceptor" | "search" | "direct_business".
+ * @param {object|string} c        competitor (domain string or {name,domain})
+ * @param {object} ctx             { sourceBucket: "business"|"search" }
+ */
+export function classifyCompetitor(c, ctx = {}) {
+  const host = bareHost(typeof c === "string" ? c : (c?.domain || c?.name || ""));
+  // 1. Platform interceptor — directory/marketplace/review/publisher/aggregator.
+  const isPlatform =
+    PLATFORM_INTERCEPTOR_DOMAINS.some(d => host === d || host.endsWith("." + d) || host.includes(d.split(".")[0] + ".")) ||
+    PLATFORM_INTERCEPTOR_SIGNALS.some(s => host.includes(s));
+  if (isPlatform) return "platform_interceptor";
+  // 2. Came from the SEARCH bucket → search competitor (SERP context only).
+  if (ctx.sourceBucket === "search") return "search";
+  // 3. Came from the BUSINESS bucket and is not a platform → validated business competitor.
+  return "direct_business";
+}
+
+/**
+ * Segment competitor inputs into the two V3 strategic buckets:
+ *   - validated_business: eligible for direct comparison / keyword gap / GBP / overtake
+ *   - search_landscape:   search competitors + platform interceptors (context only)
+ *
+ * Accepts the separated input lists from Step 5 (businessCompetitors /
+ * searchCompetitors). Falls back to treating a flat `competitors` list as business.
+ *
+ * @returns {{ validated_business: object[], search_landscape: object[],
+ *             validatedDomains: Set<string> }}
+ */
+export function segmentCompetitors({ businessCompetitors = [], searchCompetitors = [], competitors = [] } = {}) {
+  const biz = businessCompetitors.length || searchCompetitors.length ? businessCompetitors : competitors;
+  const validated_business = [];
+  const search_landscape = [];
+  const seen = new Set();
+
+  const toObj = (c, category) => {
+    const name = typeof c === "string" ? c : (c?.name || c?.domain || "");
+    const domain = bareHost(typeof c === "string" ? c : (c?.domain || c?.name || ""));
+    return { name, domain, competitor_type: category };
+  };
+
+  // Business bucket → validated business UNLESS detected as a platform interceptor.
+  for (const c of biz || []) {
+    const domain = bareHost(typeof c === "string" ? c : (c?.domain || c?.name || ""));
+    if (!domain || seen.has(domain)) continue;
+    seen.add(domain);
+    const category = classifyCompetitor(c, { sourceBucket: "business" });
+    if (category === "direct_business") validated_business.push(toObj(c, "direct_business"));
+    else search_landscape.push(toObj(c, "platform_interceptor"));
+  }
+  // Search bucket → search competitors / platform interceptors (never direct comparison).
+  for (const c of searchCompetitors || []) {
+    const domain = bareHost(typeof c === "string" ? c : (c?.domain || c?.name || ""));
+    if (!domain || seen.has(domain)) continue;
+    seen.add(domain);
+    const category = classifyCompetitor(c, { sourceBucket: "search" });
+    search_landscape.push(toObj(c, category === "platform_interceptor" ? "platform_interceptor" : "search"));
+  }
+  return { validated_business, search_landscape, validatedDomains: new Set(validated_business.map(c => c.domain)) };
+}
+
 /**
  * Derive the competitor brand exclusion list from competitor domains + names.
  * Strips TLDs and common suffixes so "dentsuwebchutney.com" → "dentsu webchutney".
@@ -1576,11 +1677,30 @@ export function runBusinessLogic(input = {}) {
   const {
     domain, clientName, industry = "", reportType = "website", location = "India",
     baselineRaw = {}, competitors = [], rawKeywords = [],
+    businessCompetitors = [], searchCompetitors = [],
     clientGmb = null, competitorGmbs = [],
     directories = [], competitorBacklinks = [],
     clientServiceTerms = [], targetKeywords = [], reportRef = "",
     crawlData = null, verifiedData = null, competitorAudits = [],
   } = input;
+
+  // ── V3 COMPETITOR SEGMENTATION (Part 4) — only VALIDATED BUSINESS competitors
+  //    may enter direct comparison, keyword gap, GBP, and overtake logic. Search
+  //    competitors + platform interceptors are confined to a search-context bucket. ──
+  const { validated_business, search_landscape, validatedDomains } =
+    segmentCompetitors({ businessCompetitors, searchCompetitors, competitors });
+  // Everything downstream that drives DIRECT comparison uses the validated set only.
+  const comparableCompetitors = validated_business;
+  const matchesValidated = (domOrName) => {
+    const h = bareHost(domOrName);
+    if (!h) return false;
+    const stem = h.split(".")[0];
+    return [...validatedDomains].some(v => v === h || v.includes(stem) || h.includes(v.split(".")[0]));
+  };
+  // Filter the GMB + audit datasets so directories/search rivals never reach the
+  // head-to-head comparison surfaces.
+  const comparableGmbs   = (competitorGmbs || []).filter(g => matchesValidated(g?.domain || g?.name));
+  const comparableAudits = (competitorAudits || []).filter(a => matchesValidated(a?.domain || a?.name));
 
   // ── Ground-truth override: when the client has connected Google Search Console
   //    / Analytics, their OWN site numbers are FACT, not estimates. Prefer them. ──
@@ -1592,8 +1712,11 @@ export function runBusinessLogic(input = {}) {
     if (gscRanked != null) { baselineRawResolved = { ...baselineRawResolved, organicKeywords: gscRanked }; verifiedSources.organic_keywords = "verified"; }
   }
 
-  // ── Competitor brands for exclusion (Problem 2) ──
-  const competitorBrands = deriveCompetitorBrands(competitors);
+  // ── Competitor brands for exclusion (Problem 2) ── derive from EVERY known
+  //    competitor entity (business + search) so no rival brand leaks into content.
+  const competitorBrands = deriveCompetitorBrands(
+    [...validated_business, ...search_landscape, ...competitors]
+  );
 
   // ── Relevance anchor (Problem 1, Step 2): the client's OWN service vocabulary,
   //    industry, and user-selected target keywords. NEVER the gap keywords being
@@ -1618,18 +1741,18 @@ export function runBusinessLogic(input = {}) {
   // ── Backlinks (Problem 4) ──
   // Pull competitor directory listings (from their GMB audits) so citation
   // entries can show how many competitors are already listed on each platform.
-  const competitorDirectories = (competitorAudits || [])
+  const competitorDirectories = (comparableAudits || [])
     .filter(c => c?.gmb && !c.gmb.error && Array.isArray(c.gmb.directories))
     .map(c => ({ name: c.name || c.domain, directories: c.gmb.directories }));
   const backlinks = categorizeBacklinks({ directories, competitorBacklinks, industry, location, competitorDirectories });
 
-  // ── GBP comparison (Problem 5) ──
-  const gbp_comparison = buildGbpComparison(clientGmb, competitorGmbs);
+  // ── GBP comparison (Problem 5) — validated business competitors only (V3 Part 4.3) ──
+  const gbp_comparison = buildGbpComparison(clientGmb, comparableGmbs);
 
-  // ── Comprehensive competitive analysis (us vs them, all dimensions) ──
+  // ── Comprehensive competitive analysis (us vs them) — validated business only ──
   const competitive_analysis = buildCompetitiveAnalysis({
     client: { crawl: crawlData, gmb: clientGmb, baseline: buildBaseline(baselineRawResolved).baseline },
-    competitorAudits,
+    competitorAudits: comparableAudits,
   });
 
   // ── SEO scores (Phase 3) — computed after baseline so they reflect real data ──
@@ -1645,7 +1768,7 @@ export function runBusinessLogic(input = {}) {
   const hasSchema = !!(crawlData?.summary?.pagesWithSchemaTypes || []).length;
   const geo_and_ai_visibility = buildGeoVisibility({
     domain, clientName, industry, baseline, hasSchema,
-    competitors: normalizeCompetitorObjects(competitors, competitorGmbs),
+    competitors: normalizeCompetitorObjects(comparableCompetitors, comparableGmbs),
   });
   // Schema additions belong to the GEO layer (kept out of content_architecture per spec)
   content_architecture.schema_additions = geo_and_ai_visibility.schema_additions.map(s => ({
@@ -1673,7 +1796,7 @@ export function runBusinessLogic(input = {}) {
   const v2_additions = buildV2Additions({
     clientName: clientName || domain, baseline, baselineRaw: baselineRawResolved, keywords,
     content_architecture, technical_issues, kpis, scores, gbp_comparison,
-    competitors: normalizeCompetitorObjects(competitors, competitorGmbs),
+    competitors: normalizeCompetitorObjects(comparableCompetitors, comparableGmbs),
     verifiedSources,
   });
 
@@ -1687,7 +1810,17 @@ export function runBusinessLogic(input = {}) {
       report_ref:  reportRef || generateReportRef(domain),
     },
     baseline,
-    competitors: normalizeCompetitorObjects(competitors, competitorGmbs),
+    competitors: normalizeCompetitorObjects(comparableCompetitors, comparableGmbs),
+    // V3 Part 4.3 — search competitors + platform interceptors: SERP/search-market
+    // CONTEXT ONLY. Never enter head-to-head comparison, keyword gap, or GBP.
+    search_landscape: search_landscape.map(c => ({
+      name: c.name,
+      domain: c.domain,
+      competitor_type: c.competitor_type,
+      note: c.competitor_type === "platform_interceptor"
+        ? "Directory / marketplace / review platform intercepting search demand — a placement target, not a business rival to overtake."
+        : "Ranks in the same search space but is not a validated business competitor — treat as SERP context, not a head-to-head benchmark.",
+    })),
     keywords,
     content_architecture,
     technical_issues,
@@ -2004,6 +2137,7 @@ function normalizeCompetitorObjects(competitors, competitorGmbs) {
     return {
       name,
       domain: dom,
+      competitor_type: c?.competitor_type || "direct_business",  // V3 Part 4.1
       threat_level: c?.threat_level || "MEDIUM",
       summary: c?.summary || "",
       what_they_do_well: c?.what_they_do_well || [],

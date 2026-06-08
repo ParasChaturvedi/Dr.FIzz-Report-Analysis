@@ -239,6 +239,19 @@ export function runQaGate(payload = {}, narrative = "") {
       !!gbp.biggest_gap && !!gbp.fastest_win && !!gbp.trust_gap);
   }
 
+  // ── V3 competitor checks (Part 11.4) ──
+  const comps = payload.competitors || [];
+  const searchLand = payload.search_landscape || [];
+  // Only validated business competitors may enter direct comparison.
+  add("competitor", "Direct comparison holds only validated business competitors",
+    comps.every(c => !c.competitor_type || c.competitor_type === "direct_business" || c.competitor_type === "adjacent_business"));
+  // No platform interceptor (directory/marketplace/review) leaked into comparison.
+  add("competitor", "No platform interceptor in direct comparison",
+    comps.every(c => c.competitor_type !== "platform_interceptor"));
+  // Search competitors + platform interceptors are confined to the search-context bucket.
+  add("competitor", "Search competitors & platform interceptors kept in search-context bucket",
+    searchLand.every(c => c.competitor_type === "search" || c.competitor_type === "platform_interceptor"));
+
   // ── V2 storytelling checks ──
   const v2 = payload.v2_additions || {};
   add("v2", "Opportunity summary present", !!v2.opportunity_summary && v2.opportunity_summary.total_monthly_search_volume != null);

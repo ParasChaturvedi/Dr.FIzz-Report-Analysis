@@ -824,6 +824,31 @@ export default function DoctorFizzReport({ data }) {
                   </table>
                 </div>
               )}
+              {/* ── Search landscape & platform threats — V3 Part 4.3 (context only) ── */}
+              {(payload.search_landscape || []).length > 0 && (
+                <div className="mt-5">
+                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.teal }}>Search Landscape & Platform Threats</div>
+                  <p className="mb-3" style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText, lineHeight: 1.6 }}>
+                    These domains rank in the same search space but are <strong>not</strong> validated business rivals, so they are excluded from the head-to-head comparison above. Directories, marketplaces and review platforms are placement targets; other ranking sites are SERP context — not businesses to overtake.
+                  </p>
+                  <div className="overflow-x-auto rounded-lg" style={{ border: `1px solid ${C.border}` }}>
+                    <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                      <thead><tr style={{ background: C.tableHead }}>
+                        <Th>Domain</Th><Th>Type</Th><Th>How To Treat It</Th>
+                      </tr></thead>
+                      <tbody>
+                        {payload.search_landscape.map((c, i) => (
+                          <tr key={i} style={{ background: i % 2 ? "#fff" : C.rowEven, borderBottom: `1px solid ${C.border}` }}>
+                            <Td>{c.domain || c.name}</Td>
+                            <Td><span className="text-[11px]">{c.competitor_type === "platform_interceptor" ? "Platform interceptor" : "Search competitor"}</span></Td>
+                            <Td><span style={{ fontSize: "12px", color: C.greyText }}>{c.note}</span></Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               <Narrative num={4} />
               {narrativeBridge("competitor_landscape") && <BridgeNote text={narrativeBridge("competitor_landscape")} />}
             </Section>

@@ -533,10 +533,12 @@ export async function POST(request) {
       ? keywordData.map((k) => (typeof k === "string" ? k : k?.label)).filter(Boolean)
       : [];
 
-    const competitors = [
-      ...(Array.isArray(competitorData?.businessCompetitors) ? competitorData.businessCompetitors : []),
-      ...(Array.isArray(competitorData?.searchCompetitors) ? competitorData.searchCompetitors : []),
-    ];
+    // V3 Part 4 — keep business and search competitors SEPARATE so the logic layer
+    // can validate them: only business competitors enter direct comparison.
+    const businessCompetitors = Array.isArray(competitorData?.businessCompetitors) ? competitorData.businessCompetitors : [];
+    const searchCompetitorsList = Array.isArray(competitorData?.searchCompetitors) ? competitorData.searchCompetitors : [];
+    // Merged list retained only for the free-text Claude narrative helper (not comparison).
+    const competitors = [...businessCompetitors, ...searchCompetitorsList];
 
     // ── Resolve PSI from prefetched data (if valid values present) ───────────
     const normScore = (v) => (v != null ? Math.round(Number(v) <= 1 ? Number(v) * 100 : Number(v)) : null);
@@ -668,6 +670,8 @@ export async function POST(request) {
           gbpRating:            gmbRaw?.gmb?.rating ?? null,
         },
         competitors,
+        businessCompetitors,           // V3 Part 4 — validated for direct comparison
+        searchCompetitors: searchCompetitorsList, // V3 Part 4 — SERP/search context only
         rawKeywords: rawKeywordsForLogic,
         crawlData:   crawlRaw,
         clientGmb:   gmbRaw,
