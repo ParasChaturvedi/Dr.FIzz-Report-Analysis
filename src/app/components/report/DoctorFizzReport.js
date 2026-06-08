@@ -476,18 +476,18 @@ export default function DoctorFizzReport({ data }) {
 
   // Section 00 — Contents & scope (Part 5)
   const CONTENTS = [
-    ["01", "Executive Summary", "Short-form diagnosis, scale of opportunity, top prescribed actions"],
-    ["02", "Priority Action Plan", "All actions ranked by impact-to-effort across three tiers"],
-    ["03", "Baseline Snapshot", "Current metrics with commercial interpretation"],
-    ["04", "Competitor Landscape", "Threat levels, advantages, and exploitable gaps"],
-    ["05", "Keyword Strategy", "Classified keyword clusters by intent"],
-    ["06", "Content Architecture", "Commercial pages, blog content, and city pages — separated"],
-    ["07", "Technical Foundation", "Ranked technical issues with developer-actionable fixes"],
-    ["08", "Authority & Link Building", "Citation, editorial, competitor-gap, local authority"],
-    ["09", "Local Visibility & GBP", "Competitor comparison + biggest gap / fastest win / trust gap"],
-    ["10", "GEO Layer & AI Visibility", "AI citation status, schema, and answer-engine optimisation"],
-    ["11", "KPI Forecast & Measurement", "Validated targets with measurement guidance"],
-    ["12", "Implementation & Sprint Plan", "Time-sequenced execution roadmap"],
+    ["01", "The Situation", "Where the business stands in search now, and what it costs"],
+    ["02", "The Opportunity", "The size and shape of the addressable upside"],
+    ["03", "What Is Blocking Growth", "The technical, content, trust, local and AI ceilings"],
+    ["04", "Who Actually Competes With You", "Business rivals vs search interceptors and platform threats"],
+    ["05", "Where the Demand Sits", "Search demand by intent class and geography"],
+    ["06", "What Pages Need to Exist", "Commercial, supporting, and geography pages — separated"],
+    ["07", "What Must Be Fixed First", "Ranked technical fixes with effort and expected unlock"],
+    ["08", "How Authority Will Be Built", "Citation, editorial, competitor-gap, local authority"],
+    ["09", "Local and Location Visibility", "Competitor comparison + biggest gap / fastest win / trust gap"],
+    ["10", "GEO and AI Visibility", "AI citation status, schema, and answer-engine optimisation"],
+    ["11", "Priority Plan", "The whole report sequenced into execution order"],
+    ["12", "What Good Looks Like", "The 6-month and 12-month future state"],
   ];
 
   return (
@@ -618,71 +618,47 @@ export default function DoctorFizzReport({ data }) {
             </div>
           </Section>
 
-          {/* ── 01 · EXECUTIVE SUMMARY (V2: diagnosis + callout stats + actions) ─ */}
-          <Section number={1} total={TOTAL} title="Executive Summary"
-            opening={scores?.seo_health != null ? `An SEO health score of ${scores.seo_health}/100 places ${meta.client_name} ${scores.seo_health < 50 ? "in the penalty tier" : scores.seo_health < 80 ? "below the competitive band" : "in a strong position"} — here is what that costs, and the fastest path out.` : null}>
-            {/* BLOCK 1 — diagnosis */}
+          {/* ── 01 · THE SITUATION (V3: standalone where-we-stand-now) ────────── */}
+          <Section number={1} total={TOTAL} title="The Situation"
+            opening={scores?.seo_health != null ? `An SEO health score of ${scores.seo_health}/100 places ${meta.client_name} ${scores.seo_health < 50 ? "in the penalty tier" : scores.seo_health < 80 ? "below the competitive band" : "in a strong position"} — here is where the business stands today, and what that costs.` : null}>
             <DiagnosisCard>
               {narrativeByNum["01"] ? <Narrative num={1} /> : (
                 <>
                   {meta.client_name} carries an SEO health score of {scores?.seo_health ?? "—"}/100{scores?.grade ? ` (grade ${scores.grade})` : ""}.
                   {gbp.biggest_gap ? ` ${gbp.biggest_gap.split(".")[0]}.` : ""}
-                  {" "}{kw.accepted?.length ? `${kw.accepted.length} qualified keyword opportunities worth ~${fmtNum(oppSummary.total_monthly_search_volume)} monthly searches are mapped for capture, ` : ""}
-                  and the prescription below sequences the highest-impact, lowest-effort work first.
+                  {" "}{kw.accepted?.length ? `${kw.accepted.length} qualified keyword opportunities worth ~${fmtNum(oppSummary.total_monthly_search_volume)} monthly searches sit uncaptured today, ` : ""}
+                  which is the commercial cost of the current position — the next sections size that opportunity and prescribe the order to claim it.
                 </>
               )}
             </DiagnosisCard>
+            {narrativeBridge("the_situation") && <BridgeNote text={narrativeBridge("the_situation")} />}
+          </Section>
 
-            {/* BLOCK 2 — callout stat blocks (V2 Rule R4: 3-5 blocks) */}
+          {/* ── 02 · THE OPPORTUNITY (V3: the addressable upside, callout stats) ─ */}
+          <Section number={2} total={TOTAL} title="The Opportunity"
+            opening="This is what the current position is leaving on the table — the addressable search demand, the pages worth building, and the realistic upside.">
+            <DiagnosisCard>
+              {narrativeByNum["02"] ? <Narrative num={2} /> : (
+                <>The search market around {meta.client_name} represents roughly {fmtNum(oppSummary.total_monthly_search_volume)} monthly searches across {fmtNum(oppSummary.commercial_keyword_count)} commercial clusters and {fmtNum(oppSummary.city_pages_needed)} geography pockets — most of it currently uncontested.</>
+              )}
+            </DiagnosisCard>
             {(oppSummary.total_monthly_search_volume != null) && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
                 <CalloutStat number={fmtNum(oppSummary.total_monthly_search_volume)} label="Monthly Searches You Could Be Winning" description="Total addressable search demand" />
                 <CalloutStat number={fmtNum(oppSummary.commercial_keyword_count)} label="Commercial Pages To Build" description="Buyer-intent keyword clusters" />
                 <CalloutStat number={fmtNum(oppSummary.quick_wins_available)} label="Quick Wins — Under 1 Week Each" description="High-impact, low-effort actions" />
                 <CalloutStat number={fmtNum(oppSummary.estimated_traffic_uplift_12m)} suffix="/mo" label="Projected Monthly Visitors In 12 Months" description="If the prescription is executed" />
               </div>
             )}
-
-            {/* BLOCK 3 — what this prescription fixes (Action Item Rows) */}
-            {pap.length > 0 && (
-              <div>
-                <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>What This Prescription Fixes</div>
-                {pap.flatMap(t => t.actions).slice(0, 6).map((a, i) => (
-                  <ActionRow key={i} step={i + 1} title={a.description} channel={a.channel} priority={a.priority} effort={a.effort} />
-                ))}
-              </div>
-            )}
-            {narrativeBridge("executive_summary") && <BridgeNote text={narrativeBridge("executive_summary")} />}
+            {narrativeBridge("the_opportunity") && <BridgeNote text={narrativeBridge("the_opportunity")} />}
           </Section>
 
-          {/* ── 02 placeholder removed; structured plan renders below ───────── */}
-
-          {/* ── 02 · PRIORITY ACTION PLAN (V2: Action Item Rows, 3 tiers) ────── */}
-          {(pap.length > 0 || narrativeByNum["02"]) && (
-            <Section number={2} total={TOTAL} title="Priority Action Plan"
-              opening="Ranked by impact-to-effort — the highest-return, lowest-cost work comes first, regardless of which section it belongs to.">
-              <DiagnosisCard>
-                {pap.reduce((n, t) => n + t.actions.length, 0)} prescribed actions, sequenced so that foundation fixes clear the ceiling before content and authority work begins — every action below is tagged by channel, priority, and effort so the team can execute in order.
-              </DiagnosisCard>
-              {(() => { let step = 0; return pap.map((tier) => (
-                <div key={tier.tier} className="mb-5">
-                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>{tier.tier}</div>
-                  {tier.actions.map((a) => { step += 1; return (
-                    <ActionRow key={step} step={step} title={a.description} channel={a.channel} priority={a.priority} effort={a.effort} />
-                  ); })}
-                </div>
-              )); })()}
-              <Narrative num={2} />
-              {narrativeBridge("executive_summary") && null}
-            </Section>
-          )}
-
-          {/* ── 03 · BASELINE SNAPSHOT (V2: formatted values + commercial reading) */}
-          <Section number={3} total={TOTAL} title="Baseline Snapshot"
-            opening={frames.technical_issues_intro ? null : undefined}>
+          {/* ── 03 · WHAT IS BLOCKING GROWTH (V3: ceilings + baseline reading) ── */}
+          <Section number={3} total={TOTAL} title="What Is Blocking Growth"
+            opening="Before the prescription, here are the ceilings holding the site down — read together, not as isolated faults.">
             {(() => {
               const mostImpactful = formattedBaseline.find(b => b.commercial_interpretation) || formattedBaseline[0];
-              return mostImpactful?.commercial_interpretation ? <DiagnosisCard>{mostImpactful.commercial_interpretation}</DiagnosisCard> : null;
+              return <DiagnosisCard>{mostImpactful?.commercial_interpretation || "The metrics below set the ceiling on every other improvement — clearing them is what unlocks the opportunity."}</DiagnosisCard>;
             })()}
             <div className="overflow-x-auto rounded-lg" style={{ border: `1px solid ${C.border}` }}>
               <table className="w-full" style={{ borderCollapse: "collapse" }}>
@@ -730,12 +706,12 @@ export default function DoctorFizzReport({ data }) {
               );
             })()}
             <Narrative num={3} />
-            {narrativeBridge("baseline_snapshot") && <BridgeNote text={narrativeBridge("baseline_snapshot")} />}
+            {narrativeBridge("whats_blocking_growth") && <BridgeNote text={narrativeBridge("whats_blocking_growth")} />}
           </Section>
 
-          {/* ── 04 · COMPETITOR LANDSCAPE (full head-to-head intelligence) ──── */}
+          {/* ── 04 · WHO ACTUALLY COMPETES WITH YOU (head-to-head + search context) */}
           {(narrativeByNum["04"] || (payload.competitors || []).length > 0 || compAnalysis) && (
-            <Section number={4} total={TOTAL} title="Competitor Landscape"
+            <Section number={4} total={TOTAL} title="Who Actually Competes With You"
               opening={compAnalysis?.overall_verdict || undefined}>
 
               {/* ── Head-to-head scorecard: you vs best competitor on every dimension ── */}
@@ -850,12 +826,12 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               )}
               <Narrative num={4} />
-              {narrativeBridge("competitor_landscape") && <BridgeNote text={narrativeBridge("competitor_landscape")} />}
+              {narrativeBridge("who_competes") && <BridgeNote text={narrativeBridge("who_competes")} />}
             </Section>
           )}
 
-          {/* ── 05 · KEYWORD STRATEGY (V2: non-expert frame + grouped tables) ─ */}
-          <Section number={5} total={TOTAL} title="Keyword Strategy">
+          {/* ── 05 · WHERE THE DEMAND SITS (V2: non-expert frame + grouped tables) */}
+          <Section number={5} total={TOTAL} title="Where the Demand Sits">
             <DiagnosisCard>
               {kw.accepted?.length || 0} keywords passed intent classification and topical-relevance filtering.
               {kw.excluded?.length ? ` ${kw.excluded.length} high-volume but irrelevant term(s) were suppressed (no conversion path).` : ""}
@@ -942,11 +918,11 @@ export default function DoctorFizzReport({ data }) {
               </details>
             )}
             <Narrative num={5} />
-              {narrativeBridge("keyword_strategy") && <BridgeNote text={narrativeBridge("keyword_strategy")} />}
+              {narrativeBridge("where_demand_sits") && <BridgeNote text={narrativeBridge("where_demand_sits")} />}
           </Section>
 
-          {/* ── 06 · CONTENT ARCHITECTURE (3 separated subsections + narrative) ─ */}
-          <Section number={6} total={TOTAL} title="Content Architecture">
+          {/* ── 06 · WHAT PAGES NEED TO EXIST (3 separated subsections + narrative) */}
+          <Section number={6} total={TOTAL} title="What Pages Need to Exist">
             <DiagnosisCard>
               {(ca.commercial_pages || []).length + (ca.city_pages || []).length} commercial/local pages and {(ca.blog_and_guides || []).length} supporting articles are mapped from the accepted keywords — each to a single intent, so buyers, researchers, and local searchers each land on a page built to convert them rather than a generic catch-all.
             </DiagnosisCard>
@@ -969,11 +945,11 @@ export default function DoctorFizzReport({ data }) {
               return groups.map(g => <ContentSub key={g.scope} title={g.title} rows={g.rows} type="city" />);
             })()}
             <Narrative num={6} />
-              {narrativeBridge("content_architecture") && <BridgeNote text={narrativeBridge("content_architecture")} />}
+              {narrativeBridge("what_pages_needed") && <BridgeNote text={narrativeBridge("what_pages_needed")} />}
           </Section>
 
-          {/* ── 07 · TECHNICAL FOUNDATION (always renders) ──────────────────── */}
-          <Section number={7} total={TOTAL} title="Technical Foundation">
+          {/* ── 07 · WHAT MUST BE FIXED FIRST (technical, priority order) ────── */}
+          <Section number={7} total={TOTAL} title="What Must Be Fixed First">
             {tech.length === 0 ? (
               <DiagnosisCard>No blocking technical issues detected in the crawl. Maintain current configuration and re-audit after any major site change.</DiagnosisCard>
             ) : (
@@ -1001,11 +977,11 @@ export default function DoctorFizzReport({ data }) {
                 ))}
               </div>
               <Narrative num={7} />
-              {narrativeBridge("technical_foundation") && <BridgeNote text={narrativeBridge("technical_foundation")} />}
+              {narrativeBridge("what_to_fix_first") && <BridgeNote text={narrativeBridge("what_to_fix_first")} />}
           </Section>
 
-          {/* ── 08 · AUTHORITY & LINK BUILDING (4 categories + narrative) ────── */}
-          <Section number={8} total={TOTAL} title="Authority &amp; Link Building">
+          {/* ── 08 · HOW AUTHORITY WILL BE BUILT (4 categories + narrative) ──── */}
+          <Section number={8} total={TOTAL} title="How Authority Will Be Built">
             <DiagnosisCard>
               Off-site authority is the ceiling on how high the site can rank for competitive terms. The four link categories below run from fastest-and-easiest (citations) to highest-long-term-value (editorial) — built in that order, they compound trust the way nothing on-page can.
             </DiagnosisCard>
@@ -1069,12 +1045,12 @@ export default function DoctorFizzReport({ data }) {
               ))}
             </BacklinkSub>
             <Narrative num={8} />
-              {narrativeBridge("authority_link_building") && <BridgeNote text={narrativeBridge("authority_link_building")} />}
+              {narrativeBridge("how_authority_built") && <BridgeNote text={narrativeBridge("how_authority_built")} />}
           </Section>
 
-          {/* ── 09 · GBP COMPARISON ─────────────────────────────────────────── */}
+          {/* ── 09 · LOCAL AND LOCATION VISIBILITY (GBP comparison, conditional) ─ */}
           {gbp.client && (
-            <Section number={9} total={TOTAL} title="Local Visibility &amp; GBP Comparison">
+            <Section number={9} total={TOTAL} title="Local and Location Visibility">
               <DiagnosisCard>{gbp.biggest_gap || "This profile is benchmarked field-by-field against every competitor appearing above it in local search — the comparison below shows exactly where a few hours of work changes the competitive picture."}</DiagnosisCard>
               {frames.gbp_intro && <p className="mb-4" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{frames.gbp_intro}</p>}
 
@@ -1268,13 +1244,13 @@ export default function DoctorFizzReport({ data }) {
               )}
 
               <Narrative num={9} />
-              {narrativeBridge("local_visibility_gbp") && <BridgeNote text={narrativeBridge("local_visibility_gbp")} />}
+              {narrativeBridge("local_visibility") && <BridgeNote text={narrativeBridge("local_visibility")} />}
             </Section>
           )}
 
-          {/* ── 10 · GEO LAYER & AI VISIBILITY (+ narrative) ────────────────── */}
+          {/* ── 10 · GEO AND AI VISIBILITY (+ narrative) ────────────────────── */}
           {geo.recommended_actions?.length > 0 && (
-            <Section number={10} total={TOTAL} title="GEO Layer &amp; AI Visibility">
+            <Section number={10} total={TOTAL} title="GEO and AI Visibility">
               <div className="flex items-center gap-2 mb-3"><TagChip tag="SEO+GEO" /><span className="text-[11px]" style={{ color: C.greyText }}>Same actions strengthen classic ranking and AI citation.</span></div>
               <DiagnosisCard>
                 Current AI citation status: <strong>{geo.current_ai_citation_count}</strong>. The site is not yet a citable source for ChatGPT, Google AI Overviews, or Perplexity — the prescription below makes the content liftable by answer engines.
@@ -1306,8 +1282,43 @@ export default function DoctorFizzReport({ data }) {
             </Section>
           )}
 
-          {/* ── 11 · KPI FORECAST (validated + narrative) ───────────────────── */}
-          <Section number={11} total={TOTAL} title="KPI Forecast &amp; Measurement">
+          {/* ── 11 · PRIORITY PLAN (V3: whole report sequenced into execution order) */}
+          {(pap.length > 0 || narrativeByNum["11"]) && (
+            <Section number={11} total={TOTAL} title="Priority Plan"
+              opening="The entire report, sequenced into execution order — foundation fixes clear the ceiling first, then pages, then authority and AI work.">
+              <DiagnosisCard>
+                {pap.reduce((n, t) => n + t.actions.length, 0)} prescribed actions, ranked by impact-to-effort and grouped so the work that unblocks everything else comes first — every action is tagged by channel, priority, and effort for direct execution.
+              </DiagnosisCard>
+              {(() => { let step = 0; return pap.map((tier) => (
+                <div key={tier.tier} className="mb-5">
+                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>{tier.tier}</div>
+                  {tier.actions.map((a) => { step += 1; return (
+                    <ActionRow key={step} step={step} title={a.description} channel={a.channel} priority={a.priority} effort={a.effort} />
+                  ); })}
+                </div>
+              )); })()}
+              {/* Time-sequenced sprint view (V3 Part 8 §11 — Foundation → Content → Authority/GEO → Measurement) */}
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-2">
+                {[
+                  ["Foundation Sprint", "Day 1", "Technical / URL / metadata blockers"],
+                  ["Content Sprint", "Week 1", "Commercial & geography pages in priority order"],
+                  ["Authority & GEO Sprint", "Weeks 1–2", "Links, schema, AI visibility"],
+                  ["Measurement Setup", "Week 1", "Tools, dashboards, early-signal tracking"],
+                ].map(([t, when, what], i) => (
+                  <div key={i} className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                    <div className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "9px", letterSpacing: "1.5px", color: C.orange }}>{when}</div>
+                    <div style={{ fontFamily: SANS, fontWeight: 600, fontSize: "12px", color: C.textDark }}>{t}</div>
+                    <div style={{ fontFamily: SANS, fontSize: "11px", color: C.greyText, lineHeight: 1.4 }}>{what}</div>
+                  </div>
+                ))}
+              </div>
+              <Narrative num={11} />
+              {narrativeBridge("priority_plan") && <BridgeNote text={narrativeBridge("priority_plan")} />}
+            </Section>
+          )}
+
+          {/* ── 12 · WHAT GOOD LOOKS LIKE (KPI forecast + 6mo/12mo future state) ─ */}
+          <Section number={12} total={TOTAL} title="What Good Looks Like">
             <DiagnosisCard>
               Every target below is directionally validated against its baseline — no flat or zero forecasts. The numbers model what the prescribed work realistically returns at 6 and 12 months, and the guidance names the exact tools and early signals to watch from week two.
             </DiagnosisCard>
@@ -1338,7 +1349,7 @@ export default function DoctorFizzReport({ data }) {
                 ))}
               </div>
             )}
-            <Narrative num={11} />
+            <Narrative num={12} />
             {/* KPI trajectory charts — baseline → 6mo → 12mo for numeric metrics */}
             {(() => {
               const trend = kpis.filter(k => typeof k.baseline === "number" && (typeof k.target_6_months === "number" || typeof k.target_12_months === "number")).slice(0, 4);
@@ -1398,42 +1409,6 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               );
             })()}
-            {narrativeBridge("kpi_forecast") && <BridgeNote text={narrativeBridge("kpi_forecast")} />}
-          </Section>
-
-          {/* ── 12 · IMPLEMENTATION & SPRINT PLAN (narrative + structured fallback) */}
-          <Section number={12} total={TOTAL} title="Implementation &amp; Sprint Plan">
-            <DiagnosisCard>
-              The prescription is sequenced into time-boxed sprints — foundation fixes on day one, content in week one, authority and GEO across weeks one to two — so the team knows exactly what to do, in what order, and what each sprint unlocks.
-            </DiagnosisCard>
-            {!narrativeByNum["12"] && pap.length > 0 && (
-              <div className="space-y-2 mb-3">
-                {[
-                  ["Day 1 — Foundation Sprint", "Foundation Fixes"],
-                  ["Week 1 — Content Sprint", "Content & On-Page Work"],
-                  ["Weeks 1–2 — Authority & GEO Sprint", "Authority & GEO Work"],
-                ].map(([label, tierName]) => {
-                  const tier = pap.find(t => t.tier === tierName);
-                  if (!tier) return null;
-                  return (
-                    <div key={label} className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.warmGrey}25` }}>
-                      <div className="text-[12px] font-bold mb-1" style={{ color: C.orange }}>{label}</div>
-                      <ul className="space-y-0.5">
-                        {tier.actions.slice(0, 5).map((a, i) => (
-                          <li key={i} className="flex gap-2 text-[11px]" style={{ color: C.greyText }}>
-                            <span style={{ color: C.orange }}>▸</span><span>{a.description} <span className="opacity-70">({a.effort})</span></span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-                <p className="text-[12px] mt-2" style={{ color: C.nearBlack }}>
-                  Completing this sequence captures the mapped keyword and local-search opportunity while removing the technical ceilings that currently suppress every page.
-                </p>
-              </div>
-            )}
-            <Narrative num={12} />
           </Section>
 
           {/* ── Any extra narrative sections not mapped above (safety net) ──── */}

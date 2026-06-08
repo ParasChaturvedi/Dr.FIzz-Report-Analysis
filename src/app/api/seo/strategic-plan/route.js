@@ -244,53 +244,51 @@ ${kpiRows || "  None"}
 
 // ── Build the section-generation instruction (Part 3 prompts) ─────────────────
 function buildSectionInstructions(payload) {
-  return `Using the validated data above, generate the Doctor Fizz report. Produce EVERY section below with its exact numbered header. Follow the diagnostic style and all 12 fundamental rules.
+  return `Using the validated data above, generate the Doctor Fizz report following the V3 storytelling architecture. The report must read as ONE guided business story: where the business stands now → the opportunity → what is blocking growth → who competes → where demand sits → what to build → what to fix → how to build authority → local → AI → the plan → what good looks like. Produce EVERY section below with its exact numbered header. Each section does ONE job, opens with a diagnosis, translates metrics into business meaning, frames every table before and after, and hands off to the next section. Follow the diagnostic style and all fundamental + storytelling rules.
 
-## 01 · EXECUTIVE SUMMARY
-Diagnosis in short form: the specific problems found, the scale of the opportunity (in concrete numbers), and the 4–6 prescribed actions in priority order. A decision-maker who reads only this must understand the entire strategic situation.
+## 01 · THE SITUATION
+Where the business stands in search RIGHT NOW, as a standalone summary a decision-maker can read alone. State the overall visibility position in plain language: how visible or invisible the site is today, the headline health/baseline reading, and — most importantly — what that currently costs the business commercially. Lead with the finding, name the single most critical issue, and close on the size of what is at stake. No jargon dumps.
 
-## 02 · PRIORITY ACTION PLAN
-Rank ALL actions by impact-to-effort ratio — highest impact, lowest effort first, regardless of section. Group into three tiers: FOUNDATION FIXES (URL/metadata/technical blockers that gate everything else), CONTENT & ON-PAGE WORK, and AUTHORITY & GEO WORK. For each action: one-line description, channel tag [SEO]/[GEO]/[SEO+GEO], priority label (CRITICAL/HIGH/MEDIUM/QUICK WIN), and effort estimate (e.g. "≈30 min", "≈3 hours", "≈1 week"). End with one sentence on why this ordering matters commercially.
+## 02 · THE OPPORTUNITY
+The size and shape of the addressable upside, in plain business language. Present, as the "what you are leaving on the table" numbers: total addressable monthly search demand, number of commercial opportunities, number of geography opportunities, quick wins available, and the projected 6- and 12-month upside range. Each number gets a business-owner label, not an SEO label. This is the section that makes the opportunity feel concrete and winnable.
 
-## 03 · BASELINE SNAPSHOT
-Clinical reading of each baseline metric. For every metric with a value, add one sentence on its commercial implication. For every unavailable field, state the unavailability label and what action captures it — never a dash. Example interpretation depth: "mobile performance of 46/100 is a hard ceiling on every page, because the majority of searches arrive on mobile."
+## 03 · WHAT IS BLOCKING GROWTH
+Consolidate the major ceilings BEFORE the detailed sections, so the reader understands the blockers as a set. Cover, in plain language and only where relevant: the technical ceiling, the content ceiling, the trust/authority ceiling, the local ceiling, and the AI-citation ceiling. For each, one tight paragraph: what the ceiling is, the evidence (named metric), and the combined commercial effect. This is the bridge from opportunity to the detailed prescription that follows.
 
-## 04 · COMPETITOR LANDSCAPE
-For each competitor: what they do well and why it is hard to replicate, the specific tactics/keywords driving their advantage, and the exploitable gaps the client can win without a head-on contest. Label each by threat level. Identify at least two specific, keyword-or-content-tied gaps. End with a paragraph titled "The Opening" summarizing total addressable opportunity in monthly search-volume terms. Competitor names are diagnostic context only — never content targets.
+## 04 · WHO ACTUALLY COMPETES WITH YOU
+Split clearly into: (a) BUSINESS COMPETITORS — validated direct rivals who get full head-to-head treatment (what they do well and why it is hard to replicate, the tactics/keywords driving their edge, and at least two exploitable gaps the client can win); label each by threat level; (b) SEARCH INTERCEPTORS & PLATFORM THREATS — directories, marketplaces, review sites and other ranking domains explained as search-market CONTEXT only, never as commercial rivals to overtake. End with "The Opening": the total addressable opportunity in monthly search-volume terms. Competitor names are diagnostic context only — never content targets.
 
-## 05 · KEYWORD STRATEGY
-Organize into: (1) Primary commercial keywords — lead with the best 2–3, with volume/difficulty/ranking; (2) Informational & supporting — how each supports a funnel stage; (3) Local & geo-modified — which pages they map to; (4) Long-tail & feature keywords. Use ONLY accepted keywords. Never use brand-monitoring or excluded terms. End with a coverage note on a strategic observation about the keyword set.
+## 05 · WHERE THE DEMAND SITS
+Open with a short non-expert explanation of what the demand groups mean and why each maps to a different asset type. Then organise accepted keywords by intent and geography: (1) Primary commercial demand — lead with the best 2–3, with volume/difficulty/ranking; (2) Informational & supporting — how each supports a funnel stage; (3) Local & geo-modified demand — which geography pages they map to; (4) Country-/region-specific demand where applicable. Use ONLY accepted keywords. Never use brand-monitoring or excluded terms. Close with the single best opportunity and why.
 
-## 06 · CONTENT ARCHITECTURE
+## 06 · WHAT PAGES NEED TO EXIST
 Three clearly separated subsections, never merged:
 SUBSECTION 1 — Core Commercial Pages: page name, URL slug, primary keyword cluster, why it exists commercially, funnel role, priority. No blog content here.
-SUBSECTION 2 — Blog & Educational Content: title, keyword cluster, search intent, funnel fit, how it connects to a commercial page. Every blog must have a stated funnel role.
+SUBSECTION 2 — Supporting Educational Content: title, keyword cluster, search intent, funnel fit, how it connects to a commercial page. Every item must have a stated funnel role.
 SUBSECTION 3 — Geography Pages: page name + geography target and its scope (country / region / city — use the narrowest scope the demand supports, do NOT default everything to "city"), keyword cluster, why a separate geography page is required, priority.
 Do not include schema additions here — they belong in the GEO section.
 
-## 07 · TECHNICAL FOUNDATION
-Each issue: state the problem precisely with counts/measurements, explain why it matters for SEO (not just that it is an issue), the developer-actionable fix, priority (CRITICAL/HIGH/MEDIUM/LOW), and effort. Rank by priority; criticals first with a directive to fix before new content. For any Core Web Vitals issue, explain ranking impact in terms of % of searches affected. No generic "improve site speed" — say specifically what changes.
+## 07 · WHAT MUST BE FIXED FIRST
+Technical and structural fixes in strict priority order. For EACH issue give all five: the Issue (precise, with counts/measurements); Why it matters (SEO + commercial consequence, not just "it is an issue"); What to do (developer-actionable fix); Estimated effort; Expected unlock (what improves once fixed). Rank by priority; criticals first with a directive to fix before new content. For any Core Web Vitals issue, explain ranking impact in terms of % of searches affected. No generic "improve site speed".
 
-## 08 · AUTHORITY & LINK BUILDING
+## 08 · HOW AUTHORITY WILL BE BUILT
 Four clearly labeled subsections, never merged:
 SUBSECTION 1 — Citation & Directory Links: platform, DR, client listed?, competitors listed?, effort hours, signal. Explain why citations are the fastest baseline authority move.
 SUBSECTION 2 — Editorial & Content-Earned Links: content asset/pitch angle, target publication, production time, link type, why competitors cannot replicate. Explain why these have the highest long-term value.
 SUBSECTION 3 — Competitor Link Gap: referring domain, which competitor has the link, link type, approach to earn it. Explain why these are the most strategically direct.
 SUBSECTION 4 — Local Authority Links: source type, geographic relevance, local signal, effort. Explain why they punch above their DR weight.
 
-## 09 · LOCAL VISIBILITY & GBP COMPARISON
-Begin with the comparison table (client vs every competitor across the provided fields). Then three paragraphs: (1) The biggest visibility gap — the field furthest behind the strongest competitor and why it matters; (2) The fastest win — the field closeable in 48 hours with the exact action; (3) The trust gap — the signal most affecting whether a customer chooses the client when viewing both profiles, with the psychology of the decision. End with a prioritized GBP action list with effort estimates.
+## 09 · LOCAL AND LOCATION VISIBILITY
+(Conditional — include only when local/geography scope exists.) Begin with the comparison table (client vs every VALIDATED business competitor across the provided fields — never directories or search interceptors). Then three paragraphs: (1) The biggest visibility gap and why it matters; (2) The fastest win — closeable in 48 hours, with the exact action; (3) The trust gap — the signal most affecting whether a customer chooses the client when viewing both profiles, with the decision psychology. End with a prioritized GBP action list with effort estimates.
 
-## 10 · GEO LAYER & AI VISIBILITY
-Explain current AI citation status vs competitor benchmarks and why the client is under-cited. Prescribe: specific on-page changes that improve AI citation probability; the schema additions required (FAQPage JSON-LD, Organization schema, and type-specific schema for this business). Include a COMPLETE, ready-to-implement JSON-LD code block (not a partial template). Cover the four GEO principles: answer-first formatting, entity clarity, consistent definitional language, vocabulary coverage. Tag the section [SEO+GEO] throughout.
+## 10 · GEO AND AI VISIBILITY
+Explain current AI citation status vs competitor benchmarks and why the client is under-cited. Prescribe: specific on-page changes that improve AI citation probability; the schema additions required (FAQPage JSON-LD, Organization schema, and type-specific schema). Include a COMPLETE, ready-to-implement JSON-LD code block (not a partial template). Cover the four GEO principles: answer-first formatting, entity clarity, consistent definitional language, vocabulary coverage. Tie the work directly back to page creation and authority-building. Tag the section [SEO+GEO] throughout.
 
-## 11 · KPI FORECAST & MEASUREMENT
-Present the validated KPI table: baseline, 6-month target, 12-month target, and the estimation note for each. For null baselines, state unavailable and the capture action. Flag any metric whose validation_status indicates manual review. After the table, give measurement guidance: which tool tracks each metric, review cadence, and the week 2–4 early signals that indicate the strategy is working before full ranking gains. Name specific tools and signals.
+## 11 · PRIORITY PLAN
+Translate the ENTIRE report into execution order — this is the synthesis section. Sequence the work as: Foundation fixes → Commercial pages → Geography pages → Supporting content → Authority work → GEO work. Rank by impact-to-effort. For each action: one-line description, channel tag [SEO]/[GEO]/[SEO+GEO], priority label (CRITICAL/HIGH/MEDIUM/QUICK WIN), and effort estimate (e.g. "≈30 min", "≈3 hours", "≈1 week"). Then give the time-sequenced view: Foundation sprint (Day 1), Content sprint (Week 1), Authority & GEO sprint (Weeks 1–2), Measurement setup (Week 1). End with one sentence on why this ordering matters commercially.
 
-Then close with a "What Good Looks Like" paragraph that describes BOTH the 6-month and the 12-month future state (V3 §12) — not just the 12-month. For each milestone, name the specific metric values being targeted AND translate them into a business consequence (enquiries, customers, revenue position), not the SEO metric alone. Make month 6 read as early momentum and month 12 as full realisation.
-
-## 12 · IMPLEMENTATION NOTES & SPRINT PLAN
-Time-sequenced sprint plan: Foundation sprint (Day 1 — technical/URL/metadata blockers), Content sprint (Week 1 — content build in priority order), Authority & GEO sprint (Weeks 1–2 — links, schema, AI visibility), and Measurement setup (Week 1 — tools and dashboards). For each sprint: what to do, by when, expected result. Close with a one-sentence framing of the total opportunity and the expected 30/60/90-day outcomes.
+## 12 · WHAT GOOD LOOKS LIKE
+The closing anchor. Present the validated KPI table (baseline, 6-month target, 12-month target, estimation note) — for null baselines state the unavailability label and the capture action, never a dash; flag any metric needing manual review. Add measurement guidance: which tool tracks each metric, review cadence, and the week 2–4 early signals. Then close with the future-state narrative describing BOTH the 6-month and 12-month state — for each milestone name the specific metric values AND translate them into a business consequence (enquiries, customers, revenue position), framing month 6 as early momentum and month 12 as full realisation.
 
 Write in direct, expert, diagnostic tone. Use the real numbers from the data above. No filler.`;
 }

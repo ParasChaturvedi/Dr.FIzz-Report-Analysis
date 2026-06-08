@@ -2084,17 +2084,19 @@ function buildV2Additions(input) {
   };
 
   // narrative_connections (L3)
+  // V3 storytelling flow — one guided business story, section to section.
   const narrative_connections = [
-    { section: "executive_summary",  narrative_connection: "The sections that follow break this prescription down: what is broken, why it matters commercially, and the exact order to fix it." },
-    { section: "baseline_snapshot",  narrative_connection: "These metrics set the ceiling. Section 07 shows precisely which technical issues to remove first and why the order matters." },
-    { section: "competitor_landscape", narrative_connection: "Knowing where rivals are strong sets up the keyword territory the next section claims." },
-    { section: "keyword_strategy",   narrative_connection: "Each keyword cluster needs a home; the content architecture section maps every cluster to a specific page." },
-    { section: "content_architecture", narrative_connection: "None of these pages will reach their potential until the technical ceiling in the next section is lifted." },
-    { section: "technical_foundation", narrative_connection: "With the technical ceiling addressed, off-site authority becomes the next growth lever." },
-    { section: "authority_link_building", narrative_connection: "Local authority and reviews feed directly into the Google Business Profile picture examined next." },
-    { section: "local_visibility_gbp", narrative_connection: "Winning locally and organically also positions the site to be cited by AI answer engines — the focus of the GEO section." },
-    { section: "geo_ai_visibility",  narrative_connection: "All of this work is only worth doing if it moves the numbers; the forecast section sets the targets." },
-    { section: "kpi_forecast",       narrative_connection: "The final section sequences every action into a week-by-week plan the team can execute immediately." },
+    { section: "the_situation",        narrative_connection: "That is where the business stands today; the next section sizes exactly what is being left on the table." },
+    { section: "the_opportunity",      narrative_connection: "An opportunity this size is only reachable once the ceilings holding the site down are understood — those come next." },
+    { section: "whats_blocking_growth",narrative_connection: "With the blockers named, the next question is who is actually winning the demand these ceilings are costing." },
+    { section: "who_competes",         narrative_connection: "Knowing where rivals are strong sets up the search territory the next section claims." },
+    { section: "where_demand_sits",    narrative_connection: "Each pocket of demand needs a home; the next section maps every cluster to a specific page at the right scope." },
+    { section: "what_pages_needed",    narrative_connection: "None of these pages reach their potential until the technical ceiling in the next section is lifted." },
+    { section: "what_to_fix_first",    narrative_connection: "With the technical ceiling addressed, off-site authority becomes the next growth lever." },
+    { section: "how_authority_built",  narrative_connection: "Authority and reviews feed directly into the local visibility picture examined next." },
+    { section: "local_visibility",     narrative_connection: "Winning locally and organically also positions the site to be cited by AI answer engines — the focus of the next section." },
+    { section: "geo_ai_visibility",    narrative_connection: "All of this work now sequences into one execution order — the priority plan that follows." },
+    { section: "priority_plan",        narrative_connection: "Executed in this order, here is what good looks like at six and twelve months." },
   ];
 
   // non_expert_section_frames (Part 1 story frames)
