@@ -202,6 +202,23 @@ function DiagnosisCard({ children }) {
   );
 }
 
+// ── Connected story block (V3 §9) — beginner-friendly, plain-language narration
+//    that links the section's metrics cause→effect. Always rendered. ────────────
+function StoryBlock({ points }) {
+  const list = (Array.isArray(points) ? points : [points]).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div style={{ background: C.ivory, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.teal}`, borderRadius: "4px", padding: "14px 18px", marginBottom: "16px" }}>
+      <div className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.teal, marginBottom: "8px" }}>In Plain English</div>
+      <div className="space-y-2">
+        {list.map((p, i) => (
+          <p key={i} style={{ fontFamily: SANS, fontSize: "13.5px", color: C.textDark, lineHeight: 1.7, margin: 0 }}>{p}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // CHARTS — lightweight inline SVG (vector, no dependency, PDF-crisp via Puppeteer)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -522,6 +539,7 @@ export default function DoctorFizzReport({ data }) {
   const oppSummary = v2.opportunity_summary || {};
   const formattedBaseline = v2.formatted_baseline || [];
   const frames = v2.non_expert_section_frames || {};
+  const story = payload.story || {};   // V3 §9 — deterministic connected story, always present
   const narrativeBridge = (section) => (v2.narrative_connections || []).find(n => n.section === section)?.narrative_connection || null;
   const fmtNum = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US"));
 
@@ -681,6 +699,7 @@ export default function DoctorFizzReport({ data }) {
                 </>
               )}
             </DiagnosisCard>
+            <StoryBlock points={story.the_situation} />
             {/* Baseline stat cards — reference "THE BASELINE" look; every measured metric surfaced */}
             {(() => {
               const order = ["domain_rating","organic_keywords","organic_traffic","referring_domains","site_health_score","mobile_performance_score","lcp","cls","errors_404","redirect_chains","gbp_rating","gbp_review_count"];
@@ -710,6 +729,7 @@ export default function DoctorFizzReport({ data }) {
                 <>The search market around {meta.client_name} represents roughly {fmtNum(oppSummary.total_monthly_search_volume)} monthly searches across {fmtNum(oppSummary.commercial_keyword_count)} commercial clusters and {fmtNum(oppSummary.city_pages_needed)} geography pockets — most of it currently uncontested.</>
               )}
             </DiagnosisCard>
+            <StoryBlock points={story.the_opportunity} />
             {(oppSummary.total_monthly_search_volume != null) && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
                 <CalloutStat number={fmtNum(oppSummary.total_monthly_search_volume)} label="Monthly Searches You Could Be Winning" description="Total addressable search demand" />
@@ -780,6 +800,7 @@ export default function DoctorFizzReport({ data }) {
                 </p>
               );
             })()}
+<StoryBlock points={story.whats_blocking_growth} />
             <Narrative num={3} />
             {narrativeBridge("whats_blocking_growth") && <BridgeNote text={narrativeBridge("whats_blocking_growth")} />}
           </Section>
@@ -900,6 +921,7 @@ export default function DoctorFizzReport({ data }) {
                   </div>
                 </div>
               )}
+<StoryBlock points={story.who_competes} />
               <Narrative num={4} />
               {narrativeBridge("who_competes") && <BridgeNote text={narrativeBridge("who_competes")} />}
             </Section>
@@ -992,6 +1014,7 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               </details>
             )}
+<StoryBlock points={story.where_demand_sits} />
             <Narrative num={5} />
               {narrativeBridge("where_demand_sits") && <BridgeNote text={narrativeBridge("where_demand_sits")} />}
           </Section>
@@ -1019,6 +1042,7 @@ export default function DoctorFizzReport({ data }) {
               if (!groups.length) return <ContentSub title="Geography Pages" rows={geo} type="city" />;
               return groups.map(g => <ContentSub key={g.scope} title={g.title} rows={g.rows} type="city" />);
             })()}
+<StoryBlock points={story.what_pages_needed} />
             <Narrative num={6} />
               {narrativeBridge("what_pages_needed") && <BridgeNote text={narrativeBridge("what_pages_needed")} />}
           </Section>
@@ -1056,6 +1080,7 @@ export default function DoctorFizzReport({ data }) {
                   </div>
                 ))}
               </div>
+<StoryBlock points={story.what_to_fix_first} />
               <Narrative num={7} />
               {narrativeBridge("what_to_fix_first") && <BridgeNote text={narrativeBridge("what_to_fix_first")} />}
           </Section>
@@ -1124,6 +1149,7 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               ))}
             </BacklinkSub>
+<StoryBlock points={story.how_authority_built} />
             <Narrative num={8} />
               {narrativeBridge("how_authority_built") && <BridgeNote text={narrativeBridge("how_authority_built")} />}
           </Section>
@@ -1323,6 +1349,7 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               )}
 
+<StoryBlock points={story.local_visibility} />
               <Narrative num={9} />
               {narrativeBridge("local_visibility") && <BridgeNote text={narrativeBridge("local_visibility")} />}
             </Section>
@@ -1357,6 +1384,7 @@ export default function DoctorFizzReport({ data }) {
                   <pre className="text-[10px] leading-snug overflow-x-auto rounded-lg p-3" style={{ background: C.nearBlack, color: "#d7e3d8" }}>{s.jsonld}</pre>
                 </div>
               ))}
+<StoryBlock points={story.geo_ai_visibility} />
               <Narrative num={10} />
               {narrativeBridge("geo_ai_visibility") && <BridgeNote text={narrativeBridge("geo_ai_visibility")} />}
             </Section>
@@ -1392,6 +1420,7 @@ export default function DoctorFizzReport({ data }) {
                   </div>
                 ))}
               </div>
+<StoryBlock points={story.priority_plan} />
               <Narrative num={11} />
               {narrativeBridge("priority_plan") && <BridgeNote text={narrativeBridge("priority_plan")} />}
             </Section>
@@ -1429,6 +1458,7 @@ export default function DoctorFizzReport({ data }) {
                 ))}
               </div>
             )}
+<StoryBlock points={story.what_good_looks_like} />
             <Narrative num={12} />
             {/* KPI trajectory charts — baseline → 6mo → 12mo for numeric metrics */}
             {(() => {

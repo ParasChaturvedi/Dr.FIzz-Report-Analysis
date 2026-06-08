@@ -1869,6 +1869,16 @@ export function runBusinessLogic(input = {}) {
     verifiedSources,
   });
 
+  // ── Deterministic CONNECTED STORY (always present, never depends on the live
+  //    Claude call) — beginner-friendly, links metrics cause→effect across sections. ──
+  const story = buildStoryNarrative({
+    clientName: clientName || domain, baseline, scores, gbp_comparison,
+    opportunity_summary: v2_additions.opportunity_summary, technical_issues,
+    keywords, content_architecture, competitive_analysis,
+    competitors: normalizeCompetitorObjects(comparableCompetitors, comparableGmbs),
+    geo_and_ai_visibility, kpis,
+  });
+
   return {
     report_meta: {
       client_name: clientName || domain,
@@ -1903,8 +1913,162 @@ export function runBusinessLogic(input = {}) {
     scores,
     priority_action_plan,
     v2_additions,
+    story,
     _meta: { competitorBrands, kpiCtx },
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONNECTED STORY LAYER (V3 §9 storytelling) — deterministic, always present.
+// Beginner-friendly, point-by-point narration that links metrics cause→effect so a
+// non-expert understands WHY each number matters, HOW the problems connect, and
+// exactly WHAT to do. Renders even when the live Claude narrative is unavailable.
+// Returns { [sectionKey]: string[] } — each string is one plain-language point.
+// ═══════════════════════════════════════════════════════════════════════════════
+export function buildStoryNarrative(input = {}) {
+  const {
+    clientName = "the business", baseline = {}, scores = {}, gbp_comparison = {},
+    opportunity_summary = {}, technical_issues = [], keywords = {},
+    content_architecture = {}, competitive_analysis = {}, competitors = [], geo_and_ai_visibility = {},
+  } = input;
+
+  const val = (k) => (baseline?.[k]?.value ?? null);
+  const n = (x) => (x == null ? null : Number(x).toLocaleString("en-US"));
+  const has = (x) => x != null;
+
+  const name = clientName;
+  const mobile = val("mobile_performance_score");
+  const lcpMs = val("lcp");
+  const lcpSec = has(lcpMs) ? (Number(lcpMs) / 1000).toFixed(1) : null;
+  const traffic = val("organic_traffic");
+  const orgKw = val("organic_keywords");
+  const dr = val("domain_rating");
+  const refDomains = val("referring_domains");
+  const reviews = val("gbp_review_count");
+  const rating = val("gbp_rating");
+  const gbpComplete = val("gbp_completeness");
+  const siteHealth = val("site_health_score");
+
+  const compReviews = Math.max(
+    0,
+    Number(gbp_comparison?.review_intel?.competitor_best_reviews || 0),
+    ...((gbp_comparison?.competitors || []).map(c => Number(c.review_count ?? c.reviewCount ?? c.reviews ?? 0)))
+  );
+  const reviewLeader = (gbp_comparison?.competitors || []).find(c => Number(c.review_count ?? c.reviewCount ?? 0) === compReviews);
+  const clientReviews = reviews != null ? reviews : (gbp_comparison?.review_intel?.total_reviews ?? null);
+  const totalDemand = opportunity_summary?.total_monthly_search_volume;
+  const commercialPages = (content_architecture?.commercial_pages || []).length;
+  const geoPages = (content_architecture?.geography_pages || content_architecture?.city_pages || []).length;
+  const blogPages = (content_architecture?.blog_and_guides || []).length;
+  const uplift6 = opportunity_summary?.estimated_traffic_uplift_6m;
+  const uplift12 = opportunity_summary?.estimated_traffic_uplift_12m;
+  const enquiries12 = has(uplift12) ? Math.round(uplift12 * 0.02) : null;
+  const acceptedKw = (keywords?.accepted || []).length;
+  const aiCites = geo_and_ai_visibility?.current_ai_citation_count;
+  const techCount = technical_issues.length;
+  const topTech = technical_issues[0];
+
+  // The slowest-loading / lowest-speed framing drives the central cause→effect chain.
+  const speedBad = has(mobile) && mobile < 50;
+  const story = {};
+
+  // 01 — THE SITUATION: plain picture + the ONE root cause connecting everything.
+  story.the_situation = [
+    `Think of your website like a shop on a busy street. Right now Google barely lists it: ${name} shows up for ${orgKw === 0 ? "no" : n(orgKw)} search terms and gets ${traffic === 0 ? "no" : n(traffic)} visitors a month from Google.`,
+    has(totalDemand) ? `Meanwhile about ${n(totalDemand)} searches a month from people looking for exactly what you offer are going to competitors instead of you — that is the real cost of where you stand today.` : null,
+    speedBad
+      ? `The single biggest reason is speed: your pages take ${lcpSec || "several"} seconds to load on a phone (a healthy site loads in under 2.5), so Google scores your mobile speed just ${mobile}/100 and quietly holds every page back. The rest of this report shows how that one problem ripples into the others — and the exact order to fix them.`
+      : `The rest of this report shows what is holding the site back, how those problems connect, and the exact order to fix them.`,
+  ].filter(Boolean);
+
+  // 02 — THE OPPORTUNITY: connect "0 rankings" → "uncaptured demand" → realistic upside.
+  story.the_opportunity = [
+    has(totalDemand) ? `These ${n(totalDemand)} monthly searches are the prize. You capture almost none of them today only because you rank for ${orgKw === 0 ? "no" : n(orgKw)} terms — not because the demand isn't there.` : `This is the size of the demand you could be capturing.`,
+    (commercialPages || geoPages) ? `To claim it you need ${commercialPages ? `${commercialPages} buyer-focused service pages` : "service pages"}${geoPages ? ` and ${geoPages} location pages` : ""} — one page per thing people search for, so each visitor lands somewhere built to win their business.` : null,
+    (has(uplift6) && has(uplift12)) ? `Do that and fix the speed ceiling, and the realistic path is roughly ${n(uplift6)} visitors a month by month 6, growing to about ${n(uplift12)} by month 12. Nothing here is guesswork — it is your real search demand multiplied by what each page can realistically capture.` : null,
+  ].filter(Boolean);
+
+  // 03 — WHAT IS BLOCKING GROWTH: the explicit cause→effect chain between metrics.
+  const blockers = [];
+  if (speedBad) blockers.push(`speed (pages load in ${lcpSec || "many"}s, mobile score ${mobile}/100)`);
+  if (has(dr) && dr < 25) blockers.push(`low trust (only ${dr}/100 domain rating — few other sites vouch for you)`);
+  else if (has(refDomains) && refDomains < 30) blockers.push(`few backlinks (${n(refDomains)} sites link to you)`);
+  if (has(clientReviews) && compReviews > clientReviews) blockers.push(`reviews (${clientReviews} vs the local leader's ${n(compReviews)})`);
+  story.whats_blocking_growth = [
+    `Here is how the problems connect — this is the important part.`,
+    speedBad
+      ? `Slow pages are the ceiling. Google will not rank a page it thinks is slow, no matter how good the writing is. So your ${lcpSec || ""}s load time (${mobile}/100 mobile) is the direct reason ${orgKw === 0 ? "you rank for nothing" : "your rankings stay low"} — and that is why organic traffic is ${traffic === 0 ? "zero" : "low"}. Lift the speed and every page becomes eligible to rank at once.`
+      : `Technical signals set a ceiling on everything above them — content and links can't reach their potential until the ceiling is lifted.`,
+    (has(dr) && dr < 25) || (has(refDomains) && refDomains < 30) ? `On top of that, very few websites link to you, so even a fast page struggles against rivals who have more of these "votes of trust." That is why a later section is all about earning links.` : null,
+    (has(clientReviews) && compReviews > clientReviews) ? `And in the local map, you have ${clientReviews} Google reviews while the leader has ${n(compReviews)} — reviews are the #1 thing that decides who shows up (and who gets the call), so this gap keeps you out of the local pack.` : null,
+    blockers.length ? `Fix these in order — ${blockers.join(", then ")} — and each fix unlocks the ones above it.` : null,
+  ].filter(Boolean);
+
+  // 04 — WHO COMPETES: plain framing of edges vs gaps.
+  const yourEdges = (competitive_analysis?.your_edges || []).length;
+  const theirEdges = (competitive_analysis?.their_edges || []).length;
+  story.who_competes = [
+    (yourEdges || theirEdges) ? `Good news first: you already beat your rivals on ${yourEdges} thing${yourEdges === 1 ? "" : "s"} (defend those). They beat you on ${theirEdges} — and each of those is a specific, closable gap, not a permanent disadvantage.` : `This compares you head-to-head with your real business rivals — where you win, and where to catch up.`,
+    `One rule that protects your strategy: directories and listing sites (the "search interceptors" below) are not real competitors. You don't try to out-rank Justdial — you get listed on it. They're placement targets, not rivals.`,
+  ].filter(Boolean);
+
+  // 05 — WHERE DEMAND SITS: explain the 3 buckets simply.
+  story.where_demand_sits = [
+    acceptedKw ? `Your ${acceptedKw} useful keywords split into three kinds of searcher, and each needs a different page.` : `Search demand splits into three kinds of searcher, each needing a different page.`,
+    `Ready-to-buy searches (e.g. "seo agency near me") need a service page that sells. Research searches (e.g. "what is seo") need a helpful blog that builds trust and links to that service page. City searches (e.g. "seo company mumbai") need their own local page. Put the wrong page on a search and it simply won't convert — that's why we map every keyword to its right page type.`,
+  ];
+
+  // 06 — WHAT PAGES NEED TO EXIST.
+  story.what_pages_needed = [
+    (commercialPages || geoPages || blogPages) ? `This is your build list: ${commercialPages} service pages, ${geoPages} location pages, and ${blogPages} guide${blogPages === 1 ? "" : "s"} — each targeting one search so it can fully answer it.` : `This is the list of pages to build, each targeting one clear search.`,
+    `Why separate pages? A single page trying to rank for "seo services", "seo mumbai" and "what is seo" at once does none of them well. One page, one job — that's how ranking pages are built. Remember: none of these reach their potential until the speed ceiling is lifted first.`,
+  ];
+
+  // 07 — WHAT MUST BE FIXED FIRST.
+  story.what_to_fix_first = [
+    techCount ? `These ${techCount} technical fix${techCount === 1 ? "" : "es"} come before everything else, because search engines read these signals before they read a word of your content.` : `Fix the technical foundation first — search engines read these signals before your content.`,
+    topTech ? `Start at the top of the list (${topTech.issue}) and work down. Each row tells you the problem, why it matters, exactly what to do, how long it takes, and what improves once it's fixed — so your developer can act without guessing.` : `Each fix lists the problem, why it matters, what to do, the effort, and what it unlocks.`,
+  ];
+
+  // 08 — HOW AUTHORITY WILL BE BUILT.
+  story.how_authority_built = [
+    `Authority is just the web's version of word-of-mouth: the more trusted sites that link to ${name}, the more Google trusts you — which raises how high you can rank for competitive searches.`,
+    `Start with the quick, free wins (get listed in the directories below — many take an hour each), then earn the harder, higher-value editorial links over time. Do the easy ones first so trust starts building this week.`,
+  ];
+
+  // 09 — LOCAL VISIBILITY: the review cause→effect + the simple free fix.
+  story.local_visibility = [
+    has(clientReviews) && compReviews > clientReviews
+      ? `In Google Maps, reviews are the single biggest reason a customer picks one business over another. You have ${clientReviews}; the leader has ${n(compReviews)}${reviewLeader?.name ? ` (${reviewLeader.name})` : ""}. That gap is the main reason they appear above you — and get the call.`
+      : `Your Google Business Profile is how local customers find and judge you. Small, fast fixes here change the local picture quickly.`,
+    has(clientReviews) && compReviews > clientReviews
+      ? `The fix is simple and free: after every job, text the customer a direct link to leave a Google review. Keep it up for 6–8 weeks and you close most of the gap — and as the reviews climb, so does your local ranking. Meanwhile, fill every empty profile field (each one is a relevance signal Google rewards).`
+      : `Fill every profile field, post weekly, and ask every happy customer for a review — each is a signal that lifts you in the local pack.`,
+  ];
+
+  // 10 — GEO / AI VISIBILITY.
+  story.geo_ai_visibility = [
+    (aiCites != null && /zero|not|0/i.test(String(aiCites))) ? `A new kind of search matters now: tools like ChatGPT and Google's AI answers. Right now they don't cite ${name} at all — you're invisible in the AI layer.` : `This is about being quoted by AI answer tools like ChatGPT and Google AI Overviews — the newest search surface.`,
+    `The fix doubles as good SEO: add the "schema" code below (it tells AI exactly what your business is), and open key pages with a clear 40–60 word answer to the main question — that's the text AI tools lift and quote. Do this and the same pages you're already building become quotable by AI.`,
+  ];
+
+  // 11 — PRIORITY PLAN.
+  story.priority_plan = [
+    `This is the whole report turned into a simple to-do list, in the order that makes each step pay off. Foundation first (speed and technical) because it unblocks everything; then the pages; then reviews, links and AI work that compound on top.`,
+    `If you only do one thing this week, do the top item — it has the highest payoff for the least effort. Then work straight down the list.`,
+  ];
+
+  // 12 — WHAT GOOD LOOKS LIKE.
+  story.what_good_looks_like = [
+    (has(uplift6) && has(uplift12))
+      ? `Here's the payoff if you follow the plan in order. By month 6, the speed fix has lifted the ceiling and your first pages rank — about ${n(uplift6)} visitors a month and your first steady stream of enquiries.`
+      : `Here's the realistic future state if the plan is followed in order.`,
+    (has(uplift12))
+      ? `By month 12, the pages, reviews and links compound into about ${n(uplift12)} visitors a month${enquiries12 ? ` — roughly ${n(enquiries12)} new enquiries every month` : ""}, from a channel that costs nothing per click and keeps growing. These are targets, not guarantees — they depend on the work actually getting done.`
+      : `These are directional targets that depend on the recommended work being implemented.`,
+  ].filter(Boolean);
+
+  return story;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

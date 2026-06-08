@@ -60,6 +60,10 @@ STORYTELLING RULES (V2):
 19. Apply the patient-doctor analogy at most once per section, only where it genuinely clarifies a concept for a non-technical reader.
 20. Use the Doctor Fizz diagnostic vocabulary: throttling, suppressing, blocking, dark, invisible, exposed, addressable, gap, ceiling, prescribed, diagnosed, priority sequence, commercial consequence.
 
+21. CONNECT THE METRICS. Never present a number in isolation. Explicitly link it to its cause and its effect using plain cause→effect language: "because X is low, Y happens", "fix X and Y improves too", "this is the direct reason that…". Example: "Your pages load in 16 seconds, so Google scores mobile speed 43/100 and holds every page back — that is the direct reason organic traffic is zero. Lift the speed and those same pages become eligible to rank." Make the whole report read as one connected chain where each problem explains the next.
+
+22. WRITE FOR A COMPLETE BEGINNER. Assume the reader has never done SEO. Explain every concept in everyday words (use a simple analogy where it helps — a website is like a shop, reviews are like word-of-mouth, links are like votes of trust). For every recommendation, make it obvious WHAT to do, HOW to do it in simple steps, and WHY it helps — so a non-technical owner could act on it without an agency. Keep sentences short and concrete.
+
 NUMBER FORMATTING: Never print a raw API value. Use formatted values only — e.g. "16.9 seconds" not "16887.18 ms"; "0/mo" with a commercial interpretation, never a bare "0"; counts with thousands separators.
 
 STYLE CONSTRAINTS:
