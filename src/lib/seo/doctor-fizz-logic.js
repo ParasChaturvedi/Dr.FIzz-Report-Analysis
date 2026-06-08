@@ -423,13 +423,19 @@ export function buildContentArchitecture(accepted = []) {
     .replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60);
 
   for (const k of accepted) {
+    // V3 Part 10.1 — geography relevance where applicable (the geo scope for local
+    // demand; "Not geo-specific" for commercial/informational pages).
+    const geoRel = k.intent_class === "local-commercial"
+      ? (extractGeography(k.keyword).place || "Local")
+      : "Not geo-specific";
     const fundamentals = {
-      keyword_cluster: k.keyword,
-      primary_volume:  k.global_volume,
-      intent_class:    k.intent_class,
-      asset_type:      k.recommended_asset_type,
-      funnel_role:     k.funnel_role,
-      priority:        k.priority,
+      keyword_cluster:     k.keyword,
+      primary_volume:      k.global_volume,
+      intent_class:        k.intent_class,
+      asset_type:          k.recommended_asset_type,
+      funnel_role:         k.funnel_role,
+      priority:            k.priority,
+      geography_relevance: geoRel,
     };
 
     if (k.intent_class === "transactional") {
