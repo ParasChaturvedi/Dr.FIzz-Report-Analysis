@@ -518,6 +518,7 @@ export async function POST(request) {
       url, keyword,
       countryCode = "in", languageCode = "en",
       businessData, keywordData, competitorData,
+      reportMode, negativeExclusions,          // V3 Part 3.1 / 3.4 setup-flow inputs
       seoData: prefetchedSeoData, // pre-fetched from Step 5 SSE (avoids double API call)
     } = body || {};
 
@@ -675,6 +676,11 @@ export async function POST(request) {
         competitors,
         businessCompetitors,           // V3 Part 4 — validated for direct comparison
         searchCompetitors: searchCompetitorsList, // V3 Part 4 — SERP/search context only
+        // V3 Part 3 setup-flow inputs (each with a downstream purpose)
+        reportMode:    reportMode || businessData?.reportMode || "",
+        businessScope: businessData?.businessScope || businessData?.scope || "",
+        coreServices:  businessData?.coreServices || businessData?.services || [],
+        negativeExclusions: Array.isArray(negativeExclusions) ? negativeExclusions : (businessData?.negativeExclusions || []),
         rawKeywords: rawKeywordsForLogic,
         crawlData:   crawlRaw,
         clientGmb:   gmbRaw,

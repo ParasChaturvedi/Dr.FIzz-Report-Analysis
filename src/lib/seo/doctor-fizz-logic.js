@@ -233,7 +233,7 @@ function funnelRoleForIntent(intentClass) {
  */
 export function classifyKeyword(kw, ctx = {}) {
   const keyword = String(kw.keyword || "");
-  const { competitorBrands = [], relevanceTerms = [], clientBrand = "" } = ctx;
+  const { competitorBrands = [], relevanceTerms = [], clientBrand = "", negativeExclusions = [] } = ctx;
 
   const base = {
     keyword,
@@ -243,6 +243,21 @@ export function classifyKeyword(kw, ctx = {}) {
     position:           kw.position ?? null,
     url:                kw.url ?? null,
   };
+
+  // ── Step 0: user-specified negative / exclude term (V3 Part 3.4)? → exclude ──
+  const kwLC = keyword.toLowerCase();
+  for (const neg of negativeExclusions) {
+    const n = String(neg).toLowerCase().trim();
+    if (n && n.length >= 2 && kwLC.includes(n)) {
+      return {
+        ...base,
+        intent_class:          "exclude",
+        recommended_asset_type: null,
+        funnel_role:           null,
+        reason:                `Matches a user-specified negative/exclude term ("${neg}"). Suppressed from the report.`,
+      };
+    }
+  }
 
   // ── Step 1: Competitor brand? → competitor-branded (monitor only) ──
   const matchedBrand = matchesCompetitorBrand(keyword, competitorBrands);
@@ -1728,6 +1743,8 @@ export function runBusinessLogic(input = {}) {
     directories = [], competitorBacklinks = [],
     clientServiceTerms = [], targetKeywords = [], reportRef = "",
     crawlData = null, verifiedData = null, competitorAudits = [],
+    // V3 Part 3 setup-flow inputs (each with a downstream purpose, per rule 2.2)
+    reportMode = "", businessScope = "", coreServices = [], negativeExclusions = [],
   } = input;
 
   // ── V3 COMPETITOR SEGMENTATION (Part 4) — only VALIDATED BUSINESS competitors
@@ -1769,16 +1786,22 @@ export function runBusinessLogic(input = {}) {
   //    classified — otherwise every keyword would self-match and nothing excludes. ──
   const relevanceTerms = [
     ...clientServiceTerms,
+    ...(Array.isArray(coreServices) ? coreServices : String(coreServices || "").split(/[,;|]/)).filter(Boolean), // V3 3.2 — Step-2 core services strengthen relevance
     ...(targetKeywords || []).filter(Boolean),
     ...tokenizeIndustry(industry),
     industry,
   ].filter(Boolean);
+
+  // Normalise user negative/exclude terms (V3 3.4).
+  const negativeExclusionList = (Array.isArray(negativeExclusions) ? negativeExclusions : String(negativeExclusions || "").split(/[,;|]/))
+    .map(s => String(s).trim()).filter(Boolean);
 
   // ── Keyword classification (Problems 1, 2) ──
   const keywords = classifyKeywords(rawKeywords, {
     competitorBrands,
     relevanceTerms,
     clientBrand: clientName || domain?.split(".")[0],
+    negativeExclusions: negativeExclusionList,
   });
 
   // ── Content architecture (Problem 3) ──
@@ -1852,6 +1875,8 @@ export function runBusinessLogic(input = {}) {
       domain,
       industry,
       report_type: reportType,
+      report_mode:   reportMode || null,      // V3 3.1 — full website / local SEO / service-page / GEO / hybrid
+      business_scope: businessScope || null,  // V3 3.2 — local / regional / national / international
       report_date: new Date().toISOString().slice(0, 10),
       report_ref:  reportRef || generateReportRef(domain),
     },

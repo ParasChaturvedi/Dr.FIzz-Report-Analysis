@@ -12,6 +12,7 @@ export default function StepSlide4({
 }) {
   const [selectedKeywords, setSelectedKeywords] = useState([]);
   const [customKeyword, setCustomKeyword] = useState("");
+  const [negativeTerms, setNegativeTerms] = useState(""); // V3 Part 3.4 — negative/exclude terms
   const [showSummary, setShowSummary] = useState(false);
 
   const [suggestedKeywords, setSuggestedKeywords] = useState([]);
@@ -283,8 +284,17 @@ export default function StepSlide4({
     }
   };
 
+  // V3 Part 3.4 — persist negative/exclude terms (read by Step5Slide2 into the report request).
+  useEffect(() => {
+    try {
+      const list = negativeTerms.split(/[,;|\n]/).map((s) => s.trim()).filter(Boolean);
+      localStorage.setItem("drfizz.keywordExclusions", JSON.stringify(list));
+    } catch {}
+  }, [negativeTerms]);
+
   const handleReset = () => {
     setSelectedKeywords([]);
+    setNegativeTerms("");
     setCustomKeyword("");
     setShowInlineMoreInput(false);
     lastSubmittedData.current = null;
@@ -438,6 +448,14 @@ export default function StepSlide4({
                   <p className="text-[12px] sm:text-[13px] md:text-[15px] text-[var(--muted)]">
                     You can always view more information in Info Tab
                   </p>
+
+                  {/* V3 Part 3.4 — negative / exclude terms (suppressed from the report) */}
+                  <div className="mt-4 max-w-[480px]">
+                    <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Negative / Exclude Terms <span className="text-[var(--muted)] normal-case">(optional, comma-separated)</span></label>
+                    <input type="text" value={negativeTerms} onChange={(e) => setNegativeTerms(e.target.value)} placeholder="e.g. jobs, free, cracked, login"
+                      className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
+                    <p className="text-[11px] text-[var(--muted)] mt-1">Any keyword containing these terms is suppressed from the final report.</p>
+                  </div>
 
                   <button
                     type="button"

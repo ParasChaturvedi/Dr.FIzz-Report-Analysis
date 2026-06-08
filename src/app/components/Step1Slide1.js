@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 
 export default function Step1Slide1({ onNext, onWebsiteSubmit }) {
   const [site, setSite] = useState("");
+  const [reportMode, setReportMode] = useState("Full Website"); // V3 Part 3.1
   const [messages, setMessages] = useState([]);
   const [currentState, setCurrentState] = useState("initial"); // initial | submitted | confirmed
   const [error, setError] = useState("");
@@ -93,7 +94,7 @@ export default function Step1Slide1({ onNext, onWebsiteSubmit }) {
     try {
       localStorage.setItem(
         "websiteData",
-        JSON.stringify({ site: site.trim() })
+        JSON.stringify({ site: site.trim(), reportMode })
       );
     } catch {}
     setSite("");
@@ -257,6 +258,18 @@ export default function Step1Slide1({ onNext, onWebsiteSubmit }) {
                     {error}
                   </p>
                 )}
+                {/* V3 Part 3.1 — Report Mode (defines crawl + report scope) */}
+                <div className="mt-4">
+                  <p className="text-[11px] sm:text-[12px] text-gray-500 mb-1.5 text-center">Report mode</p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {["Full Website", "Local SEO", "Service Page", "GEO Report", "Hybrid"].map((m) => (
+                      <button key={m} type="button" onClick={() => setReportMode(m)}
+                        className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors ${reportMode === m ? "bg-[#d45427] text-white border-[#d45427]" : "bg-white text-gray-600 border-gray-300 hover:border-[#d45427]"}`}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           ) : (

@@ -13,6 +13,11 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [customIndustry, setCustomIndustry]     = useState("");
   const [customCategory, setCustomCategory]     = useState("");
+  // V3 Part 3.2 — deeper business definition (all optional; feed relevance + geography logic)
+  const [coreServices, setCoreServices]   = useState("");   // comma-separated
+  const [revenueOffers, setRevenueOffers] = useState("");
+  const [buyerType, setBuyerType]         = useState("");
+  const [businessScope, setBusinessScope] = useState("");   // Local | Regional | National | International
 
   // UI state
   const [showSummary, setShowSummary] = useState(false);
@@ -99,6 +104,11 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
           industry: industryValue,
           offering: selectedOffering,
           category: categoryValue,
+          // V3 Part 3.2 — optional deeper definition
+          coreServices:  coreServices.split(/[,;|]/).map((s) => s.trim()).filter(Boolean),
+          revenueOffers: revenueOffers.trim() || null,
+          buyerType:     buyerType.trim() || null,
+          businessScope: businessScope || null,
         };
         const dataString = JSON.stringify(newData);
         const lastDataString = JSON.stringify(lastSubmittedData.current);
@@ -119,6 +129,10 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
     selectedCategory,
     customIndustry,
     customCategory,
+    coreServices,
+    revenueOffers,
+    buyerType,
+    businessScope,
     onBusinessDataSubmit,
   ]);
 
@@ -286,6 +300,38 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                 <p className="text-[11px] text-[var(--muted)] mt-1">
                   Used to find your Google Business Profile. Use your exact registered name.
                 </p>
+              </div>
+
+              {/* V3 Part 3.2 — deeper business definition (optional, sharpens analysis) */}
+              <div className="w-full max-w-[480px] space-y-3">
+                <div>
+                  <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Core Services / Products <span className="text-[var(--muted)] normal-case">(optional, comma-separated)</span></label>
+                  <input type="text" value={coreServices} onChange={e => setCoreServices(e.target.value)} placeholder="e.g. SEO, web design, paid ads, branding"
+                    className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
+                  <p className="text-[11px] text-[var(--muted)] mt-1">Sharpens keyword relevance filtering so only on-topic terms enter the report.</p>
+                </div>
+                <div>
+                  <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Revenue-Driving Offers <span className="text-[var(--muted)] normal-case">(optional)</span></label>
+                  <input type="text" value={revenueOffers} onChange={e => setRevenueOffers(e.target.value)} placeholder="e.g. monthly retainers, audits, one-off projects"
+                    className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Customer / Buyer Type <span className="text-[var(--muted)] normal-case">(optional)</span></label>
+                  <input type="text" value={buyerType} onChange={e => setBuyerType(e.target.value)} placeholder="e.g. SMBs, enterprise marketing teams, homeowners"
+                    className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Business-Model Scope</label>
+                  <div className="flex flex-wrap gap-2">
+                    {["Local", "Regional", "National", "International"].map((s) => (
+                      <button key={s} type="button" onClick={() => setBusinessScope(businessScope === s ? "" : s)}
+                        className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors ${businessScope === s ? "bg-[#d45427] text-white border-[#d45427]" : "bg-[var(--input)] text-[var(--text)] border-[var(--border)] hover:border-[#d45427]"}`}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-[var(--muted)] mt-1">Drives whether geography pages target country, region, or city scope.</p>
+                </div>
               </div>
 
               {/* Summary (when all selected) */}

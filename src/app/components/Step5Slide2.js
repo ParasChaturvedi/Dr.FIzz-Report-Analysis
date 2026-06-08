@@ -84,21 +84,21 @@ function formatCrawlValue(crawl) {
 // is in do we derive Content Opportunities → Strategic Plan → the AI Report.
 const INITIAL_STAGES = [
   // ── Technical data collection ──
-  { id: "websiteValidation", label: "Website Validation",        state: "idle", value: null },
-  { id: "psi",               label: "Performance Score (PSI)",   state: "idle", value: null },
-  { id: "dataforseo",        label: "Domain Metrics",            state: "idle", value: null },
-  { id: "dataforseoExtra",   label: "Keyword Rankings",          state: "idle", value: null },
-  { id: "content",           label: "Content Extraction",        state: "idle", value: null },
-  { id: "onpageKeywords",    label: "On-Page SEO Analysis",      state: "idle", value: null },
-  { id: "websiteCrawl",      label: "Website Crawl & Audit",     state: "idle", value: null },
-  { id: "gmbCheck",          label: "GMB & Directory Listings",  state: "idle", value: null },
-  { id: "competitorAudit",   label: "Competitor Audit",          state: "idle", value: null },
-  { id: "keywordGap",        label: "Keyword Gap Analysis",      state: "idle", value: null },
-  { id: "dataValidation",    label: "Data Validation",           state: "idle", value: null },
+  { id: "websiteValidation", label: "Website & Scope Validation",       state: "idle", value: null },
+  { id: "psi",               label: "Technical & Performance Audit",    state: "idle", value: null },
+  { id: "dataforseo",        label: "Domain & Authority Signals",       state: "idle", value: null },
+  { id: "dataforseoExtra",   label: "Keyword Expansion & Classification", state: "idle", value: null },
+  { id: "content",           label: "On-Page & Content Extraction",     state: "idle", value: null },
+  { id: "onpageKeywords",    label: "On-Page SEO Analysis",             state: "idle", value: null },
+  { id: "websiteCrawl",      label: "Crawl & Indexability Audit",       state: "idle", value: null },
+  { id: "gmbCheck",          label: "Local Listings & GBP Audit",       state: "idle", value: null },
+  { id: "competitorAudit",   label: "Business Competitor Validation",   state: "idle", value: null },
+  { id: "keywordGap",        label: "Keyword Gap vs Business Competitors", state: "idle", value: null },
+  { id: "dataValidation",    label: "Data Validation & Narrative Assembly", state: "idle", value: null },
   // ── Analysis & generation (only after all technical data is in) ──
-  { id: "opportunities",     label: "Content Opportunities",     state: "idle", value: null },
-  { id: "strategicPlan",     label: "Strategic Plan (AI)",       state: "idle", value: null },
-  { id: "report",            label: "AI Report Generation",      state: "idle", value: null },
+  { id: "opportunities",     label: "Content & Geography Opportunities", state: "idle", value: null },
+  { id: "strategicPlan",     label: "Strategic Plan Generation",  state: "idle", value: null },
+  { id: "report",            label: "Storytelling Report Generation", state: "idle", value: null },
 ];
 
 const INITIAL_CHECKS = [
@@ -935,6 +935,9 @@ export default function Step5Slide2({
             businessData,
             keywordData: keywords,
             competitorData,
+            // V3 Part 3.1 / 3.4 — report mode + negative exclusions persisted by Steps 1 & 4
+            reportMode: (() => { try { return JSON.parse(localStorage.getItem("websiteData") || "{}")?.reportMode || ""; } catch { return ""; } })(),
+            negativeExclusions: (() => { try { return JSON.parse(localStorage.getItem("drfizz.keywordExclusions") || "[]"); } catch { return []; } })(),
             seoData: enrichedSeoJson, // pre-fetched — includes crawl, GMB, competitor audit + strategic plan
           }),
         });

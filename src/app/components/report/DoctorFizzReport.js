@@ -565,8 +565,8 @@ export default function DoctorFizzReport({ data }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-[12px] pt-6" style={{ borderTop: `1px solid ${C.warmGrey}40` }}>
             <Meta label="Client"      value={meta.client_name} />
             <Meta label="Domain"      value={meta.domain} />
-            <Meta label="Report Type" value={meta.report_type} />
-            <Meta label="Industry"    value={meta.industry || "—"} />
+            <Meta label="Report Mode" value={meta.report_mode || meta.report_type} />
+            <Meta label="Scope"       value={meta.business_scope || meta.industry || "—"} />
             <Meta label="Date"        value={meta.report_date} />
             <Meta label="Reference"   value={meta.report_ref} />
           </div>
