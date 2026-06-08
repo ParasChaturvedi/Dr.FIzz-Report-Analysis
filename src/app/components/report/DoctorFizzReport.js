@@ -13,8 +13,46 @@
 import { useMemo } from "react";
 
 const LOGO_URL = "https://doctorfizz.com/wp-content/uploads/2025/09/doctorfizzlogo_1-scaled.png";
-const SERIF = "var(--font-playfair), 'Cormorant Garamond', Georgia, serif";
-const SANS  = "var(--font-inter), 'DM Sans', system-ui, sans-serif";
+// Typography matched to the reference deck: Trebuchet MS bold headings + Calibri body.
+// SERIF kept as the constant name (used throughout) but now resolves to the
+// reference's bold humanist-sans display stack.
+const SERIF = "'Trebuchet MS', 'Segoe UI', var(--font-inter), system-ui, sans-serif";
+const SANS  = "Calibri, 'Segoe UI', var(--font-inter), 'DM Sans', system-ui, sans-serif";
+
+// Our Clientele — partner logos used in the reference report (rendered on a dark
+// background in every report, per the brand track-record section).
+const CLIENT_LOGOS = [
+  { name: "Acenteus Accounting", file: "/clientele/acenteus.png" },
+  { name: "AxXonet",             file: "/clientele/axxonet.png" },
+  { name: "RNB Hospitality",     file: "/clientele/rnb.png" },
+  { name: "Loyora Design",       file: "/clientele/loyora.png" },
+  { name: "DexWin",              file: "/clientele/dexwin.png" },
+  { name: "AVIA",                file: "/clientele/avia.png" },
+  { name: "Waterstone",          file: "/clientele/waterstone.png" },
+  { name: "tipplr",              file: "/clientele/tipplr.png" },
+  { name: "Content Whale",       file: "/clientele/contentwhale.png" },
+  { name: "Shiva Manvi",         file: "/clientele/shivamanvi.png" },
+  { name: "Vakkal Impex",        file: "/clientele/vakkalimpex.png" },
+  { name: "Scripple Masters",    file: "/clientele/scripplemasters.png" },
+];
+
+// Themed DOCTORFIZZ wordmark — white on dark backgrounds, dark on light (the
+// reference deck uses the white logo on the cover/dark dividers, dark on pages).
+function Wordmark({ dark = false, height = 22 }) {
+  return (
+    <span className="inline-flex items-center">
+      <img
+        src={LOGO_URL}
+        alt="DoctorFizz"
+        style={{ height, width: "auto", objectFit: "contain", filter: dark ? "brightness(0) invert(1)" : "none" }}
+        onError={(e) => { const t = e.currentTarget.nextSibling; if (t) t.style.display = "inline"; e.currentTarget.style.display = "none"; }}
+      />
+      <span style={{ display: "none", fontFamily: "'Trebuchet MS', system-ui, sans-serif", fontWeight: 800, fontSize: Math.round(height * 0.72), letterSpacing: "-0.02em", color: dark ? "#fff" : "#1A1A1A" }}>
+        DOCTOR<span style={{ color: "#D4541A" }}>FIZZ</span>
+      </span>
+    </span>
+  );
+}
 
 // ── Color palette — EXACT V2 spec values (Part 2) ─────────────────────────────
 const C = {
@@ -92,6 +130,22 @@ function CalloutStat({ number, suffix, label, description }) {
       </div>
       <div className="mt-2 uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>{label}</div>
       {description && <div className="mt-1" style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText, lineHeight: 1.4 }}>{description}</div>}
+    </div>
+  );
+}
+
+// ── Baseline stat card — reference deck "01 · THE BASELINE" look: left-border
+//    accent (orange = problem metric, dark = neutral), big colored number,
+//    bold label, grey sub-label. ───────────────────────────────────────────────
+function BaselineStat({ value, label, sub, bad }) {
+  const accent = bad ? C.orange : C.nearBlack;
+  return (
+    <div className="flex items-center gap-4 rounded-lg px-5 py-4" style={{ background: "#fff", border: `1px solid ${C.border}`, borderLeft: `4px solid ${accent}` }}>
+      <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "34px", lineHeight: 1, color: bad ? C.orange : C.textDark }}>{value}</div>
+      <div>
+        <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: "13px", color: C.textDark }}>{label}</div>
+        {sub && <div style={{ fontFamily: SANS, fontSize: "11px", color: C.greyText, lineHeight: 1.3 }}>{sub}</div>}
+      </div>
     </div>
   );
 }
@@ -496,14 +550,13 @@ export default function DoctorFizzReport({ data }) {
       <div className="relative px-6 sm:px-10 py-12 sm:py-16" style={{ background: C.nearBlack }}>
         <div className="max-w-4xl mx-auto">
           <div className="flex items-center gap-3 mb-10">
-            <img src={LOGO_URL} alt="Doctor Fizz" className="h-9 w-auto object-contain" style={{ filter: "brightness(0) invert(1)" }}
-              onError={(e) => { e.currentTarget.style.display = "none"; }} />
-            <span className="text-white font-black text-lg tracking-tight">Doctor<span style={{ color: C.orangeLite }}>Fizz</span></span>
+            <Wordmark dark height={40} />
           </div>
+          <div className="h-[3px] w-12 mb-5" style={{ background: C.orange }} />
           <div className="text-[11px] tracking-[0.35em] uppercase font-semibold mb-4" style={{ color: C.orangeLite }}>
-            SEO &amp; GEO Prescription
+            SEO &amp; GEO Strategy
           </div>
-          <h1 className="text-3xl sm:text-5xl font-bold leading-tight mb-4 text-white" style={{ fontFamily: "var(--font-playfair), Georgia, serif" }}>
+          <h1 className="text-3xl sm:text-5xl font-bold leading-tight mb-4 text-white" style={{ fontFamily: SERIF }}>
             On-Page SEO &amp; GEO<br />Diagnostic Report
           </h1>
           <p className="text-[13px] sm:text-[15px] leading-relaxed mb-10 max-w-xl" style={{ color: "#c9c2b8" }}>
@@ -544,11 +597,8 @@ export default function DoctorFizzReport({ data }) {
 
           {/* Section header repeats brand on body (Part 4 header rule) */}
           <div className="flex items-center justify-between mb-8 pb-3" style={{ borderBottom: `1px solid ${C.warmGrey}30` }}>
-            <div className="flex items-center gap-2">
-              <img src={LOGO_URL} alt="" className="h-5 w-auto object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />
-              <span className="font-black text-[13px]" style={{ color: C.nearBlack }}>Doctor<span style={{ color: C.orange }}>Fizz</span></span>
-            </div>
-            <span className="text-[11px]" style={{ color: C.greyText }}>{meta.client_name} · {meta.report_type} report</span>
+            <Wordmark height={22} />
+            <span className="text-[11px] uppercase tracking-wide" style={{ color: C.greyText }}>{meta.client_name} · {meta.report_type} report</span>
           </div>
 
           {/* ── SEO SCORE PANEL (Phase 3 — Deep AI Analysis) ────────────────── */}
@@ -631,6 +681,24 @@ export default function DoctorFizzReport({ data }) {
                 </>
               )}
             </DiagnosisCard>
+            {/* Baseline stat cards — reference "THE BASELINE" look; every measured metric surfaced */}
+            {(() => {
+              const order = ["domain_rating","organic_keywords","organic_traffic","referring_domains","site_health_score","mobile_performance_score","lcp","cls","errors_404","redirect_chains","gbp_rating","gbp_review_count"];
+              const cards = formattedBaseline
+                .filter(b => b.formatted_value != null)
+                .sort((a, b) => order.indexOf(a.metric) - order.indexOf(b.metric))
+                .slice(0, 6);
+              if (!cards.length) return null;
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-2">
+                  {cards.map(b => (
+                    <BaselineStat key={b.metric} value={b.formatted_value} label={b.label}
+                      sub={b.benchmark_label}
+                      bad={/below|penalty|low|suppress|throttl|few|thin|no |0 |unclaimed|behind|gap/i.test(b.benchmark_label || "")} />
+                  ))}
+                </div>
+              );
+            })()}
             {narrativeBridge("the_situation") && <BridgeNote text={narrativeBridge("the_situation")} />}
           </Section>
 
@@ -1433,10 +1501,90 @@ export default function DoctorFizzReport({ data }) {
               </Section>
             ))}
 
+          {/* ── PARTNER · WHY DOCTORFIZZ (light, 2×2 value cards) ───────────── */}
+          <div className="mt-14">
+            <div className="flex items-center gap-2 mb-1">
+              <span style={{ width: 14, height: 14, background: C.orange, display: "inline-block" }} />
+              <span className="uppercase" style={{ fontFamily: SANS, fontWeight: 700, fontSize: "11px", letterSpacing: "3px", color: C.greyText }}>Partner</span>
+            </div>
+            <h2 style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "30px", color: C.textDark, marginBottom: "6px" }}>Why DoctorFizz</h2>
+            <div className="mb-6" style={{ borderBottom: `1px solid ${C.border}` }} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                ["◎", "Evidence, Not Guesswork", "Every recommendation here came from live ranking data and a competitor teardown. Strategy is built on what is already ranking."],
+                ["⚡", "SEO and GEO Specialists", "We optimise for traditional search and the AI answer layer (ChatGPT, Perplexity, Google AI Overviews) together."],
+                ["★", "Content That Earns Rankings", "A blended AI plus human-writer model produces depth at volume while holding the editorial quality search engines reward."],
+                ["➚", "Transparent Monthly Reporting", "We report search visibility every month: rankings, keywords, DR, and AI citations. We do not guarantee leads or conversions; outcomes depend on the recommended changes being implemented on the site."],
+              ].map(([icon, title, body], i) => (
+                <div key={i} className="rounded-lg p-5" style={{ background: "#fff", border: `1px solid ${C.border}`, borderTop: `3px solid ${C.orange}` }}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="grid place-items-center rounded-full shrink-0" style={{ width: 36, height: 36, background: C.nearBlack, color: C.orange, fontSize: "16px" }}>{icon}</span>
+                    <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "16px", color: C.textDark }}>{title}</span>
+                  </div>
+                  <p style={{ fontFamily: SANS, fontSize: "13px", color: C.greyText, lineHeight: 1.6 }}>{body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* ── FOOTER ──────────────────────────────────────────────────────── */}
           <div className="mt-12 pt-4 flex items-center justify-between text-[10px]" style={{ borderTop: `1px solid ${C.warmGrey}30`, color: C.greyText }}>
-            <span className="font-black">Doctor<span style={{ color: C.orange }}>Fizz</span></span>
+            <Wordmark height={16} />
             <span>{meta.report_ref} · {meta.report_date}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── TRACK RECORD · OUR CLIENTELE (full-width dark band, every report) ─ */}
+      <div className="px-6 sm:px-10 py-14" style={{ background: C.nearBlack }}>
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-start justify-between mb-1">
+            <span className="uppercase" style={{ fontFamily: SANS, fontWeight: 700, fontSize: "11px", letterSpacing: "3px", color: "#9a948c" }}>Track Record</span>
+            <Wordmark dark height={22} />
+          </div>
+          <h2 style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "30px", color: "#fff", marginBottom: "6px" }}>Our Clientele</h2>
+          <div className="mb-3" style={{ borderBottom: `1px solid ${C.warmGrey}55` }} />
+          <p className="mb-8" style={{ fontFamily: SANS, fontStyle: "italic", fontSize: "13px", color: "#9a948c" }}>
+            A selection of brands Itzfizz Digital has partnered with across SEO, web, branding, and growth.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-8 items-center">
+            {CLIENT_LOGOS.map((c) => (
+              <div key={c.name} className="flex items-center justify-center">
+                <img src={c.file} alt={c.name} title={c.name} loading="lazy"
+                  style={{ maxHeight: 64, maxWidth: "100%", width: "auto", objectFit: "contain" }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── HOW TO GET STARTED (full-width dark band, closing CTA) ─────────── */}
+      <div className="px-6 sm:px-10 py-14" style={{ background: C.nearBlack, borderTop: `1px solid ${C.warmGrey}40` }}>
+        <div className="max-w-4xl mx-auto">
+          <Wordmark dark height={36} />
+          <div className="h-[3px] w-12 my-4" style={{ background: C.orange }} />
+          <div className="uppercase mb-2" style={{ fontFamily: SANS, fontWeight: 700, fontSize: "11px", letterSpacing: "3px", color: C.orange }}>How To Get Started</div>
+          <h2 style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "32px", color: "#fff", marginBottom: "24px" }}>Four Steps to Launch</h2>
+          <div className="space-y-5">
+            {[
+              ["Kickoff Consultation", "Align on goals, target cities, services, and access. We confirm scope and the monthly reporting cadence."],
+              ["Technical Audit & Fix List", "We deliver the prioritised 404, redirect, and on-page fix list for your team to implement."],
+              ["Keyword Map & Content Calendar", "Approved keyword targets, page architecture, and the monthly blog and website content plan."],
+              ["Monthly Execution & Reporting", "Content delivered and search visibility tracked each month. Outcomes depend on the recommended changes being implemented on the site."],
+            ].map(([title, body], i) => (
+              <div key={i} className="flex items-start gap-4">
+                <span className="grid place-items-center rounded-full shrink-0" style={{ width: 38, height: 38, background: C.orange, color: "#fff", fontFamily: SERIF, fontWeight: 700, fontSize: "16px" }}>{i + 1}</span>
+                <div className="flex-1 sm:flex sm:gap-6">
+                  <div className="sm:w-72 shrink-0" style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "15px", color: "#fff" }}>{title}</div>
+                  <div style={{ fontFamily: SANS, fontSize: "13px", color: "#b8b2a8", lineHeight: 1.6 }}>{body}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-10 text-center" style={{ fontFamily: SANS, fontSize: "13px", color: "#b8b2a8" }}>
+            <span style={{ fontWeight: 700, color: "#fff" }}>Ready to begin?</span>{"  "}
+            <span style={{ color: C.orange }}>doctorfizz.com</span>{"  ·  "}
+            <span style={{ color: C.orange }}>sales@itzfizzz.com</span>
           </div>
         </div>
       </div>

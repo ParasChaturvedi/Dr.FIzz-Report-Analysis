@@ -2017,6 +2017,8 @@ export const PLAIN_LANGUAGE = {
   gbp_completeness:         "how fully the Google Business Profile is filled out",
   gbp_review_count:         "the number of customer reviews on the Google profile",
   gbp_rating:               "the average star rating on the Google profile",
+  errors_404:               "pages returning a not-found error to visitors and crawlers",
+  redirect_chains:          "URLs that bounce through multiple redirects before landing",
 };
 // One-time gloss for the keyword tables (KD column).
 export const KD_PLAIN_LANGUAGE = "Keyword Difficulty — how hard it is to rank for a term, where 0 is easy and 100 is near-impossible";
@@ -2036,8 +2038,11 @@ function buildV2Additions(input) {
     mobile_performance_score: baselineRaw.performanceMobile, desktop_performance_score: baselineRaw.performanceDesktop,
     lcp: baselineRaw.lcp, cls: baselineRaw.cls, site_health_score: baselineRaw.crawlHealthScore,
     gbp_completeness: baselineRaw.gbpCompletenessScore, gbp_review_count: baselineRaw.gbpReviewCount, gbp_rating: baselineRaw.gbpRating,
+    // Site-audit counts — included only when actually collected (no empty rows otherwise).
+    ...(baselineRaw.errors404 != null ? { errors_404: baselineRaw.errors404 } : {}),
+    ...(baselineRaw.redirectChains != null ? { redirect_chains: baselineRaw.redirectChains } : {}),
   };
-  const labelFor = { domain_rating: "Domain Rating", organic_traffic: "Organic Traffic", organic_keywords: "Organic Keywords", referring_domains: "Referring Domains", mobile_performance_score: "Mobile Performance", desktop_performance_score: "Desktop Performance", lcp: "LCP", cls: "Layout Shift (CLS)", site_health_score: "Site Health", gbp_completeness: "GBP Completeness", gbp_review_count: "GBP Reviews", gbp_rating: "GBP Rating" };
+  const labelFor = { domain_rating: "Domain Rating", organic_traffic: "Organic Traffic", organic_keywords: "Organic Keywords", referring_domains: "Referring Domains", mobile_performance_score: "Mobile Performance", desktop_performance_score: "Desktop Performance", lcp: "LCP", cls: "Layout Shift (CLS)", site_health_score: "Site Health", gbp_completeness: "GBP Completeness", gbp_review_count: "GBP Reviews", gbp_rating: "GBP Rating", errors_404: "404 Errors", redirect_chains: "Redirect Chains" };
   const formatted_baseline = Object.entries(rawMap).map(([metric, raw]) => {
     const sourceKey = verifiedSources[metric] || METRIC_SOURCE[metric] || "estimate";
     const sm = SOURCE_META[sourceKey] || SOURCE_META.estimate;

@@ -668,6 +668,9 @@ export async function POST(request) {
           gbpCompletenessScore: gmbRaw?.completeness?.score ?? null,
           gbpReviewCount:       gmbRaw?.gmb?.reviewCount ?? gmbRaw?.reviewCount ?? null,
           gbpRating:            gmbRaw?.gmb?.rating ?? null,
+          // Site-audit counts — surfaced only when the crawl/audit actually provides them.
+          errors404:            crawlRaw?.errors404 ?? crawlRaw?.summary?.errors404 ?? null,
+          redirectChains:       crawlRaw?.redirectChains ?? crawlRaw?.summary?.redirectChains ?? null,
         },
         competitors,
         businessCompetitors,           // V3 Part 4 — validated for direct comparison
