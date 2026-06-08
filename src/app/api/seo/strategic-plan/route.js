@@ -88,7 +88,9 @@ function buildDataContext(payload) {
   const fieldLine = (label, field) => {
     const fb = fmtMap[field];
     if (fb && fb.formatted_value != null) {
-      return `${label}: ${fb.formatted_value}${fb.benchmark_label ? ` (${fb.benchmark_label})` : ""}${fb.commercial_interpretation ? `\n    → ${fb.commercial_interpretation}` : ""}`;
+      const gloss = fb.plain_language ? ` (${fb.plain_language})` : "";       // T1: plain-language gloss on first appearance
+      const unlocks = fb.what_this_unlocks ? `\n    ⤷ What this unlocks: ${fb.what_this_unlocks}` : ""; // Baseline V2: one-line "What this unlocks"
+      return `${label}${gloss}: ${fb.formatted_value}${fb.benchmark_label ? ` (${fb.benchmark_label})` : ""}${fb.commercial_interpretation ? `\n    → ${fb.commercial_interpretation}` : ""}${unlocks}`;
     }
     const f = b[field];
     if (!f || f.value == null) return `${label}: [${f?.label || "unavailable"}]`;

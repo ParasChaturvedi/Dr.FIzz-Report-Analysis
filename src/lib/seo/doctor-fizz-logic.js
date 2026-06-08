@@ -1826,6 +1826,27 @@ const METRIC_SOURCE = {
   mobile_performance_score: "measured", desktop_performance_score: "measured", lcp: "measured", cls: "measured",
   site_health_score: "measured", gbp_completeness: "measured", gbp_review_count: "measured", gbp_rating: "measured",
 };
+
+// Rule T1 (V2): every technical metric carries a plain-language definition on
+// first appearance, written for a reader who is not an SEO specialist. These are
+// the parenthetical glosses the spec mandates (e.g. "Domain Rating (a 0–100
+// measure of how trusted the site is by other websites)").
+export const PLAIN_LANGUAGE = {
+  domain_rating:            "a 0–100 measure of how trusted the site is by other websites",
+  organic_traffic:          "visitors who arrive from unpaid Google search results",
+  organic_keywords:         "the number of search terms the site already shows up for",
+  referring_domains:        "the number of separate websites that link to this one",
+  mobile_performance_score: "Google's 0–100 speed grade for the site on phones",
+  desktop_performance_score:"Google's 0–100 speed grade for the site on computers",
+  lcp:                      "Largest Contentful Paint — how long the main content takes to load",
+  cls:                      "Cumulative Layout Shift — how much the page jumps around while loading",
+  site_health_score:        "the share of pages free of technical errors",
+  gbp_completeness:         "how fully the Google Business Profile is filled out",
+  gbp_review_count:         "the number of customer reviews on the Google profile",
+  gbp_rating:               "the average star rating on the Google profile",
+};
+// One-time gloss for the keyword tables (KD column).
+export const KD_PLAIN_LANGUAGE = "Keyword Difficulty — how hard it is to rank for a term, where 0 is easy and 100 is near-impossible";
 const SOURCE_META = {
   measured: { label: "Measured", confidence: "high",   note: "Observed directly from the live site / Google Business Profile." },
   estimate: { label: "Estimate", confidence: "modeled", note: "Third-party model (DataForSEO). Treat as a ±15% range, not an exact figure." },
@@ -1843,16 +1864,16 @@ function buildV2Additions(input) {
     lcp: baselineRaw.lcp, cls: baselineRaw.cls, site_health_score: baselineRaw.crawlHealthScore,
     gbp_completeness: baselineRaw.gbpCompletenessScore, gbp_review_count: baselineRaw.gbpReviewCount, gbp_rating: baselineRaw.gbpRating,
   };
-  const labelFor = { domain_rating: "Domain Rating", organic_traffic: "Organic Traffic", organic_keywords: "Organic Keywords", referring_domains: "Referring Domains", mobile_performance_score: "Mobile Performance", desktop_performance_score: "Desktop Performance", lcp: "LCP (page load)", cls: "Layout Shift (CLS)", site_health_score: "Site Health", gbp_completeness: "GBP Completeness", gbp_review_count: "GBP Reviews", gbp_rating: "GBP Rating" };
+  const labelFor = { domain_rating: "Domain Rating", organic_traffic: "Organic Traffic", organic_keywords: "Organic Keywords", referring_domains: "Referring Domains", mobile_performance_score: "Mobile Performance", desktop_performance_score: "Desktop Performance", lcp: "LCP", cls: "Layout Shift (CLS)", site_health_score: "Site Health", gbp_completeness: "GBP Completeness", gbp_review_count: "GBP Reviews", gbp_rating: "GBP Rating" };
   const formatted_baseline = Object.entries(rawMap).map(([metric, raw]) => {
     const sourceKey = verifiedSources[metric] || METRIC_SOURCE[metric] || "estimate";
     const sm = SOURCE_META[sourceKey] || SOURCE_META.estimate;
     const field = baseline[metric] || {};
     if (field.value == null) {
-      return { metric, label: labelFor[metric] || metric, raw_value: null, formatted_value: null, unavailable_label: field.label || MISSING_LABELS.EMPTY, benchmark_label: "", commercial_interpretation: "", what_this_unlocks: "", source: sourceKey, source_label: sm.label, confidence: sm.confidence, source_note: sm.note };
+      return { metric, label: labelFor[metric] || metric, plain_language: PLAIN_LANGUAGE[metric] || "", raw_value: null, formatted_value: null, unavailable_label: field.label || MISSING_LABELS.EMPTY, benchmark_label: "", commercial_interpretation: "", what_this_unlocks: "", source: sourceKey, source_label: sm.label, confidence: sm.confidence, source_note: sm.note };
     }
     const bi = benchmarkAndInterpretation(metric, raw, clientName, gbp_comparison);
-    return { metric, label: labelFor[metric] || metric, raw_value: raw, formatted_value: formatMetricValue(metric, raw), ...bi, source: sourceKey, source_label: sm.label, confidence: sm.confidence, source_note: sm.note };
+    return { metric, label: labelFor[metric] || metric, plain_language: PLAIN_LANGUAGE[metric] || "", raw_value: raw, formatted_value: formatMetricValue(metric, raw), ...bi, source: sourceKey, source_label: sm.label, confidence: sm.confidence, source_note: sm.note };
   });
 
   // opportunity_summary (L4) — realistic CTR-based traffic projection.

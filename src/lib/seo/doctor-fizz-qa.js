@@ -246,6 +246,9 @@ export function runQaGate(payload = {}, narrative = "") {
   add("v2", "Baseline metrics carry formatted values", fb.length > 0 && fb.filter(b => b.formatted_value != null).every(b => !/^\d+\.\d{4,}/.test(String(b.formatted_value))));
   add("v2", "Available baseline metrics have a commercial interpretation",
     fb.filter(b => b.formatted_value != null).every(b => b.commercial_interpretation || b.benchmark_label));
+  // Rule T1: every shown metric carries a plain-language gloss on first appearance
+  add("v2", "Baseline metrics carry a plain-language gloss (T1)",
+    fb.length > 0 && fb.filter(b => b.formatted_value != null).every(b => !!b.plain_language));
   add("v2", "Non-expert section frames present",
     !!v2.non_expert_section_frames?.keyword_strategy_intro && !!v2.non_expert_section_frames?.gbp_intro);
   add("v2", "Section narrative bridges present", (v2.narrative_connections || []).length >= 5);

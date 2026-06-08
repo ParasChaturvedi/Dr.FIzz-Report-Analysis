@@ -694,12 +694,20 @@ export default function DoctorFizzReport({ data }) {
                 <tbody>
                   {formattedBaseline.map((b, i) => (
                     <tr key={b.metric} style={{ background: i % 2 ? "#fff" : C.rowEven, borderBottom: `1px solid ${C.border}` }}>
-                      <Td>{b.label}</Td>
+                      <Td>
+                        <span style={{ fontWeight: 600, color: C.textDark }}>{b.label}</span>
+                        {/* T1: plain-language gloss on first appearance */}
+                        {b.plain_language && <span style={{ display: "block", fontSize: "10px", color: C.greyText, lineHeight: 1.3, marginTop: "2px" }}>{b.plain_language}</span>}
+                      </Td>
                       <Td right>{b.formatted_value != null
                         ? <span style={{ fontWeight: 600, color: C.textDark }}>{b.formatted_value}</span>
                         : <span style={{ fontStyle: "italic", fontSize: "11px", color: C.greyText }}>{b.unavailable_label}</span>}</Td>
                       <Td>{b.source ? <SourceBadge source={b.source} label={b.source_label} /> : "—"}</Td>
-                      <Td><span style={{ fontSize: "12px", color: C.greyText }}>{b.benchmark_label || (b.commercial_interpretation ? b.commercial_interpretation.slice(0, 80) + "…" : "—")}</span></Td>
+                      <Td>
+                        <span style={{ fontSize: "12px", color: C.greyText }}>{b.benchmark_label || (b.commercial_interpretation ? b.commercial_interpretation.slice(0, 80) + "…" : "—")}</span>
+                        {/* Baseline V2: one-line "What this unlocks" when fixed */}
+                        {b.what_this_unlocks && <span style={{ display: "block", fontSize: "11px", color: C.rxGreen, lineHeight: 1.35, marginTop: "3px" }}>⤷ {b.what_this_unlocks}</span>}
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
@@ -832,6 +840,10 @@ export default function DoctorFizzReport({ data }) {
             {frames.keyword_strategy_intro && (
               <p className="mb-4" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>{frames.keyword_strategy_intro}</p>
             )}
+            {/* T1: plain-language gloss of the metrics the tables use, on first appearance */}
+            <p className="mb-4" style={{ fontFamily: SANS, fontSize: "11px", color: C.greyText, lineHeight: 1.5, fontStyle: "italic" }}>
+              Reading the tables: <strong>Volume</strong> is how many people search the term each month. <strong>Difficulty (KD)</strong> is how hard it is to rank for it — 0 is easy, 100 is near-impossible. <strong>Intent</strong> is what the searcher wants, which decides the type of page you build for it.
+            </p>
             {/* Keyword intent split — donut */}
             {(() => {
               const acc = kw.accepted || [];
