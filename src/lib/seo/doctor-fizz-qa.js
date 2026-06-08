@@ -219,6 +219,9 @@ export function runQaGate(payload = {}, narrative = "") {
     add("technical", "Technical issues ranked by priority", techRanked);
     const techActionable = tech.every(t => t.recommended_action && t.estimated_effort);
     add("technical", "Every technical issue has action + effort", techActionable);
+    // V3 §07 — every fix shows Issue / Why it matters / What to do / Effort / Expected unlock
+    const techFiveFields = tech.every(t => t.issue && t.why_it_matters && t.recommended_action && t.estimated_effort && t.expected_unlock);
+    add("technical", "Every technical fix carries why-it-matters + expected-unlock (V3 §07)", techFiveFields);
   }
 
   // ── GEO layer checks ──

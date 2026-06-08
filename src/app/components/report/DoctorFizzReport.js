@@ -643,12 +643,19 @@ export default function DoctorFizzReport({ data }) {
               )}
             </DiagnosisCard>
             {(oppSummary.total_monthly_search_volume != null) && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-3">
                 <CalloutStat number={fmtNum(oppSummary.total_monthly_search_volume)} label="Monthly Searches You Could Be Winning" description="Total addressable search demand" />
                 <CalloutStat number={fmtNum(oppSummary.commercial_keyword_count)} label="Commercial Pages To Build" description="Buyer-intent keyword clusters" />
+                <CalloutStat number={fmtNum(oppSummary.city_pages_needed)} label="Geography Pages To Build" description="Country / region / city opportunities" />
                 <CalloutStat number={fmtNum(oppSummary.quick_wins_available)} label="Quick Wins — Under 1 Week Each" description="High-impact, low-effort actions" />
                 <CalloutStat number={fmtNum(oppSummary.estimated_traffic_uplift_12m)} suffix="/mo" label="Projected Monthly Visitors In 12 Months" description="If the prescription is executed" />
               </div>
+            )}
+            {/* Projected upside range — 6mo → 12mo (V3 §02 "projected upside ranges") */}
+            {(oppSummary.estimated_traffic_uplift_6m != null && oppSummary.estimated_traffic_uplift_12m != null) && (
+              <p className="mb-3" style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText }}>
+                Projected organic visitor range: <strong style={{ color: C.textDark }}>{fmtNum(oppSummary.estimated_traffic_uplift_6m)}/mo</strong> by month 6 → <strong style={{ color: C.textDark }}>{fmtNum(oppSummary.estimated_traffic_uplift_12m)}/mo</strong> by month 12 if the prescription is executed.
+              </p>
             )}
             {narrativeBridge("the_opportunity") && <BridgeNote text={narrativeBridge("the_opportunity")} />}
           </Section>
@@ -972,7 +979,12 @@ export default function DoctorFizzReport({ data }) {
                         <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: C.ivory, color: C.greyText }}>{t.estimated_effort}</span>
                       </div>
                     </div>
-                    <div className="text-[12px] leading-relaxed" style={{ color: C.greyText }}>{t.recommended_action}</div>
+                    {/* V3 §07 — Why it matters */}
+                    {t.why_it_matters && <div className="text-[12px] leading-relaxed mb-1" style={{ color: C.greyText }}><span style={{ fontWeight: 600, color: C.nearBlack }}>Why it matters: </span>{t.why_it_matters}</div>}
+                    {/* What to do */}
+                    <div className="text-[12px] leading-relaxed" style={{ color: C.greyText }}><span style={{ fontWeight: 600, color: C.nearBlack }}>Fix: </span>{t.recommended_action}</div>
+                    {/* V3 §07 — Expected unlock */}
+                    {t.expected_unlock && <div className="text-[12px] leading-relaxed mt-1" style={{ color: C.rxGreen }}><span style={{ fontWeight: 600 }}>⤷ Expected unlock: </span>{t.expected_unlock}</div>}
                   </div>
                 ))}
               </div>

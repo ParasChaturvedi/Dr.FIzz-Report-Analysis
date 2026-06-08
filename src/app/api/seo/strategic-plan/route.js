@@ -223,7 +223,7 @@ Trust gap: ${gbp.trust_gap || "—"}
 ═══════════════════════════════════════════════════════
 TECHNICAL ISSUES (ranked, developer-actionable)
 ═══════════════════════════════════════════════════════
-${tech.map(t => `  - [${t.priority}] ${t.issue}${t.affected_count ? ` (${t.affected_count})` : ""} | ${t.estimated_effort} → ${t.recommended_action}`).join("\n") || "  None detected"}
+${tech.map(t => `  - [${t.priority}] ${t.issue}${t.affected_count ? ` (${t.affected_count})` : ""} | ${t.estimated_effort}\n      Why it matters: ${t.why_it_matters || "—"}\n      Fix: ${t.recommended_action}\n      Expected unlock: ${t.expected_unlock || "—"}`).join("\n") || "  None detected"}
 
 ═══════════════════════════════════════════════════════
 GEO & AI VISIBILITY

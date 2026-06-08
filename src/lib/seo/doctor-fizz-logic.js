@@ -1254,46 +1254,48 @@ export function buildTechnicalIssues(crawlData) {
   // over the number of pages we deep-audited (a sample).
   const siteSize = crawlData.totalPagesEstimate || crawlData.indexedPages || crawlData.sitemapUrlCount || crawlData.pageCount || null;
 
+  // V3 §07 — every technical fix carries all five fields:
+  // issue · why_it_matters · recommended_action (what to do) · estimated_effort · expected_unlock
   if (crawlData.crawlBlockedByRobots)
-    issues.push({ priority: "CRITICAL", issue: "Googlebot blocked by robots.txt", affected_count: siteSize, recommended_action: "Remove 'Disallow: /' from /robots.txt. Google cannot index any page until this is lifted — every other action is dark while this stands.", estimated_effort: "≈15 min" });
+    issues.push({ priority: "CRITICAL", issue: "Googlebot blocked by robots.txt", affected_count: siteSize, why_it_matters: "Google cannot index a single page while this stands — the entire site is invisible in organic search, so every other improvement is dark.", recommended_action: "Remove 'Disallow: /' from /robots.txt and re-request indexing in Google Search Console.", estimated_effort: "≈15 min", expected_unlock: "Every page becomes eligible to rank — this single fix unlocks the return on all other work." });
 
   if (!crawlData.hasSitemap)
-    issues.push({ priority: "HIGH", issue: "XML sitemap missing", affected_count: siteSize, recommended_action: `Generate /sitemap.xml listing all canonical URLs${siteSize ? ` (≈${siteSize} pages detected)` : ""} and submit in Google Search Console → Sitemaps. Without it, crawl discovery of a large site is throttled.`, estimated_effort: "≈1 hour" });
+    issues.push({ priority: "HIGH", issue: "XML sitemap missing", affected_count: siteSize, why_it_matters: "Without a sitemap, crawl discovery of a large site is throttled, so new and deep pages stay unindexed for weeks.", recommended_action: `Generate /sitemap.xml listing all canonical URLs${siteSize ? ` (≈${siteSize} pages detected)` : ""} and submit it in Google Search Console → Sitemaps.`, estimated_effort: "≈1 hour", expected_unlock: "Faster, complete indexation of every canonical URL." });
 
   if (!(s.pagesWithSchemaTypes || []).length)
-    issues.push({ priority: "HIGH", issue: "Zero structured data (schema) sitewide", affected_count: siteSize, recommended_action: "Add LocalBusiness + WebSite JSON-LD to the homepage, Service schema to service pages, FAQPage schema to FAQ blocks. This is the precondition for AI Overview (GEO) inclusion.", estimated_effort: "≈1 day" });
+    issues.push({ priority: "HIGH", issue: "Zero structured data (schema) sitewide", affected_count: siteSize, why_it_matters: "Without structured data the site cannot be parsed into entities, so it is invisible to AI answer engines and ineligible for rich results.", recommended_action: "Add LocalBusiness + WebSite JSON-LD to the homepage, Service schema to service pages, and FAQPage schema to FAQ blocks.", estimated_effort: "≈1 day", expected_unlock: "Eligibility for rich results and AI Overview / GEO citation." });
 
   if ((s.pagesMissingMetaTitle || 0) > 0)
-    issues.push({ priority: "HIGH", issue: `${s.pagesMissingMetaTitle} pages missing <title> tags`, affected_count: s.pagesMissingMetaTitle, recommended_action: 'Write unique 50–60 char titles as "Primary Keyword | Brand", starting with highest-traffic pages.', estimated_effort: "≈3 hours" });
+    issues.push({ priority: "HIGH", issue: `${s.pagesMissingMetaTitle} pages missing <title> tags`, affected_count: s.pagesMissingMetaTitle, why_it_matters: "The <title> is the single strongest on-page ranking signal and the clickable headline in search results.", recommended_action: 'Write unique 50–60 char titles as "Primary Keyword | Brand", starting with highest-traffic pages.', estimated_effort: "≈3 hours", expected_unlock: "Recovered relevance and click-through on every fixed page." });
 
   if ((s.pagesMissingH1 || 0) > 0)
-    issues.push({ priority: "HIGH", issue: `${s.pagesMissingH1} pages with no H1`, affected_count: s.pagesMissingH1, recommended_action: "Add exactly one keyword-rich H1 per page — the clearest on-page relevance signal exposed to Google.", estimated_effort: "≈2 hours" });
+    issues.push({ priority: "HIGH", issue: `${s.pagesMissingH1} pages with no H1`, affected_count: s.pagesMissingH1, why_it_matters: "The H1 is the clearest on-page topic signal Google reads; without it, pages are ambiguous about what they rank for.", recommended_action: "Add exactly one keyword-rich H1 per page.", estimated_effort: "≈2 hours", expected_unlock: "Sharper topical relevance on each affected page." });
 
   const lcpVal = crawlData.coreWebVitals?.lcp ?? crawlData.coreWebVitals?.LCP;
   if (lcpVal && Number(lcpVal) > 2500)
-    issues.push({ priority: "HIGH", issue: `Mobile LCP at ${lcpVal}ms (target <2500ms)`, affected_count: crawlData.pageCount || null, recommended_action: "Compress hero images to WebP, preload the LCP element, defer non-critical JS. Poor LCP suppresses the majority of mobile searches regardless of content quality.", estimated_effort: "≈1 week" });
+    issues.push({ priority: "HIGH", issue: `Mobile LCP at ${lcpVal}ms (target <2500ms)`, affected_count: crawlData.pageCount || null, why_it_matters: "Core Web Vitals are a mobile ranking signal; a slow LCP suppresses the majority of mobile searches regardless of content quality.", recommended_action: "Compress hero images to WebP, preload the LCP element, and defer non-critical JS.", estimated_effort: "≈1 week", expected_unlock: "Moves pages out of the speed-penalty tier into the eligible ranking band." });
 
   if ((s.pagesMissingMetaDesc || 0) > 0)
-    issues.push({ priority: "MEDIUM", issue: `${s.pagesMissingMetaDesc} pages missing meta descriptions`, affected_count: s.pagesMissingMetaDesc, recommended_action: "Write 150–160 char descriptions with a CTA. Lifts click-through 5–10% on existing impressions.", estimated_effort: "≈2 hours" });
+    issues.push({ priority: "MEDIUM", issue: `${s.pagesMissingMetaDesc} pages missing meta descriptions`, affected_count: s.pagesMissingMetaDesc, why_it_matters: "The description is the snippet that wins or loses the click on impressions the site already earns.", recommended_action: "Write 150–160 char descriptions with a clear CTA.", estimated_effort: "≈2 hours", expected_unlock: "5–10% more clicks from rankings already held." });
 
   const dupTitles = (crawlData.duplicates || []).filter(d => d.type === "title").length;
   if (dupTitles > 0)
-    issues.push({ priority: "MEDIUM", issue: `${dupTitles} sets of duplicate meta titles`, affected_count: dupTitles, recommended_action: "Make every title unique — duplicates force Google to pick a ranking URL arbitrarily, splitting relevance.", estimated_effort: "≈2 hours" });
+    issues.push({ priority: "MEDIUM", issue: `${dupTitles} sets of duplicate meta titles`, affected_count: dupTitles, why_it_matters: "Duplicate titles force Google to pick a ranking URL arbitrarily, splitting relevance across competing pages.", recommended_action: "Make every title unique to its page and intent.", estimated_effort: "≈2 hours", expected_unlock: "Consolidated ranking signal per page." });
 
   if ((crawlData.brokenLinks || []).length > 0)
-    issues.push({ priority: "MEDIUM", issue: `${crawlData.brokenLinks.length} broken internal links`, affected_count: crawlData.brokenLinks.length, recommended_action: `Fix or 301-redirect each. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}`, estimated_effort: "≈2 hours" });
+    issues.push({ priority: "MEDIUM", issue: `${crawlData.brokenLinks.length} broken internal links`, affected_count: crawlData.brokenLinks.length, why_it_matters: "Broken internal links waste crawl budget and leak link equity into dead ends.", recommended_action: `Fix or 301-redirect each. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}`, estimated_effort: "≈2 hours", expected_unlock: "Recovered crawl efficiency and internal link equity." });
 
   if ((s.thinContentCount || 0) > 0)
-    issues.push({ priority: "MEDIUM", issue: `${s.thinContentCount} thin-content pages (<200 words)`, affected_count: s.thinContentCount, recommended_action: "Expand to 600+ words with FAQs and local context. Thin pages drag the sitewide quality signal down.", estimated_effort: "≈1 week" });
+    issues.push({ priority: "MEDIUM", issue: `${s.thinContentCount} thin-content pages (<200 words)`, affected_count: s.thinContentCount, why_it_matters: "Thin pages drag down the sitewide quality signal Google applies to the whole domain.", recommended_action: "Expand to 600+ words with FAQs and local context.", estimated_effort: "≈1 week", expected_unlock: "A stronger sitewide quality signal lifting all pages." });
 
   if ((s.totalImgsWithoutAlt || 0) > 5)
-    issues.push({ priority: "MEDIUM", issue: `${s.totalImgsWithoutAlt} images without alt text`, affected_count: s.totalImgsWithoutAlt, recommended_action: "Add descriptive, keyword-natural alt text. Affects accessibility score and image-search visibility.", estimated_effort: "≈2 hours" });
+    issues.push({ priority: "MEDIUM", issue: `${s.totalImgsWithoutAlt} images without alt text`, affected_count: s.totalImgsWithoutAlt, why_it_matters: "Missing alt text costs image-search visibility and lowers the accessibility score.", recommended_action: "Add descriptive, keyword-natural alt text.", estimated_effort: "≈2 hours", expected_unlock: "Image-search traffic and a cleaner accessibility profile." });
 
   if ((s.pagesMultipleH1 || 0) > 0)
-    issues.push({ priority: "LOW", issue: `${s.pagesMultipleH1} pages with multiple H1s`, affected_count: s.pagesMultipleH1, recommended_action: "Demote extra H1s to H2/H3 — one H1 per page.", estimated_effort: "≈1 hour" });
+    issues.push({ priority: "LOW", issue: `${s.pagesMultipleH1} pages with multiple H1s`, affected_count: s.pagesMultipleH1, why_it_matters: "Multiple H1s dilute the single clear topic signal per page.", recommended_action: "Demote extra H1s to H2/H3 — one H1 per page.", estimated_effort: "≈1 hour", expected_unlock: "A single unambiguous topic signal per page." });
 
   if (!crawlData.hasRobots)
-    issues.push({ priority: "LOW", issue: "robots.txt not found", affected_count: null, recommended_action: "Create /robots.txt with a Sitemap: directive pointing to your sitemap.xml.", estimated_effort: "≈15 min" });
+    issues.push({ priority: "LOW", issue: "robots.txt not found", affected_count: null, why_it_matters: "Without robots.txt crawlers get no sitemap directive or crawl guidance.", recommended_action: "Create /robots.txt with a Sitemap: directive pointing to your sitemap.xml.", estimated_effort: "≈15 min", expected_unlock: "Clear crawl guidance and sitemap discovery." });
 
   const rank = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
   return issues.sort((a, b) => rank[a.priority] - rank[b.priority]).slice(0, 12);
