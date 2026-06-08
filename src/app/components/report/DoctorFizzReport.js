@@ -880,6 +880,30 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               </div>
             )}
+            {/* Suppressed Keywords record (P1: transparency — show what was removed and why) */}
+            {kw.excluded?.length > 0 && (
+              <details className="mt-4 rounded-lg" style={{ background: C.tableHead, border: `1px solid ${C.border}` }}>
+                <summary className="cursor-pointer px-3 py-2 uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.greyText }}>
+                  Suppressed Keywords — {kw.excluded.length} removed for transparency (not targeted)
+                </summary>
+                <div className="px-3 pb-3">
+                  <table className="w-full" style={{ borderCollapse: "collapse" }}>
+                    <thead><tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <Th>Keyword</Th><Th>Why Suppressed</Th>
+                    </tr></thead>
+                    <tbody>
+                      {kw.excluded.slice(0, 25).map((e, i) => (
+                        <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                          <Td><span style={{ color: C.greyText }}>{e.keyword}</span></Td>
+                          <Td><span style={{ fontSize: "11px", color: C.greyMid }}>{e.reason}</span></Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {kw.excluded.length > 25 && <p style={{ fontFamily: SANS, fontSize: "10px", color: C.greyMid, marginTop: "6px" }}>+ {kw.excluded.length - 25} more suppressed.</p>}
+                </div>
+              </details>
+            )}
             <Narrative num={5} />
               {narrativeBridge("keyword_strategy") && <BridgeNote text={narrativeBridge("keyword_strategy")} />}
           </Section>
@@ -942,14 +966,17 @@ export default function DoctorFizzReport({ data }) {
             <BacklinkSub title="① Citation &amp; Directory Links" hint="Fastest baseline authority + local signals">
               <table className="w-full text-[12px]">
                 <thead><tr style={{ borderBottom: `1px solid ${C.warmGrey}30` }}>
-                  <Th>Platform</Th><Th right>DR</Th><Th>Status</Th><Th>Effort</Th><Th>Signal</Th>
+                  <Th>Platform</Th><Th right>DR</Th><Th>You</Th><Th>Competitors</Th><Th>Effort</Th><Th>Signal</Th>
                 </tr></thead>
                 <tbody>
                   {(bl.citation_links || []).map((l, i) => (
                     <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
                       <Td>{l.listing_url ? <a href={l.listing_url} target="_blank" rel="noreferrer" className="underline" style={{ color: C.orange }}>{l.platform}</a> : l.platform}</Td>
                       <Td right>{l.domain_rating}</Td>
-                      <Td>{l.client_listed ? <span style={{ color: "#3f7d4a" }}>✓ Listed</span> : <span style={{ color: "#c0341a" }}>✗ Missing</span>}</Td>
+                      <Td>{l.client_listed ? <span style={{ color: "#2D6B32" }}>✓ Listed</span> : <span style={{ color: "#B83A1A" }}>✗ Missing</span>}</Td>
+                      <Td>{l.competitors_total > 0
+                        ? <span style={{ color: l.competitors_listed > 0 ? "#9A6A12" : C.greyMid }}>{l.competitors_listed}/{l.competitors_total} listed{l.competitor_names?.length ? ` (${l.competitor_names.join(", ")})` : ""}</span>
+                        : <span style={{ color: C.greyMid }}>—</span>}</Td>
                       <Td>{l.effort_hours}</Td>
                       <Td><span className="text-[11px]" style={{ color: C.greyText }}>{l.signal}</span></Td>
                     </tr>

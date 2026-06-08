@@ -495,22 +495,35 @@ const CITATION_PLATFORMS = [
  * @returns {object} backlinks per Part 2 schema
  */
 export function categorizeBacklinks(input = {}) {
-  const { directories = [], competitorBacklinks = [], industry = "", location = "India" } = input;
+  const { directories = [], competitorBacklinks = [], industry = "", location = "India", competitorDirectories = [] } = input;
+
+  // For each platform, count how many competitors are already listed there
+  // (Problem 4: citation entries must show "whether competitors are listed").
+  const platformMatch = (dirList, p) => (dirList || []).find(d =>
+    String(d.site || "").includes(p.site.split("/")[0]) ||
+    String(d.name || "").toLowerCase() === p.name.toLowerCase()
+  );
 
   // ── Category 1: Citation and directory links ──
   const citation_links = CITATION_PLATFORMS.map(p => {
-    const match = directories.find(d =>
-      String(d.site || "").includes(p.site.split("/")[0]) ||
-      String(d.name || "").toLowerCase() === p.name.toLowerCase()
-    );
+    const match = platformMatch(directories, p);
+    // competitorDirectories: [{ name, directories: [...] }]
+    const competitorsListed = (competitorDirectories || []).filter(c => {
+      const m = platformMatch(c.directories, p);
+      return m && m.listed === true;
+    }).map(c => c.name);
+    const totalComps = (competitorDirectories || []).length;
     return {
-      platform:          p.name,
-      domain_rating:     p.dr,
-      client_listed:     match ? match.listed === true : false,
-      listing_url:       match?.listingUrl || null,
-      effort_hours:      "≈1 hour",
-      signal:            p.signal,
-      category:          "citation",
+      platform:           p.name,
+      domain_rating:      p.dr,
+      client_listed:      match ? match.listed === true : false,
+      competitors_listed: competitorsListed.length,          // count of rivals present
+      competitors_total:  totalComps,
+      competitor_names:   competitorsListed.slice(0, 3),
+      listing_url:        match?.listingUrl || null,
+      effort_hours:       "≈1 hour",
+      signal:             p.signal,
+      category:           "citation",
     };
   });
 
@@ -1603,7 +1616,12 @@ export function runBusinessLogic(input = {}) {
   const content_architecture = buildContentArchitecture(keywords.accepted);
 
   // ── Backlinks (Problem 4) ──
-  const backlinks = categorizeBacklinks({ directories, competitorBacklinks, industry, location });
+  // Pull competitor directory listings (from their GMB audits) so citation
+  // entries can show how many competitors are already listed on each platform.
+  const competitorDirectories = (competitorAudits || [])
+    .filter(c => c?.gmb && !c.gmb.error && Array.isArray(c.gmb.directories))
+    .map(c => ({ name: c.name || c.domain, directories: c.gmb.directories }));
+  const backlinks = categorizeBacklinks({ directories, competitorBacklinks, industry, location, competitorDirectories });
 
   // ── GBP comparison (Problem 5) ──
   const gbp_comparison = buildGbpComparison(clientGmb, competitorGmbs);
