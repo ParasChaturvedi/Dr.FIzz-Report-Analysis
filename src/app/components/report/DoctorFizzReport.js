@@ -1358,17 +1358,43 @@ export default function DoctorFizzReport({ data }) {
               );
             })()}
 
-            {/* "What Good Looks Like" — closing narrative anchor (V2 KPI prompt) */}
+            {/* "What Good Looks Like" — V3 Part 8 §12: BOTH 6-month and 12-month
+                future state, in metrics AND business-readable narrative. */}
             {(() => {
+              const v6  = oppSummary.estimated_traffic_uplift_6m;
               const v12 = oppSummary.estimated_traffic_uplift_12m;
-              if (v12 == null) return null;
-              const enquiries = Math.round(v12 * 0.02);
+              if (v6 == null && v12 == null) return null;
+              const enq = (v) => fmtNum(Math.round((v || 0) * 0.02));
+              // Key metric snapshots at each milestone (traffic + the strongest two KPIs).
+              const numericKpis = kpis.filter(k => typeof k.baseline === "number" && (typeof k.target_6_months === "number" || typeof k.target_12_months === "number")).slice(0, 3);
+              const milestone = (label, traffic, kpiKey, tone) => (
+                <div className="rounded-lg p-4 flex-1" style={{ background: "#fff", border: `1px solid ${C.border}`, borderTop: `3px solid ${tone}` }}>
+                  <div className="uppercase mb-2" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: tone }}>{label}</div>
+                  {traffic != null && (
+                    <div className="mb-2">
+                      <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "30px", color: C.textDark }}>{fmtNum(traffic)}</span>
+                      <span style={{ fontFamily: SANS, fontSize: "12px", color: C.greyText }}> visitors/mo · ~{enq(traffic)} enquiries/mo</span>
+                    </div>
+                  )}
+                  <ul className="space-y-0.5">
+                    {numericKpis.map((k, i) => {
+                      const t = k[kpiKey];
+                      if (typeof t !== "number") return null;
+                      return <li key={i} style={{ fontFamily: SANS, fontSize: "11px", color: C.greyText }}>{k.metric}: <strong style={{ color: C.textDark }}>{fmtNum(t)}</strong></li>;
+                    })}
+                  </ul>
+                </div>
+              );
               return (
                 <div className="mt-4 rounded-lg p-4" style={{ background: C.diagTint, borderLeft: `3px solid ${C.orange}` }}>
-                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>What Good Looks Like</div>
-                  <p style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>
-                    In 12 months, executing this prescription puts {meta.client_name} on track for roughly <strong>{fmtNum(v12)} organic visitors a month</strong> from people actively searching for what the business offers. At a conservative 2% conversion rate, that is about <strong>{fmtNum(enquiries)} new enquiries every month</strong> from a channel that costs nothing per click — compounding month over month as the content and authority mature.
+                  <div className="uppercase mb-2" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>What Good Looks Like</div>
+                  <p className="mb-3" style={{ fontFamily: SANS, fontSize: "14px", color: C.textDark, lineHeight: 1.7 }}>
+                    Executing this prescription changes {meta.client_name}'s position in two clear stages. <strong>By month six</strong>, the foundation fixes have lifted the technical ceiling and the first commercial and geography pages are ranking — early momentum shows up as roughly <strong>{fmtNum(v6)} organic visitors a month</strong> and the first steady stream of enquiries. <strong>By month twelve</strong>, the content and authority have matured into about <strong>{fmtNum(v12)} organic visitors a month</strong> — close to <strong>{enq(v12)} new enquiries every month</strong> from a channel that costs nothing per click and compounds from there.
                   </p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {milestone("At 6 Months — Early Momentum", v6, "target_6_months", C.teal)}
+                    {milestone("At 12 Months — Full Realisation", v12, "target_12_months", C.rxGreen)}
+                  </div>
                 </div>
               );
             })()}

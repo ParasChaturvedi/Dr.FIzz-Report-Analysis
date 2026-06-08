@@ -287,6 +287,8 @@ Explain current AI citation status vs competitor benchmarks and why the client i
 ## 11 · KPI FORECAST & MEASUREMENT
 Present the validated KPI table: baseline, 6-month target, 12-month target, and the estimation note for each. For null baselines, state unavailable and the capture action. Flag any metric whose validation_status indicates manual review. After the table, give measurement guidance: which tool tracks each metric, review cadence, and the week 2–4 early signals that indicate the strategy is working before full ranking gains. Name specific tools and signals.
 
+Then close with a "What Good Looks Like" paragraph that describes BOTH the 6-month and the 12-month future state (V3 §12) — not just the 12-month. For each milestone, name the specific metric values being targeted AND translate them into a business consequence (enquiries, customers, revenue position), not the SEO metric alone. Make month 6 read as early momentum and month 12 as full realisation.
+
 ## 12 · IMPLEMENTATION NOTES & SPRINT PLAN
 Time-sequenced sprint plan: Foundation sprint (Day 1 — technical/URL/metadata blockers), Content sprint (Week 1 — content build in priority order), Authority & GEO sprint (Weeks 1–2 — links, schema, AI visibility), and Measurement setup (Week 1 — tools and dashboards). For each sprint: what to do, by when, expected result. Close with a one-sentence framing of the total opportunity and the expected 30/60/90-day outcomes.
 
