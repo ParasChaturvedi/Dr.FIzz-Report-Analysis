@@ -209,10 +209,12 @@ export default function Step5Slide2({
   const startFakeProgressTo92 = () => {
     setProgressPct(0);
     if (fakeProgressRef.current) clearInterval(fakeProgressRef.current);
+    // Sequential collection takes longer wall-clock than the old parallel run, so
+    // ramp 0→92 over ~2 minutes. (The per-stage checkmarks show the real progress.)
     fakeProgressRef.current = setInterval(() => {
       setProgressPct((p) => {
         if (p >= 92) return 92;
-        return Math.min(92, p + 0.368);
+        return Math.min(92, p + 0.08);
       });
     }, 100);
   };
@@ -619,74 +621,72 @@ export default function Step5Slide2({
       // PHASE 1 — CORE DATA COLLECTION
       // ═══════════════════════════════════════════════════════════════════════
 
-      // ── Website Validation — runs IN PARALLEL with data collection (does NOT
-      //    block). Time-bounded so it can never stall the report flow. ──
-      updateStage("websiteValidation", { state: "loading" });
-      let validationJson = null;
-      const validationPromise = (async () => {
-        try {
-          const res = await fetch("/api/seo/website-validation", {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ domain }),
-            signal: AbortSignal.timeout(15000),
-          });
-          if (res.ok) {
-            validationJson = await res.json();
-            const issues = validationJson?.issues?.length || 0;
-            updateStage("websiteValidation", {
-              state: "done",
-              value: validationJson?.valid
-                ? (issues ? `Valid · ${issues} warning${issues > 1 ? "s" : ""}` : "Valid · secure")
-                : (validationJson?.issues?.[0] || "Checked"),
-            });
-          } else {
-            updateStage("websiteValidation", { state: "done", value: "Checked" });
-          }
-        } catch (e) {
-          console.warn("[Step5] Website validation failed:", e?.message);
-          updateStage("websiteValidation", { state: "done", value: "Checked" });
-        }
-      })();
-
       // ═══════════════════════════════════════════════════════════════════════
-      // TECHNICAL DATA COLLECTION — all raw sources in parallel (none depends
-      // on another). Every module retries until it succeeds; nothing hard-fails.
-      // Wall-clock ≈ the slowest single source (PSI). The SSE streams
-      // PSI → metrics → keyword rankings → content → on-page progressively.
+      // DATA COLLECTION — STRICTLY SEQUENTIAL (V3). Each stage runs and completes
+      // before the next begins, so every step builds on the data already
+      // collected. Each stage soft-fails (records "Limited data", never halts).
+      // Order: Website Validation → PSI → Domain Metrics → Keyword Rankings →
+      // Content → On-Page → Crawl → GMB → Competitor → Keyword Gap → … .
       // ═══════════════════════════════════════════════════════════════════════
-      updateStage("psi", { state: "loading" });
-      updateStage("websiteCrawl", { state: "loading" });
-      updateStage("gmbCheck", { state: "loading" });
-
       let crawlJson = null;
       let gmbJson   = null;
 
-      // — SEO SSE: PSI, Domain Intelligence, Keyword Rankings, Content, On-Page
-      const seoPromise = (async () => {
-        const payload = {
-          url,
-          keyword,
-          countryCode: "in",
-          languageCode: "en",
-          depth: 10,
-          providers: ["psi", "dataforseo", "content", "onpageKeywords"],
-        };
+      // 1) Website Validation — confirms the site is reachable/secure first; every
+      //    later step proceeds on a validated base.
+      updateStage("websiteValidation", { state: "loading" });
+      let validationJson = null;
+      try {
+        const res = await fetch("/api/seo/website-validation", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ domain }),
+          signal: AbortSignal.timeout(20000),
+        });
+        if (res.ok) {
+          validationJson = await res.json();
+          const issues = validationJson?.issues?.length || 0;
+          updateStage("websiteValidation", {
+            state: "done",
+            value: validationJson?.valid
+              ? (issues ? `Valid · ${issues} warning${issues > 1 ? "s" : ""}` : "Valid · secure")
+              : (validationJson?.issues?.[0] || "Checked"),
+          });
+        } else {
+          updateStage("websiteValidation", { state: "done", value: "Checked" });
+        }
+      } catch (e) {
+        console.warn("[Step5] Website validation failed:", e?.message);
+        updateStage("websiteValidation", { state: "done", value: "Checked" });
+      }
+
+      // 2–6) PSI → Domain Metrics → Keyword Rankings → Content → On-Page.
+      //      One SSE call whose providers now run ONE-BY-ONE server-side, so these
+      //      five stages complete in order, each after the previous. Validation
+      //      context is forwarded so collection runs against the validated site.
+      let seoJson = null;
+      try {
         const res = await fetch("/api/seo", {
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            url, keyword, countryCode: "in", languageCode: "en", depth: 10,
+            providers: ["psi", "dataforseo", "content", "onpageKeywords"],
+            validation: validationJson,   // prior-stage context
+          }),
         });
         if (!res.ok) throw new Error(`SEO API failed: ${res.status}`);
-        return readSseDone(res, (stage, stageState) => {
+        seoJson = await readSseDone(res, (stage, stageState) => {
           if (stageState === "start")      updateStage(stage, { state: "loading" });
           else if (stageState === "done")  updateStage(stage, { state: "done" });
           else if (stageState === "error") updateStage(stage, { state: "error", value: "Failed" });
         });
-      })();
+      } catch (e) {
+        console.warn("[Step5] SEO collection failed:", e?.message);
+      }
 
-      // — Website Crawl & Audit (sitemap + index check) — retried on failure
-      const crawlPromise = (async () => {
+      // 7) Website Crawl & Audit — crawls the validated site (retried, soft-fail).
+      updateStage("websiteCrawl", { state: "loading" });
+      {
         const r = await withRetry(async () => {
           const res = await fetch("/api/seo/website-crawl", {
             method:  "POST",
@@ -696,17 +696,17 @@ export default function Step5Slide2({
           if (!res.ok) throw new Error(`crawl ${res.status}`);
           return res.json();
         }, { label: "Website Crawl", validate: (d) => d && (d.pageCount || 0) >= 1 });
-
         if (r.ok) {
           crawlJson = r.data;
           updateStage("websiteCrawl", { state: "done", value: formatCrawlValue(crawlJson) });
         } else {
           updateStage("websiteCrawl", { state: "done", value: "Limited data" });
         }
-      })();
+      }
 
-      // — GMB & Directory Listings — retried on failure
-      const gmbPromise = (async () => {
+      // 8) GMB & Directory Listings — retried, soft-fail.
+      updateStage("gmbCheck", { state: "loading" });
+      {
         const businessName = businessData?.businessName || businessData?.name || "";
         const r = await withRetry(async () => {
           const res = await fetch("/api/seo/gmb", {
@@ -717,7 +717,6 @@ export default function Step5Slide2({
           if (!res.ok) throw new Error(`gmb ${res.status}`);
           return res.json();
         }, { label: "GMB", validate: (d) => d && (d.gmb !== undefined || d.directories !== undefined) });
-
         if (r.ok) {
           gmbJson = r.data;
           const found  = gmbJson?.gmb?.found;
@@ -731,12 +730,7 @@ export default function Step5Slide2({
         } else {
           updateStage("gmbCheck", { state: "done", value: "Limited data" });
         }
-      })();
-
-      // Await all technical data-collection sources together (fastest).
-      // validationPromise runs alongside but never blocks (it resolves on its
-      // own timeout) — include it so its stage settles before we move on.
-      const [seoJson] = await Promise.all([seoPromise, crawlPromise, gmbPromise, validationPromise]);
+      }
 
       // ── Competitor Intelligence + Keyword Gap (Phase 1, needs collected data) ──
       // Competitor Audit must run before Keyword Gap — the gap analysis compares

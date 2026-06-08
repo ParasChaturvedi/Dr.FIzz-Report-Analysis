@@ -1346,7 +1346,7 @@ export async function POST(request) {
           const corePromises = [];
 
           if (providers.includes("psi") && !keywordsOnly) {
-            corePromises.push(
+            corePromises.push(() =>
               runProvider("psi", "Fetching PageSpeed Insights (mobile + desktop)…", async () => {
                 const [mobileRes, desktopRes] = await Promise.allSettled([
                   fetchPsiForStrategy(url, "mobile"),
@@ -1382,7 +1382,7 @@ export async function POST(request) {
           }
 
           if (providers.includes("authority") && domain) {
-            corePromises.push(
+            corePromises.push(() =>
               runProvider("authority", "Fetching authority metrics…", async () => {
                 return await fetchOpenPageRank(domain);
               })
@@ -1390,7 +1390,7 @@ export async function POST(request) {
           }
 
           if (providers.includes("serper") && keyword && !keywordsOnly) {
-            corePromises.push(
+            corePromises.push(() =>
               runProvider("serper", "Fetching SERP results…", async () => {
                 return await fetchSerp(keyword);
               })
@@ -1398,7 +1398,7 @@ export async function POST(request) {
           }
 
           if (providers.includes("dataforseo") && domain) {
-            corePromises.push(
+            corePromises.push(() =>
               runProvider(
                 "dataforseo",
                 keywordsOnly
@@ -1416,7 +1416,7 @@ export async function POST(request) {
             );
 
             // Also run dataforseoExtra in parallel (domain rank, competitors, ranked keywords)
-            corePromises.push(
+            corePromises.push(() =>
               runProvider(
                 "dataforseoExtra",
                 "Fetching domain rank overview, competitors, ranked keywords…",
@@ -1432,8 +1432,22 @@ export async function POST(request) {
             );
           }
 
+          // content (for full SSE calls) — runs before on-page so the sequence is
+          // PSI → Domain Metrics → Keyword Rankings → Content → On-Page (V3 order).
+          if (providers.includes("content") && !keywordsOnly) {
+            corePromises.push(() =>
+              runProvider(
+                "content",
+                "Extracting page content (MAIN content + rendered HTML, image-free)…",
+                async () => {
+                  return await buildContentPayload(url);
+                }
+              )
+            );
+          }
+
           if (providers.includes("onpageKeywords") && domain && !keywordsOnly) {
-            corePromises.push(
+            corePromises.push(() =>
               runProvider(
                 "onpageKeywords",
                 "Generating new on-page SEO opportunity keywords (Claude AI)…",
@@ -1456,20 +1470,10 @@ export async function POST(request) {
             );
           }
 
-          // content (for full SSE calls)
-          if (providers.includes("content") && !keywordsOnly) {
-            corePromises.push(
-              runProvider(
-                "content",
-                "Extracting page content (MAIN content + rendered HTML, image-free)…",
-                async () => {
-                  return await buildContentPayload(url);
-                }
-              )
-            );
-          }
-
-          const coreResults = await Promise.all(corePromises);
+          // V3 — run the collected providers strictly ONE-BY-ONE (each completes,
+          // emits its SSE done event, then the next begins) rather than in parallel.
+          const coreResults = [];
+          for (const thunk of corePromises) coreResults.push(await thunk());
 
           for (const item of coreResults) {
             if (item.ok && item.result) {
