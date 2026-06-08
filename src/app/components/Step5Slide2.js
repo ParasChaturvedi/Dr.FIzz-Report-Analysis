@@ -279,10 +279,14 @@ export default function Step5Slide2({
   const getStr = (x) =>
     typeof x === "string" ? x : (x && (x.label || x.name || x.title)) || undefined;
 
-  const buildLocation = useCallback(({ city, state, country, location }) => {
+  const buildLocation = useCallback(({ city, state, country, countries, location }) => {
     const loc = getStr(location);
     if (loc) return loc;
-    const parts = [getStr(city), getStr(state)].filter(Boolean);
+    // V3 — multiple countries: list them (no city logic forced).
+    const countryList = Array.isArray(countries) ? countries.filter(Boolean) : [];
+    if (countryList.length > 1) return countryList.join(", ");
+    // Single scope: City, State, Country (city/state optional, country included).
+    const parts = [getStr(city), getStr(state), getStr(country) || countryList[0]].filter(Boolean);
     return parts.length ? parts.join(", ") : "";
   }, []);
 
@@ -293,10 +297,11 @@ export default function Step5Slide2({
       getStr(s?.language) || getStr(d?.selectedLanguage) || getStr(d?.language) || "English";
     const location =
       buildLocation({
-        city:     s?.city     ?? d?.selectedCity     ?? d?.city,
-        state:    s?.state    ?? d?.selectedState    ?? d?.state,
-        country:  s?.country  ?? d?.selectedCountry  ?? d?.country,
-        location: s?.location ?? d?.selectedLocation ?? d?.location,
+        city:      s?.city      ?? d?.selectedCity     ?? d?.city,
+        state:     s?.state     ?? d?.selectedState    ?? d?.state,
+        country:   s?.country   ?? d?.selectedCountry  ?? d?.country,
+        countries: d?.countries ?? s?.countries,        // V3 — multi-country
+        location:  s?.location  ?? d?.selectedLocation ?? d?.location,
       }) || "—";
     return { language, location };
   }, [languageLocationData, buildLocation]);
