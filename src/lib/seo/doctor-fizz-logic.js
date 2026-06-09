@@ -1968,186 +1968,176 @@ export function buildStoryNarrative(input = {}) {
   const techCount = technical_issues.length;
   const topTech = technical_issues[0];
 
-  // ── Story is written as SHORT, presentation-style bullets ──────────────────
-  // One idea per line, plain words, short sentences. The cause→effect logic and
-  // every live metric are preserved — just split into crisp points so the
-  // "In Plain English" blocks read like a deck, not a document.
+  // ── Story narration follows the OnIt SEO/GEO report's strategy, logic and
+  //    fundamentals word-for-word, written as short presentation-style bullets.
+  //    Every live metric is interpolated and the metrics are connected to one
+  //    another (foundation → rankings → traffic; reviews → map pack; commercial
+  //    gap → opportunity; everything compounds on the foundation). ────────────
   const speedBad = has(mobile) && mobile < 50;
   const reviewGap = has(clientReviews) && compReviews > clientReviews;
   const lowTrust = (has(dr) && dr < 25) || (has(refDomains) && refDomains < 30);
   const aiZero = aiCites != null && /zero|^not|^0|\bno\b/i.test(String(aiCites));
   const yourEdges = (competitive_analysis?.your_edges || []).length;
   const theirEdges = (competitive_analysis?.their_edges || []).length;
+  const invisible = (traffic === 0 || traffic == null) && (orgKw === 0 || orgKw == null);
 
-  // Short ordered labels for the "fix in this order" bullet (one word each).
-  const order = [];
-  if (speedBad) order.push("speed");
-  if (has(dr) && dr < 25) order.push("trust");
-  else if (has(refDomains) && refDomains < 30) order.push("backlinks");
-  if (reviewGap) order.push("reviews");
+  // Leader DR (for "even the DR-X leader hasn't cracked commercial rankings").
+  const compTopDr = Math.max(
+    0,
+    ...((competitors || []).map(c => Number(c?.domain_rating ?? c?.dr ?? c?.domainRating ?? 0))),
+    ...((gbp_comparison?.competitors || []).map(c => Number(c?.domain_rating ?? c?.dr ?? 0)))
+  );
+  // Technical-issue fingerprints (OnIt's "Fix Before You Build" priorities).
+  const techText = (technical_issues || []).map(t => String(t?.issue ?? t?.title ?? "").toLowerCase()).join(" | ");
+  const hasBroken = /404|broken|redirect/.test(techText);
+  const hasBlocked = /robots|blocked|noindex/.test(techText);
+  const drTargetLow = !has(dr) || dr < 25; // OnIt sets a 25–35 12-month target from a low base.
 
   const story = {};
 
-  // 01 — THE SITUATION: plain picture + the ONE root cause connecting everything.
+  // 01 — THE SITUATION  ·  OnIt "The Baseline" + "The Honest Assessment".
   story.the_situation = [
-    `Picture your website as a shop on a busy street.`,
-    `Right now, Google barely lists it.`,
-    `${name} ranks for ${orgKw === 0 ? "no" : n(orgKw)} search terms today.`,
-    `That brings ${traffic === 0 ? "no" : n(traffic)} visitors a month from Google.`,
-    has(totalDemand) ? `Meanwhile, ~${n(totalDemand)} searches a month go to rivals instead.` : null,
-    has(totalDemand) ? `That lost demand is the real cost of standing still.` : null,
-    speedBad ? `The biggest reason is speed.` : null,
-    speedBad ? `Your pages take ${lcpSec || "several"}s to load on a phone.` : null,
-    speedBad ? `A healthy site loads in under 2.5s.` : null,
-    speedBad ? `So Google scores your mobile speed just ${mobile}/100.` : null,
-    speedBad ? `That one problem quietly holds every page back.` : null,
-    `This report shows what to fix — and in what order.`,
+    `${name} has ${traffic === 0 ? "zero" : n(traffic)} organic traffic and ${orgKw === 0 ? "zero" : n(orgKw)} ranking keywords.`,
+    invisible ? `The site is effectively invisible to Google.` : null,
+    has(dr) ? `Domain Rating is just ${dr} — the foundation is weak.` : null,
+    `The technical foundation must be rebuilt first.`,
+    `No keyword strategy can take hold until it is.`,
+    (yourEdges || rating != null) ? `Working in your favour: real assets already in place.` : null,
+    `Starting from near-zero is actually an advantage.`,
+    `No bad habits to undo, no penalty history.`,
+    `And the commercial keyword space is wide open.`,
+    `This plan reverse-engineers the competitors already ranking.`,
   ].filter(Boolean);
 
-  // 02 — THE OPPORTUNITY: connect "0 rankings" → "uncaptured demand" → realistic upside.
+  // 02 — THE OPPORTUNITY  ·  OnIt "Content Blueprint" pattern + "Uncontested Territory".
   story.the_opportunity = [
-    has(totalDemand) ? `These ${n(totalDemand)} monthly searches are the prize.` : `This is the demand you could be capturing.`,
-    has(totalDemand) ? `You capture almost none of them today.` : null,
-    has(totalDemand) ? `Not because demand is missing — you rank for ${orgKw === 0 ? "no" : n(orgKw)} terms.` : null,
-    (commercialPages || geoPages) ? `To claim it, you need the right pages:` : null,
-    commercialPages ? `${commercialPages} buyer-focused service pages.` : null,
-    geoPages ? `${geoPages} local location pages.` : null,
-    (commercialPages || geoPages) ? `One page per thing people search for.` : null,
-    (has(uplift6) && has(uplift12)) ? `Fix the speed ceiling and build those pages.` : null,
-    has(uplift6) ? `Realistic path: ~${n(uplift6)} visitors a month by month 6.` : null,
-    has(uplift12) ? `Growing to ~${n(uplift12)} a month by month 12.` : null,
-    (has(uplift6) && has(uplift12)) ? `These come from your real demand, not guesswork.` : null,
+    has(totalDemand) ? `~${n(totalDemand)} searches a month are up for grabs.` : `Real commercial demand is sitting uncaptured.`,
+    compTopDr > 0 ? `Even the DR-${compTopDr} market leader hasn't cracked commercial rankings.` : `Even the market leader hasn't cracked commercial rankings.`,
+    `Their ranking content is almost all informational blog.`,
+    `So the commercial keyword space is wide open.`,
+    `Nobody is dominating it yet — that is your opening.`,
+    (commercialPages || geoPages) ? `Own it with the right pages:` : null,
+    commercialPages ? `${commercialPages} commercial-intent service pages.` : null,
+    geoPages ? `${geoPages} city and location pages.` : null,
+    `One dedicated page per city-and-service combination.`,
   ].filter(Boolean);
 
-  // 03 — WHAT IS BLOCKING GROWTH: the explicit cause→effect chain between metrics.
+  // 03 — WHAT IS BLOCKING GROWTH  ·  the connecting logic (every metric links up).
   story.whats_blocking_growth = [
-    `Here is how the problems connect. This part matters.`,
-    speedBad ? `Slow pages are the ceiling.` : `Technical signals set the ceiling on everything else.`,
-    speedBad ? `Google won't rank a page it thinks is slow.` : null,
-    speedBad ? `Your ${lcpSec || ""}s load time (${mobile}/100) caps your rankings.` : null,
-    speedBad ? `Low rankings are why traffic is ${traffic === 0 ? "zero" : "low"}.` : null,
-    speedBad ? `Lift the speed and every page can rank again.` : null,
-    lowTrust ? `Next problem: very few sites link to you.` : null,
-    lowTrust ? `Links are the "votes of trust" Google counts.` : null,
-    lowTrust ? `Without them, even a fast page struggles.` : null,
-    reviewGap ? `In the local map, reviews decide who wins.` : null,
-    reviewGap ? `You have ${clientReviews}; the leader has ${n(compReviews)}.` : null,
-    reviewGap ? `That gap keeps you out of the local pack.` : null,
-    order.length ? `Fix in this order: ${order.join(", then ")}.` : null,
-    order.length ? `Each fix unlocks the ones above it.` : null,
+    `Here is how every metric connects.`,
+    hasBroken ? `Broken pages and redirect chains make you invisible to Google.` : `Technical errors make the site hard for Google to read.`,
+    hasBlocked ? `Blocked pages hide key content from search entirely.` : null,
+    `Invisible pages can't rank — that's why keywords sit at ${orgKw === 0 ? "zero" : n(orgKw)}.`,
+    `No rankings means ${traffic === 0 ? "zero" : "low"} organic traffic.`,
+    lowTrust && has(dr) ? `Domain Rating ${dr} is too low to compete on tough terms.` : null,
+    lowTrust && has(refDomains) ? `Only ${n(refDomains)} referring domains means little authority.` : null,
+    speedBad ? `Pages also load in ${lcpSec}s — over the sub-2.5s bar Google wants.` : null,
+    reviewGap ? `And ${clientReviews} reviews vs the leader's ${n(compReviews)} keeps you out of the map pack.` : null,
+    `Fix the foundation first — everything else compounds on top.`,
   ].filter(Boolean);
 
-  // 04 — WHO COMPETES: plain framing of edges vs gaps.
+  // 04 — WHO COMPETES  ·  OnIt "Competitor Landscape" + "Competitive Intelligence" + "The Local Opening".
   story.who_competes = [
-    (yourEdges || theirEdges) ? `Good news first.` : `This compares you to your real business rivals.`,
-    yourEdges ? `You already beat rivals on ${yourEdges} thing${yourEdges === 1 ? "" : "s"}. Defend those.` : null,
-    theirEdges ? `They beat you on ${theirEdges}. Each one is closable.` : null,
-    `One rule protects your strategy.`,
-    `Directories and listing sites are not real rivals.`,
-    `You don't out-rank Justdial — you get listed on it.`,
-    `They are placement targets, not competitors.`,
+    `We reverse-engineer the competitors that already rank.`,
+    theirEdges ? `What works for them: ${theirEdges} strength${theirEdges === 1 ? "" : "s"} to match or beat.` : null,
+    yourEdges ? `Gaps you can exploit: ${yourEdges} opening${yourEdges === 1 ? "" : "s"} to own.` : null,
+    `Big directories and platforms are interceptors, not rivals.`,
+    `They win on template-driven, high-DR pages.`,
+    `They cannot be outranked nationally.`,
+    `But their templates have no edge in the local map pack.`,
+    `Nor on hyper-local long-tail terms.`,
+    `That is exactly where you compete and win.`,
   ].filter(Boolean);
 
-  // 05 — WHERE DEMAND SITS: explain the 3 buckets simply.
+  // 05 — WHERE DEMAND SITS  ·  OnIt "Keyword Strategy" — Tier 1 / 2 / 3.
   story.where_demand_sits = [
-    acceptedKw ? `Your ${acceptedKw} useful keywords split into three searcher types.` : `Search demand splits into three searcher types.`,
-    `Each type needs a different page.`,
-    `Ready-to-buy searches need a service page that sells.`,
-    `Research searches need a helpful blog that builds trust.`,
-    `City searches need their own local page.`,
-    `The wrong page on a search won't convert.`,
-    `So we map every keyword to its right page type.`,
+    acceptedKw ? `Your ${acceptedKw} target keywords split into three tiers.` : `Demand splits into three keyword tiers.`,
+    `Tier 1: commercial keywords — highest conversion intent.`,
+    `One dedicated landing page per city-and-service combo.`,
+    `Tier 2: hyper-local neighborhood terms — match or beat rivals.`,
+    `Tier 3: informational blog content — long-term authority.`,
+    `Each tier needs its own page type to rank.`,
   ];
 
-  // 06 — WHAT PAGES NEED TO EXIST.
+  // 06 — WHAT PAGES NEED TO EXIST  ·  OnIt "Content Architecture".
   story.what_pages_needed = [
-    (commercialPages || geoPages || blogPages) ? `This is your build list:` : `This is the list of pages to build.`,
-    commercialPages ? `${commercialPages} service pages.` : null,
-    geoPages ? `${geoPages} location pages.` : null,
-    blogPages ? `${blogPages} guide${blogPages === 1 ? "" : "s"}.` : null,
-    `Each page targets one search, so it answers it fully.`,
-    `Why separate pages?`,
-    `One page chasing many searches wins none of them.`,
-    `One page, one job — that's how ranking pages are built.`,
-    speedBad ? `Remember: none of these rank until speed is fixed first.` : null,
+    (commercialPages || geoPages || blogPages) ? `Build list:` : `Here is the recommended site structure.`,
+    commercialPages ? `${commercialPages} commercial service pages.` : null,
+    geoPages ? `${geoPages} city / location pages.` : null,
+    blogPages ? `${blogPages} informational blog post${blogPages === 1 ? "" : "s"}.` : null,
+    `Every location page needs the city name in the H1, title and meta.`,
+    `Unique local content — never a copy-paste template.`,
+    `Add local landmarks, an embedded map, and real area reviews.`,
+    `Click-to-call above the fold, plus a booking or quote form.`,
+    `One page, one intent — that's how they rank.`,
   ].filter(Boolean);
 
-  // 07 — WHAT MUST BE FIXED FIRST.
+  // 07 — WHAT MUST BE FIXED FIRST  ·  OnIt "Technical Foundation — Fix Before You Build".
   story.what_to_fix_first = [
-    techCount ? `These ${techCount} technical fix${techCount === 1 ? "" : "es"} come first.` : `Fix the technical foundation first.`,
-    `Search engines read these signals before your content.`,
-    topTech ? `Start at the top: ${topTech.issue}.` : null,
-    `Then work down the list in order.`,
-    `Each row shows the problem and the fix.`,
-    `Plus the effort, and what improves once it's done.`,
-    `Your developer can act without guessing.`,
+    `Fix before you build — search engines read these first.`,
+    techCount ? `${techCount} technical issue${techCount === 1 ? "" : "s"}, in priority order.` : null,
+    hasBroken ? `Critical: redirect or remove broken pages and redirect chains.` : (topTech ? `Critical first: ${topTech.issue}.` : null),
+    hasBlocked ? `Audit robots.txt — it is likely blocking key content.` : null,
+    `Then on-page SEO: titles, exact-intent H1s, meta descriptions.`,
+    `Every page: 800–1,500 unique words, JSON-LD and FAQ schema, internal links.`,
+    speedBad ? `And a sub-2.5s load — yours is ${lcpSec}s today.` : `Hold every page to a sub-2.5s load.`,
   ].filter(Boolean);
 
-  // 08 — HOW AUTHORITY WILL BE BUILT.
+  // 08 — HOW AUTHORITY WILL BE BUILT  ·  OnIt "Authority — Link Building to Raise Domain Rating".
   story.how_authority_built = [
-    `Authority is the web's version of word-of-mouth.`,
-    `More trusted sites linking to ${name} means more trust from Google.`,
-    `That lets you rank for tougher searches.`,
-    `Start with the quick, free wins.`,
-    `Get listed in the directories below — many take an hour.`,
-    `Then earn harder, higher-value links over time.`,
-    `Do the easy ones first, so trust builds this week.`,
-  ];
-
-  // 09 — LOCAL VISIBILITY: the review cause→effect + the simple free fix.
-  story.local_visibility = reviewGap
-    ? [
-        `In Google Maps, reviews decide who customers pick.`,
-        `You have ${clientReviews}. The leader has ${n(compReviews)}${reviewLeader?.name ? ` (${reviewLeader.name})` : ""}.`,
-        `That gap is why they rank above you — and get the call.`,
-        `The fix is simple and free.`,
-        `After every job, text the customer a review link.`,
-        `Keep it up for 6–8 weeks to close most of the gap.`,
-        `As reviews climb, so does your local ranking.`,
-        `Also fill every empty profile field — each one helps.`,
-      ]
-    : [
-        `Your Google Business Profile is how locals find you.`,
-        `Fill every field and post weekly.`,
-        `Ask every happy customer for a review.`,
-        `Each one lifts you in the local pack.`,
-      ];
-
-  // 10 — GEO / AI VISIBILITY.
-  story.geo_ai_visibility = [
-    aiZero ? `A new kind of search matters now.` : `This is about being quoted by AI answer tools.`,
-    aiZero ? `Tools like ChatGPT and Google's AI answers.` : `Like ChatGPT and Google AI Overviews.`,
-    aiZero ? `Right now they don't cite ${name} at all.` : null,
-    aiZero ? `You're invisible in the AI layer.` : null,
-    `The fix doubles as good SEO.`,
-    `Add the "schema" code below — it tells AI what you do.`,
-    `Open key pages with a clear 40–60 word answer.`,
-    `That's the text AI tools lift and quote.`,
-    `The pages you're already building become AI-quotable.`,
+    `Authority means raising your Domain Rating.`,
+    has(dr) ? `You're at DR ${dr} today.` : null,
+    drTargetLow ? `Target: DR 25–35 within 12 months, with consistent execution.` : `Push your DR higher with consistent link building.`,
+    `Months 1–2 quick wins: consistent NAP citations everywhere.`,
+    `Months 2–4: local press, realtor and partner links, guest posts.`,
+    `Ongoing: run a link-gap analysis against the leader.`,
+    `Any site linking to them but not to you is a priority target.`,
   ].filter(Boolean);
 
-  // 11 — PRIORITY PLAN.
+  // 09 — LOCAL VISIBILITY  ·  OnIt "Local Search — GBP: The Fastest Win".
+  story.local_visibility = [
+    `The map pack drives the majority of local service calls.`,
+    `Your Google Business Profile is the single highest-impact action.`,
+    reviewGap ? `Reviews are the top ranking signal — you have ${clientReviews}, the leader has ${n(compReviews)}${reviewLeader?.name ? ` (${reviewLeader.name})` : ""}.` : `Reviews are the top local ranking signal.`,
+    `Target 100+ Google reviews within 6 months.`,
+    `Reviews compound quickly once a request system is running.`,
+    `Verify the listing, add every service, upload 20+ photos.`,
+    `Set service areas to every target city and post weekly.`,
+    `Run a systematic review request after every job.`,
+  ].filter(Boolean);
+
+  // 10 — GEO / AI VISIBILITY  ·  OnIt "The Next Frontier — GEO and AI Visibility".
+  story.geo_ai_visibility = [
+    `The next frontier is GEO — visibility in AI answers.`,
+    aiZero ? `Right now you have 0 citations across the AI platforms.` : null,
+    aiZero ? `You are invisible in the AI layer.` : null,
+    `Add structured FAQ content with schema — 5–8 Q&As per service page.`,
+    `Earn mentions from authoritative local sources.`,
+    `Create definitive resource pages on your core services.`,
+    `Build E-E-A-T: author bios, founder story, certifications.`,
+    `Keep NAP consistent — inconsistency confuses Google and AI alike.`,
+  ].filter(Boolean);
+
+  // 11 — PRIORITY PLAN  ·  OnIt "Strategic Priority Stack" + "12-Month Roadmap".
   story.priority_plan = [
-    `This is the whole report as a simple to-do list.`,
-    `It's ordered so each step pays off the next.`,
-    `Foundation first — speed and technical. It unblocks everything.`,
-    `Then build the pages.`,
-    `Then reviews, links and AI work that compound on top.`,
-    `Only time for one thing this week? Do the top item.`,
-    `Highest payoff, least effort. Then work straight down.`,
+    `The whole plan, in strict priority order.`,
+    `1. Fix technical issues and optimise GBP — week 1.`,
+    `2. Build commercial location and service pages — months 1–3.`,
+    `3. Acquire reviews consistently — ongoing.`,
+    `Blog content, link building and AI citations compound on top.`,
+    `Foundation first, because everything else builds on it.`,
   ];
 
-  // 12 — WHAT GOOD LOOKS LIKE.
+  // 12 — WHAT GOOD LOOKS LIKE  ·  OnIt "Measuring Success — Visibility KPIs".
   story.what_good_looks_like = [
-    (has(uplift6) && has(uplift12)) ? `Here's the payoff if you follow the plan in order.` : `Here's the realistic future state if the plan is followed.`,
-    has(uplift6) ? `By month 6, the speed fix lifts the ceiling.` : null,
-    has(uplift6) ? `Your first pages rank — about ${n(uplift6)} visitors a month.` : null,
-    has(uplift6) ? `And your first steady stream of enquiries.` : null,
-    has(uplift12) ? `By month 12, pages, reviews and links compound.` : null,
-    has(uplift12) ? `About ${n(uplift12)} visitors a month${enquiries12 ? ` — roughly ${n(enquiries12)} new enquiries` : ""}.` : null,
-    has(uplift12) ? `From a channel that costs nothing per click.` : null,
-    has(uplift12) ? `These are targets, not guarantees.` : `These are directional targets.`,
-    has(uplift12) ? `They depend on the work getting done.` : `They depend on the recommended work being done.`,
+    `Here is what success looks like, tracked monthly.`,
+    has(uplift6) ? `By 6 months: ~${n(uplift6)} organic visits a month.` : null,
+    has(uplift12) ? `By 12 months: ~${n(uplift12)} organic visits a month${enquiries12 ? ` (~${n(enquiries12)} new enquiries)` : ""}.` : null,
+    has(dr) && drTargetLow ? `Domain Rating climbing from ${dr} toward 25–35.` : null,
+    `Keywords and top-10 rankings growing every month.`,
+    aiZero ? `AI citations rising from 0 toward 10–20.` : null,
+    `These are directional targets, not guarantees.`,
+    `Outcomes depend on the recommended changes being implemented.`,
   ].filter(Boolean);
 
   return story;
