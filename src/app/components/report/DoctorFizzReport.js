@@ -209,12 +209,15 @@ function StoryBlock({ points }) {
   if (!list.length) return null;
   return (
     <div style={{ background: C.ivory, border: `1px solid ${C.border}`, borderLeft: `3px solid ${C.teal}`, borderRadius: "4px", padding: "14px 18px", marginBottom: "16px" }}>
-      <div className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.teal, marginBottom: "8px" }}>In Plain English</div>
-      <div className="space-y-2">
+      <div className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.teal, marginBottom: "10px" }}>In Plain English</div>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {list.map((p, i) => (
-          <p key={i} style={{ fontFamily: SANS, fontSize: "13.5px", color: C.textDark, lineHeight: 1.7, margin: 0 }}>{p}</p>
+          <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "9px", marginBottom: i === list.length - 1 ? 0 : "6px" }}>
+            <span style={{ flexShrink: 0, width: "5px", height: "5px", borderRadius: "50%", background: C.teal, marginTop: "7px" }} />
+            <span style={{ fontFamily: SANS, fontSize: "13.5px", color: C.textDark, lineHeight: 1.5, margin: 0 }}>{p}</span>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
