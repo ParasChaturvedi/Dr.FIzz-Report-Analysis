@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 
-export default function DownloadReportModal({ domain, onClose }) {
+export default function DownloadReportModal({ domain, data, onClose }) {
   const [form, setForm]               = useState({ name: "", email: "", mobile: "", address: "", message: "" });
   const [errors, setErrors]           = useState({});
   const [downloading, setDownloading] = useState(false);
+  const [pptBusy, setPptBusy]         = useState(false);
   const [done, setDone]               = useState(false);
 
   const validate = () => {
@@ -297,6 +298,44 @@ export default function DownloadReportModal({ domain, onClose }) {
     }
   };
 
+  // ── Executive PowerPoint download ───────────────────────────────────────────
+  const handlePpt = async () => {
+    const errs = validate();
+    if (Object.keys(errs).length > 0) { setErrors(errs); return; }
+    setErrors({});
+    const df = data?.doctorFizz;
+    if (!df) { alert("The executive deck needs the analysed report data. Please open the full report and try again."); return; }
+    setPptBusy(true);
+    // Best-effort lead capture (mirrors the PDF flow), then build the deck.
+    try {
+      await fetch("/api/leads/save", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: form.name, email: form.email, mobile: form.mobile, address: form.address, message: form.message, domain, reportUrl: window.location.href }),
+      });
+    } catch { /* non-blocking */ }
+    try {
+      const resp = await fetch("/api/report/download-ppt", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ doctorFizz: df }),
+      });
+      if (!resp.ok) throw new Error(`Presentation ${resp.status}`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${String(domain || "report").replace(/^https?:\/\//, "").replace(/[^a-z0-9.-]+/gi, "-")}-Executive-Brief.pptx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      setDone(true);
+      setTimeout(() => onClose(), 1500);
+    } catch (err) {
+      console.error("[DownloadReportModal] PPT", err);
+      alert(`Presentation generation failed: ${err?.message || "unknown error"}. Please try again.`);
+    } finally {
+      setPptBusy(false);
+    }
+  };
+
   const field = (key, label, type = "text", required = false, placeholder = "") => (
     <div>
       <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -363,7 +402,7 @@ export default function DownloadReportModal({ domain, onClose }) {
 
               <button
                 type="submit"
-                disabled={downloading}
+                disabled={downloading || pptBusy}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-gradient-to-r from-[#d45427] to-[#ffa615] text-white font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-60"
               >
                 {downloading ? (
@@ -383,6 +422,33 @@ export default function DownloadReportModal({ domain, onClose }) {
                   </>
                 )}
               </button>
+
+              {/* Executive PowerPoint — leadership-friendly slide deck (data-driven) */}
+              {data?.doctorFizz && (
+                <button
+                  type="button"
+                  onClick={handlePpt}
+                  disabled={downloading || pptBusy}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-full border-2 border-gray-900 text-gray-900 font-bold text-sm hover:bg-gray-900 hover:text-white transition-colors disabled:opacity-60"
+                >
+                  {pptBusy ? (
+                    <>
+                      <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                      </svg>
+                      Building presentation…
+                    </>
+                  ) : (
+                    <>
+                      <svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v9a1 1 0 01-1 1h-4.5l1.7 2.4a1 1 0 01-1.6 1.2L10 14.8l-1.7 2.4a1 1 0 01-1.6-1.2L8.4 14H4a1 1 0 01-1-1V4zm2 1v7h10V5H5z"/>
+                      </svg>
+                      Download Executive PPT
+                    </>
+                  )}
+                </button>
+              )}
 
               <p className="text-[10px] text-gray-400 text-center">
                 By downloading, you agree to be contacted by ItzFizz Digital regarding SEO services.

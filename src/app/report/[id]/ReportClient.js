@@ -226,6 +226,7 @@ export default function ReportClient({ id }) {
       {showModal && (
         <DownloadReportModal
           domain={data?.domain || "report"}
+          data={data}
           onClose={() => setShowModal(false)}
         />
       )}
