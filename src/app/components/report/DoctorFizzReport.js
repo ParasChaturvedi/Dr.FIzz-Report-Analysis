@@ -11,6 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useMemo } from "react";
+import { buildStoryNarrative } from "@/lib/seo/doctor-fizz-logic";
 
 const LOGO_URL = "https://doctorfizz.com/wp-content/uploads/2025/09/doctorfizzlogo_1-scaled.png";
 // Typography matched to the reference deck: Trebuchet MS bold headings + Calibri body.
@@ -538,7 +539,24 @@ export default function DoctorFizzReport({ data }) {
   const oppSummary = v2.opportunity_summary || {};
   const formattedBaseline = v2.formatted_baseline || [];
   const frames = v2.non_expert_section_frames || {};
-  const story = payload.story || {};   // V3 §9 — deterministic connected story, always present
+  // V3 §9 — connected story. Recompute LIVE from the payload's metrics at render
+  // time so every report (including ones generated before a narration update)
+  // shows the current flowing narration. The narration is otherwise frozen into
+  // the saved payload at generation time, so older reports would keep stale text.
+  // Falls back to the baked payload.story if recomputation can't run.
+  const story = useMemo(() => {
+    try {
+      const live = buildStoryNarrative({
+        clientName: meta.client_name || meta.domain,
+        baseline, scores, gbp_comparison: gbp,
+        opportunity_summary: oppSummary, technical_issues: tech,
+        keywords: kw, content_architecture: ca, competitive_analysis: compAnalysis,
+        competitors: payload.competitors || [], geo_and_ai_visibility: geo, kpis: payload.kpis,
+      });
+      if (live && Object.keys(live).length) return live;
+    } catch (_) { /* fall back to baked story */ }
+    return payload.story || {};
+  }, [payload]);
   const narrativeBridge = (section) => (v2.narrative_connections || []).find(n => n.section === section)?.narrative_connection || null;
   const fmtNum = (n) => (n == null ? "—" : Number(n).toLocaleString("en-US"));
 
