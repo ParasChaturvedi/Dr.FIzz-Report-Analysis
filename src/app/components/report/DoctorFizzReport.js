@@ -1641,21 +1641,24 @@ function Td({ children, right }) {
 
 function KeywordTable({ rows }) {
   if (!rows.length) return <p className="text-[12px]" style={{ color: C.greyText }}>No keywords passed classification.</p>;
+  // Presentation-style but COMPLETE: every keyword shown (sorted by demand), in a
+  // compact, scannable table. Volume + difficulty (the fetched data) and the
+  // recommended action are all retained.
+  const sorted = [...rows].sort((a, b) => (b.global_volume || 0) - (a.global_volume || 0));
   return (
     <div className="overflow-x-auto rounded-lg" style={{ border: `1px solid ${C.warmGrey}30` }}>
       <table className="w-full text-[12px]">
         <thead><tr style={{ background: C.nearBlack }}>
-          <Th white>Keyword</Th><Th white right>Volume</Th><Th white>Difficulty</Th><Th white>Intent</Th><Th white>Asset Type</Th><Th white>Funnel</Th><Th white>Priority</Th>
+          <Th white>Keyword</Th><Th white right>Volume</Th><Th white>Difficulty</Th><Th white>Intent</Th><Th white>Asset Type</Th><Th white>Priority</Th>
         </tr></thead>
         <tbody>
-          {rows.slice(0, 20).map((k, i) => (
+          {sorted.map((k, i) => (
             <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
               <Td>{k.keyword}</Td>
               <Td right>{k.global_volume != null ? k.global_volume.toLocaleString() : "—"}</Td>
               <Td><DiffChip value={k.keyword_difficulty} /></Td>
               <Td><span className="text-[11px] capitalize">{k.intent_class?.replace("-", " ")}</span></Td>
               <Td><span className="text-[11px]">{k.recommended_asset_type}</span></Td>
-              <Td><span className="text-[11px]">{k.funnel_role}</span></Td>
               <Td><PriorityLabel priority={k.priority} /></Td>
             </tr>
           ))}
@@ -1667,34 +1670,29 @@ function KeywordTable({ rows }) {
 
 function ContentSub({ title, rows, type }) {
   return (
-    <div className="mb-5">
-      <h4 className="text-[13px] font-bold mb-2 tracking-wide" style={{ color: C.orange }} dangerouslySetInnerHTML={{ __html: title }} />
+    <div className="mb-4">
+      <div className="flex items-baseline justify-between mb-1.5">
+        <h4 className="text-[13px] font-bold tracking-wide" style={{ color: C.orange }} dangerouslySetInnerHTML={{ __html: title }} />
+        {rows.length > 0 && <span className="text-[10px]" style={{ color: C.greyText }}>{rows.length} page{rows.length === 1 ? "" : "s"}</span>}
+      </div>
       {!rows.length ? (
         <p className="text-[12px]" style={{ color: C.greyText }}>None mapped for this category.</p>
       ) : (
-        <div className="space-y-2">
+        // Compact, presentation-style: one tight row per page — every page kept,
+        // with its URL, location and demand. (The repeated rationale is summarised
+        // once in the section's "What Ranking Pages Do" note, not per row.)
+        <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.warmGrey}25` }}>
           {rows.map((p, i) => (
-            <div key={i} className="rounded-lg p-3" style={{ background: "#fff", border: `1px solid ${C.warmGrey}25` }}>
-              <div className="flex items-center justify-between flex-wrap gap-1">
-                <span className="text-[13px] font-semibold" style={{ color: C.nearBlack }}>
-                  {p.page_name || p.proposed_title}
-                </span>
-                <div className="flex items-center gap-1.5">
-                  {p.priority && <PriorityLabel priority={p.priority} />}
-                  <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: C.ivory, color: C.greyText }}>{p.funnel_role}</span>
-                </div>
+            <div key={i} className="flex items-center justify-between gap-3 px-3 py-1.5" style={{ background: i % 2 ? "#fff" : C.ivory, borderTop: i ? `1px solid ${C.line}` : "none" }}>
+              <div className="min-w-0 flex-1 truncate">
+                <span className="text-[12px] font-semibold" style={{ color: C.nearBlack }}>{p.page_name || p.proposed_title}</span>
+                {p.url_slug && <span className="text-[10.5px] font-mono ml-2" style={{ color: C.greyText }}>{p.url_slug}</span>}
+                {(p.geo_target || p.city_target) && <span className="text-[10.5px] ml-1.5" style={{ color: C.greyText }}>· {p.geo_target || p.city_target}</span>}
               </div>
-              <div className="text-[11px] mt-1" style={{ color: C.greyText }}>
-                {p.url_slug && <span className="font-mono">{p.url_slug}</span>}
-                {(p.geo_target || p.city_target) && <span> · {p.geo_scope === "country" ? "Country" : p.geo_scope === "region" ? "Region" : "City"}: {p.geo_target || p.city_target}</span>}
-                {" · "}cluster: <span style={{ color: C.nearBlack }}>"{p.keyword_cluster}"</span>
-                {p.primary_volume != null && <span> ({p.primary_volume.toLocaleString()}/mo)</span>}
+              <div className="flex items-center gap-2 shrink-0">
+                {p.primary_volume != null && <span className="text-[11px] tabular-nums" style={{ color: C.greyText }}>{p.primary_volume.toLocaleString()}/mo</span>}
+                {p.priority && <PriorityLabel priority={p.priority} />}
               </div>
-              {(p.commercial_reason || p.funnel_connection || p.why_separate_page) && (
-                <div className="text-[11px] mt-1 italic" style={{ color: C.greyText }}>
-                  {p.commercial_reason || p.funnel_connection || p.why_separate_page}
-                </div>
-              )}
             </div>
           ))}
         </div>
