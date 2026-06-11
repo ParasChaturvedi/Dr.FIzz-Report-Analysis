@@ -1625,6 +1625,46 @@ export default function DoctorFizzReport({ data }) {
             </div>
           </div>
 
+          {/* ── DATA SOURCES & INTEGRITY (credibility layer — every number sourced,
+              derived figures tagged ESTIMATE, nothing fabricated) ──────────────── */}
+          <div className="mt-14">
+            <div className="flex items-center gap-2 mb-1">
+              <span style={{ width: 14, height: 14, background: C.teal, display: "inline-block" }} />
+              <span className="uppercase" style={{ fontFamily: SANS, fontWeight: 700, fontSize: "11px", letterSpacing: "3px", color: C.greyText }}>Data Sources & Integrity</span>
+            </div>
+            <h2 style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "26px", color: C.textDark, marginBottom: "4px" }}>How to read these numbers</h2>
+            <div className="mb-4" style={{ borderBottom: `1px solid ${C.border}` }} />
+            <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr style={{ background: C.nearBlack }}>
+                    <Th white>Metric group</Th><Th white>Source</Th><Th white>Scope</Th><Th white>As of</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["Performance & Core Web Vitals", "Google PageSpeed Insights", "Mobile + desktop", meta.report_date],
+                    ["Domain rating, traffic, keywords, competitors", "DataForSEO (Labs + Site Explorer)", "Domain · country-filtered", meta.report_date],
+                    ["Backlinks & referring domains", "DataForSEO + OpenPageRank", "Domain", meta.report_date],
+                    ["Reviews, rating, directory presence", "DataForSEO (Maps / Business Data)", "Local pack", meta.report_date],
+                    ["On-page & content", "Browserless render + Claude analysis", "Page-level", meta.report_date],
+                    ["GEO / AI-readiness", "Schema & content signals · live multi-engine scan pending", "Site", meta.report_date],
+                  ].map((r, i) => (
+                    <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
+                      <Td>{r[0]}</Td><Td>{r[1]}</Td><Td>{r[2]}</Td><Td>{r[3]}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="rounded-lg p-4" style={{ background: C.ivory, borderLeft: `3px solid ${C.teal}` }}>
+              <div className="uppercase mb-1.5" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.teal }}>Data Integrity Statement</div>
+              <p style={{ fontFamily: SANS, fontSize: "12.5px", color: C.textDark, lineHeight: 1.65 }}>
+                Every figure in this report is pulled from the live tools above for <strong>{meta.domain}</strong> and cross-checked for completeness and sane ranges. Any value our engine calculates from those outputs — traffic-uplift projections, opportunity sizing, impact estimates and the 6/12-month targets — is a modelled <strong>ESTIMATE</strong>, not a measured guarantee. Where a metric could not be retrieved it is shown as <em>&ldquo;Not available&rdquo;</em> rather than guessed, and impossible values are discarded. No numbers were fabricated.
+              </p>
+            </div>
+          </div>
+
           {/* ── FOOTER ──────────────────────────────────────────────────────── */}
           <div className="mt-12 pt-4 flex items-center justify-between text-[10px]" style={{ borderTop: `1px solid ${C.warmGrey}30`, color: C.greyText }}>
             <Wordmark height={16} />
