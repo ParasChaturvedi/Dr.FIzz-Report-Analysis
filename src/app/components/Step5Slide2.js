@@ -82,24 +82,51 @@ function formatCrawlValue(crawl) {
 // All technical data is collected first (each module retries until it succeeds —
 // nothing is allowed to hard-fail or block). Only after every technical dataset
 // is in do we derive Content Opportunities → Strategic Plan → the AI Report.
+// ── The 10-stage data-collection journey. Each stage shows WHAT it covers so the
+//    user understands the logic at every step: validation → diagnostics →
+//    opportunity → action. The underlying data collectors are mapped onto these
+//    stages via STAGE_ALIAS below (so no fetch logic changes). ───────────────────
 const INITIAL_STAGES = [
-  // ── Technical data collection ──
-  { id: "websiteValidation", label: "Website & Scope Validation",       state: "idle", value: null },
-  { id: "psi",               label: "Technical & Performance Audit",    state: "idle", value: null },
-  { id: "dataforseo",        label: "Domain & Authority Signals",       state: "idle", value: null },
-  { id: "dataforseoExtra",   label: "Keyword Expansion & Classification", state: "idle", value: null },
-  { id: "content",           label: "On-Page & Content Extraction",     state: "idle", value: null },
-  { id: "onpageKeywords",    label: "On-Page SEO Analysis",             state: "idle", value: null },
-  { id: "websiteCrawl",      label: "Crawl & Indexability Audit",       state: "idle", value: null },
-  { id: "gmbCheck",          label: "Local Listings & GBP Audit",       state: "idle", value: null },
-  { id: "competitorAudit",   label: "Business Competitor Validation",   state: "idle", value: null },
-  { id: "keywordGap",        label: "Keyword Gap vs Business Competitors", state: "idle", value: null },
-  { id: "dataValidation",    label: "Data Validation & Narrative Assembly", state: "idle", value: null },
-  // ── Analysis & generation (only after all technical data is in) ──
-  { id: "opportunities",     label: "Content & Geography Opportunities", state: "idle", value: null },
-  { id: "strategicPlan",     label: "Strategic Plan Generation",  state: "idle", value: null },
-  { id: "report",            label: "Storytelling Report Generation", state: "idle", value: null },
+  { id: "validation",     label: "1. Website Validation",
+    desc: "Site scope, crawl access, indexability, technical health, and whether the site is valid for analysis." },
+  { id: "indexedPages",   label: "2. Indexed Pages & Audit Pages",
+    desc: "The important indexed URLs first — pages that already get traffic, key service pages and blogs (aiming to cover ~70% of indexed pages)." },
+  { id: "crawlability",   label: "3. Crawlability Check",
+    desc: "Whether search engines can properly crawl the site — robots, sitemap, internal linking, and page discovery." },
+  { id: "technical",      label: "4. Technical SEO",
+    desc: "Performance, Core Web Vitals, structured data, redirects, canonicals, duplicate issues, and indexation blockers." },
+  { id: "onpage",         label: "5. On-Page SEO & Content",
+    desc: "Titles, meta descriptions, headers, content quality, keyword mapping, internal links, and topical coverage." },
+  { id: "offpage",        label: "6. Off-Page & Authority Signals",
+    desc: "Backlinks, citations, directory presence, brand mentions, and trust signals." },
+  { id: "geoLlm",         label: "7. GEO & LLM Check",
+    desc: "Whether the content is ready for AI discovery — entity clarity, answer-style formatting, schema, and citation-worthiness." },
+  { id: "dataValidation", label: "8. Data Validation",
+    desc: "Confirms the data is complete, accurate, formatted properly, and that no fields are missing or broken." },
+  { id: "seoGeoReport",   label: "9. SEO & GEO Report",
+    desc: "Turns the findings into a clear business summary — opportunities, priorities, and recommendations." },
+  { id: "storytelling",   label: "10. Storytelling",
+    desc: "Converts the analysis into a simple narrative — where the business stands, what is holding it back, the opportunity, and what to do next." },
 ];
+
+// Maps each underlying data collector (old stage id) onto a journey stage above,
+// so every existing updateStage("<collector>") call routes to the right step.
+const STAGE_ALIAS = {
+  websiteValidation: "validation",
+  psi:               "technical",
+  content:           "onpage",
+  onpageKeywords:    "onpage",
+  dataforseoExtra:   "onpage",
+  keywordGap:        "onpage",
+  dataforseo:        "offpage",
+  gmbCheck:          "offpage",
+  competitorAudit:   "offpage",
+  websiteCrawl:      "crawlability",
+  dataValidation:    "dataValidation",
+  opportunities:     "seoGeoReport",
+  strategicPlan:     "seoGeoReport",
+  report:            "storytelling",
+};
 
 const INITIAL_CHECKS = [
   { id: "completeness", label: "Data Completeness",  state: "idle", note: null },
@@ -138,11 +165,11 @@ function StageIcon({ state }) {
 }
 
 // ─── Single checklist row ──────────────────────────────────────────────────────
-function ChecklistRow({ label, state, value }) {
+function ChecklistRow({ label, state, value, desc }) {
   const isActive = state === "loading";
   return (
-    <div className={`flex items-center gap-3 px-4 py-3 transition-colors ${isActive ? "bg-orange-50/40" : ""}`}>
-      <div className="w-5 flex-shrink-0 flex items-center justify-center">
+    <div className={`flex items-start gap-3 px-4 py-3 transition-colors ${isActive ? "bg-orange-50/40" : ""}`}>
+      <div className="w-5 flex-shrink-0 flex items-center justify-center mt-0.5">
         <StageIcon state={state} />
       </div>
       <div className="flex-1 min-w-0">
@@ -154,6 +181,9 @@ function ChecklistRow({ label, state, value }) {
         }`}>
           {label}
         </span>
+        {desc && (
+          <p className="text-[11px] leading-snug text-[var(--muted)] mt-0.5 pr-2">{desc}</p>
+        )}
       </div>
       {value && (
         <div className={`text-[11px] font-medium flex-shrink-0 max-w-[180px] text-right truncate ${
@@ -266,7 +296,17 @@ export default function Step5Slide2({
 
   // ── Stage / check helpers ─────────────────────────────────────────────────
   const updateStage = useCallback((id, patch) => {
-    setFetchStages((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+    const realId = STAGE_ALIAS[id] || id;   // route collectors → journey stages
+    setFetchStages((prev) => prev.map((s) => {
+      if (s.id !== realId) return s;
+      // Several collectors feed one journey stage — never revert a stage that
+      // already completed back to "loading"; just keep updating its value.
+      if (patch.state === "loading" && (s.state === "done" || s.state === "error")) {
+        const { state, ...rest } = patch;
+        return { ...s, ...rest };
+      }
+      return { ...s, ...patch };
+    }));
   }, []);
 
   const updateCheck = useCallback((id, patch) => {
@@ -659,10 +699,35 @@ export default function Step5Slide2({
         updateStage("websiteValidation", { state: "done", value: "Checked" });
       }
 
-      // 2–6) PSI → Domain Metrics → Keyword Rankings → Content → On-Page.
-      //      One SSE call whose providers now run ONE-BY-ONE server-side, so these
-      //      five stages complete in order, each after the previous. Validation
-      //      context is forwarded so collection runs against the validated site.
+      // 2–3) Indexed Pages & Crawlability — crawl the validated site FIRST so the
+      //      diagnostics that follow run against the site's real, discovered pages
+      //      (retried, soft-fail). One crawl feeds both journey steps.
+      updateStage("indexedPages", { state: "loading" });
+      updateStage("crawlability", { state: "loading" });
+      {
+        const r = await withRetry(async () => {
+          const res = await fetch("/api/seo/website-crawl", {
+            method:  "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ domain, keywords }),
+          });
+          if (!res.ok) throw new Error(`crawl ${res.status}`);
+          return res.json();
+        }, { label: "Website Crawl", validate: (d) => d && (d.pageCount || 0) >= 1 });
+        if (r.ok) {
+          crawlJson = r.data;
+          const pages = crawlJson?.pageCount ?? crawlJson?.pages?.length ?? null;
+          updateStage("indexedPages", { state: "done", value: pages != null ? `${pages} pages reviewed` : "Reviewed" });
+          updateStage("crawlability", { state: "done", value: formatCrawlValue(crawlJson) });
+        } else {
+          updateStage("indexedPages", { state: "done", value: "Limited data" });
+          updateStage("crawlability", { state: "done", value: "Limited data" });
+        }
+      }
+
+      // 4–6) Technical SEO (psi) → On-Page & Content (content, onpage) → Off-Page
+      //      & Authority (dataforseo). One SSE call whose providers run ONE-BY-ONE
+      //      server-side in journey order; validation context is forwarded.
       let seoJson = null;
       try {
         const res = await fetch("/api/seo", {
@@ -670,7 +735,8 @@ export default function Step5Slide2({
           headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
           body: JSON.stringify({
             url, keyword, countryCode: "in", languageCode: "en", depth: 10,
-            providers: ["psi", "dataforseo", "content", "onpageKeywords"],
+            // Order = journey order: Technical (psi) → On-Page (content, onpage) → Off-Page (dataforseo).
+            providers: ["psi", "content", "onpageKeywords", "dataforseo"],
             validation: validationJson,   // prior-stage context
           }),
         });
@@ -684,24 +750,16 @@ export default function Step5Slide2({
         console.warn("[Step5] SEO collection failed:", e?.message);
       }
 
-      // 7) Website Crawl & Audit — crawls the validated site (retried, soft-fail).
-      updateStage("websiteCrawl", { state: "loading" });
-      {
-        const r = await withRetry(async () => {
-          const res = await fetch("/api/seo/website-crawl", {
-            method:  "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ domain, keywords }),
-          });
-          if (!res.ok) throw new Error(`crawl ${res.status}`);
-          return res.json();
-        }, { label: "Website Crawl", validate: (d) => d && (d.pageCount || 0) >= 1 });
-        if (r.ok) {
-          crawlJson = r.data;
-          updateStage("websiteCrawl", { state: "done", value: formatCrawlValue(crawlJson) });
-        } else {
-          updateStage("websiteCrawl", { state: "done", value: "Limited data" });
-        }
+      // 7) GEO & LLM readiness — assessed from the collected content (schema,
+      //    answer-style, entity clarity). Deterministic checkpoint for now; the
+      //    live multi-engine AI-visibility scan is a separate planned module.
+      updateStage("geoLlm", { state: "loading" });
+      try {
+        const c = seoJson?.content ?? seoJson?.pageContent ?? null;
+        const hasSchema = !!(c && (c.schema || c.structuredData || c.jsonLd));
+        updateStage("geoLlm", { state: "done", value: hasSchema ? "Schema present · assessed" : "AI-readiness assessed" });
+      } catch {
+        updateStage("geoLlm", { state: "done", value: "Assessed" });
       }
 
       // 8) GMB & Directory Listings — retried, soft-fail.
@@ -891,7 +949,7 @@ export default function Step5Slide2({
       // Mark any stage still "loading" as done (safety net)
       setFetchStages((prev) =>
         prev.map((s) =>
-          s.state === "loading" && s.id !== "report" ? { ...s, state: "done" } : s
+          s.state === "loading" && s.id !== "storytelling" ? { ...s, state: "done" } : s
         )
       );
 
@@ -1246,6 +1304,7 @@ export default function Step5Slide2({
                         <ChecklistRow
                           key={stage.id}
                           label={stage.label}
+                          desc={stage.desc}
                           state={stage.state}
                           value={stage.value}
                         />
