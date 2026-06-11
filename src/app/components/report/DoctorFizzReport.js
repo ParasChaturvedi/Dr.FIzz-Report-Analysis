@@ -1067,6 +1067,43 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               );
             })()}
+
+            {/* Demand by intent — VOLUME-weighted (where the searches/month sit, ref-style) */}
+            {(() => {
+              const acc = kw.accepted || [];
+              if (acc.length < 2) return null;
+              const vol = (k) => Number(k.volume ?? k.global_volume ?? k.search_volume ?? 0) || 0;
+              const buckets = { transactional: 0, "local-commercial": 0, informational: 0, other: 0 };
+              acc.forEach(k => { const key = buckets[k.intent_class] !== undefined ? k.intent_class : "other"; buckets[key] += vol(k); });
+              const total = Object.values(buckets).reduce((a, b) => a + b, 0);
+              if (total <= 0) return null;
+              const rows = [
+                { label: "Commercial (ready-to-buy)", v: buckets.transactional, color: C.orange },
+                { label: "Local / geo", v: buckets["local-commercial"], color: "#2D6B32" },
+                { label: "Informational", v: buckets.informational, color: C.teal },
+                { label: "Other", v: buckets.other, color: C.greyMid },
+              ].filter(r => r.v > 0).sort((a, b) => b.v - a.v);
+              return (
+                <div className="rounded-lg p-4 mb-4" style={{ background: "#fff", border: `1px solid ${C.border}` }}>
+                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.greyText }}>Demand by Intent — by monthly search volume</div>
+                  <div className="text-[11px] mb-3" style={{ color: C.greyText }}>Where the {fmtNum(total)} monthly searches actually concentrate — not just keyword count.</div>
+                  {rows.map((r, i) => {
+                    const pct = Math.round((r.v / total) * 100);
+                    return (
+                      <div key={i} className="mb-2">
+                        <div className="flex justify-between text-[11.5px] mb-0.5" style={{ color: C.textDark }}>
+                          <span>{r.label}</span><span className="tabular-nums"><strong>{pct}%</strong> · {fmtNum(r.v)}/mo</span>
+                        </div>
+                        <div style={{ height: 7, background: C.tableHead, borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ width: `${Math.max(2, pct)}%`, height: "100%", background: r.color, borderRadius: 4 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
             {/* Grouped by intent class per spec: primary commercial,
                 informational & supporting, local & geo, long-tail feature. */}
             {(() => {
