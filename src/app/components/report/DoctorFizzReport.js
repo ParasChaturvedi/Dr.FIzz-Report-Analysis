@@ -11,7 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { useMemo } from "react";
-import { buildStoryNarrative } from "@/lib/seo/doctor-fizz-logic";
+import { buildStoryNarrative, buildGeoVisibility } from "@/lib/seo/doctor-fizz-logic";
 
 const LOGO_URL = "https://doctorfizz.com/wp-content/uploads/2025/09/doctorfizzlogo_1-scaled.png";
 // Typography matched to the reference deck: Trebuchet MS bold headings + Calibri body.
@@ -531,7 +531,20 @@ export default function DoctorFizzReport({ data }) {
   const gbp = payload.gbp_comparison || {};
   const kpis = payload.kpis?.metrics || [];
   const tech = payload.technical_issues || [];
-  const geo = payload.geo_and_ai_visibility || {};
+  // GEO/AI visibility — back-fill the newer fields (readiness scorecard, tracked
+  // prompts, AI-platform coverage) at render so reports generated BEFORE those
+  // fields existed still show the full section. Baked values always win.
+  const geo = useMemo(() => {
+    const baked = payload.geo_and_ai_visibility || {};
+    if (baked.geo_readiness && baked.tracked_prompts) return baked;  // already current
+    try {
+      const live = buildGeoVisibility({
+        domain: meta.domain, clientName: meta.client_name, industry: meta.industry,
+        baseline, hasSchema: false, competitors: payload.competitors || [],
+      });
+      return { ...live, ...baked };  // keep baked values, add only the missing new fields
+    } catch (_) { return baked; }
+  }, [payload]);
   const scores = payload.scores || null;
   const pap = payload.priority_action_plan || [];
   const compAnalysis = payload.competitive_analysis || null;
