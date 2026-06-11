@@ -1489,6 +1489,36 @@ export default function DoctorFizzReport({ data }) {
               <DiagnosisCard>
                 {pap.reduce((n, t) => n + t.actions.length, 0)} prescribed actions, ranked by impact-to-effort and grouped so the work that unblocks everything else comes first — every action is tagged by channel, priority, and effort for direct execution.
               </DiagnosisCard>
+
+              {/* Top Growth Opportunities — flat, numbered, scannable summary (ref-style) */}
+              {(() => {
+                const all = pap.flatMap(t => t.actions);
+                const impactRank = { CRITICAL: 5, HIGH: 4, "QUICK WIN": 3, MEDIUM: 2, LOW: 1 };
+                const top = [...all].sort((a, b) => (impactRank[b.priority] || 0) - (impactRank[a.priority] || 0)).slice(0, 12);
+                if (!top.length) return null;
+                return (
+                  <div className="overflow-x-auto rounded-lg mb-5" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                    <div className="uppercase px-3 pt-2.5 pb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>Top Growth Opportunities — at a glance</div>
+                    <table className="w-full text-[12px]">
+                      <thead>
+                        <tr style={{ background: C.nearBlack }}>
+                          <Th white>#</Th><Th white>Opportunity</Th><Th white>Type</Th><Th white>Impact</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {top.map((a, i) => (
+                          <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
+                            <Td>{i + 1}</Td>
+                            <Td>{a.description}</Td>
+                            <Td><TagChip tag={a.channel} /></Td>
+                            <Td><PriorityLabel priority={a.priority} /></Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
               {(() => { let step = 0; return pap.map((tier) => (
                 <div key={tier.tier} className="mb-5">
                   <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>{tier.tier}</div>
