@@ -918,6 +918,29 @@ export default function DoctorFizzReport({ data }) {
                     </div>
                   )}
 
+                  {/* What each rival does better → what to copy (consolidated, ref-style) */}
+                  {(gbp.competitor_analysis || []).length > 0 && (
+                    <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                      <div className="uppercase px-3 pt-2.5 pb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>What Each Rival Does Better — and What To Copy</div>
+                      <table className="w-full text-[12px]">
+                        <thead>
+                          <tr style={{ background: C.nearBlack }}>
+                            <Th white>Competitor</Th><Th white>What they do better</Th><Th white>What to copy</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {gbp.competitor_analysis.map((c, i) => (
+                            <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
+                              <Td>{c.name}</Td>
+                              <Td>{(c.strengths && c.strengths[0]) || "No measured advantage over you."}</Td>
+                              <Td>{c.overtake_play || "—"}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
                   {/* ── How to improve — prioritised roadmap (Action Item Rows) ── */}
                   {compAnalysis.improvement_roadmap.length > 0 && (
                     <div className="mb-3">
