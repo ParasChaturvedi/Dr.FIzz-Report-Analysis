@@ -1457,47 +1457,59 @@ const PRIORITY_IMPACT = { CRITICAL: 5, HIGH: 4, MEDIUM: 2.5, "QUICK WIN": 2, LOW
  */
 export function buildPriorityActionPlan({ technical_issues = [], content_architecture = {}, backlinks = {}, geo_and_ai_visibility = {}, gbp_comparison = {} }) {
   const actions = [];
-  const add = (tier, description, channel, priority, effort) =>
-    actions.push({ tier, description, channel, priority, effort, _impact: PRIORITY_IMPACT[priority] || 2, _hours: effortToHours(effort) });
+  // Each action carries `why` — the specific finding/metric that justifies it,
+  // so no recommendation is arbitrary (it is always tied to evidence + impact).
+  const add = (tier, description, channel, priority, effort, why = "") =>
+    actions.push({ tier, description, channel, priority, effort, why, _impact: PRIORITY_IMPACT[priority] || 2, _hours: effortToHours(effort) });
 
   // ── Tier 1: Foundation fixes (technical blockers gate everything) ──
   for (const t of technical_issues) {
     if (t.priority === "CRITICAL" || t.priority === "HIGH") {
-      add("Foundation Fixes", t.issue + " — " + (t.recommended_action || "").split(".")[0], "SEO", t.priority, t.estimated_effort);
+      add("Foundation Fixes", t.issue + " — " + (t.recommended_action || "").split(".")[0], "SEO", t.priority, t.estimated_effort,
+        t.why_it_matters || t.expected_unlock || "Search engines read this technical signal before they read the content, so it caps every page above it.");
     }
   }
 
   // ── Tier 2: Content & on-page work ──
   for (const p of (content_architecture.commercial_pages || []).slice(0, 4)) {
-    add("Content & On-Page Work", `Build commercial page: ${p.page_name} (${p.url_slug}) targeting "${p.keyword_cluster}"`, "SEO", p.priority === "HIGH" ? "HIGH" : "MEDIUM", "≈1 week");
+    add("Content & On-Page Work", `Build commercial page: ${p.page_name} (${p.url_slug}) targeting "${p.keyword_cluster}"`, "SEO", p.priority === "HIGH" ? "HIGH" : "MEDIUM", "≈1 week",
+      `Targets uncaptured commercial demand for "${p.keyword_cluster}"${p.primary_volume ? ` (~${Number(p.primary_volume).toLocaleString()} searches/mo)` : ""} — no page currently ranks for it.`);
   }
   for (const p of (content_architecture.geography_pages || content_architecture.city_pages || []).slice(0, 3)) {
     const where = p.geo_target || p.city_target;
-    add("Content & On-Page Work", `Create ${(p.page_type || "geography page").toLowerCase()}${where ? ` for ${where}` : ""}: "${p.keyword_cluster}"`, "SEO", "MEDIUM", "≈3 hours");
+    add("Content & On-Page Work", `Create ${(p.page_type || "geography page").toLowerCase()}${where ? ` for ${where}` : ""}: "${p.keyword_cluster}"`, "SEO", "MEDIUM", "≈3 hours",
+      `Captures local "near me" demand${where ? ` in ${where}` : ""} that a generic page cannot win.`);
   }
   for (const p of (content_architecture.blog_and_guides || []).slice(0, 3)) {
-    add("Content & On-Page Work", `Publish guide: "${p.proposed_title}"`, "SEO", "MEDIUM", "≈1 week");
+    add("Content & On-Page Work", `Publish guide: "${p.proposed_title}"`, "SEO", "MEDIUM", "≈1 week",
+      "Builds topical authority and earns informational + AI-answer traffic that links into the commercial pages.");
   }
 
   // ── Tier 3: Authority & GEO work ──
   const missingCitations = (backlinks.citation_links || []).filter(l => !l.client_listed).slice(0, 5);
   if (missingCitations.length) {
-    add("Authority & GEO Work", `Claim ${missingCitations.length} missing citation listings (${missingCitations.map(l => l.platform).join(", ")})`, "SEO", "QUICK WIN", "≈3 hours");
+    add("Authority & GEO Work", `Claim ${missingCitations.length} missing citation listings (${missingCitations.map(l => l.platform).join(", ")})`, "SEO", "QUICK WIN", "≈3 hours",
+      "These directories are placement targets where competitors are already listed — fast, free authority and local-ranking signals.");
   }
   for (const l of (backlinks.editorial_links || []).slice(0, 2)) {
-    add("Authority & GEO Work", `Editorial link: ${l.content_asset}`, "SEO", "MEDIUM", l.effort || "≈2 weeks");
+    add("Authority & GEO Work", `Editorial link: ${l.content_asset}`, "SEO", "MEDIUM", l.effort || "≈2 weeks",
+      "Earns a high-value editorial link to close the referring-domain diversity gap against competitors.");
   }
   for (const g of (backlinks.competitor_gap || []).slice(0, 2)) {
-    add("Authority & GEO Work", `Pursue competitor-gap link from ${g.referring_domain}`, "SEO", "MEDIUM", "≈1 week");
+    add("Authority & GEO Work", `Pursue competitor-gap link from ${g.referring_domain}`, "SEO", "MEDIUM", "≈1 week",
+      `${g.referring_domain} already links to a competitor but not to you — a proven, reachable link target.`);
   }
   if ((geo_and_ai_visibility.schema_additions || []).length) {
-    add("Authority & GEO Work", `Implement ${geo_and_ai_visibility.schema_additions.map(s => s.type).join(" + ")} JSON-LD for AI citation`, "SEO+GEO", "HIGH", "≈3 hours");
+    add("Authority & GEO Work", `Implement ${geo_and_ai_visibility.schema_additions.map(s => s.type).join(" + ")} JSON-LD for AI citation`, "SEO+GEO", "HIGH", "≈3 hours",
+      "Makes the pages eligible for AI Overviews and answer-engine citation — the schema AI engines read to identify the business.");
   }
   for (const a of (geo_and_ai_visibility.recommended_actions || []).slice(0, 2)) {
-    add("Authority & GEO Work", a.split(".")[0], "GEO", "MEDIUM", "≈1 day");
+    add("Authority & GEO Work", a.split(".")[0], "GEO", "MEDIUM", "≈1 day",
+      "Improves AI-answer readiness so the content becomes quotable by ChatGPT, Gemini and Perplexity.");
   }
   if (gbp_comparison?.client && gbp_comparison.fastest_win) {
-    add("Authority & GEO Work", `GBP fastest win: ${gbp_comparison.fastest_win.split(".")[0]}`, "SEO", "QUICK WIN", "≈30 min");
+    add("Authority & GEO Work", `GBP fastest win: ${gbp_comparison.fastest_win.split(".")[0]}`, "SEO", "QUICK WIN", "≈30 min",
+      gbp_comparison.fastest_win);
   }
 
   // Rank within each tier by impact-to-effort (higher = do first)

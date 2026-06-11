@@ -1493,7 +1493,7 @@ export default function DoctorFizzReport({ data }) {
                 <div key={tier.tier} className="mb-5">
                   <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>{tier.tier}</div>
                   {tier.actions.map((a) => { step += 1; return (
-                    <ActionRow key={step} step={step} title={a.description} channel={a.channel} priority={a.priority} effort={a.effort} />
+                    <ActionRow key={step} step={step} title={a.description} description={a.why ? `Why: ${a.why}` : undefined} channel={a.channel} priority={a.priority} effort={a.effort} />
                   ); })}
                 </div>
               )); })()}
