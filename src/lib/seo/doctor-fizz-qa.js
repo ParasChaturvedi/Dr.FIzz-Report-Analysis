@@ -74,13 +74,37 @@ export function validateDataCompleteness(datasets = {}) {
     warnings.push("Contradiction: organic traffic > 0 but 0 organic keywords. Verify data source.");
   }
 
+  // ── Accuracy sanity checks — catch impossible / hallucinated values so a bad
+  //    number is flagged (and labelled "Not available") instead of being shown. ──
+  const accuracyIssues = [];
+  const outOfRange = (v, lo, hi) => v != null && (isNaN(Number(v)) || Number(v) < lo || Number(v) > hi);
+  const gmbInfo = datasets.gmb?.gmb || datasets.gmb || {};
+  if (outOfRange(gmbInfo.rating, 0, 5))            accuracyIssues.push(`GMB rating "${gmbInfo.rating}" is outside 0–5 — treat as unavailable.`);
+  if (gmbInfo.reviewCount != null && Number(gmbInfo.reviewCount) < 0) accuracyIssues.push("GMB review count is negative — treat as unavailable.");
+  if (outOfRange(dm.domainRating ?? dm.rank ?? dm.domain_rank, 0, 100)) accuracyIssues.push("Domain rating is outside 0–100 — treat as unavailable.");
+  for (const k of ["performanceScoreMobile", "performanceScoreDesktop"]) {
+    const v = datasets.psi?.[k];
+    if (v != null && outOfRange(v <= 1 ? v * 100 : v, 0, 100)) accuracyIssues.push(`PSI ${k} is outside 0–100 — treat as unavailable.`);
+  }
+  warnings.push(...accuracyIssues);
+
   const failures = modules.filter(m => m.required && !m.ok);
+
+  // Named metrics that did NOT load — surfaced to the user as "Not available"
+  // and handed back as a re-fetch list so the pipeline can retry them once
+  // instead of silently shipping a gap.
+  const missingMetrics = failures.map(m => m.name);
+  const refetch = failures.map(m => m.name);
+
   return {
     pass: failures.length === 0,
     blocking: failures.length > 0,
     modules,
     failures,
     warnings,
+    accuracyIssues,     // impossible/hallucinated values (flagged, not shown)
+    missingMetrics,     // required metrics that didn't load → show "Not available"
+    refetch,            // modules the pipeline should re-run once before giving up
   };
 }
 
