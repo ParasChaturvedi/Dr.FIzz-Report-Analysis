@@ -20,6 +20,11 @@ const DIRECTORIES = [
   { name: "Yellow Pages",  site: "yellowpages.com",    weight: 2 },
   { name: "Facebook",      site: "facebook.com",       weight: 2 },
   { name: "Glassdoor",     site: "glassdoor.com",      weight: 1 },
+  // B2B / agency review directories (relevant for service & digital businesses)
+  { name: "Clutch",        site: "clutch.co",          weight: 3 },
+  { name: "GoodFirms",     site: "goodfirms.co",       weight: 2 },
+  { name: "G2",            site: "g2.com",             weight: 2 },
+  { name: "DesignRush",    site: "designrush.com",     weight: 1 },
 ];
 
 function getAuth() {
@@ -229,12 +234,17 @@ async function fetchGmbQA(keyword, location, auth) {
 async function checkDirectoryListings(domain, auth, businessName = "") {
   const host = domain.replace(/^https?:\/\//,"").replace(/^www\./,"").split("/")[0];
 
-  // Build search name variants (up to 2 most specific)
+  // Search name variants — CLEAN brand (no legal suffix) FIRST. We never assume a
+  // "Private Limited / Pvt Ltd / LLP / Inc / LLC / Ltd" suffix the user didn't
+  // enter, and a suffix-free brand matches directory listings more reliably.
+  const stripLegal = (s) => String(s || "")
+    .replace(/[\s,]+(private\s+limited|pvt\.?\s*ltd\.?|p\.?\s*ltd\.?|limited|ltd\.?|inc\.?|incorporated|llc|llp)\.?\s*$/gi, "")
+    .replace(/\s{2,}/g, " ").trim();
   const nameVariants = [...new Set([
-    businessName,
-    businessName.replace(/\s+private\s+limited$/i, "").replace(/\s+pvt\.?\s+ltd\.?$/i, "").trim(),
-    host.split(".")[0],
-  ].filter(Boolean))].slice(0, 2);
+    stripLegal(businessName) || businessName,  // clean brand first
+    businessName,                              // full, as entered
+    host.split(".")[0],                        // host brand
+  ].filter(Boolean))].slice(0, 3);
 
   const primaryName = nameVariants[0] || host.split(".")[0];
 
