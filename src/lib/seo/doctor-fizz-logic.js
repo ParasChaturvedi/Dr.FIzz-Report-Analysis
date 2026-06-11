@@ -1354,9 +1354,44 @@ export function buildGeoVisibility(input = {}) {
   const orgSchema = buildOrgSchemaJsonLd({ domain, clientName, industry, baseline });
   const faqSchema = buildFaqSchemaJsonLd(industry);
 
+  // ── GEO-readiness scorecard — LLM-optimization factors, data-derived ──────────
+  const gbpComplete = baseline.gbp_completeness?.value ?? 0;
+  const geo_readiness = [
+    { factor: "Structured data (schema)", status: hasSchema ? "Present" : "Missing",
+      detail: hasSchema ? "The site exposes JSON-LD, so AI engines can identify the entity." : "No JSON-LD found — AI engines can't reliably identify the business. Add the schema below." },
+    { factor: "Answer-style formatting", status: "Needs work",
+      detail: "Open key pages with a 40–60 word direct answer — that is the text AI tools lift verbatim." },
+    { factor: "Entity clarity (consistent NAP & naming)", status: gbpComplete >= 80 ? "Strong" : "Needs work",
+      detail: "Define the business and category the same way across every page and profile so the entity is unambiguous." },
+    { factor: "FAQ / Q&A coverage", status: "Needs work",
+      detail: "Add 5–8 schema-marked Q&As per key page so questions become eligible for AI Overviews." },
+    { factor: "Citation-worthiness (authority)", status: dr >= 30 ? "Moderate" : "Low",
+      detail: `Domain Rating ${dr} — answer engines preferentially cite higher-authority, original sources.` },
+  ];
+
+  // ── Prompt tracking — the prompts the LIVE multi-engine AI-visibility scan
+  //    will run. Status stays "Pending" until that browser-automation scan runs. ──
+  const ind = String(industry || "your services").toLowerCase();
+  const brand = clientName || domain;
+  const tracked_prompts = [
+    `best ${ind} in India`,
+    `top ${ind} companies`,
+    `${ind} services near me`,
+    `affordable ${ind}`,
+    `is ${brand} good`,
+    `${brand} reviews`,
+  ];
+  const ai_platforms = ["ChatGPT", "Google AI Overviews", "Perplexity", "Microsoft Copilot"]
+    .map(platform => ({ platform, visibility: "Pending live scan" }));
+  const prompt_tracking_status = "Pending — the live multi-engine AI-visibility scan (ChatGPT, Gemini, Perplexity, Copilot) is a separate module; the prompts below are what it will track.";
+
   return {
     current_ai_citation_count: currentCitations,
     competitor_citation_benchmarks: competitorBenchmarks,
+    geo_readiness,
+    tracked_prompts,
+    ai_platforms,
+    prompt_tracking_status,
     recommended_actions,
     schema_additions: [
       { type: "Organization + LocalBusiness", jsonld: orgSchema },

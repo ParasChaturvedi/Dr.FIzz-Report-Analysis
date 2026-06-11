@@ -1379,6 +1379,44 @@ export default function DoctorFizzReport({ data }) {
               <DiagnosisCard>
                 Current AI citation status: <strong>{geo.current_ai_citation_count}</strong>. The site is not yet a citable source for ChatGPT, Google AI Overviews, or Perplexity — the prescription below makes the content liftable by answer engines.
               </DiagnosisCard>
+
+              {/* GEO / LLM readiness scorecard — data-derived optimization factors */}
+              {(geo.geo_readiness || []).length > 0 && (
+                <div className="mb-3">
+                  <div className="text-[11px] font-bold mb-1.5 tracking-wide" style={{ color: C.orange }}>AI / LLM READINESS</div>
+                  {geo.geo_readiness.map((f, i) => {
+                    const ok = /present|strong|moderate/i.test(f.status);
+                    return (
+                      <div key={i} className="flex items-start gap-2 py-1.5" style={{ borderBottom: `1px solid ${C.warmGrey}20` }}>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: ok ? "#E3F0E6" : "#FBE9E7", color: ok ? "#1E7B3E" : "#B3261E", minWidth: "78px", textAlign: "center" }}>{f.status}</span>
+                        <div className="min-w-0">
+                          <div className="text-[12px] font-semibold" style={{ color: C.textDark }}>{f.factor}</div>
+                          <div className="text-[11px]" style={{ color: C.greyText }}>{f.detail}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Prompt tracking — live multi-engine AI-visibility (status pending) */}
+              {(geo.tracked_prompts || []).length > 0 && (
+                <div className="mb-3 rounded-lg p-3" style={{ background: C.ivory, border: `1px solid ${C.border}` }}>
+                  <div className="text-[11px] font-bold mb-1 tracking-wide" style={{ color: C.teal }}>PROMPT TRACKING — AI SEARCH VISIBILITY</div>
+                  <div className="text-[11px] mb-2" style={{ color: C.greyText }}>{geo.prompt_tracking_status}</div>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {geo.tracked_prompts.map((p, i) => (
+                      <span key={i} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#fff", border: `1px solid ${C.border}`, color: C.textDark }}>&ldquo;{p}&rdquo;</span>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(geo.ai_platforms || []).map((pl, i) => (
+                      <span key={i} className="text-[10px] px-2 py-0.5 rounded" style={{ background: "#F2EFEA", color: C.greyText }}>{pl.platform}: {pl.visibility}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Action Item Rows (Rule R3 — no plain bullets for actions) */}
               <div className="mb-3">
                 {geo.recommended_actions.map((a, i) => (
