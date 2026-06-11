@@ -698,6 +698,34 @@ export default function DoctorFizzReport({ data }) {
             </div>
           )}
 
+          {/* ── EXECUTIVE SUMMARY · FINDINGS THAT MATTER (data-derived, ref-style) ─ */}
+          {(() => {
+            const bv = (k) => baseline?.[k]?.value;
+            const f = [];
+            const kw = bv("organic_keywords"), mob = bv("mobile_performance_score"), reviews = bv("gbp_review_count");
+            const demand = oppSummary.total_monthly_search_volume;
+            if (kw != null && demand) f.push(`${meta.client_name} ranks for ${fmtNum(kw)} search terms, yet roughly ${fmtNum(demand)} monthly searches in your market go uncaptured.`);
+            if (mob != null && mob < 50) f.push(`Mobile speed is ${mob}/100 — a technical ceiling that caps how high any page can rank until it is fixed.`);
+            const compReviews = (gbp.competitors || []).reduce((m, c) => Math.max(m, c.review_count || 0), 0);
+            if (reviews != null && compReviews > reviews) f.push(`A ${fmtNum(compReviews - reviews)}-review gap separates you from the local leader (${fmtNum(reviews)} vs ${fmtNum(compReviews)}) — the strongest local-ranking signal.`);
+            if (geo.current_ai_citation_count && /zero|not|^0/i.test(String(geo.current_ai_citation_count))) f.push("Not yet cited by AI answer engines (ChatGPT, Gemini, Perplexity) — a fast-growing visibility channel left entirely open.");
+            if (oppSummary.estimated_traffic_uplift_12m) f.push(`The realistic 12-month path is about ${fmtNum(oppSummary.estimated_traffic_uplift_12m)} organic visitors a month, from work that compounds and costs nothing per click.`);
+            if (!f.length) return null;
+            return (
+              <div className="mb-10 rounded-xl p-5" style={{ background: C.diagTint, borderLeft: `3px solid ${C.orange}` }}>
+                <div className="uppercase mb-3" style={{ fontFamily: SANS, fontWeight: 700, fontSize: "11px", letterSpacing: "2.5px", color: C.orange }}>Executive Summary — Findings That Matter</div>
+                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                  {f.map((x, i) => (
+                    <li key={i} className="flex items-start gap-2.5 mb-2">
+                      <span style={{ flexShrink: 0, width: 6, height: 6, borderRadius: "50%", background: C.orange, marginTop: 7 }} />
+                      <span style={{ fontFamily: SANS, fontSize: "13.5px", color: C.textDark, lineHeight: 1.6 }}>{x}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })()}
+
           {/* ── 00 · CONTENTS & SCOPE ───────────────────────────────────────── */}
           <Section number={0} total={TOTAL} title="Contents &amp; Scope">
             <div className="rounded-lg p-4 mb-3" style={{ background: "#fff", border: `1px solid ${C.warmGrey}25` }}>
