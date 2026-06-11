@@ -1,6 +1,6 @@
 // src/app/api/plagiarism/route.js
 import { NextResponse } from "next/server";
-import { checkPlagiarismWithPerplexity } from "@/lib/claude/pipeline";
+import { checkPlagiarismWithClaude } from "@/lib/claude/pipeline";
 
 export const runtime = "nodejs";
 
@@ -73,7 +73,7 @@ export async function POST(req) {
     const draftForModel = truncateForModel(draftText, 9000);
     const sourceForModel = truncateForModel(sourceText, 9000);
 
-    const out = await checkPlagiarismWithPerplexity({
+    const out = await checkPlagiarismWithClaude({
       url: url || sourceUrl,
       sourceUrl: sourceUrl || url,
       draftText: draftForModel,

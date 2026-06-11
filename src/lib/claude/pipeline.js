@@ -68,7 +68,7 @@ function coerceKeywordsList(raw) {
  * Plagiarism estimation via Claude.
  * LLM-assisted estimation (not Turnitin-grade).
  */
-export async function checkPlagiarismWithPerplexity({
+export async function checkPlagiarismWithClaude({
   url = "",
   sourceUrl = "",
   draftText = "",

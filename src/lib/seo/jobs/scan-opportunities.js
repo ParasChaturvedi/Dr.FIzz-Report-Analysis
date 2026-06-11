@@ -11,7 +11,7 @@ import {
   upsertOpportunitiesSnapshot,
 } from "@/lib/seo/snapshots.store";
 
-import { checkPlagiarismWithPerplexity } from "@/lib/perplexity/pipeline";
+import { checkPlagiarismWithClaude } from "@/lib/claude/pipeline";
 
 // ✅ Use Browserless-rendered HTML + Readability main-content extraction
 import {
@@ -638,7 +638,7 @@ async function fetchMeta(url, hostname, allowSubdomains, plagiarismBudgetApi) {
 
       const draftText = htmlToPlain(contentHtml).slice(0, 9000);
 
-      const out = await checkPlagiarismWithPerplexity({
+      const out = await checkPlagiarismWithClaude({
         url,
         sourceUrl: url,
         draftText,
