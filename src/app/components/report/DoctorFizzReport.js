@@ -894,6 +894,30 @@ export default function DoctorFizzReport({ data }) {
                     }))} />
                   </div>
 
+                  {/* Competitive Scorecard — exact head-to-head figures + source line (ref-style) */}
+                  {compAnalysis.dimensions?.length > 0 && (
+                    <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                      <div className="uppercase px-3 pt-2.5 pb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>Competitive Scorecard</div>
+                      <table className="w-full text-[12px]">
+                        <thead>
+                          <tr style={{ background: C.nearBlack }}>
+                            <Th white>Metric</Th><Th white right>{gbp.client?.name || meta.client_name || "You"}</Th><Th white right>Best competitor</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {compAnalysis.dimensions.map((d, i) => (
+                            <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
+                              <Td>{d.dimension}</Td>
+                              <Td right><strong style={{ color: C.textDark }}>{d.client_display ?? (d.client_value != null ? d.client_value : <span className="italic text-[10px]" style={{ color: C.greyText }}>Not available</span>)}</strong></Td>
+                              <Td right>{d.competitor_best_display ?? (d.competitor_best != null ? d.competitor_best : <span className="italic text-[10px]" style={{ color: C.greyText }}>Not available</span>)}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="px-3 py-2 text-[10.5px]" style={{ color: C.greyText, background: C.ivory }}>Source: live Google Business Profile, DataForSEO and PageSpeed data for {meta.client_name} and the best-performing validated competitor per metric. A metric we do not measure for competitors is shown &ldquo;Not available&rdquo;, never estimated.</div>
+                    </div>
+                  )}
+
                   {/* ── How to improve — prioritised roadmap (Action Item Rows) ── */}
                   {compAnalysis.improvement_roadmap.length > 0 && (
                     <div className="mb-3">
