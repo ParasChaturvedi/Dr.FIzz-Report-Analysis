@@ -1397,43 +1397,11 @@ export async function POST(request) {
             );
           }
 
-          if (providers.includes("dataforseo") && domain) {
-            corePromises.push(() =>
-              runProvider(
-                "dataforseo",
-                keywordsOnly
-                  ? "Fetching DataForSEO suggested keywords (fast)…"
-                  : "Fetching DataForSEO keywords & opportunities…",
-                async () => {
-                  return await fetchDataForSeo(domain, {
-                    language_code: languageCode,
-                    countryCode,
-                    depth,
-                    keywordsOnly: Boolean(keywordsOnly),
-                  });
-                }
-              )
-            );
-
-            // Also run dataforseoExtra in parallel (domain rank, competitors, ranked keywords)
-            corePromises.push(() =>
-              runProvider(
-                "dataforseoExtra",
-                "Fetching domain rank overview, competitors, ranked keywords…",
-                async () => {
-                  const [domainRankOverview, competitorDomains, rankedKeywords] = await Promise.all([
-                    fetchDomainRankOverview(domain).catch(() => null),
-                    fetchCompetitorDomains(domain).catch(() => []),
-                    fetchRankedKeywords(domain).catch(() => []),
-                  ]);
-                  return { domainRankOverview, competitorDomains, rankedKeywords };
-                }
-              )
-            );
-          }
-
-          // content (for full SSE calls) — runs before on-page so the sequence is
-          // PSI → Domain Metrics → Keyword Rankings → Content → On-Page (V3 order).
+          // Journey order for the 10-stage scan UI: On-Page & Content (content,
+          // onpageKeywords = stage 5) is collected BEFORE Off-Page & Authority
+          // (dataforseo = stage 6), so the journey lights up 4 → 5 → 6 in order.
+          // (The merge below keys off item.key, so collection order never affects
+          // the data — only the SSE progress order.)
           if (providers.includes("content") && !keywordsOnly) {
             corePromises.push(() =>
               runProvider(
@@ -1465,6 +1433,41 @@ export async function POST(request) {
                   const seoRows = buildOnpageSeoRowsFromKeywords(keywords, domain);
 
                   return { seoRows, onpageKeywords: keywords, onpageClusters: clusters };
+                }
+              )
+            );
+          }
+
+          if (providers.includes("dataforseo") && domain) {
+            corePromises.push(() =>
+              runProvider(
+                "dataforseo",
+                keywordsOnly
+                  ? "Fetching DataForSEO suggested keywords (fast)…"
+                  : "Fetching DataForSEO keywords & opportunities…",
+                async () => {
+                  return await fetchDataForSeo(domain, {
+                    language_code: languageCode,
+                    countryCode,
+                    depth,
+                    keywordsOnly: Boolean(keywordsOnly),
+                  });
+                }
+              )
+            );
+
+            // Also run dataforseoExtra (domain rank, competitors, ranked keywords)
+            corePromises.push(() =>
+              runProvider(
+                "dataforseoExtra",
+                "Fetching domain rank overview, competitors, ranked keywords…",
+                async () => {
+                  const [domainRankOverview, competitorDomains, rankedKeywords] = await Promise.all([
+                    fetchDomainRankOverview(domain).catch(() => null),
+                    fetchCompetitorDomains(domain).catch(() => []),
+                    fetchRankedKeywords(domain).catch(() => []),
+                  ]);
+                  return { domainRankOverview, competitorDomains, rankedKeywords };
                 }
               )
             );

@@ -735,7 +735,9 @@ export default function Step5Slide2({
           headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
           body: JSON.stringify({
             url, keyword, countryCode: "in", languageCode: "en", depth: 10,
-            // Order = journey order: Technical (psi) → On-Page (content, onpage) → Off-Page (dataforseo).
+            // Providers to run. Execution/SSE order is enforced server-side in
+            // /api/seo (psi → content → onpageKeywords → dataforseo) so the scan
+            // journey lights up Technical(4) → On-Page(5) → Off-Page(6) in order.
             providers: ["psi", "content", "onpageKeywords", "dataforseo"],
             validation: validationJson,   // prior-stage context
           }),
