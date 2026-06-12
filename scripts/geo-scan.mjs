@@ -5,12 +5,19 @@
 // SoV + Citation logic and prints the result. Use this to calibrate, then we
 // wire the same runGeoScan() into a background job for the app.
 //
-// Requires in .env.local (NOT pasted anywhere public):
+// PLATFORM SECRETS (static — same for every report; in .env.local, never public):
 //   BROWSERLESS_TOKEN=...                 (your Browserless API token)
 //   BROWSERLESS_USE_RESIDENTIAL=1         (in-country residential proxy)
 //   BROWSERLESS_ENDPOINT_BASE=https://production-sfo.browserless.io   (optional)
-// Optional scan config (env or defaults):
-//   GEO_BRAND, GEO_DOMAIN, GEO_INDUSTRY, GEO_COMPETITORS (comma-separated), GEO_LOCATION
+//   ANTHROPIC_API_KEY=...                 (for Claude via API)
+//
+// PER-REPORT INPUTS (GEO_BRAND / GEO_DOMAIN / GEO_INDUSTRY / GEO_COMPETITORS /
+//   GEO_LOCATION) are used HERE FOR CALIBRATION ONLY — to test one example brand
+//   from the CLI without the UI. In the live product these are NOT env vars: the
+//   background job passes the brand/domain/industry/competitors/location straight
+//   from the user's onboarding input (the same businessData / domain /
+//   competitorData / location the rest of the pipeline already uses), so every
+//   report scans its own company automatically.
 //
 // Usage:  node scripts/geo-scan.mjs
 // ─────────────────────────────────────────────────────────────────────────────
