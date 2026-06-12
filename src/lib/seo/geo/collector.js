@@ -17,6 +17,8 @@
 //   responses[i] = { engine, prompt, answerText?, brandsMentioned?, leadBrand?, citations?[] }
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { buildMarketplacePrompts, MARKETPLACES } from "./marketplace-intelligence.js";
+
 export const ENGINES = {
   chatgpt:     { name: "ChatGPT",             url: "https://chatgpt.com/",           needsSession: true,  type: "chat" },
   gemini:      { name: "Gemini",              url: "https://gemini.google.com/app",  needsSession: true,  type: "chat" },
@@ -78,16 +80,11 @@ async function connectBrowserless(proxyCountry = "") {
 // MUST be calibrated per engine against a real logged-in session (the consumer
 // AI apps change their DOM often). Login walls are detected and surfaced.
 const SETTLE_MS = Number(process.env.GEO_SCAN_SETTLE_MS || 9000);
-async function askEngine(browser, engineKey, prompt, storageState) {
-  const cfg = ENGINES[engineKey];
-  if (!cfg) throw new Error(`Unknown engine: ${engineKey}`);
-  if (cfg.needsSession && !storageState) throw new Error(`${cfg.name}: no logged-in session provided (needs storageState).`);
 
-  const context = await browser.newContext({
-    storageState: storageState || undefined,
-    locale: "en-US",
-    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-  });
+// Page-level ask flow. Works with ANY Playwright context — a Browserless
+// newContext seeded with storageState OR a local persistent-profile context.
+// Owns only the PAGE; the caller owns the context lifecycle.
+async function askInContext(context, cfg, prompt) {
   const page = await context.newPage();
   try {
     // ── Search-type engine (Google AI Overviews): run a Google search and grab
@@ -131,33 +128,120 @@ async function askEngine(browser, engineKey, prompt, storageState) {
     );
     return { engine: cfg.name, prompt, answerText, citations: [...new Set(citations)].slice(0, 30) };
   } finally {
-    await context.close();
+    await page.close().catch(() => {});
   }
+}
+
+// Browserless transport: fresh context seeded with the captured storageState.
+async function askEngine(browser, engineKey, prompt, storageState) {
+  const cfg = ENGINES[engineKey];
+  if (!cfg) throw new Error(`Unknown engine: ${engineKey}`);
+  if (cfg.needsSession && !storageState) throw new Error(`${cfg.name}: no logged-in session provided (needs storageState).`);
+  const context = await browser.newContext({
+    storageState: storageState || undefined,
+    locale: "en-US",
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+  });
+  try { return await askInContext(context, cfg, prompt); }
+  finally { await context.close().catch(() => {}); }
 }
 
 // ── Mock adapter (no browser — testable now) ─────────────────────────────────
 function mockResponses({ brandSet, prompts, engineKeys }) {
   const lead = brandSet[1] || brandSet[0]; // a competitor leads, client trails (realistic)
+  const slug = (s) => String(s || "").toLowerCase().replace(/\s+/g, "-");
   const out = [];
   for (const ek of engineKeys) {
     const eName = ENGINES[ek]?.name || ek;
     for (const p of prompts) {
-      out.push({
-        engine: eName,
-        prompt: p.prompt,
-        brandsMentioned: brandSet.slice(0, Math.min(3, brandSet.length)),
-        leadBrand: lead,
-        citations: ["https://idntimes.com/x", "https://clutch.co/y", "https://reddit.com/z"],
-      });
+      const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
+      if (p.theme === "Marketplace presence") {
+        const b = p.brand || brandSet[0];
+        out.push({
+          engine: eName, prompt: p.prompt, ...tag,
+          answerText: `${b} has active profiles on Clutch and JustDial.`,
+          citations: [`https://clutch.co/profile/${slug(b)}`, `https://www.justdial.com/${slug(b).replace(/-/g, "")}`],
+        });
+      } else {
+        out.push({
+          engine: eName, prompt: p.prompt, ...tag,
+          brandsMentioned: brandSet.slice(0, Math.min(3, brandSet.length)),
+          leadBrand: lead,
+          citations: ["https://idntimes.com/x", "https://clutch.co/y", "https://reddit.com/z"],
+        });
+      }
     }
   }
   return out;
 }
 
-// ── Orchestrator ─────────────────────────────────────────────────────────────
+// ── Transport: Browserless (hosted browser, production) ──────────────────────
+async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry }) {
+  const browser = await connectBrowserless(proxyCountry);
+  const responses = [];
+  try {
+    for (const ek of engineKeys) {
+      const cfg = ENGINES[ek];
+      for (const p of prompts) {
+        const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
+        try { responses.push({ ...(await askEngine(browser, ek, p.prompt, sessions[ek])), ...tag }); }
+        catch (err) { responses.push({ engine: cfg?.name || ek, prompt: p.prompt, ...tag, error: String(err?.message || err) }); }
+      }
+    }
+  } finally { try { await browser.close(); } catch {} }
+  return responses;
+}
+
+// ── Transport: LOCAL persistent profiles (.geo-sessions/profile-<engine>) ────
+// Reuses the real Chrome profiles captured by scripts/geo-capture.mjs — already
+// logged in and Cloudflare-cleared. One window per engine, reused across prompts.
+async function _runLocal({ engineKeys, prompts }) {
+  let chromium;
+  try { ({ chromium } = await import("playwright")); }
+  catch { throw new Error("playwright (full) not installed — run `npm i -D playwright && npx playwright install chromium` for the local GEO scan."); }
+  const path = await import("path");
+  const fs = await import("fs");
+  const responses = [];
+  for (const ek of engineKeys) {
+    const cfg = ENGINES[ek];
+    if (!cfg) continue;
+    const profileDir = path.join(".geo-sessions", `profile-${ek}`);
+    const tagFor = (p) => ({ engine: cfg.name, prompt: p.prompt, brand: p.brand, theme: p.theme, promptId: p.id });
+    if (cfg.needsSession && !fs.existsSync(profileDir)) {
+      for (const p of prompts) responses.push({ ...tagFor(p), error: `no local profile (.geo-sessions/profile-${ek}) — run: node scripts/geo-capture.mjs ${ek}` });
+      continue;
+    }
+    fs.mkdirSync(profileDir, { recursive: true });
+    let context;
+    try {
+      context = await chromium.launchPersistentContext(profileDir, {
+        headless: false, channel: "chrome", viewport: null, locale: "en-US",
+        args: ["--disable-blink-features=AutomationControlled", "--start-maximized"],
+      });
+      await context.addInitScript(() => { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); });
+      for (const p of prompts) {
+        try { responses.push({ ...(await askInContext(context, cfg, p.prompt)), brand: p.brand, theme: p.theme, promptId: p.id }); }
+        catch (err) { responses.push({ ...tagFor(p), error: String(err?.message || err) }); }
+      }
+    } catch (err) {
+      for (const p of prompts) responses.push({ ...tagFor(p), error: String(err?.message || err) });
+    } finally { try { await context?.close(); } catch {} }
+  }
+  return responses;
+}
+
+// ── Unified runner ───────────────────────────────────────────────────────────
+async function _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet }) {
+  if (mode !== "live") return mockResponses({ brandSet, prompts, engineKeys });
+  if (transport === "local") return _runLocal({ engineKeys, prompts });
+  return _runBrowserless({ engineKeys, prompts, sessions, proxyCountry });
+}
+
+// ── Orchestrator: SoV / Citation scan ────────────────────────────────────────
 export async function runGeoScan(opts = {}) {
   const {
     mode = "mock",
+    transport = "browserless",   // "browserless" (hosted) | "local" (captured profiles)
     brand,
     clientDomain = "",
     competitors = [],
@@ -175,25 +259,7 @@ export async function runGeoScan(opts = {}) {
   const brandSet = [brand, ...competitors].filter(Boolean);
   const prompts = customPrompts || buildGeoPrompts({ brand, industry, marketplaces, location });
 
-  let responses = [];
-  if (mode === "live") {
-    const browser = await connectBrowserless(proxyCountry);
-    try {
-      for (const ek of engineKeys) {
-        for (const p of prompts) {
-          try {
-            responses.push(await askEngine(browser, ek, p.prompt, sessions[ek]));
-          } catch (err) {
-            responses.push({ engine: ENGINES[ek]?.name || ek, prompt: p.prompt, error: String(err?.message || err) });
-          }
-        }
-      }
-    } finally {
-      try { await browser.close(); } catch {}
-    }
-  } else {
-    responses = mockResponses({ brandSet, prompts, engineKeys });
-  }
+  const responses = await _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet });
 
   return {
     brandSet,
@@ -203,5 +269,67 @@ export async function runGeoScan(opts = {}) {
     prompts,
     responses: responses.filter((r) => !r.error),
     errors: responses.filter((r) => r.error),
+  };
+}
+
+// ── Orchestrator: Marketplace / directory presence scan ──────────────────────
+// Drives all engines with the per-brand marketplace template (client + each
+// competitor). Feed `responses` straight into buildMarketplaceIntelligence().
+export async function runMarketplaceScan(opts = {}) {
+  const {
+    mode = "mock",
+    transport = "browserless",
+    client,
+    clientSite = "",
+    clientDomain = "",
+    competitors = [],
+    marketplaces,
+    proxyCountry = "in",
+    engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "copilot"],
+    sessions = {},
+  } = opts;
+
+  const brand = client || opts.brand;
+  if (!brand) throw new Error("runMarketplaceScan: `client` (brand) is required.");
+  const mps = marketplaces && marketplaces.length ? marketplaces : MARKETPLACES;
+  const site = clientSite || clientDomain;
+  const prompts = buildMarketplacePrompts({ client: brand, clientSite: site, competitors, marketplaces: mps });
+  const brandSet = [brand, ...competitors.map((c) => (typeof c === "string" ? c : c.name))].filter(Boolean);
+
+  const responses = await _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet });
+
+  return {
+    client: brand,
+    clientSite: site,
+    competitors,
+    marketplaces: mps,
+    prompts,
+    responses: responses.filter((r) => !r.error),
+    errors: responses.filter((r) => r.error),
+  };
+}
+
+// ── Real-URL verifier (optional confidence booster for the synthesis) ────────
+// Promotes a URL-backed marketplace finding to "verified" on a clean 200 + brand
+// match. A block/timeout returns ok:false → NO promotion and NO penalty (the
+// cross-LLM consensus confidence still stands). Used only on the live path.
+export function makeUrlVerifier({ timeoutMs = 8000 } = {}) {
+  return async function verifyUrl(url, brand = "") {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), timeoutMs);
+      const res = await fetch(url, {
+        redirect: "follow", signal: ctrl.signal,
+        headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" },
+      });
+      clearTimeout(t);
+      if (!res.ok) return { ok: false };
+      let matched = true;
+      try {
+        const body = (await res.text()).toLowerCase();
+        if (brand) matched = body.includes(String(brand).toLowerCase().split(" ")[0]);
+      } catch { /* body unreadable — keep matched=true (200 is enough) */ }
+      return { ok: true, matched };
+    } catch { return { ok: false }; }
   };
 }
