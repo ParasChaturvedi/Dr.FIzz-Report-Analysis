@@ -44,21 +44,84 @@ const dir = ".geo-sessions";
 fs.mkdirSync(dir, { recursive: true });
 const out = path.join(dir, `${engine}.json`);
 
-const browser = await chromium.launch({ headless: false });
-const context = await browser.newContext({ locale: "en-US" });
-const page = await context.newPage();
-await page.goto(ENGINES[engine], { waitUntil: "domcontentloaded" });
+const profileDir = path.join(dir, `profile-${engine}`);
+fs.mkdirSync(profileDir, { recursive: true });
+// Real Google Chrome + a persistent profile + light stealth → looks like a human
+// browser to Cloudflare, which blocks Playwright's default Chromium.
+const context = await chromium.launchPersistentContext(profileDir, {
+  headless: false,
+  channel: "chrome",   // use installed Google Chrome (NOT Playwright's Chromium)
+  viewport: null,
+  locale: "en-US",
+  args: ["--disable-blink-features=AutomationControlled", "--start-maximized"],
+});
+await context.addInitScript(() => {
+  Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+});
+let closed = false;
+context.on("close", () => { closed = true; });
+const page = context.pages()[0] || (await context.newPage());
+await page.goto(ENGINES[engine], { waitUntil: "domcontentloaded" }).catch(() => {});
 
-console.log(`\n👉 Log into ${engine.toUpperCase()} in the browser window that just opened.`);
-console.log(`   Handle any OTP / 2FA. When the chat is fully loaded and ready,`);
-console.log(`   come back HERE and press ENTER to save the session.\n`);
+console.log(`\n👉 Log into ${engine.toUpperCase()} in the browser window that just opened (handle OTP/2FA).`);
+console.log(`   No need to touch the terminal — I auto-save the moment you're signed in.\n`);
 
-process.stdin.resume();
-await new Promise((res) => process.stdin.once("data", res));
+// Detect login DEFINITIVELY via the engine's own session endpoint (uses the
+// context cookies, so it sees what the logged-in user sees). A logged-out user
+// gets {} / no user; a logged-in user gets their account → impossible to
+// false-positive. Falls back to a page check for engines without such an endpoint.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const eTLD = new URL(ENGINES[engine]).hostname.split(".").slice(-2).join(".");
+async function isLoggedIn() {
+  const sessionUrl = {
+    chatgpt:    "https://chatgpt.com/api/auth/session",
+    perplexity: "https://www.perplexity.ai/api/auth/session",
+  }[engine];
+  if (sessionUrl) {
+    try {
+      const r = await context.request.get(sessionUrl, { timeout: 8000 });
+      const j = await r.json().catch(() => ({}));
+      return !!(j && j.user && (j.user.email || j.user.id || j.user.name));
+    } catch { return false; }
+  }
+  // Fallback (gemini / copilot / claude): the engine's own page shows a chat
+  // composer AND no visible "Log in / Sign in" call-to-action.
+  try {
+    const pg = context.pages().find((p) => { try { return new URL(p.url()).hostname.includes(eTLD); } catch { return false; } });
+    if (!pg) return false;
+    const cta = await pg.locator(':is(a,button):has-text("Log in"), :is(a,button):has-text("Sign in"), :is(a,button):has-text("Sign up")').count();
+    const composer = await pg.locator('textarea, [contenteditable="true"], div[role="textbox"]').count();
+    return composer > 0 && cta === 0;
+  } catch { return false; }
+}
 
-await context.storageState({ path: out });
-console.log(`\n✔ Saved logged-in session → ${out}`);
-console.log(`   (This file holds your session cookies — it is gitignored, keep it private.)\n`);
+const start = Date.now();
+const deadline = start + 5 * 60 * 1000; // up to 5 minutes to log in
+let saved = false;
+let stable = 0;
+while (Date.now() < deadline) {
+  await sleep(3000);
+  if (closed) {
+    console.log("\n⚠ Browser window was closed before login completed. Please re-run and keep it open until I save.");
+    break;
+  }
+  if (Date.now() - start < 8000) continue;
+  const ok = await isLoggedIn();
+  stable = ok ? stable + 1 : 0;     // require 2 consecutive confirmations
+  if (stable >= 2) {
+    await sleep(1500);
+    try {
+      await context.storageState({ path: out });
+      console.log(`\n✔ Detected login — saved session → ${out}`);
+      saved = true;
+    } catch (e) { console.log("save failed:", e?.message); }
+    break;
+  }
+}
+if (!saved && !closed) {
+  try { await context.storageState({ path: out }); console.log(`\n(timeout) Saved current state → ${out}. Re-run if it was not logged in.`); } catch {}
+}
+console.log(`   (Session file is gitignored — keep it private.)\n`);
 
-await browser.close();
-process.exit(0);
+try { await context.close(); } catch {}
+process.exit(saved ? 0 : 1);
