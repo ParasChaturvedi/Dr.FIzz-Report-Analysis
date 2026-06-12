@@ -18,11 +18,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const ENGINES = {
-  chatgpt:    { name: "ChatGPT",              url: "https://chatgpt.com/",           needsSession: true  },
-  gemini:     { name: "Google AI Overviews",  url: "https://gemini.google.com/app",  needsSession: true  },
-  perplexity: { name: "Perplexity",           url: "https://www.perplexity.ai/",     needsSession: false },
-  copilot:    { name: "Microsoft Copilot",    url: "https://copilot.microsoft.com/", needsSession: true  },
-  claude:     { name: "Claude",               url: "https://claude.ai/new",          needsSession: true  },
+  chatgpt:     { name: "ChatGPT",             url: "https://chatgpt.com/",           needsSession: true,  type: "chat" },
+  gemini:      { name: "Gemini",              url: "https://gemini.google.com/app",  needsSession: true,  type: "chat" },
+  // Google AI Overviews = the AI summary on the Google SEARCH results page (NOT
+  // the Gemini app). No login required; reuses the Google session if present.
+  aioverviews: { name: "Google AI Overviews", url: "https://www.google.com/search",  needsSession: false, type: "search" },
+  perplexity:  { name: "Perplexity",          url: "https://www.perplexity.ai/",     needsSession: false, type: "chat" },
+  copilot:     { name: "Microsoft Copilot",   url: "https://copilot.microsoft.com/", needsSession: true,  type: "chat" },
+  claude:      { name: "Claude",              url: "https://claude.ai/new",          needsSession: true,  type: "chat" },
 };
 
 // ── Prompt generator ─────────────────────────────────────────────────────────
@@ -87,6 +90,24 @@ async function askEngine(browser, engineKey, prompt, storageState) {
   });
   const page = await context.newPage();
   try {
+    // ── Search-type engine (Google AI Overviews): run a Google search and grab
+    //    the AI Overview block + its source links. No chat composer. ──
+    if (cfg.type === "search") {
+      const country = (process.env.BROWSERLESS_PROXY_COUNTRY || "in").toLowerCase();
+      await page.goto(`${cfg.url}?q=${encodeURIComponent(prompt)}&gl=${country}&hl=en&num=10`, { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForTimeout(5000);
+      try { await page.getByRole("button", { name: /show more/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(1500); } catch {}
+      const answerText = await page.evaluate(() => {
+        const el = document.querySelector('[data-attrid*="AIOverview" i], [aria-label*="AI Overview" i], #rso');
+        return (el?.innerText || document.body.innerText).slice(0, 8000);
+      });
+      const citations = await page.evaluate(() =>
+        Array.from(document.querySelectorAll('a[href^="http"]')).map((a) => a.href)
+          .filter((h) => !/google\.|gstatic|youtube\.com\/(redirect|results)|accounts\.|webcache/i.test(h))
+      );
+      return { engine: cfg.name, prompt, answerText, citations: [...new Set(citations)].slice(0, 30) };
+    }
+
     await page.goto(cfg.url, { waitUntil: "domcontentloaded", timeout: 60000 });
 
     // Login-wall detection (calibration point): if the composer never appears,
@@ -145,7 +166,7 @@ export async function runGeoScan(opts = {}) {
     marketplaces = [],
     location = "",
     proxyCountry = "in",    // residential-IP country (matches the report's market)
-    engineKeys = ["chatgpt", "gemini", "perplexity", "copilot"],
+    engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "copilot"],
     sessions = {},          // { chatgpt: storageState, gemini: ..., ... }
     prompts: customPrompts,
   } = opts;
