@@ -154,15 +154,19 @@ async function askInContext(context, cfg, prompt) {
       await page.goto(`${cfg.url}?q=${encodeURIComponent(prompt)}&gl=${country}&hl=en&num=10`, { waitUntil: "domcontentloaded", timeout: 60000 });
       await page.waitForTimeout(5000);
       try { await page.getByRole("button", { name: /show more/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(1500); } catch {}
-      const answerText = await page.evaluate(() => {
-        const el = document.querySelector('[data-attrid*="AIOverview" i], [aria-label*="AI Overview" i], #rso');
-        return (el?.innerText || document.body.innerText).slice(0, 8000);
+      // Extract ONLY the AI Overview block (+ its own source links). If Google shows
+      // no AI Overview for this query, contribute NO signal — never scrape the
+      // organic results list (that would just be a noisy SERP `site:` check again).
+      const { answerText, citations } = await page.evaluate(() => {
+        const sels = ['div[data-attrid="AIOverview"]', '[data-attrid*="AIOverview" i]', 'div[aria-label*="AI Overview" i]', 'div[jsname][data-rl]'];
+        let el = null;
+        for (const s of sels) { const e = document.querySelector(s); if (e && String(e.innerText || "").trim().length > 40) { el = e; break; } }
+        if (!el) return { answerText: "", citations: [] };
+        const links = Array.from(el.querySelectorAll('a[href^="http"]')).map((a) => a.href)
+          .filter((h) => !/google\.|gstatic|youtube\.com\/(redirect|results)|accounts\.|webcache/i.test(h));
+        return { answerText: String(el.innerText || "").slice(0, 8000), citations: [...new Set(links)].slice(0, 30) };
       });
-      const citations = await page.evaluate(() =>
-        Array.from(document.querySelectorAll('a[href^="http"]')).map((a) => a.href)
-          .filter((h) => !/google\.|gstatic|youtube\.com\/(redirect|results)|accounts\.|webcache/i.test(h))
-      );
-      return { engine: cfg.name, prompt, answerText, citations: [...new Set(citations)].slice(0, 30) };
+      return { engine: cfg.name, prompt, answerText, citations };
     }
 
     // Ephemeral entry point (ChatGPT Temporary Chat etc.) → no history / no memory.
