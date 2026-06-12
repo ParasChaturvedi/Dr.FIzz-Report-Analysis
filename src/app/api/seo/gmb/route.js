@@ -5,6 +5,7 @@
 
 import { NextResponse } from "next/server";
 import { claudeChat }   from "@/lib/claude/client";
+import { loadMarketplaceDirectories } from "@/lib/seo/geo/marketplace-source";
 
 export const runtime    = "nodejs";
 export const maxDuration = 90;
@@ -448,7 +449,10 @@ export async function checkGmb(domain, businessName = "", location = "India") {
   const [reviewRes, qaRes, dirRes] = await Promise.allSettled([
     info?.found ? fetchGmbReviews(matchedKeyword, location, auth) : Promise.resolve([]),
     info?.found ? fetchGmbQA(matchedKeyword, location, auth)      : Promise.resolve([]),
-    checkDirectoryListings(host, auth, matchedKeyword),
+    // Prefer the multi-LLM Marketplace Intelligence (cross-LLM-validated, cached);
+    // falls back to DataForSEO SERP detection when the flag is off / no cache.
+    loadMarketplaceDirectories({ domain: host, businessName: matchedKeyword, location })
+      .then((llm) => llm || checkDirectoryListings(host, auth, matchedKeyword)),
   ]);
 
   const reviews = reviewRes.status === "fulfilled" ? reviewRes.value : [];

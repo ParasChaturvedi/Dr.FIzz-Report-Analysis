@@ -45,3 +45,5 @@ next-env.d.ts
 
 # Live GEO scan — logged-in AI sessions (sensitive cookies)
 .geo-sessions/
+# Multi-LLM marketplace intelligence cache (per-domain scan artifacts)
+.geo-cache/
