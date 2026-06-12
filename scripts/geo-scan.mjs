@@ -54,6 +54,7 @@ const scan = await runGeoScan({
   clientDomain: process.env.GEO_DOMAIN     || "itzfizz.com",
   industry:     process.env.GEO_INDUSTRY   || "SEO agency",
   location:     process.env.GEO_LOCATION   || "",
+  proxyCountry: process.env.GEO_PROXY_COUNTRY || "in",
   competitors:  (process.env.GEO_COMPETITORS || "").split(",").map(s => s.trim()).filter(Boolean),
   marketplaces: ["Clutch", "GoodFirms", "G2", "Sulekha", "TradeIndia"],
   engineKeys,

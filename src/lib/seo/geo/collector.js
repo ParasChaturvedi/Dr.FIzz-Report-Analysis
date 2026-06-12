@@ -50,18 +50,24 @@ export function buildGeoPrompts({ brand, industry = "your services", marketplace
 }
 
 // ── Connect Playwright → Browserless (live mode only) ────────────────────────
-async function connectBrowserless() {
+async function connectBrowserless(proxyCountry = "") {
   const token = process.env.BROWSERLESS_TOKEN;
   if (!token) throw new Error("BROWSERLESS_TOKEN is not set — required for the live GEO scan.");
   const base = (process.env.BROWSERLESS_ENDPOINT_BASE || "https://production-sfo.browserless.io").replace(/^http/i, "ws");
   const residential = String(process.env.BROWSERLESS_USE_RESIDENTIAL || "").trim() === "1";
-  const ws = `${base}/chromium/playwright?token=${encodeURIComponent(token)}${residential ? "&proxy=residential" : ""}`;
+  // Country-target the residential IP so AI answers match the report's market
+  // (verified: &proxy=residential&proxyCountry=in → an India IP).
+  const country = String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "").toLowerCase();
+  const proxyQs = residential ? `&proxy=residential${country ? `&proxyCountry=${country}` : ""}` : "";
+  const ws = `${base}/chromium/playwright?token=${encodeURIComponent(token)}${proxyQs}`;
   // Dynamic import so build/serverless bundles never pull Playwright unless a
   // live scan actually runs (the browser itself is hosted on Browserless).
   let chromium;
   try { ({ chromium } = await import("playwright-core")); }
   catch { throw new Error("playwright-core is not installed — run `npm i playwright-core` to enable the live GEO scan."); }
-  return chromium.connectOverCDP(ws);
+  // Browserless `/chromium/playwright` endpoint uses the Playwright protocol →
+  // chromium.connect() (NOT connectOverCDP, which is for the /chromium CDP endpoint).
+  return chromium.connect(ws);
 }
 
 // ── Per-engine adapter (live) ────────────────────────────────────────────────
@@ -138,6 +144,7 @@ export async function runGeoScan(opts = {}) {
     industry = "",
     marketplaces = [],
     location = "",
+    proxyCountry = "in",    // residential-IP country (matches the report's market)
     engineKeys = ["chatgpt", "gemini", "perplexity", "copilot"],
     sessions = {},          // { chatgpt: storageState, gemini: ..., ... }
     prompts: customPrompts,
@@ -149,7 +156,7 @@ export async function runGeoScan(opts = {}) {
 
   let responses = [];
   if (mode === "live") {
-    const browser = await connectBrowserless();
+    const browser = await connectBrowserless(proxyCountry);
     try {
       for (const ek of engineKeys) {
         for (const p of prompts) {
