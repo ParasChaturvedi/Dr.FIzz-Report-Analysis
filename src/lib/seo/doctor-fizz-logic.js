@@ -1383,11 +1383,34 @@ export function buildGeoVisibility(input = {}) {
   ];
   const ai_platforms = ["ChatGPT", "Google AI Overviews", "Perplexity", "Microsoft Copilot"]
     .map(platform => ({ platform, visibility: "Pending live scan" }));
-  const prompt_tracking_status = "Pending — the live multi-engine AI-visibility scan (ChatGPT, Gemini, Perplexity, Copilot) is a separate module; the prompts below are what it will track.";
+  // ── LIVE AI visibility (proprietary SoV + Citation logic) — computed ONLY when
+  //    the multi-engine collector has supplied raw responses (input.aiResponses);
+  //    null otherwise, so the deterministic placeholders above still show. ───────
+  let share_of_voice = null, citation_analysis = null;
+  const raw = input.aiResponses || input.ai_visibility_raw || null;
+  if (raw && Array.isArray(raw.responses) && raw.responses.length) {
+    share_of_voice = buildShareOfVoice({
+      brandSet: raw.brandSet || [clientName || domain, ...(competitors || []).map(c => c.name || c.domain).filter(Boolean)],
+      client: clientName || domain,
+      responses: raw.responses,
+    });
+    citation_analysis = buildCitationAnalysis({
+      clientDomain: raw.clientDomain || domain,
+      clientName: clientName || domain,
+      competitorDomains: raw.competitorDomains || (competitors || []).map(c => c.domain).filter(Boolean),
+      responses: raw.responses,
+    });
+  }
+  const live = !!(share_of_voice || citation_analysis);
+  const prompt_tracking_status = live
+    ? `Live — measured across ${(share_of_voice?.engines || []).join(", ") || "the AI engines"} from the multi-engine scan.`
+    : "Pending — the live multi-engine AI-visibility scan (ChatGPT, Gemini, Perplexity, Copilot) is a separate module; the prompts below are what it will track.";
 
   return {
     current_ai_citation_count: currentCitations,
     competitor_citation_benchmarks: competitorBenchmarks,
+    share_of_voice,         // proprietary SoV table (null until collector runs)
+    citation_analysis,      // proprietary citation intelligence (null until collector runs)
     geo_readiness,
     tracked_prompts,
     ai_platforms,
@@ -1433,6 +1456,152 @@ function buildFaqSchemaJsonLd(industry) {
         "acceptedAnswer": { "@type": "Answer", "text": "Replace with a 40–60 word direct answer to this question." } },
     ],
   }, null, 2);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GEO MEASUREMENT — PROPRIETARY LOGIC (Doctor Fizz owns this; the AI engines are
+// RAW SIGNAL only). Both functions are COLLECTOR-AGNOSTIC: they take raw per-engine
+// AI responses (from the Playwright+Browserless collector, an API, or mock data)
+// and turn them into Share-of-Voice and Citation intelligence.
+//
+// Raw response shape (what the collector must supply per AI answer):
+//   { engine, prompt, answerText?, brandsMentioned?: string[], leadBrand?: string,
+//     citations?: string[] (source URLs) }
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const _geoNorm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+const _geoHost = (url) => {
+  try { return new URL(String(url).includes("://") ? url : `https://${url}`).hostname.replace(/^www\./, "").toLowerCase(); }
+  catch { return String(url || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase(); }
+};
+
+/**
+ * SHARE OF VOICE LOGIC — % visibility of each brand inside each AI engine, plus a
+ * Doctor-Fizz-calculated Avg (ESTIMATE). A lead brand (the one the answer leads
+ * with) is weighted higher than a passing mention. SOV is RELATIVE within the
+ * supplied brand set. Returns null until raw responses exist.
+ *
+ * @param {object} input { brandSet: string[], client: string, responses: [] }
+ */
+export function buildShareOfVoice(input = {}) {
+  const brandSet = (input.brandSet || []).filter(Boolean);
+  const responses = input.responses || [];
+  if (brandSet.length < 2 || !responses.length) return null;
+
+  const client = input.client || brandSet[0];
+  const clientN = _geoNorm(client);
+
+  const mentionsOf = (r) => {
+    if (Array.isArray(r.brandsMentioned) && r.brandsMentioned.length) {
+      const set = new Set(r.brandsMentioned.map(_geoNorm));
+      return brandSet.filter(b => set.has(_geoNorm(b)));
+    }
+    const text = _geoNorm(r.answerText || "");
+    return text ? brandSet.filter(b => text.includes(_geoNorm(b))) : [];
+  };
+
+  const engines = [...new Set(responses.map(r => r.engine).filter(Boolean))];
+  const byEngine = {};
+  for (const engine of engines) {
+    const rs = responses.filter(r => r.engine === engine);
+    const counts = {}; brandSet.forEach(b => (counts[b] = 0));
+    let total = 0;
+    for (const r of rs) {
+      for (const b of mentionsOf(r)) {
+        const w = _geoNorm(r.leadBrand) === _geoNorm(b) ? 2 : 1;  // lead-weighting (proprietary)
+        counts[b] += w; total += w;
+      }
+    }
+    byEngine[engine] = {};
+    for (const b of brandSet) byEngine[engine][b] = total > 0 ? (counts[b] / total) * 100 : 0;
+  }
+
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const by_brand = brandSet.map(b => {
+    const row = { brand: b, is_client: _geoNorm(b) === clientN, per_engine: {} };
+    let sum = 0;
+    for (const e of engines) { const v = byEngine[e][b]; row.per_engine[e] = r1(v); sum += v; }
+    row.avg = r1(engines.length ? sum / engines.length : 0);
+    return row;
+  }).sort((a, b) => b.avg - a.avg);
+
+  const clientRow = by_brand.find(r => r.is_client);
+  return {
+    engines,
+    by_brand,
+    client_sov_avg: clientRow ? clientRow.avg : 0,
+    estimate: true,
+    note: "Share of Voice is relative within this brand set. Per-engine values come from the AI engines; the Avg column is calculated by Doctor Fizz (ESTIMATE).",
+  };
+}
+
+const _GEO_DOMAIN_TYPES = [
+  [/wikipedia\.org|wikidata\.org/, "Encyclopedia"],
+  [/reddit\.com|quora\.com|stackexchange|forum/, "Community"],
+  [/justdial|sulekha|indiamart|tradeindia|yelp|trustpilot|clutch\.co|goodfirms|g2\.com|glassdoor|yellowpages|designrush|foodierate|hargamenu|cuponation|hemat\.|katalogpromosi|kumparan/, "Aggregator / directory"],
+  [/times|news|liputan|kompas|tribun|detik|cnbc|forbes|techcrunch|businessinsider|\.com\/(blog|news)|blog\./, "Media"],
+];
+function _geoClassifyDomain(domain, clientDomain, competitorDomains) {
+  const d = String(domain || "").toLowerCase();
+  if (clientDomain && d.includes(clientDomain)) return "Brand domain (you)";
+  if ((competitorDomains || []).some(c => c && d.includes(c))) return "Brand domain (competitor)";
+  for (const [re, label] of _GEO_DOMAIN_TYPES) if (re.test(d)) return label;
+  return "Other";
+}
+
+/**
+ * CITATION LOGIC — which source domains the AI engines cite, the citation gap
+ * (is the client's own domain cited, vs competitors?), and brand presence per
+ * prompt. Engines = raw signal; this aggregation + gap analysis is Doctor Fizz's.
+ *
+ * @param {object} input { clientDomain, clientName?, competitorDomains?: [], responses: [] }
+ */
+export function buildCitationAnalysis(input = {}) {
+  const responses = input.responses || [];
+  if (!responses.length) return null;
+  const clientDomain = _geoHost(input.clientDomain || "");
+  const competitorDomains = (input.competitorDomains || []).map(_geoHost).filter(Boolean);
+
+  const agg = new Map();   // host -> { pages:Set, responses:int }
+  for (const r of responses) {
+    const cites = (r.citations || []).filter(Boolean);
+    const seen = new Set();
+    for (const url of cites) {
+      const host = _geoHost(url);
+      if (!host) continue;
+      if (!agg.has(host)) agg.set(host, { domain: host, pages: new Set(), responses: 0 });
+      const e = agg.get(host);
+      e.pages.add(url);
+      if (!seen.has(host)) { e.responses++; seen.add(host); }
+    }
+  }
+
+  const most_cited_domains = [...agg.values()].map(e => ({
+    domain: e.domain,
+    pages_cited: e.pages.size,
+    responses: e.responses,
+    type: _geoClassifyDomain(e.domain, clientDomain, competitorDomains),
+    is_client: !!(clientDomain && e.domain.includes(clientDomain)),
+    is_competitor: competitorDomains.some(c => e.domain.includes(c)),
+  })).sort((a, b) => b.responses - a.responses || b.pages_cited - a.pages_cited).slice(0, 12);
+
+  const client_cited = most_cited_domains.some(d => d.is_client);
+  const topComp = most_cited_domains.find(d => d.is_competitor);
+  const who = input.clientName || clientDomain || "your domain";
+  const citation_gap = client_cited
+    ? `${who}'s own domain is already cited by AI engines — defend and expand the pages that earn it.`
+    : topComp
+      ? `${clientDomain || "Your domain"} is absent from the top cited domains, while ${topComp.domain} (a competitor) is cited at scale (${topComp.responses} responses). A brand domain CAN be cited — build the citable pages.`
+      : `${clientDomain || "Your domain"} is not yet cited; AI cites third-party media and aggregators instead. Build citable pages and earn coverage on the exact sources AI already trusts.`;
+
+  const brand_presence = responses.slice(0, 10).map(r => ({
+    prompt: r.prompt || "",
+    brands_surfaced: r.brandsMentioned || [],
+    client_present: (r.brandsMentioned || []).some(b => _geoNorm(b).includes(_geoNorm(input.clientName || ""))),
+    sources_cited: [...new Set((r.citations || []).map(_geoHost).filter(Boolean))].slice(0, 4),
+  }));
+
+  return { most_cited_domains, client_cited, citation_gap, brand_presence, responses_analysed: responses.length };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

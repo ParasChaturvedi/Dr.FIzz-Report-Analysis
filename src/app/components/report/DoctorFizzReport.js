@@ -1505,6 +1505,70 @@ export default function DoctorFizzReport({ data }) {
                 Current AI citation status: <strong>{geo.current_ai_citation_count}</strong>. The site is not yet a citable source for ChatGPT, Google AI Overviews, or Perplexity — the prescription below makes the content liftable by answer engines.
               </DiagnosisCard>
 
+              {/* LIVE AI Share of Voice — proprietary SoV logic (only when collector ran) */}
+              {geo.share_of_voice && (
+                <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                  <div className="px-3 pt-2.5 pb-1 flex items-center gap-2">
+                    <span className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>AI Share of Voice — by engine</span>
+                    <span className="text-[8px] font-bold px-1.5 py-0.5 rounded" style={{ background: C.orange, color: "#fff" }}>ESTIMATE</span>
+                  </div>
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr style={{ background: C.nearBlack }}>
+                        <Th white>Brand</Th>
+                        {geo.share_of_voice.engines.map((e, i) => <Th key={i} white right>{e}</Th>)}
+                        <Th white right>Avg</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {geo.share_of_voice.by_brand.map((b, i) => (
+                        <tr key={i} style={{ background: b.is_client ? C.diagTint : (i % 2 ? "#fff" : C.ivory) }}>
+                          <Td><span style={{ fontWeight: b.is_client ? 700 : 400, color: b.is_client ? C.orange : C.textDark }}>{b.brand}{b.is_client ? " (you)" : ""}</span></Td>
+                          {geo.share_of_voice.engines.map((e, j) => <Td key={j} right>{b.per_engine[e]}%</Td>)}
+                          <Td right><strong>{b.avg}%</strong></Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="px-3 py-2 text-[10.5px]" style={{ color: C.greyText, background: C.ivory }}>{geo.share_of_voice.note}</div>
+                </div>
+              )}
+
+              {/* LIVE Citation intelligence — proprietary citation logic (only when collector ran) */}
+              {geo.citation_analysis && (
+                <>
+                  <div className="rounded-lg p-3 mb-3" style={{ background: C.diagTint, borderLeft: `3px solid ${C.orange}` }}>
+                    <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>Citation Gap — the root cause</div>
+                    <p className="text-[13px]" style={{ color: C.textDark, lineHeight: 1.6 }}>{geo.citation_analysis.citation_gap}</p>
+                  </div>
+                  {(geo.citation_analysis.most_cited_domains || []).length > 0 && (
+                    <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                      <div className="uppercase px-3 pt-2.5 pb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>Most-Cited Sources — what AI quotes instead of you</div>
+                      <table className="w-full text-[12px]">
+                        <thead>
+                          <tr style={{ background: C.nearBlack }}>
+                            <Th white>Source domain</Th><Th white right>Pages cited</Th><Th white right>Responses</Th><Th white>Type</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {geo.citation_analysis.most_cited_domains.map((d, i) => (
+                            <tr key={i} style={{ background: d.is_client ? C.diagTint : d.is_competitor ? "#FBE9E7" : (i % 2 ? "#fff" : C.ivory) }}>
+                              <Td>{d.domain}
+                                {d.is_competitor && <span className="text-[9px] ml-1.5 px-1 py-0.5 rounded" style={{ background: "#B3261E", color: "#fff" }}>competitor</span>}
+                                {d.is_client && <span className="text-[9px] ml-1.5 px-1 py-0.5 rounded" style={{ background: C.rxGreen, color: "#fff" }}>you</span>}
+                              </Td>
+                              <Td right>{d.pages_cited}</Td>
+                              <Td right>{d.responses}</Td>
+                              <Td>{d.type}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+
               {/* GEO / LLM readiness scorecard — data-derived optimization factors */}
               {(geo.geo_readiness || []).length > 0 && (
                 <div className="mb-3">
