@@ -42,3 +42,6 @@ leads.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Live GEO scan — logged-in AI sessions (sensitive cookies)
+.geo-sessions/
