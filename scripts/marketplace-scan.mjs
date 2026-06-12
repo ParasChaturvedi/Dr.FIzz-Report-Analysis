@@ -11,9 +11,14 @@
 //        GEO_MARKETPLACE_SOURCE=llm
 //
 // Transport:
-//   • local (default)  → reuses the real Chrome profiles from geo-capture.mjs
-//                        (.geo-sessions/profile-<engine>). Run geo-capture first.
-//   • browserless      → set GEO_TRANSPORT=browserless (hosted; needs sessions).
+//   • browserless (DEFAULT) → HEADLESS browser hosted in Browserless's cloud.
+//                        Nothing opens on your device; fully automatic. Each query
+//                        runs in a fresh throwaway context (incognito) and ChatGPT
+//                        uses Temporary Chat → no history / no memory bias. Uses the
+//                        captured storageState sessions (.geo-sessions/<engine>.json)
+//                        only to authenticate; logged-out engines stay logged out.
+//   • local            → set GEO_TRANSPORT=local to drive real local Chrome profiles
+//                        (visible windows; for debugging/calibration only).
 //
 // Per-report inputs here are CALIBRATION ONLY (one example brand from the CLI).
 // In production the background job passes brand/domain/competitors straight from
@@ -42,11 +47,12 @@ const { saveMarketplaceIntelligence } = await import("../src/lib/seo/geo/marketp
 const brand       = process.env.GEO_BRAND       || "Itzfizz Digital";
 const clientDomain= process.env.GEO_DOMAIN      || "itzfizz.com";
 const competitors = (process.env.GEO_COMPETITORS || "").split(",").map((s) => s.trim()).filter(Boolean);
-const transport   = process.env.GEO_TRANSPORT   || "local";
+const transport   = process.env.GEO_TRANSPORT   || "browserless";  // headless cloud — no device windows
 const mode        = process.env.GEO_MODE        || "live";   // set GEO_MODE=mock to dry-run
 const proxyCountry= process.env.GEO_PROXY_COUNTRY || "in";
 
-// Sessions (only needed for the browserless transport)
+// Sessions authenticate the logged-in engines (Browserless seeds a fresh ephemeral
+// context with these cookies per query, then discards it → incognito, no memory).
 const sessions = {};
 if (transport === "browserless") {
   for (const e of ["chatgpt", "gemini", "copilot", "perplexity", "claude"]) {
@@ -57,11 +63,15 @@ if (transport === "browserless") {
 console.log(`\nMarketplace scan → brand="${brand}" domain=${clientDomain} competitors=[${competitors.join(", ")}]`);
 console.log(`mode=${mode} transport=${transport} proxyCountry=${proxyCountry}\n`);
 
+const engineKeys = (process.env.GEO_ENGINES || "").split(",").map((s) => s.trim()).filter(Boolean);
 const scan = await runMarketplaceScan({
   mode, transport, client: brand, clientDomain, competitors, proxyCountry, sessions,
+  ...(engineKeys.length ? { engineKeys } : {}),
 });
 console.log(`Collected ${scan.responses.length} responses, ${scan.errors.length} errors.`);
 if (scan.errors.length) console.log("Errors:\n  " + scan.errors.map((e) => `${e.engine}: ${e.error}`).join("\n  "));
+// Persist the RAW scan so we can calibrate per-engine selectors from real output.
+try { fs.mkdirSync(".geo-cache", { recursive: true }); fs.writeFileSync(".geo-cache/last-marketplace-scan.json", JSON.stringify(scan, null, 2)); console.log("Raw scan → .geo-cache/last-marketplace-scan.json"); } catch {}
 
 // Real-URL verification promotes URL-backed findings to "verified".
 const verifyUrl = makeUrlVerifier({ timeoutMs: 8000 });

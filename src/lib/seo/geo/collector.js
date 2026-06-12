@@ -20,14 +20,44 @@
 import { buildMarketplacePrompts, MARKETPLACES } from "./marketplace-intelligence.js";
 
 export const ENGINES = {
-  chatgpt:     { name: "ChatGPT",             url: "https://chatgpt.com/",           needsSession: true,  type: "chat" },
-  gemini:      { name: "Gemini",              url: "https://gemini.google.com/app",  needsSession: true,  type: "chat" },
+  // `ephemeralUrl` = a no-history / no-memory entry point. We always run each query
+  // in a fresh, throwaway context (incognito-style); for ChatGPT we additionally
+  // use Temporary Chat so the query never enters chat history or updates memory —
+  // keeps every answer unbiased + repeatable (no personalisation drift).
+  chatgpt: {
+    name: "ChatGPT", url: "https://chatgpt.com/", ephemeralUrl: "https://chatgpt.com/?temporary-chat=true",
+    needsSession: true, type: "chat",
+    composerSel: '#prompt-textarea, div[contenteditable="true"]',
+    sendSel: '[data-testid="send-button"], button[aria-label*="Send" i]',
+    answerSel: '[data-message-author-role="assistant"]',
+  },
+  gemini: {
+    name: "Gemini", url: "https://gemini.google.com/app", needsSession: true, type: "chat",
+    composerSel: 'rich-textarea div[contenteditable="true"], div[contenteditable="true"][role="textbox"]',
+    sendSel: 'button[aria-label*="Send" i], button.send-button',
+    answerSel: 'message-content, .model-response-text, [class*="response-container" i]',
+  },
   // Google AI Overviews = the AI summary on the Google SEARCH results page (NOT
   // the Gemini app). No login required; reuses the Google session if present.
-  aioverviews: { name: "Google AI Overviews", url: "https://www.google.com/search",  needsSession: false, type: "search" },
-  perplexity:  { name: "Perplexity",          url: "https://www.perplexity.ai/",     needsSession: false, type: "chat" },
-  copilot:     { name: "Microsoft Copilot",   url: "https://copilot.microsoft.com/", needsSession: true,  type: "chat" },
-  claude:      { name: "Claude",              url: "https://claude.ai/new",          needsSession: true,  type: "chat" },
+  aioverviews: { name: "Google AI Overviews", url: "https://www.google.com/search", needsSession: false, type: "search" },
+  perplexity: {
+    name: "Perplexity", url: "https://www.perplexity.ai/", needsSession: false, type: "chat",
+    composerSel: 'textarea, div[contenteditable="true"]',
+    sendSel: 'button[aria-label*="Submit" i], button[aria-label*="Send" i]',
+    answerSel: '.prose, [class*="answer" i], [class*="prose" i]',
+  },
+  copilot: {
+    name: "Microsoft Copilot", url: "https://copilot.microsoft.com/", needsSession: true, type: "chat",
+    composerSel: 'textarea, div[contenteditable="true"], #userInput',
+    sendSel: 'button[aria-label*="Send" i], button[title*="Send" i]',
+    answerSel: '[data-content="ai-message"], [class*="message" i][class*="ai" i], .ac-textBlock',
+  },
+  claude: {
+    name: "Claude", url: "https://claude.ai/new", needsSession: true, type: "chat",
+    composerSel: 'div[contenteditable="true"], .ProseMirror',
+    sendSel: 'button[aria-label*="Send" i]',
+    answerSel: '[data-testid*="message" i], .font-claude-message, [class*="message" i]',
+  },
 };
 
 // ── Prompt generator ─────────────────────────────────────────────────────────
@@ -64,7 +94,11 @@ async function connectBrowserless(proxyCountry = "") {
   // (verified: &proxy=residential&proxyCountry=in → an India IP).
   const country = String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "").toLowerCase();
   const proxyQs = residential ? `&proxy=residential${country ? `&proxyCountry=${country}` : ""}` : "";
-  const ws = `${base}/chromium/playwright?token=${encodeURIComponent(token)}${proxyQs}`;
+  // Browserless kills the session after `timeout` (default ~30s) — too short for a
+  // streamed AI answer. Extend to the plan max (60,000) so one query fits. A fresh
+  // connection is made per query, so the whole scan never needs one long session.
+  const timeoutMs = Math.min(60000, Number(process.env.BROWSERLESS_TIMEOUT_MS || 60000));
+  const ws = `${base}/chromium/playwright?token=${encodeURIComponent(token)}${proxyQs}&timeout=${timeoutMs}`;
   // Dynamic import so build/serverless bundles never pull Playwright unless a
   // live scan actually runs (the browser itself is hosted on Browserless).
   let chromium;
@@ -80,6 +114,32 @@ async function connectBrowserless(proxyCountry = "") {
 // MUST be calibrated per engine against a real logged-in session (the consumer
 // AI apps change their DOM often). Login walls are detected and surfaced.
 const SETTLE_MS = Number(process.env.GEO_SCAN_SETTLE_MS || 9000);
+
+// Poll the assistant answer node until it appears AND stops growing (stream done).
+// Reads ONLY cfg.answerSel — so we never capture page chrome or the prompt echo.
+async function waitForStableAnswer(page, cfg) {
+  // Kept under the Browserless 60s session cap (goto + extract eat the rest).
+  const maxMs = Number(process.env.GEO_ANSWER_MAX_MS || 42000);
+  const start = Date.now();
+  let last = "", stable = 0;
+  while (Date.now() - start < maxMs) {
+    await page.waitForTimeout(2500);
+    const txt = await page.evaluate((sel) => {
+      if (!sel) return "";
+      const n = document.querySelectorAll(sel);
+      return n.length ? String(n[n.length - 1].innerText || "").trim() : "";
+    }, cfg.answerSel);
+    if (txt && txt.length > 40) {
+      if (txt === last) { if (++stable >= 2) return txt.slice(0, 8000); }
+      else { stable = 0; last = txt; }
+    }
+  }
+  if (last) return last.slice(0, 8000);
+  // Fallback: the answer node never matched — return the tail of the body MINUS the
+  // prompt echo, so a selector drift still yields *something* to calibrate against.
+  const body = await page.evaluate(() => document.body.innerText || "");
+  return body.replace(/\s+/g, " ").slice(-6000);
+}
 
 // Page-level ask flow. Works with ANY Playwright context — a Browserless
 // newContext seeded with storageState OR a local persistent-profile context.
@@ -105,27 +165,45 @@ async function askInContext(context, cfg, prompt) {
       return { engine: cfg.name, prompt, answerText, citations: [...new Set(citations)].slice(0, 30) };
     }
 
-    await page.goto(cfg.url, { waitUntil: "domcontentloaded", timeout: 60000 });
+    // Ephemeral entry point (ChatGPT Temporary Chat etc.) → no history / no memory.
+    await page.goto(cfg.ephemeralUrl || cfg.url, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await page.waitForTimeout(2500); // SPA hydration before the composer renders
 
     // Login-wall detection (calibration point): if the composer never appears,
     // the session has expired → caller should refresh that engine's storageState.
-    const composer = page.locator('textarea, [contenteditable="true"], div[role="textbox"]').first();
-    await composer.waitFor({ state: "visible", timeout: 25000 });
-
+    // The engine selector is OR'd with a generic fallback for resilience.
+    const composerSel = cfg.composerSel
+      ? `${cfg.composerSel}, textarea, div[role="textbox"]`
+      : 'textarea, [contenteditable="true"], div[role="textbox"]';
+    const composer = page.locator(composerSel).first();
+    await composer.waitFor({ state: "visible", timeout: 35000 });
     await composer.click();
-    await composer.type(prompt, { delay: 20 });
-    await page.keyboard.press("Enter");
 
-    // Wait for streaming to settle. (Calibration point: per-engine "stop
-    // generating" disappearance is more precise than a fixed wait.)
-    await page.waitForTimeout(SETTLE_MS);
+    // insertText pastes the whole prompt at once (no per-key Enter) so a multi-line
+    // prompt never submits early. Then submit via the SEND BUTTON (Enter often just
+    // inserts a newline in these rich composers); fall back to Enter.
+    await page.keyboard.insertText(prompt);
+    await page.waitForTimeout(400);
+    let sent = false;
+    if (cfg.sendSel) {
+      try {
+        const btn = page.locator(cfg.sendSel).first();
+        await btn.waitFor({ state: "visible", timeout: 5000 });
+        await btn.click({ timeout: 4000 });
+        sent = true;
+      } catch { /* fall back to Enter */ }
+    }
+    if (!sent) await page.keyboard.press("Enter");
 
-    const answerText = await page.evaluate(() => document.body.innerText.slice(-8000));
-    const citations = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('a[href^="http"]'))
-        .map((a) => a.href)
-        .filter((h) => !/(chatgpt|openai|google\.com|gemini|accounts\.|perplexity\.ai\/?$|microsoft\.com|bing\.com|copilot|claude\.ai|anthropic)/i.test(h))
-    );
+    // Wait for the assistant turn to APPEAR and stop growing (stream settled),
+    // reading only the answer node — never the page chrome or the prompt echo.
+    const answerText = await waitForStableAnswer(page, cfg);
+    const citations = await page.evaluate((sel) => {
+      let root = document.body;
+      if (sel) { const n = document.querySelectorAll(sel); if (n.length) root = n[n.length - 1]; }
+      return Array.from(root.querySelectorAll('a[href^="http"]')).map((a) => a.href)
+        .filter((h) => !/(chatgpt|openai|google\.com|gemini|accounts\.|perplexity\.ai\/?$|microsoft\.com|bing\.com|copilot|claude\.ai|anthropic|gstatic)/i.test(h));
+    }, cfg.answerSel);
     return { engine: cfg.name, prompt, answerText, citations: [...new Set(citations)].slice(0, 30) };
   } finally {
     await page.close().catch(() => {});
@@ -176,19 +254,29 @@ function mockResponses({ brandSet, prompts, engineKeys }) {
 }
 
 // ── Transport: Browserless (hosted browser, production) ──────────────────────
+// A FRESH connection per query: each stays well under the Browserless session
+// timeout AND is fully ephemeral (incognito) — no state bleeds between queries.
 async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry }) {
-  const browser = await connectBrowserless(proxyCountry);
   const responses = [];
-  try {
-    for (const ek of engineKeys) {
-      const cfg = ENGINES[ek];
-      for (const p of prompts) {
-        const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
-        try { responses.push({ ...(await askEngine(browser, ek, p.prompt, sessions[ek])), ...tag }); }
-        catch (err) { responses.push({ engine: cfg?.name || ek, prompt: p.prompt, ...tag, error: String(err?.message || err) }); }
+  const attempts = Number(process.env.GEO_QUERY_ATTEMPTS || 2);
+  for (const ek of engineKeys) {
+    const cfg = ENGINES[ek];
+    for (const p of prompts) {
+      const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
+      let lastErr = null;
+      for (let a = 0; a < attempts; a++) {
+        let browser;
+        try {
+          browser = await connectBrowserless(proxyCountry);
+          responses.push({ ...(await askEngine(browser, ek, p.prompt, sessions[ek])), ...tag });
+          lastErr = null;
+          break; // success
+        } catch (err) { lastErr = err; }
+        finally { try { await browser?.close(); } catch {} }
       }
+      if (lastErr) responses.push({ engine: cfg?.name || ek, prompt: p.prompt, ...tag, error: String(lastErr?.message || lastErr) });
     }
-  } finally { try { await browser.close(); } catch {} }
+  }
   return responses;
 }
 
