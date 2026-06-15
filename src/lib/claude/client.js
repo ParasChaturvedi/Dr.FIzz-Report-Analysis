@@ -182,7 +182,10 @@ export async function claudeChatStream({
   meta = {}, // { domain, api, label } — for per-report cost tracking (optional)
 } = {}) {
   const apiKey = mustEnv("ANTHROPIC_API_KEY");
-  const model = modelOverride || "claude-opus-4-7";
+  // Default to Sonnet 4.6 — fast + accurate, no forced thinking → no 504s on long
+  // report streams. Callers can override (e.g. Opus) explicitly. (Was opus-4-7, which
+  // forced adaptive thinking and was the slow path.)
+  const model = modelOverride || process.env.CLAUDE_MODEL || "claude-sonnet-4-6";
 
   const client = new Anthropic({
     apiKey,

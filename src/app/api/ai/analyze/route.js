@@ -327,7 +327,7 @@ export async function POST(req) {
         success: true,
         domain,
         analysis: parsed,
-        model: "claude-opus-4-7",
+        model: "claude-sonnet-4-6",
         generatedAt: parsed.generatedAt,
       },
       { status: 200 }
