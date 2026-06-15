@@ -136,15 +136,14 @@ export function buildMarketplacePrompts({ client, clientSite = "", competitors =
     theme: "Marketplace presence",
     brand: b.name,
     brandRole: b.role,
+    // Kept deliberately SHORT — a compact list answers faster (fewer Browserless
+    // session-seconds + output tokens). Cross-verification happens in OUR synthesis
+    // across engines, so each engine only needs to list verifiable profiles.
     prompt:
-      `Analyze the brand "${b.name}"${b.site ? ` with official website ${b.site}` : ""}. ` +
-      `Identify and verify all of its active profiles across key marketplaces, directories and B2B platforms, ` +
-      `including but not limited to: ${names}. ` +
-      `Deeply analyze the data from these platforms. Cross-verify the findings, eliminate false positives, ` +
-      `and return ONLY the highest-confidence, verifiable data points.\n\n` +
-      `Format your answer as one line per platform where a profile genuinely exists, exactly:\n` +
-      `Platform | profile URL | confidence (high/medium/low)\n` +
-      `If you cannot verify a profile with a real URL, do not list that platform.`,
+      `For the brand "${b.name}"${b.site ? ` (${b.site})` : ""}, which of these platforms have a REAL, existing profile for it: ${names}? ` +
+      `Answer ONLY as one line per platform that genuinely has a profile, exactly:\n` +
+      `Platform | profile URL | confidence(high/medium/low)\n` +
+      `Skip any platform you can't back with a real URL. No preamble, no extra commentary.`,
   }));
 }
 

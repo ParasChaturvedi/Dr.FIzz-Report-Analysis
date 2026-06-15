@@ -111,13 +111,12 @@ async function connectBrowserless(proxyCountry = "") {
 // Generic ask → wait → extract. The selectors below are a STARTING POINT and
 // MUST be calibrated per engine against a real logged-in session (the consumer
 // AI apps change their DOM often). Login walls are detected and surfaced.
-const SETTLE_MS = Number(process.env.GEO_SCAN_SETTLE_MS || 9000);
-
 // Poll the assistant answer node until it appears AND stops growing (stream done).
 // Reads ONLY cfg.answerSel — so we never capture page chrome or the prompt echo.
 async function waitForStableAnswer(page, cfg) {
-  // Kept under the Browserless 60s session cap (goto + extract eat the rest).
-  const maxMs = Number(process.env.GEO_ANSWER_MAX_MS || 42000);
+  // Bounded tight to save Browserless units; early-exits the moment the answer
+  // stops growing, so a fast answer costs far less than this hard cap.
+  const maxMs = Number(process.env.GEO_ANSWER_MAX_MS || 30000);
   const start = Date.now();
   let last = "", stable = 0;
   while (Date.now() - start < maxMs) {
@@ -153,14 +152,24 @@ async function waitForStableAnswer(page, cfg) {
 // Owns only the PAGE; the caller owns the context lifecycle.
 async function askInContext(context, cfg, prompt) {
   const page = await context.newPage();
+  // Block heavy resources (images/media/fonts) → slashes residential-proxy
+  // bandwidth (the main Browserless cost) and speeds loads. Text + links unaffected.
+  if (String(process.env.GEO_BLOCK_HEAVY || "1") === "1") {
+    try {
+      await page.route("**/*", (route) => {
+        const t = route.request().resourceType();
+        return (t === "image" || t === "media" || t === "font") ? route.abort() : route.continue();
+      });
+    } catch { /* routing unsupported — proceed unblocked */ }
+  }
   try {
     // ── Search-type engine (Google AI Overviews): run a Google search and grab
     //    the AI Overview block + its source links. No chat composer. ──
     if (cfg.type === "search") {
       const country = (process.env.BROWSERLESS_PROXY_COUNTRY || "in").toLowerCase();
       await page.goto(`${cfg.url}?q=${encodeURIComponent(prompt)}&gl=${country}&hl=en&num=10`, { waitUntil: "domcontentloaded", timeout: 60000 });
-      await page.waitForTimeout(5000);
-      try { await page.getByRole("button", { name: /show more/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(1500); } catch {}
+      await page.waitForTimeout(3000);
+      try { await page.getByRole("button", { name: /show more/i }).first().click({ timeout: 1500 }); await page.waitForTimeout(1000); } catch {}
       // Extract ONLY the AI Overview block (+ its own source links). If Google shows
       // no AI Overview for this query, contribute NO signal — never scrape the
       // organic results list (that would just be a noisy SERP `site:` check again).
@@ -178,7 +187,7 @@ async function askInContext(context, cfg, prompt) {
 
     // Ephemeral entry point (ChatGPT Temporary Chat etc.) → no history / no memory.
     await page.goto(cfg.ephemeralUrl || cfg.url, { waitUntil: "domcontentloaded", timeout: 60000 });
-    await page.waitForTimeout(2500); // SPA hydration before the composer renders
+    await page.waitForTimeout(1200); // brief SPA hydration; composer.waitFor handles readiness
 
     // Login-wall detection (calibration point): if the composer never appears,
     // the session has expired → caller should refresh that engine's storageState.
@@ -321,7 +330,7 @@ function mockResponses({ brandSet, prompts, engineKeys }) {
 // timeout AND is fully ephemeral (incognito) — no state bleeds between queries.
 async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry }) {
   const responses = [];
-  const attempts = Number(process.env.GEO_QUERY_ATTEMPTS || 2);
+  const attempts = Number(process.env.GEO_QUERY_ATTEMPTS || 1); // frugal: no retry by default (saves units)
   for (const ek of engineKeys) {
     const cfg = ENGINES[ek];
     for (const p of prompts) {

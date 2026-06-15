@@ -64,6 +64,22 @@ if (transport === "browserless") {
 console.log(`\nMarketplace scan → brand="${brand}" domain=${clientDomain} competitors=[${competitors.join(", ")}]`);
 console.log(`mode=${mode} transport=${transport} proxyCountry=${proxyCountry}\n`);
 
+// Skip a re-scan if a fresh cache already exists → saves Browserless units.
+// Force a re-scan with GEO_FORCE=1.
+if (mode === "live" && String(process.env.GEO_FORCE || "") !== "1") {
+  const ttlDays = Number(process.env.GEO_MARKETPLACE_TTL_DAYS || 30);
+  const slug = clientDomain.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase().replace(/[^a-z0-9.-]/g, "_");
+  try {
+    const existing = JSON.parse(fs.readFileSync(`.geo-cache/marketplace-${slug}.json`, "utf8"));
+    const ageDays = (Date.now() - (Date.parse(existing.generatedAt) || 0)) / 86400000;
+    if (existing.generatedAt && ageDays < ttlDays) {
+      console.log(`✔ Fresh cache exists (${ageDays.toFixed(1)}d old < ${ttlDays}d TTL) → skipping scan to save Browserless units.`);
+      console.log(`  Re-scan anyway with:  GEO_FORCE=1 node scripts/marketplace-scan.mjs\n`);
+      process.exit(0);
+    }
+  } catch { /* no usable cache → run the scan */ }
+}
+
 const engineKeys = (process.env.GEO_ENGINES || "").split(",").map((s) => s.trim()).filter(Boolean);
 const scan = await runMarketplaceScan({
   mode, transport, client: brand, clientDomain, competitors, proxyCountry, sessions,
@@ -73,6 +89,9 @@ console.log(`Collected ${scan.responses.length} responses, ${scan.errors.length}
 if (scan.errors.length) console.log("Errors:\n  " + scan.errors.map((e) => `${e.engine}: ${e.error}`).join("\n  "));
 // Persist the RAW scan so we can calibrate per-engine selectors from real output.
 try { fs.mkdirSync(".geo-cache", { recursive: true }); fs.writeFileSync(".geo-cache/last-marketplace-scan.json", JSON.stringify(scan, null, 2)); console.log("Raw scan → .geo-cache/last-marketplace-scan.json"); } catch {}
+// Browserless cost visibility — Claude is API (no Browserless units).
+const browserQueries = [...scan.responses, ...scan.errors].filter((r) => r.engine !== "Claude").length;
+console.log(`Browserless sessions this scan: ~${browserQueries} (Claude via API = 0 Browserless units; images/fonts blocked to cut residential bandwidth).`);
 
 // Real-URL verification promotes URL-backed findings to "verified".
 const verifyUrl = makeUrlVerifier({ timeoutMs: 8000 });
