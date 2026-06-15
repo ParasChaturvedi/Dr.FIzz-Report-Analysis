@@ -36,19 +36,25 @@ const normDomain = (d) =>
   String(d || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase().trim();
 
 // Lazy, connection-reused client (survives serverless warm invocations + dev HMR).
+// Circuit breaker: if a connect fails, skip Mongo for a cooldown so an unreachable
+// DB never slows the report — every cache call fails fast → fail-safe no-op. Retries
+// once after the cooldown. Cooldown is configurable via MONGODB_DOWN_COOLDOWN_MS.
 function clientPromise() {
   const uri = String(process.env.MONGODB_URI || "").trim();
   if (!uri) return null;
+  if (g.__drfizzMongoDownUntil && Date.now() < g.__drfizzMongoDownUntil) return null; // circuit open
   if (!g.__drfizzMongoPromise) {
-    const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 8000 });
+    const cooldown = Number(process.env.MONGODB_DOWN_COOLDOWN_MS || 60000);
+    const client = new MongoClient(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 5000 });
     g.__drfizzMongoPromise = client
       .connect()
       .then(async (c) => {
         // Ensure the lookup index once (idempotent). NOT a TTL index — audit is forever.
         try { await c.db(DB_NAME).collection(COLLECTION).createIndex({ domain: 1, data_type: 1, fetched_at: -1 }); } catch {}
+        g.__drfizzMongoDownUntil = 0; // healthy → reset breaker
         return c;
       })
-      .catch((e) => { g.__drfizzMongoPromise = null; throw e; });
+      .catch((e) => { g.__drfizzMongoPromise = null; g.__drfizzMongoDownUntil = Date.now() + cooldown; throw e; });
   }
   return g.__drfizzMongoPromise;
 }
