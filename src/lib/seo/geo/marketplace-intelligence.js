@@ -75,6 +75,19 @@ function _extractUrls(text) {
   while ((m = re.exec(String(text || ""))) !== null) out.push(m[0].replace(/[.,;)]+$/, ""));
   return out;
 }
+// Distinctive brand tokens (drop generic words so "Itzfizz Digital" → ["itzfizz"]).
+const _GENERIC = new Set(["digital","agency","agencies","solutions","solution","technologies","technology","tech","media","marketing","seo","studio","studios","labs","lab","group","global","services","service","systems","software","online","web","private","limited","ltd","inc","incorporated","llc","llp","the","and","company","co","pvt"]);
+function _brandTokens(brand) {
+  return _norm(brand).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !_GENERIC.has(w));
+}
+// A marketplace URL is credibly THIS brand's profile only if it carries a brand
+// token (clutch.co/profile/itzfizz-digital ✓ ; g2.com/sellers/goodfirms ✗ for Itzfizz).
+function _urlMatchesBrand(url, brand) {
+  const toks = _brandTokens(brand);
+  if (!toks.length) return true; // can't tell → don't over-filter
+  const u = String(url).toLowerCase().replace(/[^a-z0-9]/g, "");
+  return toks.some((t) => u.includes(t));
+}
 
 // Does this answer AFFIRM that the brand has a profile on `mpName`?
 // We look for the marketplace name and make sure it is NOT inside a negation
@@ -154,10 +167,14 @@ async function _synthBrand({ brand, brandSite = "", marketplaces, responses, ver
     const urlByEngine = new Map(); // engine → best URL on this marketplace
     for (const r of mine) {
       const hay = `${r.answerText || ""}\n${(r.citations || []).join("\n")}`;
-      const found = [..._extractUrls(r.answerText || ""), ...(r.citations || [])].filter((u) => _urlOnSite(u, mp.site));
-      const affirmed = found.length > 0 || _affirmsPresence(hay, mp.name, mp.site);
-      const denied = found.length === 0 && _deniesPresence(hay, mp.name, mp.site);
-      if (found.length) urlByEngine.set(r.engine, found[0]);
+      const onSite = [..._extractUrls(r.answerText || ""), ...(r.citations || [])].filter((u) => _urlOnSite(u, mp.site));
+      // Only a URL that carries the brand token counts as "URL-backed" — a bare
+      // domain match (another company's page on the same marketplace) does not.
+      const brandUrls = onSite.filter((u) => _urlMatchesBrand(u, brand));
+      const nameAffirmed = _affirmsPresence(hay, mp.name, mp.site);
+      const denied = onSite.length === 0 && _deniesPresence(hay, mp.name, mp.site);
+      if (brandUrls.length) urlByEngine.set(r.engine, brandUrls[0]);
+      const affirmed = brandUrls.length > 0 || nameAffirmed;
       if (affirmed && !denied) affirmers.push(r.engine);
       else if (denied) negators.push(r.engine);
     }

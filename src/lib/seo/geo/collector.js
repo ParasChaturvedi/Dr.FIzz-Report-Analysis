@@ -52,12 +52,9 @@ export const ENGINES = {
     sendSel: 'button[aria-label*="Send" i], button[title*="Send" i]',
     answerSel: '[data-content="ai-message"], [class*="message" i][class*="ai" i], .ac-textBlock',
   },
-  claude: {
-    name: "Claude", url: "https://claude.ai/new", needsSession: true, type: "chat",
-    composerSel: 'div[contenteditable="true"], .ProseMirror',
-    sendSel: 'button[aria-label*="Send" i]',
-    answerSel: '[data-testid*="message" i], .font-claude-message, [class*="message" i]',
-  },
+  // Claude runs via the Anthropic API WITH the web_search tool — reliable, no
+  // browser/session, and live web access so its marketplace findings are verifiable.
+  claude: { name: "Claude", type: "api", needsSession: false },
 };
 
 // ── Prompt generator ─────────────────────────────────────────────────────────
@@ -228,6 +225,46 @@ async function askEngine(browser, engineKey, prompt, storageState) {
   finally { await context.close().catch(() => {}); }
 }
 
+// ── API adapter: Claude via Anthropic SDK + web_search tool ──────────────────
+// Live web access → Claude can actually verify marketplace presence and cite real
+// URLs (not hallucinate). No browser, no session — just the API key.
+async function askClaudeAPI(prompt) {
+  let Anthropic;
+  try { ({ default: Anthropic } = await import("@anthropic-ai/sdk")); }
+  catch { throw new Error("@anthropic-ai/sdk not installed — required for the Claude engine."); }
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not set — required for the Claude engine.");
+  const model = process.env.GEO_CLAUDE_MODEL || process.env.CLAUDE_MODEL || "claude-sonnet-4-6";
+  const client = new Anthropic({ apiKey, timeout: 60000 });
+
+  const resp = await client.messages.create({
+    model,
+    max_tokens: 1024,
+    messages: [{ role: "user", content: prompt }],
+    // Server-side web search → real, current, citable answers.
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+  });
+
+  let answerText = "";
+  const citations = [];
+  for (const block of resp.content || []) {
+    if (block.type === "text") {
+      answerText += block.text;
+      for (const c of block.citations || []) { if (c?.url) citations.push(c.url); }
+    } else if (block.type === "web_search_tool_result") {
+      for (const r of (block.content || [])) { if (r?.url) citations.push(r.url); }
+    }
+  }
+  // also harvest any bare URLs in the prose
+  const bare = (answerText.match(/https?:\/\/[^\s)>\]"'`]+/gi) || []).map((u) => u.replace(/[.,;)]+$/, ""));
+  return {
+    engine: ENGINES.claude.name, prompt,
+    answerText: answerText.slice(0, 8000),
+    citations: [...new Set([...citations, ...bare])]
+      .filter((h) => !/anthropic|claude\.ai/i.test(h)).slice(0, 30),
+  };
+}
+
 // ── Mock adapter (no browser — testable now) ─────────────────────────────────
 function mockResponses({ brandSet, prompts, engineKeys }) {
   const lead = brandSet[1] || brandSet[0]; // a competitor leads, client trails (realistic)
@@ -322,11 +359,39 @@ async function _runLocal({ engineKeys, prompts }) {
   return responses;
 }
 
+// ── Transport: API engines (Claude) — no browser ────────────────────────────
+async function _runApi({ engineKeys, prompts }) {
+  const responses = [];
+  for (const ek of engineKeys) {
+    const cfg = ENGINES[ek];
+    for (const p of prompts) {
+      const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
+      try {
+        if (ek === "claude") responses.push({ ...(await askClaudeAPI(p.prompt)), ...tag });
+        else throw new Error(`No API adapter for engine "${ek}"`);
+      } catch (err) {
+        responses.push({ engine: cfg?.name || ek, prompt: p.prompt, ...tag, error: String(err?.message || err) });
+      }
+    }
+  }
+  return responses;
+}
+
 // ── Unified runner ───────────────────────────────────────────────────────────
+// Splits engines by type: API engines (Claude) run keyless via the SDK; the rest
+// run through the chosen browser transport. Both contribute to the same response set.
 async function _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet }) {
   if (mode !== "live") return mockResponses({ brandSet, prompts, engineKeys });
-  if (transport === "local") return _runLocal({ engineKeys, prompts });
-  return _runBrowserless({ engineKeys, prompts, sessions, proxyCountry });
+  const apiKeys = engineKeys.filter((k) => ENGINES[k]?.type === "api");
+  const browserKeys = engineKeys.filter((k) => ENGINES[k] && ENGINES[k].type !== "api");
+  const out = [];
+  if (apiKeys.length) out.push(...(await _runApi({ engineKeys: apiKeys, prompts })));
+  if (browserKeys.length) {
+    out.push(...(transport === "local"
+      ? await _runLocal({ engineKeys: browserKeys, prompts })
+      : await _runBrowserless({ engineKeys: browserKeys, prompts, sessions, proxyCountry })));
+  }
+  return out;
 }
 
 // ── Orchestrator: SoV / Citation scan ────────────────────────────────────────
@@ -342,7 +407,7 @@ export async function runGeoScan(opts = {}) {
     marketplaces = [],
     location = "",
     proxyCountry = "in",    // residential-IP country (matches the report's market)
-    engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "copilot"],
+    engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "copilot", "claude"],
     sessions = {},          // { chatgpt: storageState, gemini: ..., ... }
     prompts: customPrompts,
   } = opts;
@@ -377,7 +442,7 @@ export async function runMarketplaceScan(opts = {}) {
     competitors = [],
     marketplaces,
     proxyCountry = "in",
-    engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "copilot"],
+    engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "copilot", "claude"],
     sessions = {},
   } = opts;
 
