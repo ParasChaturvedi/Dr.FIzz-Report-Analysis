@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
+import { getCached, putCached } from "@/lib/cache/mongo";
 
 import { claudeChatStream } from "@/lib/claude/client";
 import {
@@ -73,6 +74,7 @@ async function generateWithAI(systemPrompt, userPrompt, fallback = {}) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      model: "claude-sonnet-4-6", // was defaulting to Opus 4.7 — Sonnet is the intended pipeline model (cost)
       max_tokens: 7000,
       timeoutMs: 90000,
     });
@@ -530,6 +532,22 @@ export async function POST(request) {
     const domain = getDomain(safeUrl);
     const reportType = isPageUrl(safeUrl) ? "page" : "website";
 
+    // ── 30-day REPORT cache, keyed by domain + the inputs that change the report ──
+    // On a fresh hit we return the SAVED report (no fetches, no Claude). The id is
+    // regenerated so each view has its own id; the data comes from the cache.
+    const _inputSig = JSON.stringify({
+      bn: businessData?.businessName || businessData?.name || "",
+      comp: (Array.isArray(competitorData) ? competitorData : []).map((c) => (typeof c === "string" ? c : c?.domain || c?.name || "")).slice(0, 8),
+      mode: reportMode || "", kw: keyword || "", cc: countryCode,
+    });
+    let _h = 0; for (let i = 0; i < _inputSig.length; i++) _h = (Math.imul(_h, 31) + _inputSig.charCodeAt(i)) | 0;
+    const reportDataType = `report:${reportType}:${(_h >>> 0).toString(36)}`;
+    const _cachedReport = await getCached({ domain, dataType: reportDataType, ttlDays: 30 });
+    if (_cachedReport) {
+      console.log(`[cache HIT] report:${domain} — returning saved report (no fetch, no Claude)`);
+      return NextResponse.json({ id: randomUUID(), reportType, data: _cachedReport });
+    }
+
     const keywords = Array.isArray(keywordData)
       ? keywordData.map((k) => (typeof k === "string" ? k : k?.label)).filter(Boolean)
       : [];
@@ -779,6 +797,10 @@ export async function POST(request) {
       keywordGap:      kwGapRaw,
       strategicPlan:   prefetchedSeoData?.strategicPlan   ?? null,
     };
+
+    // Append the report to the 30-day cache (no-op without Mongo). Repeat reports
+    // for the same site + inputs will return this instantly — no fetches, no Claude.
+    try { await putCached({ domain, dataType: reportDataType, payload: reportData, source: "report", forClientDomain: domain }); } catch {}
 
     // ── Persist to /tmp/reports/{id}.json ────────────────────────────────────
     const id = randomUUID();

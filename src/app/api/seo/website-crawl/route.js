@@ -5,6 +5,7 @@
 // content quality, page speed hints, E-E-A-T signals, overall health score.
 
 import { NextResponse } from "next/server";
+import { getOrFetch } from "@/lib/cache/mongo";
 
 export const runtime    = "nodejs";
 export const maxDuration = 90;
@@ -813,7 +814,12 @@ export async function POST(request) {
     const body = await request.json();
     const { domain, keywords = [] } = body;
     if (!domain) return NextResponse.json({ error: "domain required" }, { status: 400 });
-    const result = await crawlDomain(domain, keywords);
+    // 30-day persistent cache by domain (cross-user: a competitor crawl already done
+    // for one user is reused for another). No-op if Mongo isn't configured.
+    const { data: result } = await getOrFetch({
+      domain, dataType: "crawl", ttlDays: 30, source: "crawl",
+      fetchFn: () => crawlDomain(domain, keywords),
+    });
     return NextResponse.json(result);
   } catch (err) {
     console.error("[website-crawl] Error:", err);

@@ -4,6 +4,7 @@
 // Uses DataForSEO: keywords_for_site, ranked_keywords, serp/google/organic.
 
 import { NextResponse } from "next/server";
+import { getCached, putCached } from "@/lib/cache/mongo";
 
 export const runtime    = "nodejs";
 export const maxDuration = 60;
@@ -142,6 +143,11 @@ export async function POST(request) {
   const target = norm(domain);
   const compDomains = competitors.map(norm).filter(Boolean).slice(0, 4);
 
+  // 30-day persistent cache, keyed by domain + the competitor set. No-op without Mongo.
+  const cacheType = `keyword-gap:${[...compDomains].sort().join("|")}`;
+  const cachedGap = await getCached({ domain: target, dataType: cacheType, ttlDays: 30 });
+  if (cachedGap) return NextResponse.json(cachedGap);
+
   // Fetch target keywords + all competitor keywords in parallel
   const [targetKwMap, ...compKwMaps] = await Promise.all([
     getKeywordsForDomain(target, auth, 150),
@@ -198,7 +204,7 @@ export async function POST(request) {
     .sort((a, b) => opportunityScore(b.volume, b.difficulty) - opportunityScore(a.volume, a.difficulty))
     .slice(0, 20);
 
-  return NextResponse.json({
+  const out = {
     domain: target,
     competitors: compDomains,
     targetKeywordCount: targetKwMap.size,
@@ -214,5 +220,7 @@ export async function POST(request) {
       topGapByVolume:   [...gapMap.values()].sort((a,b) => b.volume - a.volume).slice(0, 5).map(k => k.keyword),
       intentBreakdown:  Object.fromEntries(Object.entries(byIntent).map(([k,v]) => [k, v.length])),
     },
-  });
+  };
+  try { await putCached({ domain: target, dataType: cacheType, payload: out, source: "keyword-gap" }); } catch {}
+  return NextResponse.json(out);
 }
