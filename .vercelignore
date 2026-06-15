@@ -1,0 +1,12 @@
+# Local-only / sensitive — must NEVER be uploaded to Vercel
+.geo-sessions/        # captured browser profiles + logged-in session cookies (local capture only)
+.geo-cache/           # local scan cache (production uses MongoDB instead)
+.env.local
+.env.local.bak.*
+*.log
+.vercel/deploy.log
+
+# Auto-excluded by Vercel anyway, listed for clarity
+node_modules/
+.next/
+.git/
