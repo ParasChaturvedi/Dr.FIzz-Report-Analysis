@@ -123,8 +123,17 @@ async function waitForStableAnswer(page, cfg) {
     await page.waitForTimeout(2500);
     const txt = await page.evaluate((sel) => {
       if (!sel) return "";
-      const n = document.querySelectorAll(sel);
-      return n.length ? String(n[n.length - 1].innerText || "").trim() : "";
+      let nodes = Array.from(document.querySelectorAll(sel));
+      if (!nodes.length) { // pierce Shadow DOM (Copilot renders its chat in shadow roots)
+        const walk = (root) => {
+          try { root.querySelectorAll(sel).forEach((e) => nodes.push(e)); } catch {}
+          root.querySelectorAll("*").forEach((e) => { if (e.shadowRoot) walk(e.shadowRoot); });
+        };
+        walk(document);
+      }
+      if (!nodes.length) return "";
+      const el = nodes[nodes.length - 1];
+      return String(el.innerText || el.textContent || "").trim();
     }, cfg.answerSel);
     if (txt && txt.length > 40) {
       if (txt === last) { if (++stable >= 2) return txt.slice(0, 8000); }
@@ -195,6 +204,18 @@ async function askInContext(context, cfg, prompt) {
       } catch { /* fall back to Enter */ }
     }
     if (!sent) await page.keyboard.press("Enter");
+
+    // Cloudflare Turnstile "Verify you are human" sometimes gates the answer
+    // (notably Copilot). Only attempt a click when the challenge frame is actually
+    // present (page.frames() is instant) — so engines without a challenge pay no
+    // penalty and stay within the 60s session budget.
+    if (page.frames().some((f) => /challenges\.cloudflare\.com/.test(f.url()))) {
+      try {
+        const cf = page.frameLocator('iframe[src*="challenges.cloudflare.com"]');
+        await cf.locator('input[type="checkbox"], label, body').first().click({ timeout: 3000 });
+        await page.waitForTimeout(3000);
+      } catch { /* challenge not clickable headlessly */ }
+    }
 
     // Wait for the assistant turn to APPEAR and stop growing (stream settled),
     // reading only the answer node — never the page chrome or the prompt echo.

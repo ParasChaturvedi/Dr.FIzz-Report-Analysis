@@ -33,23 +33,33 @@ try {
     await page.waitForTimeout(20000);
   }
   const cands = await page.evaluate(() => {
+    const all = [];
+    const walk = (root) => { // pierce Shadow DOM (Copilot)
+      root.querySelectorAll("*").forEach((e) => { all.push(e); if (e.shadowRoot) walk(e.shadowRoot); });
+    };
+    walk(document);
     const out = [];
-    for (const el of Array.from(document.querySelectorAll("*"))) {
-      const t = (el.innerText || "").trim();
+    for (const el of all) {
+      const t = (el.innerText || el.textContent || "").trim();
       if (t.length > 120 && t.length < 4000 && el.children.length < 40) {
         out.push({
           tag: el.tagName.toLowerCase(),
           cls: String(el.className || "").slice(0, 70),
-          dataAttrs: Array.from(el.attributes).map((a) => a.name).filter((n) => n.startsWith("data-") || n === "jsname").join(","),
+          dataAttrs: Array.from(el.attributes || []).map((a) => a.name).filter((n) => n.startsWith("data-") || n === "jsname").join(","),
+          shadow: !!el.getRootNode().host,
           len: t.length, sample: t.slice(0, 70).replace(/\s+/g, " "),
         });
       }
     }
-    return out.sort((a, b) => a.len - b.len).slice(0, 12);
+    return out.sort((a, b) => a.len - b.len).slice(0, 15);
   });
   console.log("── candidate answer blocks (smallest first) ──");
-  cands.forEach((c) => console.log(`${c.tag}  cls="${c.cls}"  [${c.dataAttrs}]  len=${c.len} :: ${c.sample}`));
+  cands.forEach((c) => console.log(`${c.shadow?"[shadow] ":""}${c.tag}  cls="${c.cls}"  [${c.dataAttrs}]  len=${c.len} :: ${c.sample}`));
   fs.writeFileSync(`.geo-cache/debug-${engine}.html`, await page.content());
+  try { await page.screenshot({ path: `.geo-cache/debug-${engine}.png`, fullPage: false }); console.log(`saved screenshot → .geo-cache/debug-${engine}.png`); } catch {}
+  // iframe scan (Copilot may render chat inside an iframe)
+  const frames = page.frames().map((f) => f.url()).filter((u) => u && u !== "about:blank");
+  console.log("frames:", frames.length, frames.slice(0, 6).join("  "));
   console.log(`saved full HTML → .geo-cache/debug-${engine}.html`);
 } finally { try { await browser.close(); } catch {} }
 process.exit(0);
