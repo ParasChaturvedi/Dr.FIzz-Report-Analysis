@@ -23,7 +23,11 @@ async function auditOneDomain(competitor, keywords = [], location = "India", bas
   const domain   = isDomain ? String(competitor).replace(/^https?:\/\//, "").trim() : "";
   const name     = isDomain ? "" : String(competitor).trim();
 
-  const gmbBody = isDomain ? { domain, location } : { domain: "", businessName: name, location };
+  // skipDirectories: competitors don't need the ~14-call directory SERP fan-out
+  // (not shown in the comparison) — saves DataForSEO credits per competitor.
+  const gmbBody = isDomain
+    ? { domain, location, skipDirectories: true }
+    : { domain: "", businessName: name, location, skipDirectories: true };
 
   const [crawlResult, gmbResult] = await Promise.allSettled([
     // Crawl only makes sense for a real domain.

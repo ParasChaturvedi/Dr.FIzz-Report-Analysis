@@ -302,9 +302,9 @@ export async function POST(req) {
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      max_tokens: 8000,
+      max_tokens: 6000,
       timeoutMs: 280000,
-      model: "claude-opus-4-7",
+      model: "claude-sonnet-4-6", // was Opus 4.7 — Sonnet 4.6 handles this structured JSON analysis at a fraction of the cost
     });
 
     const parsed = extractJsonObjectLoose(content);
