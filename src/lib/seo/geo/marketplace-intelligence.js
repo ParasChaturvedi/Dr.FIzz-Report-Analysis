@@ -120,6 +120,25 @@ function _deniesPresence(text, mpName, mpSite) {
   return false;
 }
 
+// Collect the external sites the LLMs cited about this brand = "reference sites".
+// Per the owner's spec these ARE the backlinks (counted live from the scan, no Moz).
+// Excludes the brand's own domain + search-engine/asset hosts.
+function _collectReferenceSites(responses, brandSite = "") {
+  const ownHost = brandSite ? _host(brandSite.includes("://") ? brandSite : `https://${brandSite}`) : "";
+  const seen = new Map();
+  for (const r of responses) {
+    for (const url of (r.citations || [])) {
+      const h = _host(url);
+      if (!h) continue;
+      if (ownHost && (h === ownHost || h.endsWith("." + ownHost))) continue;
+      if (/(google\.|bing\.|gstatic|googleusercontent|youtube\.com|duckduckgo|webcache|microsoft\.com|openai\.com)/i.test(h)) continue;
+      if (!seen.has(h)) seen.set(h, { domain: h, url, refs: 0 });
+      seen.get(h).refs++;
+    }
+  }
+  return [...seen.values()].sort((a, b) => b.refs - a.refs);
+}
+
 // ── Prompt generator (the spec's exact template, made parse-friendly) ─────────
 // One prompt per brand. Tag carries the brand so the orchestrator can route each
 // response back to the right brand during synthesis.
@@ -241,6 +260,10 @@ async function _synthBrand({ brand, brandSite = "", marketplaces, responses, ver
     acc[d.confidence] = (acc[d.confidence] || 0) + 1; return acc;
   }, {});
 
+  // LLM-scan BACKLINKS = the external sites the LLMs cited about this brand.
+  // (Owner's chosen backlink source — counted live, zero Moz tokens.)
+  const referenceSites = _collectReferenceSites(mine, brandSite);
+
   return {
     brand,
     brandSite,
@@ -249,6 +272,18 @@ async function _synthBrand({ brand, brandSite = "", marketplaces, responses, ver
     listedDirectoryCount,        // LOCKED count
     totalChecked: marketplaces.length,
     byConfidence,                // { verified, high, medium, low, none }
+    backlinks: {
+      count: referenceSites.length,
+      sites: referenceSites.map((s) => ({
+        domain: s.domain,
+        backlinks: s.refs,
+        rank: 0,
+        referring_pages: s.refs,
+        backlinks_spam_score: 0,
+        first_seen: null,
+        lost_date: null,
+      })),
+    },
   };
 }
 

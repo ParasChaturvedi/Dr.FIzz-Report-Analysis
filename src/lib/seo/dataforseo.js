@@ -1,5 +1,6 @@
 // src/lib/seo/dataforseo.js
 import { fetchMozMetrics } from "./moz/client.js";
+import { loadLlmBacklinks } from "./geo/marketplace-source.js";
 
 const DATAFORSEO_LOGIN = process.env.DATAFORSEO_LOGIN;
 const DATAFORSEO_PASSWORD = process.env.DATAFORSEO_PASSWORD;
@@ -474,20 +475,24 @@ export async function fetchDataForSeo(targetInput, options = {}) {
     let totalDomains = 0;
     let referringDomainsRaw = null;
 
-    // ── Moz Links API = 1ST PRIORITY for DA / backlinks / referring domains ──
-    // (the data we were waiting on DataForSEO backlinks for). When Moz answers, the
-    // DataForSEO backlinks calls below are SKIPPED → saves DataForSEO credits.
-    // Everything else (keywords / SERP / etc.) is unaffected.
+    // ── Owner's split: DA + REFERRING DOMAINS from Moz; backlink COUNT + reference-
+    //    sites LIST from the LLM/Browserless scan. When LLM backlinks exist, Moz runs
+    //    ONLY the 1-row url_metrics (DA+refdomains) and SKIPS the ~50-row
+    //    linking_root_domains list → saves Moz tokens. DataForSEO backlinks remain a
+    //    last-resort fallback. Everything else (keywords/SERP) is unaffected.
+    let llmBl = null;
+    try { llmBl = await loadLlmBacklinks({ domain: target }); } catch {}
+
     let mozOk = false;
     try {
-      const moz = await fetchMozMetrics(target);
+      const moz = await fetchMozMetrics(target, { withList: !llmBl });
       if (moz && moz.backlinksSummary && (moz.backlinksSummary.backlinks || moz.backlinksSummary.referring_domains || moz.domainAuthority)) {
         backlinksSummary = moz.backlinksSummary;
         backlinkDomains  = moz.backlinkDomains || [];
         externalTotal    = moz.externalTotal || 0;
         totalDomains     = moz.totalDomains || 0;
         mozOk = true;
-        console.log(`[Moz] DA=${moz.domainAuthority} backlinks=${backlinksSummary.backlinks} refDomains=${backlinksSummary.referring_domains} — DataForSEO backlinks skipped (credits saved)`);
+        console.log(`[Moz] DA=${moz.domainAuthority} refDomains=${backlinksSummary.referring_domains}` + (llmBl ? " — backlinks from LLM scan, Moz list skipped (tokens saved)" : ` backlinks=${backlinksSummary.backlinks} — DataForSEO backlinks skipped`));
       }
     } catch (mozErr) {
       console.warn("[Moz] metrics failed — falling back to DataForSEO backlinks:", mozErr?.message);
@@ -596,7 +601,22 @@ export async function fetchDataForSeo(targetInput, options = {}) {
     } catch {
       // don’t fail full pipeline if referring domains call fails
     }
-    } // end if (!mozOk) — Moz already supplied DA / backlinks / referring domains
+    } // end if (!mozOk) — Moz/DataForSEO supplied DA + referring domains
+
+    // ── LLM-scan BACKLINKS override (owner's chosen backlink source) ──
+    // Backlink COUNT + the referring-sites LIST come from the Browserless scan's
+    // reference sites. DA + referring_domains stay from Moz/DataForSEO above.
+    if (llmBl) {
+      if (!backlinksSummary) backlinksSummary = {};
+      backlinksSummary.backlinks = llmBl.count;
+      backlinksSummary._backlinksSource = "llm-scan";
+      if (Array.isArray(llmBl.sites) && llmBl.sites.length) {
+        backlinkDomains = llmBl.sites;
+        externalTotal = llmBl.count;
+        if (!totalDomains) totalDomains = backlinksSummary.referring_domains || llmBl.sites.length;
+      }
+      console.log(`[LLM-backlinks] count=${llmBl.count} sites=${llmBl.sites?.length || 0} (from Browserless scan — Moz backlinks not used)`);
+    }
 
     // 2) DOMAIN KEYWORDS
     const keywordsPayload = [

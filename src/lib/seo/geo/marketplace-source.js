@@ -80,6 +80,29 @@ export async function loadMarketplaceDirectories({ domain, businessName = "", lo
   }
 }
 
+// LLM-scan BACKLINKS for the client (reference sites the LLMs cited) — the owner's
+// chosen backlink source. Returns { count, sites:[{domain,backlinks,...}] } or null
+// (→ keep Moz/DataForSEO backlinks). Gated on the same GEO_MARKETPLACE_SOURCE flag.
+export async function loadLlmBacklinks({ domain } = {}) {
+  if (String(process.env.GEO_MARKETPLACE_SOURCE || "").toLowerCase() !== "llm") return null;
+  if (!domain) return null;
+  const ttlDays = Number(process.env.GEO_MARKETPLACE_TTL_DAYS || 30);
+  try {
+    const fs = await import("fs");
+    const path = await import("path");
+    const file = path.join(cacheDir(), `marketplace-${domainSlug(domain)}.json`);
+    if (!fs.existsSync(file)) return null;
+    const intel = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!_isUsable(intel, ttlDays)) return null;
+    const bl = intel?.client?.backlinks;
+    if (!bl || typeof bl.count !== "number") return null;
+    return { count: bl.count, sites: Array.isArray(bl.sites) ? bl.sites : [] };
+  } catch (err) {
+    console.warn("[marketplace-source] LLM backlinks read failed:", err?.message);
+    return null;
+  }
+}
+
 // Writer used by the offline producer (scripts/marketplace-scan.mjs).
 export async function saveMarketplaceIntelligence(domain, intel) {
   const fs = await import("fs");
