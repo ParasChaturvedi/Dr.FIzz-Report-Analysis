@@ -525,7 +525,7 @@ export async function fetchDataForSeo(targetInput, options = {}) {
       const referringPayload = [
         {
           target,
-          limit: 200, // 100–1000 (max 1000)
+          limit: 50, // fallback-only now (Moz is primary); report renders ~25 rows
           offset: 0,
           order_by: ["rank,desc"],
           exclude_internal_backlinks: true,
