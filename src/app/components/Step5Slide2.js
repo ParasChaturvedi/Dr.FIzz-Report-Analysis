@@ -105,8 +105,8 @@ const INITIAL_STAGES = [
     desc: "Confirms the data is complete, accurate, formatted properly, and that no fields are missing or broken." },
   { id: "seoGeoReport",   label: "9. SEO & GEO Report",
     desc: "Turns the findings into a clear business summary — opportunities, priorities, and recommendations." },
-  { id: "storytelling",   label: "10. Storytelling",
-    desc: "Converts the analysis into a simple narrative — where the business stands, what is holding it back, the opportunity, and what to do next." },
+  { id: "storytelling",   label: "10. Final Intelligence Report",
+    desc: "The final intelligence report — where the business stands, what is holding it back, the biggest opportunity, and the prioritized action plan." },
 ];
 
 // Maps each underlying data collector (old stage id) onto a journey stage above,
