@@ -72,6 +72,30 @@ function writeOppsCache(domain, payload) {
   }
 }
 
+// Read the cached opportunities scan → per-page plagiarism, for the report.
+// Returns [{ url, title, plagiarism, sources }] (worst first), or [] if none scanned.
+export function getPlagiarismPages(domain) {
+  try {
+    if (typeof window === "undefined") return [];
+    const raw = sessionStorage.getItem(oppsCacheKey(domain));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    const row = Array.isArray(parsed?.seoRows) ? parsed.seoRows[0] : null;
+    const slots = [...((row?.content?.blog) || []), ...((row?.content?.pages) || [])];
+    return slots
+      .filter((s) => typeof s?.plagiarism === "number")
+      .map((s) => ({
+        url: s.url || "",
+        title: s.title || s.url || "Untitled",
+        plagiarism: s.plagiarism,
+        sources: Array.isArray(s.plagiarismSources) ? s.plagiarismSources.slice(0, 5) : [],
+      }))
+      .sort((a, b) => (b.plagiarism || 0) - (a.plagiarism || 0));
+  } catch {
+    return [];
+  }
+}
+
 /* -------------------------------------------
    In-memory / window de-dupe
 -------------------------------------------- */

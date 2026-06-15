@@ -11,7 +11,7 @@ import {
   UsersRound,
 } from "lucide-react";
 
-import { prefetchOpportunitiesAndContent } from "@/lib/prefetch-opportunities";
+import { prefetchOpportunitiesAndContent, getPlagiarismPages } from "@/lib/prefetch-opportunities";
 
 // ─── Module status state machine ──────────────────────────────────────────────
 const STATUS = {
@@ -1005,6 +1005,15 @@ export default function Step5Slide2({
           // read the file written by generate-analysis on a different instance.
           // Storing in sessionStorage bridges the gap (same browser tab).
           if (reportId && reportData.reportType && reportData.data) {
+            // Bake per-page plagiarism (from the opportunities scan) into the saved
+            // report so the report can render a Content Originality table.
+            try {
+              if (reportData.data.doctorFizz) {
+                reportData.data.doctorFizz.content_originality = getPlagiarismPages(domain);
+              }
+            } catch (plagErr) {
+              console.warn("[Step5] Could not attach plagiarism to report:", plagErr?.message);
+            }
             try {
               sessionStorage.setItem(
                 `drfizz:report:${reportId}`,

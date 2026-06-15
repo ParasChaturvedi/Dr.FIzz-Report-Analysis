@@ -529,6 +529,7 @@ export default function DoctorFizzReport({ data }) {
   const ca = payload.content_architecture || {};
   const bl = payload.backlinks || {};
   const gbp = payload.gbp_comparison || {};
+  const contentOriginality = Array.isArray(payload.content_originality) ? payload.content_originality : [];
   const kpis = payload.kpis?.metrics || [];
   const tech = payload.technical_issues || [];
   // GEO/AI visibility — back-fill the newer fields (readiness scorecard, tracked
@@ -1671,6 +1672,38 @@ export default function DoctorFizzReport({ data }) {
                   </div>
                 );
               })()}
+
+              {/* Content Originality — per-page plagiarism check (from the AI content scan) */}
+              {contentOriginality.length > 0 && (
+                <div className="overflow-x-auto rounded-lg mb-5" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                  <div className="uppercase px-3 pt-2.5 pb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>Content Originality — Plagiarism Check</div>
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr style={{ background: C.nearBlack }}>
+                        <Th white>Page</Th><Th white right>Plagiarism</Th><Th white>Top matched sources</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contentOriginality.slice(0, 15).map((p, i) => {
+                        const pct = Math.round(p.plagiarism || 0);
+                        const color = pct >= 40 ? "#EF4444" : pct >= 20 ? "#F59E0B" : "#1CC88A";
+                        const srcHosts = (p.sources || [])
+                          .map((s) => String(s?.url || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0])
+                          .filter(Boolean).slice(0, 3).join(", ");
+                        return (
+                          <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
+                            <Td>{p.title || p.url || "Untitled"}</Td>
+                            <Td right><span style={{ fontWeight: 700, color }}>{pct}%</span></Td>
+                            <Td>{srcHosts || <span className="italic text-[10px]" style={{ color: C.greyText }}>none flagged</span>}</Td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="px-3 py-2 text-[10.5px]" style={{ color: C.greyText, background: C.ivory }}>Originality is AI-estimated against known web sources. Lower is better — <span style={{ color: "#EF4444", fontWeight: 600 }}>≥40%</span> flags likely-copied content to rewrite, <span style={{ color: "#F59E0B", fontWeight: 600 }}>20–39%</span> review, <span style={{ color: "#1CC88A", fontWeight: 600 }}>&lt;20%</span> original.</div>
+                </div>
+              )}
+
               {(() => { let step = 0; return pap.map((tier) => (
                 <div key={tier.tier} className="mb-5">
                   <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "11px", letterSpacing: "1.5px", color: C.orange }}>{tier.tier}</div>
