@@ -5,6 +5,7 @@
 
 import { NextResponse } from "next/server";
 import { getCached, putCached } from "@/lib/cache/mongo";
+import { logUsage } from "@/lib/cache/usage";
 
 export const runtime    = "nodejs";
 export const maxDuration = 60;
@@ -146,7 +147,7 @@ export async function POST(request) {
   // 30-day persistent cache, keyed by domain + the competitor set. No-op without Mongo.
   const cacheType = `keyword-gap:${[...compDomains].sort().join("|")}`;
   const cachedGap = await getCached({ domain: target, dataType: cacheType, ttlDays: 30 });
-  if (cachedGap) return NextResponse.json(cachedGap);
+  if (cachedGap) { await logUsage({ domain: target, api: "keyword-gap", costUSD: 0, cached: true }); return NextResponse.json(cachedGap); }
 
   // Fetch target keywords + all competitor keywords in parallel
   const [targetKwMap, ...compKwMaps] = await Promise.all([
@@ -222,5 +223,6 @@ export async function POST(request) {
     },
   };
   try { await putCached({ domain: target, dataType: cacheType, payload: out, source: "keyword-gap" }); } catch {}
+  await logUsage({ domain: target, api: "keyword-gap", costUSD: 0.08, cached: false });
   return NextResponse.json(out);
 }

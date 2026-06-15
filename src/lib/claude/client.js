@@ -5,6 +5,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { logUsage, claudeCostUSD } from "../cache/usage.js";
 
 // Turbopack (Next.js 15+/16+) sometimes skips .env.local for server Route Handlers.
 // This reads it directly as a fallback, setting only vars not already in process.env.
@@ -82,6 +83,7 @@ export async function claudeChat({
   max_tokens = 1100,
   timeoutMs = 30000,
   model: modelOverride,
+  meta = {}, // { domain, api, label } — for per-report cost tracking (optional)
 } = {}) {
   const apiKey = mustEnv("ANTHROPIC_API_KEY");
 
@@ -131,6 +133,10 @@ export async function claudeChat({
       .map((block) => block.text)
       .join("");
 
+    try {
+      const u = response?.usage || {};
+      await logUsage({ domain: meta.domain, api: meta.api || "claude", kind: "claude", endpoint: meta.label || "", model, inTok: u.input_tokens, outTok: u.output_tokens, costUSD: claudeCostUSD(model, u.input_tokens, u.output_tokens) });
+    } catch {}
     return { raw: response, content, model };
   } catch (err) {
     // Friendly error messages matching the original perplexity client's style
@@ -173,6 +179,7 @@ export async function claudeChatStream({
   timeoutMs = 120000,
   model: modelOverride,
   onText,
+  meta = {}, // { domain, api, label } — for per-report cost tracking (optional)
 } = {}) {
   const apiKey = mustEnv("ANTHROPIC_API_KEY");
   const model = modelOverride || "claude-opus-4-7";
@@ -216,5 +223,9 @@ export async function claudeChatStream({
     .map((block) => block.text)
     .join("");
 
+  try {
+    const u = finalMessage?.usage || {};
+    await logUsage({ domain: meta.domain, api: meta.api || "claude", kind: "claude", endpoint: meta.label || "", model, inTok: u.input_tokens, outTok: u.output_tokens, costUSD: claudeCostUSD(model, u.input_tokens, u.output_tokens) });
+  } catch {}
   return { raw: finalMessage, content, model };
 }

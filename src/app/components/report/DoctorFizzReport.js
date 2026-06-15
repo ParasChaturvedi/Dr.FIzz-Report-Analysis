@@ -530,6 +530,7 @@ export default function DoctorFizzReport({ data }) {
   const bl = payload.backlinks || {};
   const gbp = payload.gbp_comparison || {};
   const contentOriginality = Array.isArray(payload.content_originality) ? payload.content_originality : [];
+  const metrics = data?.metrics || null; // internal: per-report cost + data-confidence
   const kpis = payload.kpis?.metrics || [];
   const tech = payload.technical_issues || [];
   // GEO/AI visibility — back-fill the newer fields (readiness scorecard, tracked
@@ -1902,6 +1903,31 @@ export default function DoctorFizzReport({ data }) {
                 Every figure in this report is pulled from the live tools above for <strong>{meta.domain}</strong> and cross-checked for completeness and sane ranges. Any value our engine calculates from those outputs — traffic-uplift projections, opportunity sizing, impact estimates and the 6/12-month targets — is a modelled <strong>ESTIMATE</strong>, not a measured guarantee. Where a metric could not be retrieved it is shown as <em>&ldquo;Not available&rdquo;</em> rather than guessed, and impossible values are discarded. No numbers were fabricated.
               </p>
             </div>
+
+            {/* Internal — per-report cost + data confidence (not part of the client deliverable) */}
+            {metrics && (
+              <div className="rounded-lg p-4 mt-3" style={{ background: "#fff", border: `1px dashed ${C.warmGrey}` }}>
+                <div className="uppercase mb-2" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.greyText }}>Internal · Report Cost &amp; Data Confidence</div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[12px]" style={{ fontFamily: SANS }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "20px", color: C.nearBlack }}>{metrics.completeness?.score ?? "—"}%</div>
+                    <div style={{ color: C.greyText }}>Data confidence ({metrics.completeness?.confidence || "—"})</div>
+                    {metrics.completeness?.missing?.length ? <div style={{ color: C.greyText, fontSize: "10.5px", marginTop: 2 }}>Missing: {metrics.completeness.missing.join(", ")}</div> : null}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "20px", color: C.nearBlack }}>₹{metrics.cost?.inr ?? "—"} <span style={{ fontSize: "11px", color: C.greyText }}>(${metrics.cost?.usd ?? "—"})</span></div>
+                    <div style={{ color: C.greyText }}>Est. generation cost</div>
+                    <div style={{ color: C.greyText, fontSize: "10.5px", marginTop: 2 }}>Claude ${metrics.cost?.claudeUSD ?? 0} · APIs ${metrics.cost?.apiUSD ?? 0}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "20px", color: C.nearBlack }}>{metrics.cost?.cacheHits ?? 0}/{metrics.cost?.calls ?? 0}</div>
+                    <div style={{ color: C.greyText }}>Cache hits / tracked calls</div>
+                    <div style={{ color: C.greyText, fontSize: "10.5px", marginTop: 2 }}>Claude tokens: {(metrics.cost?.claudeTokens?.in || 0) + (metrics.cost?.claudeTokens?.out || 0)}</div>
+                  </div>
+                </div>
+                <div style={{ color: C.greyText, fontSize: "10px", marginTop: 8 }}>Internal metric — not shown to clients. Claude cost is real (token-based); API per-call prices are estimates. A cached repeat report costs ~₹0.</div>
+              </div>
+            )}
           </div>
 
           {/* ── FOOTER ──────────────────────────────────────────────────────── */}

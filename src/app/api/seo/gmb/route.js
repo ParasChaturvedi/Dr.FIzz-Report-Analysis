@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { claudeChat }   from "@/lib/claude/client";
 import { loadMarketplaceDirectories } from "@/lib/seo/geo/marketplace-source";
 import { getOrFetch } from "@/lib/cache/mongo";
+import { logUsage } from "@/lib/cache/usage";
 
 export const runtime    = "nodejs";
 export const maxDuration = 90;
@@ -530,13 +531,14 @@ export async function POST(request) {
     if (!domain) return NextResponse.json({ error: "domain required" }, { status: 400 });
     // 30-day persistent cache by domain (cross-user reuse: a competitor that matches
     // an already-checked domain reuses its GMB data). No-op if Mongo isn't configured.
-    const { data: result } = await getOrFetch({
+    const { data: result, cached } = await getOrFetch({
       domain,
       dataType: `gmb:${skipDirectories ? "nodirs" : "full"}`,
       ttlDays: 30,
       source: "gmb",
       fetchFn: () => checkGmb(domain, businessName || "", location || "India", { skipDirectories: !!skipDirectories }),
     });
+    await logUsage({ domain, api: "gmb", costUSD: cached ? 0 : (skipDirectories ? 0.015 : 0.03), cached });
     return NextResponse.json(result);
   } catch (err) {
     console.error("[gmb] Error:", err);

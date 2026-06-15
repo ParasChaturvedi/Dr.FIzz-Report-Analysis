@@ -2,6 +2,7 @@
 import { fetchMozMetrics } from "./moz/client.js";
 import { loadLlmBacklinks } from "./geo/marketplace-source.js";
 import { getCached, putCached } from "../cache/mongo.js";
+import { logUsage } from "../cache/usage.js";
 
 const DATAFORSEO_LOGIN = process.env.DATAFORSEO_LOGIN;
 const DATAFORSEO_PASSWORD = process.env.DATAFORSEO_PASSWORD;
@@ -308,7 +309,7 @@ export async function fetchDataForSeo(targetInput, options = {}) {
   // no Moz, no LLM backlinks). On miss, the live result below is appended.
   const dfsKey = `dataforseo:${location_name}:kw${maxKeywords}:${keywordsOnly ? "ko" : "full"}:${includeSubtopics ? "sub" : "nosub"}`;
   const mongoHit = await getCached({ domain: target, dataType: dfsKey, ttlDays: 30 });
-  if (mongoHit) return mongoHit;
+  if (mongoHit) { logUsage({ domain: target, api: "dataforseo", costUSD: 0, cached: true }).catch(() => {}); return mongoHit; }
 
   // ✅ 10 min TTL avoids repeated cost while user navigates UI
   const cached = cacheGet(CACHE.seo, cacheKey);
@@ -880,6 +881,7 @@ export async function fetchDataForSeo(targetInput, options = {}) {
     cacheSet(CACHE.seo, cacheKey, result, 10 * 60 * 1000);
     // Append to the 30-day persistent cache (append-only; no-op if Mongo absent).
     try { await putCached({ domain: target, dataType: dfsKey, payload: result, source: "dataforseo+moz" }); } catch {}
+    logUsage({ domain: target, api: "dataforseo", costUSD: 0.18, cached: false }).catch(() => {});
     return result;
   })().finally(() => {
     CACHE.inflightSeo.delete(cacheKey);

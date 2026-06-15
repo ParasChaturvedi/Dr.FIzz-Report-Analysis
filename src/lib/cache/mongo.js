@@ -60,6 +60,14 @@ async function collection() {
   return c.db(DB_NAME).collection(COLLECTION);
 }
 
+// Generic collection accessor (used by the usage/metrics tracker). null if no DB.
+export async function getCollection(name) {
+  const p = clientPromise();
+  if (!p) return null;
+  try { const c = await p; return c.db(DB_NAME).collection(name); }
+  catch { return null; }
+}
+
 // LIVE read: latest payload for (domain, dataType) within ttlDays. null on miss/any error.
 export async function getCached({ domain, dataType, ttlDays = 30 } = {}) {
   if (!cacheConfigured() || !domain || !dataType) return null;

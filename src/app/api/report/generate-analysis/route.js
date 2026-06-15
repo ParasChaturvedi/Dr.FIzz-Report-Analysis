@@ -4,6 +4,7 @@ import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { getCached, putCached } from "@/lib/cache/mongo";
+import { scoreCompleteness, summarizeUsage } from "@/lib/cache/usage";
 
 import { claudeChatStream } from "@/lib/claude/client";
 import {
@@ -67,7 +68,7 @@ function fmt(n, fallback = "—") {
 
 // ─── Claude helper: generate structured JSON sections ─────────────────────────
 
-async function generateWithAI(systemPrompt, userPrompt, fallback = {}) {
+async function generateWithAI(systemPrompt, userPrompt, fallback = {}, meta = {}) {
   try {
     const { content } = await claudeChatStream({
       messages: [
@@ -77,6 +78,7 @@ async function generateWithAI(systemPrompt, userPrompt, fallback = {}) {
       model: "claude-sonnet-4-6", // was defaulting to Opus 4.7 — Sonnet is the intended pipeline model (cost)
       max_tokens: 7000,
       timeoutMs: 90000,
+      meta,
     });
 
     let parsed = null;
@@ -383,7 +385,7 @@ Return ONLY this JSON (no markdown, no commentary):
     geoFrontier: { domainAICitations: "—", competitorAICitations: "—", howToEarnCitations: [] },
     quickWins180: [],
     strategicPriorities: [],
-  });
+  }, { domain, api: "claude", label: "website-analysis" });
 }
 
 // ─── Page-level AI analysis ───────────────────────────────────────────────────
@@ -508,7 +510,7 @@ Return JSON with exactly these keys:
     aiVisibility: { dashboardFeatures: [], useCases: [] },
     geoLayer: { faqAnalysis: "", faqs: [], faqJsonLd: "", principles: [] },
     implementation: { sprint1: {}, sprint2: {}, sprint3: {}, measurementChecklist: [] },
-  });
+  }, { domain, api: "claude", label: "page-analysis" });
 }
 
 // ─── Main POST handler ─────────────────────────────────────────────────────────
@@ -797,6 +799,24 @@ export async function POST(request) {
       keywordGap:      kwGapRaw,
       strategicPlan:   prefetchedSeoData?.strategicPlan   ?? null,
     };
+
+    // ── Per-report cost + data-confidence metrics (from the usage log + the data) ──
+    try {
+      const completeness = scoreCompleteness(reportData);
+      const usage = await summarizeUsage({ domain, sinceMs: 25 * 60 * 1000 });
+      const usd = Math.round(usage.totalUSD * 100) / 100;
+      reportData.metrics = {
+        cost: {
+          usd, inr: Math.round(usd * 84),
+          claudeUSD: Math.round(usage.claudeUSD * 100) / 100,
+          apiUSD: Math.round(usage.apiUSD * 1000) / 1000,
+          byApi: usage.byApi, calls: usage.calls, cacheHits: usage.cacheHits,
+          claudeTokens: usage.claudeTokens,
+        },
+        completeness, // { score, present[], missing[], confidence }
+        generatedAt: new Date().toISOString(),
+      };
+    } catch (mErr) { console.warn("[metrics] non-fatal:", mErr?.message); }
 
     // Append the report to the 30-day cache (no-op without Mongo). Repeat reports
     // for the same site + inputs will return this instantly — no fetches, no Claude.
