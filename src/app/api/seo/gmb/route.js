@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { claudeChat }   from "@/lib/claude/client";
 import { loadMarketplaceDirectories } from "@/lib/seo/geo/marketplace-source";
+import { getOrFetch } from "@/lib/cache/mongo";
 
 export const runtime    = "nodejs";
 export const maxDuration = 90;
@@ -423,7 +424,7 @@ async function extractBusinessName(host) {
 }
 
 // ── Main check function ───────────────────────────────────────────────────────
-export async function checkGmb(domain, businessName = "", location = "India") {
+export async function checkGmb(domain, businessName = "", location = "India", opts = {}) {
   const auth = getAuth();
   if (!auth) return { error: "DataForSEO credentials not configured", domain };
 
@@ -449,10 +450,14 @@ export async function checkGmb(domain, businessName = "", location = "India") {
   const [reviewRes, qaRes, dirRes] = await Promise.allSettled([
     info?.found ? fetchGmbReviews(matchedKeyword, location, auth) : Promise.resolve([]),
     info?.found ? fetchGmbQA(matchedKeyword, location, auth)      : Promise.resolve([]),
-    // Prefer the multi-LLM Marketplace Intelligence (cross-LLM-validated, cached);
-    // falls back to DataForSEO SERP detection when the flag is off / no cache.
-    loadMarketplaceDirectories({ domain: host, businessName: matchedKeyword, location })
-      .then((llm) => llm || checkDirectoryListings(host, auth, matchedKeyword)),
+    // Competitors skip the ~14-call directory SERP fan-out (not shown in the
+    // competitor comparison) → saves DataForSEO credits. Client gets full data.
+    opts.skipDirectories
+      ? Promise.resolve(DIRECTORIES.map((d) => ({ ...d, listed: null, listingUrl: null })))
+      // Prefer the multi-LLM Marketplace Intelligence (cross-LLM-validated, cached);
+      // falls back to DataForSEO SERP detection when the flag is off / no cache.
+      : loadMarketplaceDirectories({ domain: host, businessName: matchedKeyword, location })
+          .then((llm) => llm || checkDirectoryListings(host, auth, matchedKeyword)),
   ]);
 
   const reviews = reviewRes.status === "fulfilled" ? reviewRes.value : [];
@@ -521,9 +526,17 @@ export async function checkGmb(domain, businessName = "", location = "India") {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { domain, businessName, location } = body;
+    const { domain, businessName, location, skipDirectories } = body;
     if (!domain) return NextResponse.json({ error: "domain required" }, { status: 400 });
-    const result = await checkGmb(domain, businessName || "", location || "India");
+    // 30-day persistent cache by domain (cross-user reuse: a competitor that matches
+    // an already-checked domain reuses its GMB data). No-op if Mongo isn't configured.
+    const { data: result } = await getOrFetch({
+      domain,
+      dataType: `gmb:${skipDirectories ? "nodirs" : "full"}`,
+      ttlDays: 30,
+      source: "gmb",
+      fetchFn: () => checkGmb(domain, businessName || "", location || "India", { skipDirectories: !!skipDirectories }),
+    });
     return NextResponse.json(result);
   } catch (err) {
     console.error("[gmb] Error:", err);
