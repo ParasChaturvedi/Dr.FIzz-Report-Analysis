@@ -1,4 +1,5 @@
 // src/lib/seo/dataforseo.js
+import { fetchMozMetrics } from "./moz/client.js";
 
 const DATAFORSEO_LOGIN = process.env.DATAFORSEO_LOGIN;
 const DATAFORSEO_PASSWORD = process.env.DATAFORSEO_PASSWORD;
@@ -458,7 +459,32 @@ export async function fetchDataForSeo(targetInput, options = {}) {
 
     let backlinksSummary = null;
     let backlinksData = null;
+    let backlinkDomains = [];
+    let externalTotal = 0;
+    let totalDomains = 0;
+    let referringDomainsRaw = null;
 
+    // ── Moz Links API = 1ST PRIORITY for DA / backlinks / referring domains ──
+    // (the data we were waiting on DataForSEO backlinks for). When Moz answers, the
+    // DataForSEO backlinks calls below are SKIPPED → saves DataForSEO credits.
+    // Everything else (keywords / SERP / etc.) is unaffected.
+    let mozOk = false;
+    try {
+      const moz = await fetchMozMetrics(target);
+      if (moz && moz.backlinksSummary && (moz.backlinksSummary.backlinks || moz.backlinksSummary.referring_domains || moz.domainAuthority)) {
+        backlinksSummary = moz.backlinksSummary;
+        backlinkDomains  = moz.backlinkDomains || [];
+        externalTotal    = moz.externalTotal || 0;
+        totalDomains     = moz.totalDomains || 0;
+        mozOk = true;
+        console.log(`[Moz] DA=${moz.domainAuthority} backlinks=${backlinksSummary.backlinks} refDomains=${backlinksSummary.referring_domains} — DataForSEO backlinks skipped (credits saved)`);
+      }
+    } catch (mozErr) {
+      console.warn("[Moz] metrics failed — falling back to DataForSEO backlinks:", mozErr?.message);
+    }
+
+    // ── DataForSEO backlinks (FALLBACK ONLY — runs when Moz is unavailable) ──
+    if (!mozOk) {
     try {
       const backlinksRes = await fetch(
         "https://api.dataforseo.com/v3/backlinks/summary/live",
@@ -495,11 +521,6 @@ export async function fetchDataForSeo(targetInput, options = {}) {
 
     // ✅ 1.5) REFERRING DOMAINS (this powers your Links tab)
     // This returns an actual list of domains with backlinks counts.
-    let backlinkDomains = [];
-    let externalTotal = 0;
-    let totalDomains = 0;
-    let referringDomainsRaw = null;
-
     try {
       const referringPayload = [
         {
@@ -565,6 +586,7 @@ export async function fetchDataForSeo(targetInput, options = {}) {
     } catch {
       // don’t fail full pipeline if referring domains call fails
     }
+    } // end if (!mozOk) — Moz already supplied DA / backlinks / referring domains
 
     // 2) DOMAIN KEYWORDS
     const keywordsPayload = [
