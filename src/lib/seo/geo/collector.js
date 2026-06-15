@@ -92,9 +92,10 @@ async function connectBrowserless(proxyCountry = "") {
   const country = String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "").toLowerCase();
   const proxyQs = residential ? `&proxy=residential${country ? `&proxyCountry=${country}` : ""}` : "";
   // Browserless kills the session after `timeout` (default ~30s) — too short for a
-  // streamed AI answer. Extend to the plan max (60,000) so one query fits. A fresh
-  // connection is made per query, so the whole scan never needs one long session.
-  const timeoutMs = Math.min(60000, Number(process.env.BROWSERLESS_TIMEOUT_MS || 60000));
+  // streamed AI answer. Default 60,000 (the free-plan max) covers one query; a paid
+  // plan can raise it via BROWSERLESS_TIMEOUT_MS for slow engines. A fresh connection
+  // is made per query, so the whole scan never needs one long session.
+  const timeoutMs = Number(process.env.BROWSERLESS_TIMEOUT_MS || 60000);
   const ws = `${base}/chromium/playwright?token=${encodeURIComponent(token)}${proxyQs}&timeout=${timeoutMs}`;
   // Dynamic import so build/serverless bundles never pull Playwright unless a
   // live scan actually runs (the browser itself is hosted on Browserless).
@@ -428,7 +429,7 @@ export async function runGeoScan(opts = {}) {
     marketplaces = [],
     location = "",
     proxyCountry = "in",    // residential-IP country (matches the report's market)
-    engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "copilot", "claude"],
+    engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "claude"],
     sessions = {},          // { chatgpt: storageState, gemini: ..., ... }
     prompts: customPrompts,
   } = opts;
@@ -463,7 +464,7 @@ export async function runMarketplaceScan(opts = {}) {
     competitors = [],
     marketplaces,
     proxyCountry = "in",
-    engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "copilot", "claude"],
+    engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "claude"],
     sessions = {},
   } = opts;
 
