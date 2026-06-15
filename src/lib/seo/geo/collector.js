@@ -35,7 +35,7 @@ export const ENGINES = {
     name: "Gemini", url: "https://gemini.google.com/app", needsSession: true, type: "chat",
     composerSel: 'rich-textarea div[contenteditable="true"], div[contenteditable="true"][role="textbox"]',
     sendSel: 'button[aria-label*="Send" i], button.send-button',
-    answerSel: 'message-content, .model-response-text, [class*="response-container" i]',
+    answerSel: '.model-response-text, message-content',
   },
   // Google AI Overviews = the AI summary on the Google SEARCH results page (NOT
   // the Gemini app). No login required; reuses the Google session if present.
