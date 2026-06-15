@@ -603,19 +603,15 @@ export async function fetchDataForSeo(targetInput, options = {}) {
     }
     } // end if (!mozOk) — Moz/DataForSEO supplied DA + referring domains
 
-    // ── LLM-scan BACKLINKS override (owner's chosen backlink source) ──
-    // Backlink COUNT + the referring-sites LIST come from the Browserless scan's
-    // reference sites. DA + referring_domains stay from Moz/DataForSEO above.
-    if (llmBl) {
-      if (!backlinksSummary) backlinksSummary = {};
-      backlinksSummary.backlinks = llmBl.count;
-      backlinksSummary._backlinksSource = "llm-scan";
-      if (Array.isArray(llmBl.sites) && llmBl.sites.length) {
-        backlinkDomains = llmBl.sites;
-        externalTotal = llmBl.count;
-        if (!totalDomains) totalDomains = backlinksSummary.referring_domains || llmBl.sites.length;
-      }
-      console.log(`[LLM-backlinks] count=${llmBl.count} sites=${llmBl.sites?.length || 0} (from Browserless scan — Moz backlinks not used)`);
+    // ── LLM scan supplies WHERE the backlinks are (the referring-sites LIST) ──
+    // The COUNT stays from Moz (accurate ~ full crawl); DA + referring_domains stay
+    // from Moz too. Only the list of referring sites is replaced with the Browserless
+    // scan's reference sites — so Moz's expensive 50-row list call is skipped (tokens
+    // saved) while the headline count remains accurate and consistent.
+    if (llmBl && Array.isArray(llmBl.sites) && llmBl.sites.length) {
+      backlinkDomains = llmBl.sites;
+      if (backlinksSummary) backlinksSummary._linksListSource = "llm-scan";
+      console.log(`[LLM-backlinks] reference-sites list = ${llmBl.sites.length} (Moz list skipped; count/DA/referring-domains stay Moz)`);
     }
 
     // 2) DOMAIN KEYWORDS

@@ -102,7 +102,7 @@ const intel = await buildMarketplaceIntelligence({
 });
 
 const printBrand = (b) => {
-  console.log(`\n── ${b.brand}  (${b.listedDirectoryCount}/${b.totalChecked} listed · backlinks(LLM ref-sites): ${b.backlinks?.count ?? 0} · engines: ${b.enginesUsed.join(", ") || "none"}) ──`);
+  console.log(`\n── ${b.brand}  (${b.listedDirectoryCount}/${b.totalChecked} listed · AI ref-sites (backlink list): ${b.backlinks?.count ?? 0} · engines: ${b.enginesUsed.join(", ") || "none"}) ──`);
   b.directories.filter((d) => d.confidence !== "none").forEach((d) =>
     console.log(`   ${d.listed === true ? "✓" : d.listed === false ? "✗" : "?"} ${String(d.name).padEnd(13)} ${String(d.confidence).padEnd(9)} by=[${d.confirmedBy.join(",")}]${d.verified ? " ✔verified" : ""}  ${d.listingUrl || ""}`)
   );
