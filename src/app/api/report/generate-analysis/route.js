@@ -5,6 +5,7 @@ import { join } from "path";
 import { randomUUID } from "crypto";
 import { getCached, putCached } from "@/lib/cache/mongo";
 import { scoreCompleteness, summarizeUsage } from "@/lib/cache/usage";
+import { reportCacheType } from "@/lib/cache/report-key";
 
 import { claudeChatStream } from "@/lib/claude/client";
 import {
@@ -537,13 +538,7 @@ export async function POST(request) {
     // ── 30-day REPORT cache, keyed by domain + the inputs that change the report ──
     // On a fresh hit we return the SAVED report (no fetches, no Claude). The id is
     // regenerated so each view has its own id; the data comes from the cache.
-    const _inputSig = JSON.stringify({
-      bn: businessData?.businessName || businessData?.name || "",
-      comp: (Array.isArray(competitorData) ? competitorData : []).map((c) => (typeof c === "string" ? c : c?.domain || c?.name || "")).slice(0, 8),
-      mode: reportMode || "", kw: keyword || "", cc: countryCode,
-    });
-    let _h = 0; for (let i = 0; i < _inputSig.length; i++) _h = (Math.imul(_h, 31) + _inputSig.charCodeAt(i)) | 0;
-    const reportDataType = `report:${reportType}:${(_h >>> 0).toString(36)}`;
+    const reportDataType = reportCacheType({ reportType, businessData, competitorData, reportMode, keyword, countryCode });
     const _cachedReport = await getCached({ domain, dataType: reportDataType, ttlDays: 30 });
     if (_cachedReport) {
       console.log(`[cache HIT] report:${domain} — returning saved report (no fetch, no Claude)`);

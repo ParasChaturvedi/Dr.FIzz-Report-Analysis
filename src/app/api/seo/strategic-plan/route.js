@@ -18,7 +18,7 @@ import { runBusinessLogic } from "@/lib/seo/doctor-fizz-logic";
 import { runQaGate }        from "@/lib/seo/doctor-fizz-qa";
 
 export const runtime    = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300; // was 120 → the Claude call exceeded it (504); match generate-analysis
 
 function safe(obj, maxLen = 6000) {
   const s = typeof obj === "string" ? obj : JSON.stringify(obj || {});

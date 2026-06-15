@@ -658,6 +658,33 @@ export default function Step5Slide2({
       if (keywords.length > 0 && typeof keywords[0] === "string") keyword = keywords[0];
 
       // ═══════════════════════════════════════════════════════════════════════
+      // SHORT-CIRCUIT — if a fresh (≤30-day) report for THIS exact request is
+      // already in MongoDB, skip the entire collect→analyse→generate pipeline and
+      // open the saved report instantly (no APIs, no Claude, no slow request).
+      // ═══════════════════════════════════════════════════════════════════════
+      try {
+        const _reportMode = (() => { try { return JSON.parse(localStorage.getItem("websiteData") || "{}")?.reportMode || ""; } catch { return ""; } })();
+        const cachedRes = await fetch("/api/report/cached", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, businessData, competitorData, reportMode: _reportMode, keyword, countryCode: "in" }),
+          signal: AbortSignal.timeout(15000),
+        });
+        const cachedReport = cachedRes.ok ? await cachedRes.json() : null;
+        if (cachedReport?.found && cachedReport?.id && cachedReport?.data) {
+          setFetchStages((prev) => prev.map((s) => ({ ...s, state: "done", value: "From cache (30-day)" })));
+          setProgressPct(100);
+          stopFakeProgress();
+          try {
+            sessionStorage.setItem(`drfizz:report:${cachedReport.id}`, JSON.stringify({ id: cachedReport.id, reportType: cachedReport.reportType, data: cachedReport.data }));
+          } catch (_) {}
+          await delay(500);
+          window.location.href = `/report/${cachedReport.id}`;
+          return; // ← whole pipeline skipped, report opened from cache
+        }
+      } catch (_) { /* cache miss / unreachable → fall through to the full pipeline */ }
+
+      // ═══════════════════════════════════════════════════════════════════════
       // PHASE 1 — CORE DATA COLLECTION
       // ═══════════════════════════════════════════════════════════════════════
 
@@ -978,23 +1005,37 @@ export default function Step5Slide2({
 
       let reportId = null;
       try {
-        const reportRes = await fetch("/api/report/generate-analysis", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url,
-            keyword,
-            countryCode: "in",
-            languageCode: "en",
-            businessData,
-            keywordData: keywords,
-            competitorData,
-            // V3 Part 3.1 / 3.4 — report mode + negative exclusions persisted by Steps 1 & 4
-            reportMode: (() => { try { return JSON.parse(localStorage.getItem("websiteData") || "{}")?.reportMode || ""; } catch { return ""; } })(),
-            negativeExclusions: (() => { try { return JSON.parse(localStorage.getItem("drfizz.keywordExclusions") || "[]"); } catch { return []; } })(),
-            seoData: enrichedSeoJson, // pre-fetched — includes crawl, GMB, competitor audit + strategic plan
-          }),
+        const _reportBody = JSON.stringify({
+          url,
+          keyword,
+          countryCode: "in",
+          languageCode: "en",
+          businessData,
+          keywordData: keywords,
+          competitorData,
+          // V3 Part 3.1 / 3.4 — report mode + negative exclusions persisted by Steps 1 & 4
+          reportMode: (() => { try { return JSON.parse(localStorage.getItem("websiteData") || "{}")?.reportMode || ""; } catch { return ""; } })(),
+          negativeExclusions: (() => { try { return JSON.parse(localStorage.getItem("drfizz.keywordExclusions") || "[]"); } catch { return []; } })(),
+          seoData: enrichedSeoJson, // pre-fetched — includes crawl, GMB, competitor audit + strategic plan
         });
+        // Retry once on a network drop (ERR_NETWORK_CHANGED) or 504 — long Claude
+        // requests can drop on a flaky network. The server may have cached the report
+        // even if the client dropped, so a retry (or the next run's short-circuit) recovers.
+        let reportRes = null;
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            reportRes = await fetch("/api/report/generate-analysis", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: _reportBody,
+            });
+            if (reportRes.ok || attempt === 2) break;
+          } catch (netErr) {
+            console.warn(`[Step5] report fetch attempt ${attempt} failed (${netErr?.message})${attempt < 2 ? " — retrying" : ""}`);
+            if (attempt === 2) throw netErr;
+          }
+          await delay(2500);
+        }
 
         if (reportRes.ok) {
           const reportData = await reportRes.json();
