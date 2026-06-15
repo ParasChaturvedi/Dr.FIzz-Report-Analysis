@@ -377,10 +377,8 @@ export async function runOpportunitiesScan({
     } catch {}
 
     // ---- bounded plagiarism budget for the scan ----
-    // Plagiarism scoring is a CONTENT-EDITOR feature and is NOT shown in the report,
-    // so eager-scan only a few here; the rest are scored lazily when a page is opened.
-    // (Was 12 → up to 12 Claude calls per report; 3 cuts that ~75% with no report impact.)
-    const PLAGIARISM_MAX_ITEMS = Number(process.env.PLAGIARISM_MAX_ITEMS || 3);
+    // Plagiarism IS a wanted feature — keep it fully provisioned (env-tunable).
+    const PLAGIARISM_MAX_ITEMS = Number(process.env.PLAGIARISM_MAX_ITEMS || 12);
     let plagiarismBudgetRemaining = PLAGIARISM_MAX_ITEMS;
 
     const budgetApi = {

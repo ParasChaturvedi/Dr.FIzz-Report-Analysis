@@ -8,6 +8,16 @@ if (!DATAFORSEO_LOGIN || !DATAFORSEO_PASSWORD) {
   console.warn("DATAFORSEO_LOGIN or DATAFORSEO_PASSWORD not set in .env.local");
 }
 
+// Resolve a DataForSEO location_name from a country code. Defaults to India to match
+// the rest of the pipeline (countryCode defaults to "in" everywhere). Fixes the old
+// US/India mismatch where the Labs calls below hardcoded "United States" while the
+// main keyword/SERP fetches + keyword-gap used India — i.e. comparing two markets.
+function locationNameForCountry(cc) {
+  const c = String(cc || "in").toLowerCase();
+  const map = { in: "India", us: "United States", gb: "United Kingdom", uk: "United Kingdom", ca: "Canada", au: "Australia", ae: "United Arab Emirates", sg: "Singapore" };
+  return map[c] || "India";
+}
+
 /* ============================================================================
    Tiny in-memory cache + in-flight dedupe (per Node process)
    - Prevents duplicate calls when dev/route triggers twice
@@ -1020,7 +1030,7 @@ export async function fetchDomainRankOverview(domain, options = {}) {
       {
         target,
         language_code: "en",
-        location_name: "United States",
+        location_name: locationNameForCountry(options.countryCode),
       },
     ];
 
@@ -1089,7 +1099,7 @@ export async function fetchCompetitorDomains(domain, options = {}) {
       {
         target,
         language_code: "en",
-        location_name: "United States",
+        location_name: locationNameForCountry(options.countryCode),
         limit: 10,
       },
     ];
@@ -1169,7 +1179,7 @@ export async function fetchRankedKeywords(domain, options = {}) {
       {
         target,
         language_code: "en",
-        location_name: "United States",
+        location_name: locationNameForCountry(options.countryCode),
         limit: 20,
       },
     ];
