@@ -338,13 +338,15 @@ export default function Step5Slide2({
   useEffect(() => { return () => stopFakeProgress(); }, []);
 
   // ── Stage / check helpers ─────────────────────────────────────────────────
-  const updateStage = useCallback((id, patch) => {
+  const updateStage = useCallback((id, patch, opts = {}) => {
     const realId = STAGE_ALIAS[id] || id;   // route collectors → journey stages
     setFetchStages((prev) => prev.map((s) => {
       if (s.id !== realId) return s;
-      // Several collectors feed one journey stage — never revert a stage that
-      // already completed back to "loading"; just keep updating its value.
-      if (patch.state === "loading" && (s.state === "done" || s.state === "error")) {
+      // Several collectors feed one journey stage — normally never revert a completed
+      // stage back to "loading"; just keep updating its value. EXCEPTION: opts.force
+      // lets a LATE, slow collector (e.g. the ~90s GEO scan, competitor audit) re-show
+      // its stage as loading, so the user sees activity instead of a stuck UI.
+      if (!opts.force && patch.state === "loading" && (s.state === "done" || s.state === "error")) {
         const { state, ...rest } = patch;
         return { ...s, ...rest };
       }
@@ -878,7 +880,9 @@ export default function Step5Slide2({
       }
 
       // 8) GMB & Directory Listings — retried, soft-fail.
-      updateStage("gmbCheck", { state: "loading" });
+      // force: gmbCheck runs the ~90s inline GEO scan AFTER off-page was marked done —
+      // re-show the stage as loading so the long scan isn't an invisible "stuck" gap.
+      updateStage("gmbCheck", { state: "loading", value: "Scanning directories & AI presence…" }, { force: true });
       {
         const businessName = businessData?.businessName || businessData?.name || "";
         const r = await withRetry(async () => {
@@ -916,7 +920,7 @@ export default function Step5Slide2({
 
       let competitorAuditJson = null;
       if (allCompetitors.length > 0) {
-        updateStage("competitorAudit", { state: "loading" });
+        updateStage("competitorAudit", { state: "loading", value: "Auditing competitors…" }, { force: true });
         try {
           const res = await fetch("/api/seo/competitor-audit", {
             method:  "POST",
@@ -943,7 +947,7 @@ export default function Step5Slide2({
       }
 
       // ── Keyword Gap Analysis ──────────────────────────────────────────────
-      updateStage("keywordGap", { state: "loading" });
+      updateStage("keywordGap", { state: "loading", value: "Analyzing keyword gaps…" }, { force: true });
       let keywordGapJson = null;
       try {
         const res = await fetch("/api/seo/keyword-gap", {

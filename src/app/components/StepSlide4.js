@@ -322,7 +322,10 @@ export default function StepSlide4({
         tailRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
-  }, [showSummary, selectedKeywords.length, showInlineMoreInput, isLoadingKeywords]);
+    // NOTE: deps intentionally EXCLUDE selectedKeywords.length / showSummary — selecting
+    // a keyword must NOT auto-scroll the page (it was yanking the chips out of view).
+    // Only scroll when genuinely new content appears (the "More" input, or a fresh load).
+  }, [showInlineMoreInput, isLoadingKeywords]);
 
   return (
     <div className="w-full h-full flex flex-col bg-transparent overflow-x-hidden">

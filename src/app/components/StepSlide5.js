@@ -386,7 +386,10 @@ export default function StepSlide5({
         tailRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
-  }, [showSummary, selectedBusinessCompetitors.length, selectedSearchCompetitors.length, addingBusiness, addingSearch, isLoading]);
+    // NOTE: deps intentionally EXCLUDE the selected-competitor counts / showSummary —
+    // selecting a competitor must NOT auto-scroll the page. Only scroll when new content
+    // appears (an add-input opens, or a fresh load).
+  }, [addingBusiness, addingSearch, isLoading]);
 
   const Chip = ({ label, isSelected, onClick, disabled }) => (
     <button

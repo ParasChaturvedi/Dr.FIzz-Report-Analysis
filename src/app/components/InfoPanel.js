@@ -150,6 +150,7 @@ function formatNumber(num) {
 /* -------------------- Presentational helpers -------------------- */
 function WebsiteStatsCard({ website, stats }) {
   const badge = stats?.badge || { label: "Good", tone: "success" };
+  const loading = Boolean(stats?.loading);
 
   const badgeClass =
     badge?.tone === "danger"
@@ -216,7 +217,13 @@ function WebsiteStatsCard({ website, stats }) {
 
                 <div className="mt-2 mb-1.5 flex items-center justify-center gap-2">
                   <div className="text-[clamp(20px,3vw,23px)] leading-tight font-extrabold text-gray-900 dark:text-[var(--text)]">
-                    {hasValue ? formatNumber(it.value) : "--"}
+                    {hasValue ? (
+                      formatNumber(it.value)
+                    ) : loading ? (
+                      <span className="inline-block h-[22px] w-14 rounded-md bg-gray-200 dark:bg-white/10 animate-pulse align-middle" />
+                    ) : (
+                      "--"
+                    )}
                   </div>
 
                   {hasValue ? (
@@ -232,9 +239,15 @@ function WebsiteStatsCard({ website, stats }) {
                   className="text-[13px] text-gray-500 dark:text-[var(--muted)]"
                   suppressHydrationWarning
                 >
-                  {showRealGrowth
-                    ? `${Math.abs(g)}%`
-                    : Math.floor(Math.random() * (100 - 26 + 1)) + 26}
+                  {showRealGrowth ? (
+                    `${Math.abs(g)}%`
+                  ) : loading ? (
+                    <span className="inline-block h-[10px] w-8 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
+                  ) : hasValue ? (
+                    Math.floor(Math.random() * (100 - 26 + 1)) + 26
+                  ) : (
+                    ""
+                  )}
                 </div>
               </div>
             );
@@ -446,6 +459,8 @@ export default function InfoPanel({
 
   // ✅ Fetch /api/seo when panel is OPEN OR PINNED (not just open)
   const [apiInfoPanel, setApiInfoPanel] = useState(null);
+  // True while the info-stats fetch is in flight → show a loading shimmer (not "--").
+  const [infoStatsLoading, setInfoStatsLoading] = useState(false);
 
   // ✅ store full /api/seo response for keyword fallback
   const [apiSeo, setApiSeo] = useState(null);
@@ -473,6 +488,7 @@ export default function InfoPanel({
     const safeUrl = rawWebsite.includes("://") ? rawWebsite : `https://${rawWebsite}`;
     const controller = new AbortController();
 
+    setInfoStatsLoading(true);
     (async () => {
       try {
         // Real DA (Moz) + Organic Traffic/Keywords (DataForSEO), 30-day-cached in
@@ -487,9 +503,11 @@ export default function InfoPanel({
         if (!res.ok) throw new Error(`info-stats ${res.status}`);
         const json = await res.json();
         setApiInfoPanel(json?.infoPanel ?? null);
+        setInfoStatsLoading(false);
       } catch (e) {
-        if (e?.name === "AbortError") return;
+        if (e?.name === "AbortError") return; // superseded by a newer fetch — keep loading
         setApiInfoPanel(null);
+        setInfoStatsLoading(false);
       }
     })();
 
@@ -591,13 +609,15 @@ export default function InfoPanel({
           : null,
         growth: apiInfoPanel.growth || null,
         badge: apiInfoPanel.badge || { label: "Good", tone: "success" },
+        loading: false,
       }
     : {
         domainAuthority: null,
         organicTraffic: null,
         organicKeyword: null,
         growth: null,
-        badge: { label: "—", tone: "success" },
+        badge: { label: infoStatsLoading ? "Scanning…" : "—", tone: "success" },
+        loading: infoStatsLoading,
       };
 
   const displayWebsite = rawWebsite || "yourcompany.com";
