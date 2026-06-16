@@ -612,6 +612,15 @@ export async function fetchDataForSeo(targetInput, options = {}) {
     }
     } // end if (!mozOk) — Moz/DataForSEO supplied DA + referring domains
 
+    // Normalize domain rank to a 0-100 scale. Moz returns 0-100 (DA); DataForSEO's
+    // backlinks 'rank' is 0-1000 — without this a DataForSEO value (e.g. flipkart=570)
+    // exceeds the 0-100 range the report validates and renders "Not available". (570→57)
+    if (backlinksSummary && typeof backlinksSummary.rank === "number" && backlinksSummary.rank > 100) {
+      backlinksSummary.rank = Math.round(backlinksSummary.rank / 10);
+      if (typeof backlinksSummary.domain_rank === "number" && backlinksSummary.domain_rank > 100) backlinksSummary.domain_rank = Math.round(backlinksSummary.domain_rank / 10);
+      if (typeof backlinksSummary.ahrefs_rank === "number" && backlinksSummary.ahrefs_rank > 100) backlinksSummary.ahrefs_rank = Math.round(backlinksSummary.ahrefs_rank / 10);
+    }
+
     // ── LLM scan supplies WHERE the backlinks are (the referring-sites LIST) ──
     // The COUNT stays from Moz (accurate ~ full crawl); DA + referring_domains stay
     // from Moz too. Only the list of referring sites is replaced with the Browserless
@@ -1079,14 +1088,19 @@ export async function fetchDomainRankOverview(domain, options = {}) {
     const json = await res.json();
     const task = Array.isArray(json?.tasks) ? json.tasks[0] : null;
     const result = Array.isArray(task?.result) ? task.result[0] : null;
-    const metrics = result?.metrics?.organic || result?.metrics || result || null;
+    // BUGFIX: DataForSEO Labs nests metrics under result.items[0].metrics — NOT
+    // result.metrics. The missing items[0] level was returning 0 organic
+    // keywords/traffic for EVERY domain (e.g. flipkart.com showed 0 despite ~1.9M kw).
+    const item = Array.isArray(result?.items) ? result.items[0] : result;
+    const organic = item?.metrics?.organic || item?.metrics || result?.metrics?.organic || null;
+    const paid = item?.metrics?.paid || result?.metrics?.paid || null;
 
     const out = {
-      organicKeywords: toNumber(metrics?.count) ?? toNumber(metrics?.keywords_count) ?? 0,
-      organicTraffic: toNumber(metrics?.etv) ?? toNumber(metrics?.estimated_traffic_volume) ?? 0,
-      paidKeywords: toNumber(result?.metrics?.paid?.count) ?? 0,
-      paidTraffic: toNumber(result?.metrics?.paid?.etv) ?? 0,
-      rank: toNumber(result?.rank) ?? null,
+      organicKeywords: toNumber(organic?.count) ?? toNumber(organic?.keywords_count) ?? 0,
+      organicTraffic: toNumber(organic?.etv) ?? toNumber(organic?.estimated_traffic_volume) ?? 0,
+      paidKeywords: toNumber(paid?.count) ?? 0,
+      paidTraffic: toNumber(paid?.etv) ?? 0,
+      rank: toNumber(item?.rank) ?? toNumber(result?.rank) ?? null,
     };
 
     cacheSet(CACHE.seo, cacheKey, out, 30 * 60 * 1000);
