@@ -15,6 +15,7 @@ import {
   fetchDataForSeo,
 } from "@/lib/seo/dataforseo";
 import { fetchPsiForStrategy } from "@/lib/seo/psi";
+import { fetchMozMetrics } from "@/lib/seo/moz/client";
 import { runBusinessLogic } from "@/lib/seo/doctor-fizz-logic";
 import { runQaGate } from "@/lib/seo/doctor-fizz-qa";
 
@@ -612,7 +613,20 @@ export async function POST(request) {
       if (dr              == null) dr              = domainRankData.rank             ?? null;
     }
 
-    console.log("[generate-analysis] baseline:", { dr, organicTraffic, organicKeywords, mobileScore, desktopScore });
+    // Domain Rating + referring domains + total backlinks come from Moz — the DataForSEO
+    // domain overview does NOT carry them, which is why the report was showing them as
+    // "unavailable". Same accurate source the Info panel uses (e.g. itzfizz DA 52).
+    let backlinks = null;
+    const moz = await safeCall(() => fetchMozMetrics(domain, { withList: false }));
+    if (moz) {
+      if (Number.isFinite(moz.domainAuthority)) dr = moz.domainAuthority;       // 0-100 DA
+      const rd = moz.backlinksSummary?.referring_domains;
+      if (Number.isFinite(rd) && rd > 0) referringDomains = rd;
+      const bl = moz.backlinksSummary?.backlinks;
+      if (Number.isFinite(bl) && bl > 0) backlinks = bl;
+    }
+
+    console.log("[generate-analysis] baseline:", { dr, organicTraffic, organicKeywords, referringDomains, backlinks, mobileScore, desktopScore });
 
     const psiData = {
       performanceScoreMobile: mobileScore,
@@ -624,17 +638,22 @@ export async function POST(request) {
     // ── Build baseline metrics ────────────────────────────────────────────────
     // Metrics: store formatted strings for text fields, null for missing numbers
     // PSI scores stored as integer (0-100), NOT as strings with "/100" — the report component adds that
+    // Store RAW numbers (NOT formatted strings). The logic + report format them via
+    // formatMetricValue. Passing "1.3K"-style strings here caused Number("1.3K") → NaN
+    // in the storytelling ("draws NaN organic traffic"). Raw numbers also keep full
+    // precision (1,289 instead of a lossy 1.3K).
     const baselineMetrics = {
-      domainRating:     dr             != null ? String(dr)               : null,
-      referringDomains: referringDomains != null ? fmt(referringDomains)  : null,
-      organicKeywords:  organicKeywords  != null ? fmt(organicKeywords)   : null,
-      organicTraffic:   organicTraffic   != null ? fmt(organicTraffic)    : null,
+      domainRating:     Number.isFinite(dr)               ? dr               : null,
+      referringDomains: Number.isFinite(referringDomains) ? referringDomains : null,
+      organicKeywords:  Number.isFinite(organicKeywords)  ? organicKeywords  : null,
+      organicTraffic:   Number.isFinite(organicTraffic)   ? organicTraffic   : null,
+      backlinks:        Number.isFinite(backlinks)        ? backlinks        : null, // Moz total backlinks
       errors404:        null, // requires backlink subscription
       redirectChains:   null, // requires backlink subscription
       performanceMobile:  mobileScore,   // integer 0-100 or null
       performanceDesktop: desktopScore,  // integer 0-100 or null
-      lcp: cwvLab?.lcp ?? cwvLab?.LCP ?? null, // ms (number) or null
-      cls: cwvLab?.cls ?? cwvLab?.CLS ?? null, // decimal or null
+      lcp: (cwvLab?.lcp ?? cwvLab?.LCP) != null ? Math.round(cwvLab?.lcp ?? cwvLab?.LCP) : null, // ms, whole number
+      cls: (cwvLab?.cls ?? cwvLab?.CLS) != null ? Math.round((cwvLab?.cls ?? cwvLab?.CLS) * 100) / 100 : null, // 2 decimals
     };
 
     // ── Compute real-data sections (no AI needed — derived from collected metrics) ──

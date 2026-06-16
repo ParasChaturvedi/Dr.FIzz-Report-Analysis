@@ -1113,7 +1113,7 @@ export function buildCompetitiveAnalysis(input = {}) {
 const HIGHER_IS_BETTER = new Set([
   "organic_traffic", "organic_keywords", "referring_domains", "domain_rating",
   "gbp_completeness", "gbp_review_count", "review_count", "review_rating", "gbp_rating",
-  "site_health_score",
+  "site_health_score", "mobile_performance_score", "desktop_performance_score",
 ]);
 
 // Metrics where a lower value is better.
@@ -1204,13 +1204,16 @@ function improveUp(baseline, months) {
   const factor = months >= 12 ? 2.5 : 1.6;
   // For small ratings (≤5) add increments rather than multiply
   if (baseline <= 5) return Math.min(5, Math.round((baseline + (months >= 12 ? 0.5 : 0.3)) * 10) / 10);
-  if (baseline <= 100) return Math.round(baseline + (months >= 12 ? 30 : 12)); // DR-like
+  // 0-100 scores (DA, site health, GBP completeness, mobile/desktop perf) — additive,
+  // but CAPPED at 100 so a high baseline can't project to an impossible 104/122.
+  if (baseline <= 100) return Math.min(100, Math.round(baseline + (months >= 12 ? 30 : 12)));
   return Math.round(baseline * factor);
 }
 
 function improveDown(baseline, months) {
   const factor = months >= 12 ? 0.5 : 0.75;
-  return Math.round(baseline * factor * 100) / 100;
+  // Large values (e.g. LCP in ms) → whole numbers; small values (CLS) keep 2 decimals.
+  return baseline >= 100 ? Math.round(baseline * factor) : Math.round(baseline * factor * 100) / 100;
 }
 
 /**
@@ -2149,7 +2152,16 @@ export function buildStoryNarrative(input = {}) {
   } = input;
 
   const val = (k) => (baseline?.[k]?.value ?? null);
-  const n = (x) => (x == null ? null : Number(x).toLocaleString("en-US"));
+  // Robust formatter: accepts raw numbers OR formatted strings ("1,289"), never emits
+  // "NaN"/"null". Returns null when the value can't be parsed → callers fall back.
+  const n = (x) => {
+    if (x == null) return null;
+    if (typeof x === "number") return Number.isFinite(x) ? x.toLocaleString("en-US") : null;
+    const s = String(x).replace(/[^0-9.\-]/g, "");
+    if (!s || s === "-" || s === ".") return null;
+    const num = Number(s);
+    return Number.isFinite(num) ? num.toLocaleString("en-US") : null;
+  };
   const has = (x) => x != null;
 
   const name = clientName;
@@ -2197,8 +2209,8 @@ export function buildStoryNarrative(input = {}) {
   const yourEdges = (competitive_analysis?.your_edges || []).length;
   const theirEdges = (competitive_analysis?.their_edges || []).length;
   const invisible = (traffic === 0 || traffic == null) && (orgKw === 0 || orgKw == null);
-  const t = traffic === 0 ? "zero" : n(traffic);
-  const k = orgKw === 0 ? "zero" : n(orgKw);
+  const t = traffic === 0 ? "zero" : (n(traffic) || "limited");
+  const k = orgKw === 0 ? "zero" : (n(orgKw) || "limited");
 
   // Leader DR (for "even the DR-X leader hasn't cracked commercial rankings").
   const compTopDr = Math.max(

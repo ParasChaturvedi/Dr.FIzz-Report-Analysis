@@ -443,8 +443,53 @@ function renderNarrative(md) {
     listBuf = [];
   };
 
-  lines.forEach((raw, idx) => {
-    const line = raw.trimEnd();
+  // Markdown-table helpers — without these, table rows (and the |---|---| separator)
+  // leaked into the report as literal text.
+  const splitRow = (s) => s.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
+  const isSepRow = (s) => /\|/.test(s) && /-/.test(s) && /^[\s|:\-]+$/.test(s.trim());
+  const isPipeRow = (s) => /^\s*\|.*\|\s*$/.test(s);
+
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx].trimEnd();
+
+    // ── Real markdown table: header row + |---| separator + body rows ──────────
+    if (isPipeRow(line) && idx + 1 < lines.length && isSepRow(lines[idx + 1])) {
+      flushList(idx);
+      const header = splitRow(line);
+      const rows = [];
+      let j = idx + 2;
+      while (j < lines.length && isPipeRow(lines[j].trimEnd()) && !isSepRow(lines[j])) {
+        rows.push(splitRow(lines[j].trimEnd()));
+        j++;
+      }
+      out.push(
+        <div key={`tbl-${idx}`} className="overflow-x-auto mb-3">
+          <table className="w-full text-[12px] border-collapse">
+            <thead>
+              <tr>{header.map((h, i) => (
+                <th key={i} className="text-left font-bold px-2 py-1.5 border-b" style={{ color: C.nearBlack, borderColor: "#e2e2e2" }}>{renderInline(h)}</th>
+              ))}</tr>
+            </thead>
+            <tbody>{rows.map((r, ri) => (
+              <tr key={ri}>{r.map((c, ci) => (
+                <td key={ci} className="px-2 py-1.5 border-b align-top" style={{ color: C.nearBlack, borderColor: "#f0f0f0" }}>{renderInline(c)}</td>
+              ))}</tr>
+            ))}</tbody>
+          </table>
+        </div>
+      );
+      idx = j - 1;
+      continue;
+    }
+    // Stray separator (malformed/partial table) → drop it, never print "|---|".
+    if (isSepRow(line)) continue;
+    // Stray pipe row with no separator → render cleaned (no raw pipes).
+    if (isPipeRow(line)) {
+      flushList(idx);
+      out.push(<p key={idx} className="text-[13px] leading-relaxed mb-2" style={{ color: C.nearBlack }}>{renderInline(splitRow(line).filter(Boolean).join("  ·  "))}</p>);
+      continue;
+    }
+
     if (/^###\s+/.test(line)) {
       flushList(idx);
       out.push(<h4 key={idx} className="text-[14px] font-bold mt-4 mb-2" style={{ color: C.nearBlack }}>{renderInline(line.replace(/^###\s+/, ""))}</h4>);
@@ -461,7 +506,7 @@ function renderNarrative(md) {
       flushList(idx);
       out.push(<p key={idx} className="text-[13px] leading-relaxed mb-2" style={{ color: C.nearBlack }}>{renderInline(line)}</p>);
     }
-  });
+  }
   flushList("end");
   return out;
 }
