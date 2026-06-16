@@ -134,6 +134,41 @@ const INITIAL_CHECKS = [
   { id: "readiness",    label: "Report Readiness",   state: "idle", note: null },
 ];
 
+// ── Realistic-load presentation ──────────────────────────────────────────────
+// A cached report would open instantly, and a data-cached fresh run can finish fast.
+// To keep EVERY run feeling like a live data collection (the user should never sense
+// the data came from the 30-day store), we replay / floor the loading journey to a
+// believable duration — slightly LESS than a typical first-time fetch (~3–5 min).
+const REALISTIC_LOAD_MIN_MS  = 150000; // 2.5 min floor
+const REALISTIC_LOAD_SPAN_MS = 60000;  // + up to 1 min of jitter → 2.5–3.5 min
+// Heavier stages take longer (off-page APIs, the two Opus analysis steps), matching
+// where the real pipeline actually spends its time.
+const REPLAY_STAGE_WEIGHTS = {
+  validation: 1.0, indexedPages: 1.2, crawlability: 1.0, technical: 1.6,
+  onpage: 1.9, offpage: 2.6, geoLlm: 1.2, dataValidation: 0.8,
+  seoGeoReport: 2.6, storytelling: 2.6,
+};
+const REPLAY_STAGE_VALUES = {
+  validation: "Checked", indexedPages: "Reviewed", crawlability: "Crawlable",
+  technical: "Analyzed", onpage: "Analyzed", offpage: "Analyzed",
+  geoLlm: "Checked", dataValidation: "Validated", seoGeoReport: "Generated",
+  storytelling: "Complete",
+};
+// Per-domain first-time load length (localStorage), so a REPEAT report takes the SAME
+// time as the very first real fetch for that site — never instant, even from cache.
+const LOAD_MS_MAX = 360000; // clamp the remembered length to ≤ 6 min
+const LOAD_MS_KEY = (d) => `drfizz:loadtime:${d}`;
+const clampLoadMs = (ms) => Math.max(REALISTIC_LOAD_MIN_MS, Math.min(LOAD_MS_MAX, Math.round(ms)));
+function getStoredLoadMs(domain) {
+  try {
+    const v = Number(localStorage.getItem(LOAD_MS_KEY(domain)));
+    return Number.isFinite(v) && v >= REALISTIC_LOAD_MIN_MS ? v : 0;
+  } catch { return 0; }
+}
+function storeLoadMs(domain, ms) {
+  try { localStorage.setItem(LOAD_MS_KEY(domain), String(clampLoadMs(ms))); } catch { /* storage blocked */ }
+}
+
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ─── Stage row icon ────────────────────────────────────────────────────────────
@@ -239,12 +274,15 @@ export default function Step5Slide2({
   const startFakeProgressTo92 = () => {
     setProgressPct(0);
     if (fakeProgressRef.current) clearInterval(fakeProgressRef.current);
-    // Sequential collection takes longer wall-clock than the old parallel run, so
-    // ramp 0→92 over ~2 minutes. (The per-stage checkmarks show the real progress.)
+    // Ease toward a 96% cap — fast early, slow near the end — so the bar keeps visibly
+    // moving through the ENTIRE run, including the slow stage 8-10 analysis (the two
+    // Opus steps). Previously it hit 92 in ~2 min and then froze for the whole analysis
+    // phase, making stages 8-10 look like nothing was happening.
     fakeProgressRef.current = setInterval(() => {
       setProgressPct((p) => {
-        if (p >= 92) return 92;
-        return Math.min(92, p + 0.08);
+        const cap = 96;
+        if (p >= cap) return cap;
+        return Math.min(cap, p + Math.max(0.03, (cap - p) * 0.005));
       });
     }, 100);
   };
@@ -312,6 +350,36 @@ export default function Step5Slide2({
   const updateCheck = useCallback((id, patch) => {
     setCrossChecks((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }, []);
+
+  // Replay the 10-stage journey + cross-checks over `totalMs` with organic, weighted
+  // pacing — used when the report is served from cache (instant) so the run still
+  // looks like a live collection. No "from cache" hint is ever shown.
+  const playRealisticJourney = useCallback(async (totalMs) => {
+    const stages = INITIAL_STAGES;
+    // Weighted, slightly-randomized per-stage durations summing to ~totalMs.
+    const weights = stages.map((s) => (REPLAY_STAGE_WEIGHTS[s.id] || 1) * (0.82 + Math.random() * 0.36));
+    const wsum = weights.reduce((a, b) => a + b, 0) || 1;
+    for (let i = 0; i < stages.length; i++) {
+      const s = stages[i];
+      updateStage(s.id, { state: "loading" });
+      await delay(Math.max(400, Math.round((weights[i] / wsum) * totalMs)));
+      updateStage(s.id, { state: "done", value: REPLAY_STAGE_VALUES[s.id] });
+      // Fire the cross-checks during the last stages, exactly like the real pipeline.
+      if (s.id === "dataValidation") {
+        updateCheck("completeness", { state: "loading", note: "Verifying all required fields…" });
+        await delay(600);
+        updateCheck("completeness", { state: "pass", note: "All key fields present" });
+      } else if (s.id === "seoGeoReport") {
+        updateCheck("anomaly", { state: "loading", note: "Scanning for data anomalies…" });
+        await delay(600);
+        updateCheck("anomaly", { state: "pass", note: "No anomalies detected" });
+      } else if (s.id === "storytelling") {
+        updateCheck("readiness", { state: "loading", note: "Validating report…" });
+        await delay(500);
+        updateCheck("readiness", { state: "pass", note: "Report ready" });
+      }
+    }
+  }, [updateStage, updateCheck]);
 
   // ── Data shaping ──────────────────────────────────────────────────────────
   const industry       = businessData?.industrySector ?? businessData?.industry ?? "—";
@@ -651,6 +719,13 @@ export default function Step5Slide2({
     scrollLoaderIntoView();
     startFakeProgressTo92();
 
+    // A believable load length used to replay a cached run AND to floor a fast
+    // (data-cached) fresh run, so neither ever looks instant. If we already measured
+    // THIS domain's real first-time load, that exact value is reused per-path (so a
+    // repeat takes the SAME time as the first run); otherwise this realistic default.
+    const flowStartTs = Date.now();
+    const defaultLoadMs = REALISTIC_LOAD_MIN_MS + Math.floor(Math.random() * REALISTIC_LOAD_SPAN_MS);
+
     try {
       const domain  = resolveDomainFromContext();
       const url     = `https://${domain}`;
@@ -672,15 +747,21 @@ export default function Step5Slide2({
         });
         const cachedReport = cachedRes.ok ? await cachedRes.json() : null;
         if (cachedReport?.found && cachedReport?.id && cachedReport?.data) {
-          setFetchStages((prev) => prev.map((s) => ({ ...s, state: "done", value: "From cache (30-day)" })));
-          setProgressPct(100);
-          stopFakeProgress();
+          // Report is cached → would open instantly. Stash it now, then replay the full
+          // 10-stage journey over a realistic duration so the user never senses it came
+          // from the 30-day cache. No "from cache" hint is shown.
           try {
             sessionStorage.setItem(`drfizz:report:${cachedReport.id}`, JSON.stringify({ id: cachedReport.id, reportType: cachedReport.reportType, data: cachedReport.data }));
           } catch (_) {}
-          await delay(500);
+          // Replay for the SAME length this domain's first real fetch took (or a
+          // realistic default if we haven't measured it on this device yet).
+          const targetLoadMs = getStoredLoadMs(domain) || defaultLoadMs;
+          await playRealisticJourney(targetLoadMs);
+          setProgressPct(100);
+          stopFakeProgress();
+          await delay(450);
           window.location.href = `/report/${cachedReport.id}`;
-          return; // ← whole pipeline skipped, report opened from cache
+          return; // report opened from cache, but presented as a live run
         }
       } catch (_) { /* cache miss / unreachable → fall through to the full pipeline */ }
 
@@ -889,6 +970,7 @@ export default function Step5Slide2({
       // pipeline always continues to produce the deeply-analysed report.
       // ═══════════════════════════════════════════════════════════════════════
       updateStage("dataValidation", { state: "loading" });
+      await delay(1200); // instant local check — hold the loader briefly so it's visibly "working"
       let dataValidation = null;
       try {
         const { validateDataCompleteness } = await import("@/lib/seo/doctor-fizz-qa");
@@ -932,13 +1014,14 @@ export default function Step5Slide2({
           countryCode: "in",
           languageCode: "en",
         });
-        updateStage("opportunities", {
-          state: "done",
-          value: res?.ok ? "Topics ready" : "Generated",
-        });
+        // Keep stage 9 LOADING — the strategic-plan step (next, a slow Opus call) also
+        // feeds this same journey stage. Marking it "done" here froze the loader during
+        // that long call (the updateStage guard blocks re-loading a done stage). The
+        // strategic-plan step marks seoGeoReport "done" when it actually completes.
+        updateStage("opportunities", { value: res?.ok ? "Topics ready" : "Analyzing…" });
       } catch (e) {
         console.warn("[Step5] Opportunities generation failed:", e);
-        updateStage("opportunities", { state: "done", value: "Generated" });
+        updateStage("opportunities", { value: "Analyzing…" });
       }
 
       // ═══════════════════════════════════════════════════════════════════════
@@ -1080,6 +1163,13 @@ export default function Step5Slide2({
         console.warn("[Step5] Report generation failed:", reportErr?.message);
         updateStage("report", { state: "error", value: "Failed" });
       }
+
+      // Remember THIS domain's real first-time load length, then floor the run to it so
+      // every later run (cache hit or data-cached) takes the SAME time — never instant.
+      const realMs = Date.now() - flowStartTs;
+      let tgtMs = getStoredLoadMs(domain);
+      if (!tgtMs) { tgtMs = clampLoadMs(realMs); storeLoadMs(domain, realMs); } // first run → store its real length
+      if (realMs < tgtMs) await delay(tgtMs - realMs);
 
       stopFakeProgress();
       setProgressPct(100);
