@@ -99,8 +99,9 @@ export async function claudeChat({
   // Separate system from user/assistant messages
   const { systemPrompt, userMessages } = separateSystemMessages(messages);
 
-  // Note: claude-opus-4-7 does NOT support temperature — only include for sonnet/haiku
-  const isOpus47 = model.includes("opus-4-7") || model === "claude-opus-4-7";
+  // Opus models (4.7, 4.8, …) do NOT support temperature (400 error) and use
+  // adaptive thinking instead. Only Sonnet/Haiku take temperature.
+  const isOpus = model.includes("opus");
 
   const requestParams = {
     model,
@@ -118,10 +119,10 @@ export async function claudeChat({
           ],
         }
       : {}),
-    // Only include temperature for non-Opus-4-7 models
-    ...(!isOpus47 ? { temperature } : {}),
-    // Adaptive thinking for Opus 4.7
-    ...(isOpus47 ? { thinking: { type: "adaptive" } } : {}),
+    // Only include temperature for non-Opus models (Opus 4.7/4.8 reject it)
+    ...(!isOpus ? { temperature } : {}),
+    // Adaptive thinking for any Opus model
+    ...(isOpus ? { thinking: { type: "adaptive" } } : {}),
   };
 
   try {

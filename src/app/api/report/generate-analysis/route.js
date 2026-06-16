@@ -76,9 +76,9 @@ async function generateWithAI(systemPrompt, userPrompt, fallback = {}, meta = {}
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      model: "claude-sonnet-4-6", // was defaulting to Opus 4.7 — Sonnet is the intended pipeline model (cost)
+      model: "claude-opus-4-8", // Opus 4.8 = deepest, most-accurate analysis (user: max accuracy). Cached per site, so paid once per 30 days.
       max_tokens: 7000,
-      timeoutMs: 90000,
+      timeoutMs: 280000,
       meta,
     });
 

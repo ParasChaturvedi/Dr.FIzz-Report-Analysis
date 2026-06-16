@@ -56,7 +56,7 @@ const hostOf = (d) =>
 // Main: returns DataForSEO-shaped backlink/DA data, or null on any failure.
 // opts.withList=false skips the per-domain list call (cheaper — for competitors
 // where only DA + counts are shown, not the full referring-domains table).
-export async function fetchMozMetrics(domain, { listLimit = 50, withList = true } = {}) {
+export async function fetchMozMetrics(domain, { listLimit = 25, withList = true } = {}) {
   const host = hostOf(domain);
   if (!host || !mozConfigured()) return null;
 
@@ -93,7 +93,7 @@ export async function fetchMozMetrics(domain, { listLimit = 50, withList = true 
         const lr = await mozPost("linking_root_domains", {
           target: host,
           target_scope: "root_domain",
-          limit: Math.min(Number(listLimit) || 50, 50),
+          limit: Math.min(Number(listLimit) || 25, 50),
         });
         const rows = Array.isArray(lr?.results) ? lr.results : [];
         backlinkDomains = rows.map((r) => {

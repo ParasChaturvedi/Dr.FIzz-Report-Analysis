@@ -367,8 +367,8 @@ export async function POST(request) {
         { role: "user",   content: userPrompt },
       ],
       max_tokens: 8000,
-      timeoutMs:  110000,
-      model: "claude-sonnet-4-6",
+      timeoutMs:  280000,
+      model: "claude-opus-4-8", // Opus 4.8 = deepest, most-accurate analysis (user: max accuracy). Cached per site, so paid once per 30 days.
     });
 
     // Parse numbered sections for structured rendering
