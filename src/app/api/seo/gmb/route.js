@@ -10,7 +10,7 @@ import { getOrFetch } from "@/lib/cache/mongo";
 import { logUsage } from "@/lib/cache/usage";
 
 export const runtime    = "nodejs";
-export const maxDuration = 90;
+export const maxDuration = 300; // allows the inline live GEO scan to run on a cache miss
 
 const DIRECTORIES = [
   { name: "JustDial",      site: "justdial.com",      weight: 3 },
@@ -455,9 +455,11 @@ export async function checkGmb(domain, businessName = "", location = "India", op
     // competitor comparison) → saves DataForSEO credits. Client gets full data.
     opts.skipDirectories
       ? Promise.resolve(DIRECTORIES.map((d) => ({ ...d, listed: null, listingUrl: null })))
-      // Prefer the multi-LLM Marketplace Intelligence (cross-LLM-validated, cached);
-      // falls back to DataForSEO SERP detection when the flag is off / no cache.
-      : loadMarketplaceDirectories({ domain: host, businessName: matchedKeyword, location })
+      // Prefer the multi-LLM Marketplace Intelligence (cross-LLM-validated, cached in
+      // MongoDB); falls back to DataForSEO SERP detection when the flag is off / scan fails.
+      // allowLiveScan: this is the CLIENT call → on a cache miss it runs the live scan
+      // inline + stores to MongoDB (30-day). Competitors use skipDirectories → scan runs once.
+      : loadMarketplaceDirectories({ domain: host, businessName: matchedKeyword, location, allowLiveScan: true })
           .then((llm) => llm || checkDirectoryListings(host, auth, matchedKeyword)),
   ]);
 

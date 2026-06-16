@@ -18,7 +18,17 @@
 // Enable with:  GEO_MARKETPLACE_SOURCE=llm   (anything else = DataForSEO, unchanged)
 // Optional:     GEO_MARKETPLACE_TTL_DAYS=30  (max cache age before ignoring it)
 //               GEO_MARKETPLACE_CACHE_DIR=.geo-cache
+//
+// SERVERLESS NOTE (Vercel): the local `.geo-cache` filesystem does NOT persist, so
+// on production we read/write the intelligence from MongoDB (`data_type:geo-marketplace`,
+// the same 30-day store as every other cached fetch). The local `.geo-cache` is kept
+// as a secondary read source for local dev / a VPS producer.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import { getCached, putCached } from "../../cache/mongo.js";
+
+// MongoDB data_type for the cached marketplace intelligence.
+const GEO_DATA_TYPE = "geo-marketplace";
 
 const LOCKED_FIELDS = ["name", "site", "weight", "listed", "listingUrl"];
 
@@ -61,23 +71,71 @@ function _toLockedDirectories(dirs) {
   });
 }
 
-// MAIN: returns the client's directories[] (drop-in) or null (→ use DataForSEO).
-export async function loadMarketplaceDirectories({ domain, businessName = "", location = "" } = {}) {
-  if (String(process.env.GEO_MARKETPLACE_SOURCE || "").toLowerCase() !== "llm") return null;
-  if (!domain) return null;
-  const ttlDays = Number(process.env.GEO_MARKETPLACE_TTL_DAYS || 30);
+// Read cached intelligence: MongoDB first (persists on serverless), then the local
+// .geo-cache file (local dev / VPS producer). Returns a usable intel object or null.
+async function _readIntel(domain, ttlDays) {
+  // 1) MongoDB — the production store.
+  try {
+    const m = await getCached({ domain, dataType: GEO_DATA_TYPE, ttlDays });
+    if (m && _isUsable(m, ttlDays)) return m;
+  } catch (err) { console.warn("[marketplace-source] mongo read failed:", err?.message); }
+  // 2) Local .geo-cache (won't exist on Vercel, but used in dev / on a VPS).
   try {
     const fs = await import("fs");
     const path = await import("path");
     const file = path.join(cacheDir(), `marketplace-${domainSlug(domain)}.json`);
-    if (!fs.existsSync(file)) return null;
-    const intel = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (!_isUsable(intel, ttlDays)) return null;
-    return _toLockedDirectories(intel.client.directories);
+    if (fs.existsSync(file)) {
+      const intel = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (_isUsable(intel, ttlDays)) return intel;
+    }
+  } catch (err) { console.warn("[marketplace-source] file read failed:", err?.message); }
+  return null;
+}
+
+// Run the live multi-LLM scan INLINE, store the result to MongoDB (+ best-effort
+// local file), and return the intelligence. null on any failure → DataForSEO fallback.
+// Engine default = the ones that work WITHOUT captured login sessions (serverless has
+// no .geo-sessions): Google AI Overviews + Perplexity (browser, no login) + Claude (API).
+// Add chatgpt,gemini via GEO_INLINE_ENGINES once their sessions are available server-side.
+async function _runAndStoreScan({ domain, businessName, competitors = [], proxyCountry = "in" }) {
+  try {
+    const { runMarketplaceScan, makeUrlVerifier } = await import("./collector.js");
+    const { buildMarketplaceIntelligence } = await import("./marketplace-intelligence.js");
+    const engineKeys = String(process.env.GEO_INLINE_ENGINES || "aioverviews,perplexity,claude")
+      .split(",").map((s) => s.trim()).filter(Boolean);
+    const brand = businessName || domainSlug(domain).split(".")[0];
+    console.log(`[marketplace-source] no fresh cache for ${domain} → running inline scan (engines: ${engineKeys.join(",")})`);
+    const scan = await runMarketplaceScan({
+      mode: "live", transport: "browserless",
+      client: brand, clientDomain: domain, competitors, proxyCountry, engineKeys, sessions: {},
+    });
+    if (!scan?.responses?.length) return null;
+    const verifyUrl = makeUrlVerifier({ timeoutMs: 8000 });
+    const intel = await buildMarketplaceIntelligence({
+      client: brand, clientSite: domain, competitors,
+      responses: scan.responses, verifyUrl, generatedAt: new Date().toISOString(),
+    });
+    if (!_isUsable(intel, 0)) return null;
+    await putCached({ domain, dataType: GEO_DATA_TYPE, payload: intel, source: "llm-scan", fetchedBy: brand });
+    try { await saveMarketplaceIntelligence(domain, intel); } catch { /* RO FS on serverless — ignore */ }
+    return intel;
   } catch (err) {
-    console.warn("[marketplace-source] cache read failed:", err?.message);
-    return null; // any error → graceful fallback to DataForSEO
+    console.warn("[marketplace-source] inline scan failed (fallback to DataForSEO):", err?.message);
+    return null;
   }
+}
+
+// MAIN: returns the client's directories[] (drop-in) or null (→ use DataForSEO).
+// allowLiveScan=true (the client's gmb call) runs the scan inline on a cache miss;
+// other callers read-only so the scan never runs twice per report.
+export async function loadMarketplaceDirectories({ domain, businessName = "", location = "", competitors = [], allowLiveScan = false, proxyCountry = "in" } = {}) {
+  if (String(process.env.GEO_MARKETPLACE_SOURCE || "").toLowerCase() !== "llm") return null;
+  if (!domain) return null;
+  const ttlDays = Number(process.env.GEO_MARKETPLACE_TTL_DAYS || 30);
+  let intel = await _readIntel(domain, ttlDays);
+  if (!intel && allowLiveScan) intel = await _runAndStoreScan({ domain, businessName, competitors, proxyCountry });
+  if (!intel || !Array.isArray(intel?.client?.directories)) return null;
+  return _toLockedDirectories(intel.client.directories);
 }
 
 // LLM-scan BACKLINKS for the client (reference sites the LLMs cited) — the owner's
@@ -87,20 +145,12 @@ export async function loadLlmBacklinks({ domain } = {}) {
   if (String(process.env.GEO_MARKETPLACE_SOURCE || "").toLowerCase() !== "llm") return null;
   if (!domain) return null;
   const ttlDays = Number(process.env.GEO_MARKETPLACE_TTL_DAYS || 30);
-  try {
-    const fs = await import("fs");
-    const path = await import("path");
-    const file = path.join(cacheDir(), `marketplace-${domainSlug(domain)}.json`);
-    if (!fs.existsSync(file)) return null;
-    const intel = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (!_isUsable(intel, ttlDays)) return null;
-    const bl = intel?.client?.backlinks;
-    if (!bl || typeof bl.count !== "number") return null;
-    return { count: bl.count, sites: Array.isArray(bl.sites) ? bl.sites : [] };
-  } catch (err) {
-    console.warn("[marketplace-source] LLM backlinks read failed:", err?.message);
-    return null;
-  }
+  // Read-only (Mongo → local). The scan is triggered by loadMarketplaceDirectories,
+  // so this just consumes whatever it already stored — never runs a second scan.
+  const intel = await _readIntel(domain, ttlDays);
+  const bl = intel?.client?.backlinks;
+  if (!bl || typeof bl.count !== "number") return null;
+  return { count: bl.count, sites: Array.isArray(bl.sites) ? bl.sites : [] };
 }
 
 // Writer used by the offline producer (scripts/marketplace-scan.mjs).
