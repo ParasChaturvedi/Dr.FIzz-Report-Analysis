@@ -466,43 +466,29 @@ export default function InfoPanel({
   }, [top3SelectedKeywords, top3ApiKeywords]);
 
   useEffect(() => {
-    return;
     if (!rawWebsite) return;
+    // Only fetch when the panel is actually visible — avoids wasted API calls.
+    if (!isOpen && !isPinned) return;
 
     const safeUrl = rawWebsite.includes("://") ? rawWebsite : `https://${rawWebsite}`;
     const controller = new AbortController();
 
     (async () => {
       try {
-        const prefetched =
-          typeof window !== "undefined" ? window.__drfizzSeoPrefetch : null;
-
-        if (prefetched?.infoPanel) {
-          setApiSeo(prefetched);
-          setApiInfoPanel(prefetched.infoPanel);
-          return;
-        }
-
-        const res = await fetch("/api/seo", {
+        // Real DA (Moz) + Organic Traffic/Keywords (DataForSEO), 30-day-cached in
+        // MongoDB: 1st time fetches live, then every request within 30 days is served
+        // from the cache (same logic as the rest of the app).
+        const res = await fetch("/api/seo/info-stats", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: safeUrl,
-            providers: ["psi", "authority", "dataforseo"],
-            // ✅ FAST MODE: you’ll implement this in route.js + dataforseo.js
-            keywordsOnly: true,
-          }),
+          body: JSON.stringify({ url: safeUrl }),
           signal: controller.signal,
         });
-
-        if (!res.ok) throw new Error(`API failed: ${res.status}`);
-
+        if (!res.ok) throw new Error(`info-stats ${res.status}`);
         const json = await res.json();
-        setApiSeo(json);
         setApiInfoPanel(json?.infoPanel ?? null);
       } catch (e) {
         if (e?.name === "AbortError") return;
-        setApiSeo(null);
         setApiInfoPanel(null);
       }
     })();
@@ -584,7 +570,15 @@ export default function InfoPanel({
     };
   };
 
-  const stats = false
+  // Use the REAL cached stats (Moz DA + DataForSEO traffic/keywords) when loaded.
+  // While loading or if unavailable, show "--" placeholders — never fabricated numbers.
+  const _apiHasStats =
+    apiInfoPanel &&
+    (Number.isFinite(apiInfoPanel.domainAuthority) ||
+      Number.isFinite(apiInfoPanel.organicTraffic) ||
+      Number.isFinite(apiInfoPanel.organicKeyword));
+
+  const stats = _apiHasStats
     ? {
         domainAuthority: Number.isFinite(apiInfoPanel.domainAuthority)
           ? Math.round(apiInfoPanel.domainAuthority)
@@ -594,22 +588,16 @@ export default function InfoPanel({
           : null,
         organicKeyword: Number.isFinite(apiInfoPanel.organicKeyword)
           ? Math.round(apiInfoPanel.organicKeyword)
-          : 0,
+          : null,
         growth: apiInfoPanel.growth || null,
-        badge: apiInfoPanel.badge || null,
-      }
-    : selected
-    ? {
-        domainAuthority: Math.round(selected.domainRating ?? 0),
-        organicTraffic: Math.round(selected.organicTrafficMonthly ?? 0),
-        organicKeyword: Math.round(selected.organicKeywordsTotal ?? 0),
-        growth: null,
-        badge: { label: "Good", tone: "success" },
+        badge: apiInfoPanel.badge || { label: "Good", tone: "success" },
       }
     : {
-        ...generateRandomStats(rawWebsite),
+        domainAuthority: null,
+        organicTraffic: null,
+        organicKeyword: null,
         growth: null,
-        badge: { label: "Good", tone: "success" },
+        badge: { label: "—", tone: "success" },
       };
 
   const displayWebsite = rawWebsite || "yourcompany.com";

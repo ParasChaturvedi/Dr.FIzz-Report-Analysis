@@ -266,25 +266,30 @@ export default function Step5Slide2({
   // Live checklist state
   const [fetchStages, setFetchStages] = useState(INITIAL_STAGES);
   const [crossChecks, setCrossChecks]  = useState(INITIAL_CHECKS);
+  // Mirror of fetchStages so the progress interval always reads the latest stage states.
+  const fetchStagesRef = useRef(INITIAL_STAGES);
+  useEffect(() => { fetchStagesRef.current = fetchStages; }, [fetchStages]);
 
-  // Fake progress (kept for internal use — not shown)
+  // Progress bar — driven by REAL stage completion (see startFakeProgressTo92 below).
   const [progressPct, setProgressPct] = useState(0);
   const fakeProgressRef = useRef(null);
 
   const startFakeProgressTo92 = () => {
     setProgressPct(0);
     if (fakeProgressRef.current) clearInterval(fakeProgressRef.current);
-    // Ease toward a 96% cap — fast early, slow near the end — so the bar keeps visibly
-    // moving through the ENTIRE run, including the slow stage 8-10 analysis (the two
-    // Opus steps). Previously it hit 92 in ~2 min and then froze for the whole analysis
-    // phase, making stages 8-10 look like nothing was happening.
+    // Drive the bar from REAL stage completion (read via ref so the interval always
+    // sees the latest stages). The bar = completed-stage fraction; within an in-flight
+    // stage it eases toward — but never reaches — the next milestone. So it mirrors
+    // actual data-collection progress instead of a timer. Works for both the live run
+    // and the cached replay (which completes the stages over the stored duration).
     fakeProgressRef.current = setInterval(() => {
-      setProgressPct((p) => {
-        const cap = 96;
-        if (p >= cap) return cap;
-        return Math.min(cap, p + Math.max(0.03, (cap - p) * 0.005));
-      });
-    }, 100);
+      const stages = fetchStagesRef.current || [];
+      const total = stages.length || 1;
+      const done = stages.filter((s) => s.state === "done" || s.state === "pass" || s.state === "error").length;
+      const anyLoading = stages.some((s) => s.state === "loading");
+      const ceiling = Math.min(99, ((done + (anyLoading ? 0.85 : 0)) / total) * 100);
+      setProgressPct((p) => (p >= ceiling ? p : Math.min(ceiling, p + Math.max(0.06, (ceiling - p) * 0.04))));
+    }, 120);
   };
 
   const stopFakeProgress = () => {
