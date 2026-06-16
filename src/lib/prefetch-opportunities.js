@@ -77,6 +77,9 @@ function writeOppsCache(domain, payload) {
 export function getPlagiarismPages(domain) {
   try {
     if (typeof window === "undefined") return [];
+    // The client's own domain isn't a plagiarism "source" — a page can't plagiarise
+    // itself. Strip it from the matched-sources list so it never shows e.g. "itzfizz.com".
+    const selfHost = String(domain || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase();
     const raw = sessionStorage.getItem(oppsCacheKey(domain));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
@@ -88,7 +91,9 @@ export function getPlagiarismPages(domain) {
         url: s.url || "",
         title: s.title || s.url || "Untitled",
         plagiarism: s.plagiarism,
-        sources: Array.isArray(s.plagiarismSources) ? s.plagiarismSources.slice(0, 5) : [],
+        sources: Array.isArray(s.plagiarismSources)
+          ? s.plagiarismSources.filter((src) => selfHost && !String(src).toLowerCase().includes(selfHost)).slice(0, 5)
+          : [],
       }))
       .sort((a, b) => (b.plagiarism || 0) - (a.plagiarism || 0));
   } catch {

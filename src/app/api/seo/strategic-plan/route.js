@@ -14,8 +14,13 @@
 
 import { NextResponse }     from "next/server";
 import { claudeChatStream } from "@/lib/claude/client";
+import { fetchMozMetrics }  from "@/lib/seo/moz/client";
 import { runBusinessLogic } from "@/lib/seo/doctor-fizz-logic";
 import { runQaGate }        from "@/lib/seo/doctor-fizz-qa";
+
+// PSI scores arrive 0-1 OR 0-100 depending on source — normalise to 0-100 so the
+// narrative never renders a 0-1 value as "0/100" (it must match the report table).
+const normScore = (v) => (v == null ? null : Math.round(Number(v) <= 1 ? Number(v) * 100 : Number(v)));
 
 export const runtime    = "nodejs";
 export const maxDuration = 300; // was 120 → the Claude call exceeded it (504); match generate-analysis
@@ -328,6 +333,12 @@ export async function POST(request) {
         ? competitorAudit.competitors.filter(c => c?.gmb && !c.gmb.error).map(c => ({ domain: c.domain, name: c.name || c.domain, gmbCheck: c.gmb }))
         : [];
 
+      // Domain Rating + referring from Moz so the narrative matches the report table
+      // (which also uses Moz). Falls back to the DataForSEO overview if Moz is down.
+      const mozM = await fetchMozMetrics(domain, { withList: false }).catch(() => null);
+      const mozDr  = Number.isFinite(mozM?.domainAuthority) ? mozM.domainAuthority : null;
+      const mozRef = Number.isFinite(mozM?.backlinksSummary?.referring_domains) ? mozM.backlinksSummary.referring_domains : null;
+
       payload = runBusinessLogic({
         domain,
         clientName: businessData?.businessName || businessData?.name || domain,
@@ -335,12 +346,12 @@ export async function POST(request) {
         reportType: "website",
         location:   businessData?.location || "India",
         baselineRaw: {
-          domainRating:     seoData?.domainRankOverview?.rank ?? null,
+          domainRating:     mozDr  ?? seoData?.domainRankOverview?.rank ?? null,
           organicTraffic:   seoData?.domainRankOverview?.organicTraffic ?? null,
           organicKeywords:  seoData?.domainRankOverview?.organicKeywords ?? null,
-          referringDomains: seoData?.domainRankOverview?.referringDomains ?? null,
-          performanceMobile:  seoData?.technicalSeo?.performanceScoreMobile ?? null,
-          performanceDesktop: seoData?.technicalSeo?.performanceScoreDesktop ?? null,
+          referringDomains: mozRef ?? seoData?.domainRankOverview?.referringDomains ?? null,
+          performanceMobile:  normScore(seoData?.technicalSeo?.performanceScoreMobile),
+          performanceDesktop: normScore(seoData?.technicalSeo?.performanceScoreDesktop),
           crawlHealthScore:   crawlData?.healthScore ?? null,
           gbpCompletenessScore: gmbData?.completeness?.score ?? null,
           gbpReviewCount:     gmbData?.gmb?.reviewCount ?? null,

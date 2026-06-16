@@ -1330,7 +1330,7 @@ export default function DoctorFizzReport({ data }) {
               </BacklinkSub>
             )}
 
-            <BacklinkSub title="④ Local Authority Links" hint="Punch above their DR weight for local + GBP signals">
+            <BacklinkSub title={`${(bl.competitor_gap || []).length > 0 ? "④" : "③"} Local Authority Links`} hint="Punch above their DR weight for local + GBP signals">
               {(bl.local_authority_links || []).map((l, i) => (
                 <div key={i} className="flex items-center justify-between py-1.5 text-[12px]" style={{ borderBottom: i < bl.local_authority_links.length - 1 ? `1px solid ${C.warmGrey}20` : "none" }}>
                   <span style={{ color: C.nearBlack }}>{l.source}</span>
