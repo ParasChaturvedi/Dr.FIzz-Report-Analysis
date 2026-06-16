@@ -2217,84 +2217,85 @@ export function buildStoryNarrative(input = {}) {
 
   // 01 — THE SITUATION  ·  OnIt "The Baseline" + "The Honest Assessment".
   story.the_situation = [
-    `${name} has ${t} organic traffic and ${k} ranking keywords today.${invisible ? " The site is effectively invisible to Google." : ""}${has(dr) ? ` With a Domain Rating of just ${dr}, the foundation is weak.` : ""} So the technical foundation has to be rebuilt before any keyword strategy can take hold.`,
-    `The good news is that starting from near-zero is actually an advantage. There are no bad habits to undo, no penalty history, and the commercial keyword space is wide open. This whole plan is built by reverse-engineering the competitors who already rank.`,
+    `${name} draws ${t} organic traffic from ${k} ranking keywords today${invisible ? " — effectively invisible in Google" : ""}${has(dr) ? `, on a Domain Rating of ${dr}` : ""}.`,
+    `Near-zero is an advantage: no penalty history, the commercial space wide open — the plan reverse-engineers the competitors already ranking.`,
   ];
 
-  // 02 — THE OPPORTUNITY  ·  OnIt "Content Blueprint" pattern + "Uncontested Territory".
+  // 02 — THE OPPORTUNITY
   story.the_opportunity = [
-    `${has(totalDemand) ? `The opportunity is large: about ${n(totalDemand)} searches a month are up for grabs, and almost none of them reach you today.` : `There is real commercial demand sitting uncaptured today.`} Even ${leaderRef} hasn't cracked the commercial rankings — almost all of their ranking content is informational blog. So the commercial keyword space is wide open, and nobody is dominating it yet.`,
+    `${has(totalDemand) ? `About ${n(totalDemand)} searches a month are up for grabs and barely reach you` : `Real commercial demand sits uncaptured today`} — even ${leaderRef} hasn't cracked the commercial rankings.`,
     (commercialPages || geoPages)
-      ? `To own it, the plan builds ${commercialPages ? `${commercialPages} commercial-intent service pages` : `commercial service pages`}${geoPages ? ` and ${geoPages} city and location pages` : ""}, with one dedicated page for each city-and-service combination.`
+      ? `To own it: build ${commercialPages ? `${commercialPages} commercial service pages` : `commercial service pages`}${geoPages ? ` and ${geoPages} location pages` : ""}.`
       : null,
   ].filter(Boolean);
 
-  // 03 — WHAT IS BLOCKING GROWTH  ·  the connecting logic (every metric links into one story).
+  // 03 — WHAT IS BLOCKING GROWTH
   story.whats_blocking_growth = [
-    `Here is how every number connects. ${hasBroken ? "Broken pages and redirect chains" : "Technical errors"} make the site hard for Google to read, so it stays ${invisible ? "effectively invisible" : "hard to find"} — which is exactly why you rank for ${k} keywords and pull in ${t} organic visitors a month.${hasBlocked ? " Pages blocked in robots.txt hide key content from search entirely." : ""}`,
-    `${lowTrust ? `On top of that, ${has(dr) ? `a Domain Rating of ${dr}` : "a low Domain Rating"}${has(refDomains) ? ` and only ${n(refDomains)} referring domains` : ""} leave you with little authority to compete on tougher terms.` : ""}${speedBad ? ` Your pages also load in ${lcpSec}s, short of the under-2.5-second mark Google rewards.` : ""}${reviewGap ? ` And with ${clientReviews} reviews against the leader's ${n(compReviews)}, you stay out of the local map pack.` : ""}`.trim() || `Each weak signal makes the next one harder to overcome.`,
-    `Each problem feeds the next, so the foundation gets fixed first — everything else compounds on top of it.`,
+    `${hasBroken ? "Broken pages and redirect chains" : "Technical errors"} make the site hard to crawl, so it ${invisible ? "stays invisible" : "barely ranks"} — ${k} keywords, ${t} visitors a month.${hasBlocked ? " Robots.txt hides key content too." : ""}`,
+    (lowTrust || speedBad || reviewGap)
+      ? `Weak signals stack up${lowTrust ? `${has(dr) ? ` — DR ${dr}` : " — low authority"}${has(refDomains) ? `, ${n(refDomains)} referring domains` : ""}` : ""}${speedBad ? `${lowTrust ? "," : " —"} a ${lcpSec}s load (vs <2.5s)` : ""}${reviewGap ? `${(lowTrust || speedBad) ? "," : " —"} ${clientReviews} vs ${n(compReviews)} reviews` : ""} — keeping you off tougher terms.`
+      : `Each weak signal compounds the next.`,
+    `Fix the foundation first; everything else compounds on it.`,
   ].filter(p => p && p.trim());
 
-  // 04 — WHO COMPETES  ·  OnIt "Competitor Landscape" + "Competitive Intelligence" + "The Local Opening".
+  // 04 — WHO COMPETES
   story.who_competes = [
-    `The strategy starts by reverse-engineering the competitors who already rank — learning what works for them${theirEdges ? ` (we found ${theirEdges} strength${theirEdges === 1 ? "" : "s"} to match or beat)` : ""} and the gaps you can exploit${yourEdges ? ` (${yourEdges} clear opening${yourEdges === 1 ? "" : "s"} to own)` : ""}.`,
-    `The big directories and platforms are interceptors, not real rivals. They win on template-driven, high-DR pages and can't be outranked nationally. But those generic templates hold no advantage in the local map pack or on hyper-local long-tail terms — and that is exactly where you can compete and win.`,
+    `The strategy reverse-engineers the competitors already ranking${theirEdges ? ` — ${theirEdges} strength${theirEdges === 1 ? "" : "s"} to match` : ""}${yourEdges ? ` and ${yourEdges} gap${yourEdges === 1 ? "" : "s"} to exploit` : ""}.`,
+    `The big platforms are interceptors, not rivals — unbeatable nationally, but wide open in the local map pack and on hyper-local long-tail terms.`,
   ];
 
-  // 05 — WHERE DEMAND SITS  ·  OnIt "Keyword Strategy" — Tier 1 / 2 / 3.
+  // 05 — WHERE DEMAND SITS
   story.where_demand_sits = [
-    `${acceptedKw ? `Your ${acceptedKw} target keywords split` : `Your keyword demand splits`} into three tiers, and each one needs its own kind of page.`,
-    `Tier 1 is commercial keywords with the highest buying intent — each needs a dedicated landing page for a city-and-service combination. Tier 2 is hyper-local neighborhood terms, where the goal is simply to match or beat the local leader. Tier 3 is informational blog content that builds long-term authority and feeds traffic into the commercial pages.`,
+    `${acceptedKw ? `Your ${acceptedKw} target keywords split` : `Demand splits`} into three tiers, each needing its own kind of page.`,
+    `Tier 1 — commercial buyer-intent (landing pages); Tier 2 — hyper-local terms (match the local leader); Tier 3 — informational blogs that build authority.`,
   ];
 
-  // 06 — WHAT PAGES NEED TO EXIST  ·  OnIt "Content Architecture".
+  // 06 — WHAT PAGES NEED TO EXIST
   story.what_pages_needed = [
     (commercialPages || geoPages || blogPages)
-      ? `This is the site to build: ${commercialPages} commercial service pages, ${geoPages} city and location pages, and ${blogPages} blog post${blogPages === 1 ? "" : "s"}.`
-      : `This is the recommended site structure to build.`,
-    `Every location page must carry the city name in its H1, title and meta, with unique local content — never a copy-paste template. Each one should include local landmarks, an embedded map, real reviews from that area, a click-to-call above the fold, and a booking or quote form.`,
-    `One page, one intent — that is how pages earn their rankings.`,
+      ? `Build ${commercialPages} commercial service pages, ${geoPages} location pages, and ${blogPages} blog post${blogPages === 1 ? "" : "s"}.`
+      : `Here is the recommended site structure.`,
+    `Each location page needs the city in its H1, title and meta with unique local content — never a template. One page, one intent.`,
   ];
 
-  // 07 — WHAT MUST BE FIXED FIRST  ·  OnIt "Technical Foundation — Fix Before You Build".
+  // 07 — WHAT MUST BE FIXED FIRST
   story.what_to_fix_first = [
-    `Fix before you build — search engines read these signals before they read a single word of your content.`,
-    `${hasBroken ? "Start with the critical issues: redirect or remove the broken pages and redirect chains" : (topTech ? `Start with the most critical issue, ${topTech.issue}` : "Start with the most critical issues first")}${hasBlocked ? ", and clear anything blocked in robots.txt" : ""}. Then tighten on-page SEO with proper titles, exact-intent H1s and meta descriptions.`,
-    `Every page should carry 800–1,500 unique words, JSON-LD and FAQ schema, internal links${speedBad ? `, and load in under 2.5 seconds — yours takes ${lcpSec}s today` : `, and load in under 2.5 seconds`}.`,
+    `Fix before you build — search engines read technical signals before a single word of content.`,
+    `${hasBroken ? "First, clear the broken pages and redirect chains" : (topTech ? `First, fix ${topTech.issue}` : "Start with the most critical issues")}${hasBlocked ? " and anything blocked in robots.txt" : ""}; then tighten titles, H1s and meta.`,
+    `Every page: 800–1,500 unique words, JSON-LD + FAQ schema, internal links${speedBad ? `, and a sub-2.5s load (yours is ${lcpSec}s)` : `, and a sub-2.5s load`}.`,
   ];
 
-  // 08 — HOW AUTHORITY WILL BE BUILT  ·  OnIt "Authority — Link Building to Raise Domain Rating".
+  // 08 — HOW AUTHORITY WILL BE BUILT
   story.how_authority_built = [
-    `Authority comes down to raising your Domain Rating${has(dr) ? ` from ${dr} today` : ""}${drTargetLow ? `, and the target is DR 25–35 within twelve months with consistent work` : `, with steady link building over time`}.`,
-    `Begin with quick wins in months 1–2: consistent NAP citations across every directory. In months 2–4, earn content-driven links from local press, realtor and partner sites, and guest posts. Then, on an ongoing basis, run a link-gap against the leader — any site that links to them but not to you becomes a priority outreach target.`,
+    `Authority means raising Domain Rating${has(dr) ? ` from ${dr}` : ""}${drTargetLow ? ` toward 25–35 within twelve months` : ` with steady link building`}.`,
+    `Start with NAP citations (months 1–2), then content-driven links from local press and partners (2–4), then an ongoing link-gap against the leader.`,
   ];
 
-  // 09 — LOCAL VISIBILITY  ·  OnIt "Local Search — GBP: The Fastest Win".
+  // 09 — LOCAL VISIBILITY
   story.local_visibility = [
-    `The map pack drives the majority of local service calls, which makes your Google Business Profile the single highest-impact action you can take.`,
+    `The map pack drives most local calls — your Google Business Profile is the single highest-impact win.`,
     `${reviewGap
-        ? `Reviews are the top ranking signal here — you have ${clientReviews} while the leader has ${n(compReviews)}${reviewLeader?.name ? ` (${reviewLeader.name})` : ""} — but reviews compound quickly once a request system is running, so the target is 100+ within six months.`
-        : `Reviews are the top local ranking signal, and they compound quickly once a request system is running, so the target is 100+ within six months.`}`,
-    `Alongside that, verify the listing, add every service, upload 20+ photos, set your service areas to every target city, post weekly, and ask for a review after every job.`,
+        ? `Reviews are the top signal — ${clientReviews} vs the leader's ${n(compReviews)}${reviewLeader?.name ? ` (${reviewLeader.name})` : ""}; target 100+ in six months.`
+        : `Reviews are the top local signal; target 100+ in six months.`}`,
+    `Verify the listing, add every service, 20+ photos, set service areas, post weekly, and request a review after every job.`,
   ];
 
-  // 10 — GEO / AI VISIBILITY  ·  OnIt "The Next Frontier — GEO and AI Visibility".
+  // 10 — GEO / AI VISIBILITY
   story.geo_ai_visibility = [
-    `The next frontier is GEO — being cited in AI answers like ChatGPT and Google's AI Overviews${aiZero ? `, where you are currently invisible with zero citations` : ""}.`,
-    `To earn those citations, add structured FAQ content with schema — around 5–8 Q&As on each service page — and earn mentions from authoritative local sources. Building real E-E-A-T signals like author bios, a founder story and certifications, and keeping your NAP consistent everywhere, tells both Google and the AI models exactly who you are.`,
+    `The next frontier is GEO — being cited in AI answers like ChatGPT and Google AI Overviews${aiZero ? `, where you have zero citations today` : ""}.`,
+    `Earn citations with FAQ schema (5–8 Q&As per service page), authoritative mentions, and real E-E-A-T signals — author bios, a founder story, consistent NAP.`,
   ];
 
-  // 11 — PRIORITY PLAN  ·  OnIt "Strategic Priority Stack" + "12-Month Roadmap".
+  // 11 — PRIORITY PLAN
   story.priority_plan = [
-    `In plain priority order: first, fix the technical issues and fully optimise your Google Business Profile in week one. Second, build the commercial location and service pages across months one to three. Third, acquire reviews consistently, on an ongoing basis.`,
-    `Blog content, link building and AI citations all compound on top of that foundation — which is exactly why the foundation always comes first.`,
+    `In order: week one — fix the technical issues and optimise the Google Business Profile; months 1–3 — build the commercial and location pages; ongoing — acquire reviews.`,
+    `Blog content, links and AI citations compound on that foundation — which is why it comes first.`,
   ];
 
-  // 12 — WHAT GOOD LOOKS LIKE  ·  OnIt "Measuring Success — Visibility KPIs".
+  // 12 — WHAT GOOD LOOKS LIKE
   story.what_good_looks_like = [
-    `Here is what good looks like, and we track it every month. ${has(uplift6) ? `By six months you are looking at roughly ${n(uplift6)} organic visits a month` : `Organic visits climb steadily`}${has(uplift12) ? `, climbing toward about ${n(uplift12)} by month twelve${enquiries12 ? ` and around ${n(enquiries12)} new enquiries` : ""}` : ""}${has(dr) && drTargetLow ? `, with Domain Rating rising from ${dr} toward the 25–35 range` : ""}${aiZero ? `, and AI citations moving from zero into double digits` : ""}.`,
-    `These are directional targets, not guarantees — the outcomes depend on the recommended changes actually being implemented on the site.`,
+    `Tracked monthly: ${has(uplift6) ? `~${n(uplift6)} organic visits by month six` : `organic visits climb steadily`}${has(uplift12) ? `, ~${n(uplift12)} by month twelve${enquiries12 ? ` and ~${n(enquiries12)} new enquiries` : ""}` : ""}${has(dr) && drTargetLow ? `, DR rising from ${dr} toward 25–35` : ""}${aiZero ? `, AI citations from zero into double digits` : ""}.`,
+    `These are directional targets — outcomes depend on the changes actually being implemented.`,
   ];
 
   return story;
