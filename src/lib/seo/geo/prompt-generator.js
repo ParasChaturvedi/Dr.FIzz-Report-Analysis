@@ -16,14 +16,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { claudeChat } from "../../claude/client.js";
 
-const SYS = `You generate realistic search prompts that real potential customers type into AI assistants (ChatGPT, Gemini, Perplexity, Google AI Overview) when researching who to hire or buy from in a given industry.
+const SYS = `You are a GEO (Generative Engine Optimization) analyst. You generate the definitive set of realistic search prompts that real potential customers type into AI assistants (ChatGPT, Gemini, Perplexity, Google AI Overview) when researching who to hire or buy from in a given industry.
+
+FIRST, DEEPLY ANALYSE the supplied data (industry, location, and the real keywords) to map:
+- the distinct service lines / product categories the business actually offers,
+- the buyer intents present (commercial "hire now", local "in <city>", research, comparison, pricing, budget),
+- the specific cities / regions / markets that matter,
+- the comparison axes and use-cases (by client type: startup, SMB, ecommerce, B2B, D2C, enterprise).
+THEN generate prompts that COMPREHENSIVELY cover that map — every important service line, intent, and market should be represented, with no wasted duplicates.
 
 HARD RULES (must follow exactly):
 1. Output EXACTLY the requested number of prompts.
 2. NEVER mention any specific company, brand, product, agency, or competitor name. Every prompt is a neutral category/intent query. WRONG: "agencies like Acme" / "is Acme good". RIGHT: "best digital marketing agencies in India 2026".
 3. Each prompt must be natural, specific and high-intent — the kind whose answer lists/recommends companies (so we can measure which brands appear).
 4. Cover DIVERSE intents via semantic clustering: top/best lists, local (city & region), affordable/budget, comparison (service-type vs service-type), use-case ("best X for startups/ecommerce/B2B"), pricing, "best X for [need]", and near-me.
-5. Use the provided industry, location and real keywords to make prompts specific and relevant to this market.
+5. Ground every prompt in the supplied industry, location and real keywords — make them specific to THIS market, not generic.
 
 Return ONLY valid JSON: {"prompts":["...", ...]} with no other text.`;
 
@@ -82,7 +89,7 @@ export async function generateGeoPrompts({
     return lp.length > 6 && !banned.some((b) => lp.includes(b));
   };
 
-  const kw = (keywords || []).map(norm).filter(Boolean).slice(0, 40).join(", ");
+  const kw = [...new Set((keywords || []).map(norm).filter(Boolean))].slice(0, 60).join(", ");
   const user = `Industry / category: ${industry || category || "services"}
 Location / market: ${location || "India"}
 Real keywords this business targets: ${kw || "(none provided — infer from the industry)"}

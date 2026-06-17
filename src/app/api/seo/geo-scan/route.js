@@ -15,9 +15,13 @@
 // Fail-safe: any error returns { geo: null } so the report falls back to the GEO
 // readiness placeholders rather than breaking.
 // ─────────────────────────────────────────────────────────────────────────────
-import { getOrFetch } from "@/lib/cache/mongo";
+import { getOrFetch, getCached, putCached } from "@/lib/cache/mongo";
 import { runGeoScan } from "@/lib/seo/geo/collector";
 import { generateGeoPrompts } from "@/lib/seo/geo/prompt-generator";
+
+// Locked prompts live ~indefinitely (1 year) so the SAME prompts are reused on every
+// re-scan → SoV is comparable over time. Force a regenerate with GEO_PROMPTS_FORCE=1.
+const LOCKED_PROMPT_TTL_DAYS = 365;
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -49,18 +53,27 @@ export async function POST(req) {
   const promptCount = Number(process.env.GEO_PROMPT_COUNT || 20);
 
   try {
+    // ── LOCKED PROMPTS (§17) ──────────────────────────────────────────────────
+    // Generate ONCE per domain by deeply analysing all collected data, then LOCK
+    // (store ~1 year) and reuse on every re-scan so Share-of-Voice stays comparable
+    // over time and we never pay to regenerate. Brand/competitor-neutral, hard-filtered.
+    const force = String(process.env.GEO_PROMPTS_FORCE || "") === "1";
+    let prompts = force ? null : (await getCached({ domain, dataType: "geo-prompts", ttlDays: LOCKED_PROMPT_TTL_DAYS }).catch(() => null))?.prompts;
+    if (!Array.isArray(prompts) || !prompts.length) {
+      prompts = await generateGeoPrompts({
+        industry, category: body.category || "", location, keywords,
+        excludeTerms: [brand, domain, ...competitors, ...competitorDomains],
+        count: promptCount,
+      });
+      if (prompts.length) {
+        await putCached({ domain, dataType: "geo-prompts", payload: { prompts, generatedAt: new Date().toISOString(), count: prompts.length }, source: "geo-prompt-gen", fetchedBy: brand });
+      }
+    }
+    const promptObjs = prompts.map((p, i) => ({ id: `gp${i + 1}`, theme: "geo", prompt: p }));
+
     const { data, cached } = await getOrFetch({
       domain, dataType: "geo-visibility", ttlDays: 30, source: "geo-scan", fetchedBy: brand,
       fetchFn: async () => {
-        // §17 — generate brand- & competitor-NEUTRAL prompts (never seed the brand into
-        // the query; we measure organic appearance). excludeTerms hard-filters leaks.
-        const prompts = await generateGeoPrompts({
-          industry, category: body.category || "", location, keywords,
-          excludeTerms: [brand, domain, ...competitors, ...competitorDomains],
-          count: promptCount,
-        });
-        const promptObjs = prompts.map((p, i) => ({ id: `gp${i + 1}`, theme: "geo", prompt: p }));
-
         const scan = await runGeoScan({
           mode: "live", transport: "browserless",
           brand, clientDomain: domain, competitors, competitorDomains,
