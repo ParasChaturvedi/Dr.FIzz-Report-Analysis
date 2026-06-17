@@ -1387,16 +1387,15 @@ export function buildGeoVisibility(input = {}) {
   //    will run. Status stays "Pending" until that browser-automation scan runs. ──
   const ind = String(industry || "your services").toLowerCase();
   const brand = clientName || domain;
-  const tracked_prompts = [
-    `best ${ind} in India`,
-    `top ${ind} companies`,
-    `${ind} services near me`,
-    `affordable ${ind}`,
-    `is ${brand} good`,
-    `${brand} reviews`,
-  ];
-  const ai_platforms = ["ChatGPT", "Google AI Overviews", "Perplexity", "Microsoft Copilot"]
-    .map(platform => ({ platform, visibility: "Pending live scan" }));
+  const _rawViz = input.aiResponses || input.ai_visibility_raw || null;
+  // When a live scan exists, show the ACTUAL prompts run + the engines measured;
+  // otherwise a brand-NEUTRAL placeholder preview (never seed the brand name).
+  const tracked_prompts = (_rawViz?.prompts?.length)
+    ? _rawViz.prompts.slice(0, 20)
+    : [`best ${ind} in India 2026`, `top ${ind} companies in India`, `most affordable ${ind} in India`, `top rated ${ind} near me`, `best ${ind} for small businesses`, `${ind} reviews and ratings`];
+  const ai_platforms = (_rawViz?.responses?.length)
+    ? [...new Set(_rawViz.responses.map(r => r.engine).filter(Boolean))].map(platform => ({ platform, visibility: "Measured (live scan)" }))
+    : ["ChatGPT", "Google AI Overviews", "Gemini", "Perplexity", "Claude"].map(platform => ({ platform, visibility: "Pending live scan" }));
   // ── LIVE AI visibility (proprietary SoV + Citation logic) — computed ONLY when
   //    the multi-engine collector has supplied raw responses (input.aiResponses);
   //    null otherwise, so the deterministic placeholders above still show. ───────
@@ -1516,6 +1515,12 @@ const _geoHost = (url) => {
   try { return new URL(String(url).includes("://") ? url : `https://${url}`).hostname.replace(/^www\./, "").toLowerCase(); }
   catch { return String(url || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase(); }
 };
+// Safe host match — exact host or sub-domain only. Avoids "acme.com" matching
+// "notacme.com" / "acme.com.evil.com" (the substring-includes bug).
+const _hostMatches = (hostOrUrl, domain) => {
+  const h = _geoHost(hostOrUrl), d = _geoHost(domain);
+  return !!d && d.length > 1 && (h === d || h.endsWith("." + d));
+};
 
 /**
  * SHARE OF VOICE LOGIC — % visibility of each brand inside each AI engine, plus a
@@ -1541,6 +1546,15 @@ export function buildShareOfVoice(input = {}) {
     const text = _geoNorm(r.answerText || "");
     return text ? brandSet.filter(b => text.includes(_geoNorm(b))) : [];
   };
+  // Lead brand: explicit, else the brand named earliest in the answer (works live).
+  const leadOf = (r) => {
+    if (r.leadBrand) return _geoNorm(r.leadBrand);
+    const t = _geoNorm(r.answerText || "");
+    if (!t) return "";
+    let best = "", bestIdx = Infinity;
+    for (const b of brandSet) { const i = t.indexOf(_geoNorm(b)); if (i >= 0 && i < bestIdx) { bestIdx = i; best = _geoNorm(b); } }
+    return best;
+  };
 
   const engines = [...new Set(responses.map(r => r.engine).filter(Boolean))];
   const byEngine = {};
@@ -1549,8 +1563,9 @@ export function buildShareOfVoice(input = {}) {
     const counts = {}; brandSet.forEach(b => (counts[b] = 0));
     let total = 0;
     for (const r of rs) {
+      const lead = leadOf(r);
       for (const b of mentionsOf(r)) {
-        const w = _geoNorm(r.leadBrand) === _geoNorm(b) ? 2 : 1;  // lead-weighting (proprietary)
+        const w = lead === _geoNorm(b) ? 2 : 1;  // lead-weighting (proprietary)
         counts[b] += w; total += w;
       }
     }
@@ -1585,8 +1600,8 @@ const _GEO_DOMAIN_TYPES = [
 ];
 function _geoClassifyDomain(domain, clientDomain, competitorDomains) {
   const d = String(domain || "").toLowerCase();
-  if (clientDomain && d.includes(clientDomain)) return "Brand domain (you)";
-  if ((competitorDomains || []).some(c => c && d.includes(c))) return "Brand domain (competitor)";
+  if (_hostMatches(d, clientDomain)) return "Brand domain (you)";
+  if ((competitorDomains || []).some(c => _hostMatches(d, c))) return "Brand domain (competitor)";
   for (const [re, label] of _GEO_DOMAIN_TYPES) if (re.test(d)) return label;
   return "Other";
 }
@@ -1623,8 +1638,8 @@ export function buildCitationAnalysis(input = {}) {
     pages_cited: e.pages.size,
     responses: e.responses,
     type: _geoClassifyDomain(e.domain, clientDomain, competitorDomains),
-    is_client: !!(clientDomain && e.domain.includes(clientDomain)),
-    is_competitor: competitorDomains.some(c => e.domain.includes(c)),
+    is_client: _hostMatches(e.domain, clientDomain),
+    is_competitor: competitorDomains.some(c => _hostMatches(e.domain, c)),
   })).sort((a, b) => b.responses - a.responses || b.pages_cited - a.pages_cited).slice(0, 12);
 
   const client_cited = most_cited_domains.some(d => d.is_client);
@@ -1667,34 +1682,54 @@ export function buildCitationAnalysis(input = {}) {
 // new logic"). Each cited URL becomes a typed link/citation opportunity with a clear
 // next action — turning the GEO citation layer into a backlink-discovery engine.
 // ═══════════════════════════════════════════════════════════════════════════════
-// [regex, citation_class, source_type, opportunity_score, difficulty, editorial_control, action_type]
-const _CITATION_RULES = [
-  [/wikipedia\.org|wikidata\.org/,                                          "wikipedia",          "Encyclopedia",     70, "hard",   "community", "build_similar_page"],
-  [/reddit\.com/,                                                            "reddit",             "Community",        75, "medium", "community", "outreach"],
-  [/quora\.com|stackexchange|stackoverflow/,                                 "forums",             "Q&A / forum",      65, "easy",   "community", "outreach"],
-  [/(facebook|instagram|twitter|x|linkedin|youtube|tiktok|pinterest)\.com/,  "social_media",       "Social",           60, "easy",   "self",      "claim_listing"],
-  [/(justdial|sulekha|indiamart|tradeindia|yellowpages|yelp|foursquare|99acres|urbanpro)\./, "business_directory", "Directory", 85, "easy", "self", "claim_listing"],
-  [/trustpilot|g2\.com|capterra|getapp|clutch\.co|goodfirms|glassdoor|designrush|ambitionbox|mouthshut/, "review_site", "Review platform", 88, "easy", "self", "claim_listing"],
-  [/(amazon|flipkart|etsy|ebay|meesho)\./,                                   "marketplace",        "Marketplace",      50, "medium", "self",      "claim_listing"],
-  [/(forbes|techcrunch|businessinsider|economictimes|livemint|yourstory|inc42|hindustantimes|timesofindia|cnbc|reuters|bloomberg|entrepreneur|mashable)\./, "pr_news", "News / PR", 80, "hard", "editorial", "outreach"],
-  [/\.edu(\.|\/|$)|\.ac\.|coursera|udemy|edx/,                              "educational",        "Education",        55, "hard",   "editorial", "build_similar_page"],
-  [/\.gov(\.|\/|$)|gov\.in|nic\.in/,                                         "government",         "Government",       40, "hard",   "editorial", "monitor"],
-  [/\b(vs|versus|compare|comparison|alternatives?|top-?\d|best-)\b/,         "comparison_page",    "Comparison",       78, "medium", "editorial", "build_similar_page"],
-  [/medium\.com|substack|wordpress|blogspot|\/blog\/|blog\./,               "blog",               "Blog",             70, "medium", "editorial", "outreach"],
+// Authority proxy (0-100) per class — high-trust sources score higher.
+const _CLASS_AUTHORITY = {
+  brand_page: 100, wikipedia: 95, government: 95, pr_news: 85, educational: 85,
+  review_site: 80, social_media: 75, business_directory: 75, listings: 72,
+  marketplace: 70, competitor_page: 70, reddit: 70, partner_page: 62,
+  forums: 60, communities: 60, comparison_page: 58, resource_page: 56, blog: 50, unknown: 40,
+};
+// HOST rules: [hostRegex, class, source_type, opportunity_score, difficulty, editorial_control, action_type]
+const _CITATION_HOST_RULES = [
+  [/(?:^|\.)wikipedia\.org$|(?:^|\.)wikidata\.org$/,                         "wikipedia",          "Encyclopedia",     70, "hard",   "community", "request_correction"],
+  [/(?:^|\.)reddit\.com$/,                                                    "reddit",             "Community",        75, "medium", "community", "outreach"],
+  [/(?:^|\.)(quora|stackexchange|stackoverflow|discord|slack)\.[a-z]/,        "communities",        "Community / forum",62, "medium", "community", "outreach"],
+  [/(?:^|\.)(facebook|instagram|twitter|x|linkedin|youtube|tiktok|pinterest)\.com$/, "social_media", "Social",     60, "easy",   "self",      "claim_listing"],
+  [/(?:^|\.)(justdial|sulekha|indiamart|tradeindia|yellowpages|yelp|foursquare|99acres|urbanpro)\.[a-z]/, "business_directory", "Directory", 85, "easy", "self", "claim_listing"],
+  [/(?:^|\.)(trustpilot|g2|capterra|getapp|clutch|goodfirms|glassdoor|designrush|ambitionbox|mouthshut)\.[a-z]/, "review_site", "Review platform", 88, "easy", "self", "claim_listing"],
+  [/(?:^|\.)(producthunt|crunchbase|angellist|wellfound)\.[a-z]/,             "listings",           "Listing site",     80, "easy",   "self",      "claim_listing"],
+  [/(?:^|\.)(amazon|flipkart|etsy|ebay|meesho)\.[a-z]/,                       "marketplace",        "Marketplace",      50, "medium", "self",      "create_backlink_target"],
+  [/(?:^|\.)(forbes|techcrunch|businessinsider|economictimes|livemint|yourstory|inc42|hindustantimes|timesofindia|cnbc|reuters|bloomberg|entrepreneur|mashable|theverge)\.[a-z]/, "pr_news", "News / PR", 82, "hard", "editorial", "outreach"],
+  [/\.edu(\.|$)|\.ac\.[a-z]|(?:^|\.)(coursera|udemy|edx)\.[a-z]/,             "educational",        "Education",        55, "hard",   "editorial", "build_similar_page"],
+  [/\.gov(\.|$)|(?:^|\.)gov\.[a-z]|(?:^|\.)nic\.in$/,                         "government",         "Government",       45, "hard",   "editorial", "request_correction"],
+  [/(?:^|\.)(medium|substack)\.com$|(?:^|\.)(wordpress|blogspot)\.com$|(?:^|\.)blog\./, "blog",      "Blog",             70, "medium", "editorial", "outreach"],
+];
+// PATH rules (tested on the URL path only — never the host, to avoid host false-positives):
+const _CITATION_PATH_RULES = [
+  [/\/(compare|comparison|alternatives?)(\/|-|$)|[-/]vs[-/]|\/vs(\/|$)/,      "comparison_page",    "Comparison",       78, "medium", "editorial", "build_similar_page"],
+  [/\/partners?(\/|-|$)|\/partner-with/,                                      "partner_page",       "Partner page",     72, "medium", "editorial", "outreach"],
+  [/\/(resources?|guides?|tools?|directory|listings?)(\/|$)/,                 "resource_page",      "Resource page",    66, "medium", "editorial", "create_backlink_target"],
 ];
 
 export function classifyCitation(url, { clientDomain = "", competitorDomains = [] } = {}) {
   const host = _geoHost(url);
-  const full = String(url || "").toLowerCase();
-  const base = { domain: host, relevance_score: 70, authority_score: null };
-  if (clientDomain && host.includes(_geoHost(clientDomain)))
-    return { ...base, citation_class: "brand_page", source_type: "Your site", link_opportunity_score: 0, link_acquisition_difficulty: "owned", editorial_control: "self", relevance_score: 100, action_type: "citation_only" };
-  if ((competitorDomains || []).some(c => c && host.includes(_geoHost(c))))
-    return { ...base, citation_class: "competitor_page", source_type: "Competitor", link_opportunity_score: 25, link_acquisition_difficulty: "hard", editorial_control: "none", relevance_score: 85, action_type: "build_similar_page" };
-  for (const [re, cls, src, score, diff, ctrl, action] of _CITATION_RULES)
-    if (re.test(host) || re.test(full))
-      return { ...base, citation_class: cls, source_type: src, link_opportunity_score: score, link_acquisition_difficulty: diff, editorial_control: ctrl, action_type: action };
-  return { ...base, citation_class: "unknown", source_type: "Other", link_opportunity_score: 45, link_acquisition_difficulty: "medium", editorial_control: "unknown", relevance_score: 50, action_type: "monitor" };
+  let path = "";
+  try { path = new URL(String(url).includes("://") ? url : `https://${url}`).pathname.toLowerCase(); }
+  catch { path = "/" + String(url || "").toLowerCase().replace(/^[^/]*\/?/, ""); }
+  const out = (cls, src, score, diff, ctrl, action, rel = 70) => ({
+    domain: host, citation_class: cls, source_type: src, link_opportunity_score: score,
+    link_acquisition_difficulty: diff, editorial_control: ctrl, relevance_score: rel,
+    authority_score: _CLASS_AUTHORITY[cls] ?? 40, action_type: action,
+  });
+  if (clientDomain && _hostMatches(host, clientDomain))
+    return out("brand_page", "Your site", 0, "owned", "self", "citation_only", 100);
+  if ((competitorDomains || []).some((c) => _hostMatches(host, c)))
+    return out("competitor_page", "Competitor", 25, "hard", "none", "build_similar_page", 85);
+  for (const [re, cls, src, score, diff, ctrl, action] of _CITATION_HOST_RULES)
+    if (re.test(host)) return out(cls, src, score, diff, ctrl, action);
+  for (const [re, cls, src, score, diff, ctrl, action] of _CITATION_PATH_RULES)
+    if (re.test(path)) return out(cls, src, score, diff, ctrl, action);
+  return out("unknown", "Other", 45, "medium", "unknown", "monitor", 50);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1770,38 +1805,50 @@ export function buildGeoMetrics(input = {}) {
     const t = _geoNorm(r.answerText || "");
     return t ? brandSet.filter((b) => t.includes(_geoNorm(b))) : [];
   };
+  // Lead brand = explicit leadBrand if the live adapter set one, else the brand named
+  // EARLIEST in the answer text (so lead-weighting works for real scans too).
+  const leadOf = (r) => {
+    if (r.leadBrand) return _geoNorm(r.leadBrand);
+    const t = _geoNorm(r.answerText || "");
+    if (!t) return "";
+    let best = "", bestIdx = Infinity;
+    for (const b of brandSet) { const i = t.indexOf(_geoNorm(b)); if (i >= 0 && i < bestIdx) { bestIdx = i; best = _geoNorm(b); } }
+    return best;
+  };
   const hostsIn = (r) => (r.citations || []).map(_geoHost).filter(Boolean);
   const citePos = (r, targets) => {
     const hosts = hostsIn(r);
-    for (let i = 0; i < hosts.length; i++) if (targets.some((d) => d && hosts[i].includes(d))) return i + 1;
+    for (let i = 0; i < hosts.length; i++) if (targets.some((d) => _hostMatches(hosts[i], d))) return i + 1;
     return 0;
   };
 
   const compute = (rs) => {
     const n = rs.length || 1;
-    let bMent = 0, bCit = 0, cMent = 0, cCit = 0, mw = 0, cw = 0, compw = 0, citScore = 0, posSum = 0, posCount = 0;
-    const themes = new Set();
+    let bMent = 0, bCit = 0, cMentResp = 0, cCitResp = 0, mw = 0, cw = 0, compw = 0, citScore = 0, posSum = 0, posCount = 0, totalCites = 0;
+    const themes = new Set(), sourceHosts = new Set(), sourceTypes = new Set();
     for (const r of rs) {
-      const ms = mentionsIn(r);
+      const ms = mentionsIn(r), lead = leadOf(r);
       if (ms.some((b) => _geoNorm(b) === clientN)) { bMent++; themes.add(String(r.prompt || "")); }
+      if (ms.some((b) => _geoNorm(b) !== clientN)) cMentResp++;            // §20: prompts WITH a competitor mention (response-count, comparable to brand)
       for (const b of ms) {
-        const w = _geoNorm(r.leadBrand) === _geoNorm(b) ? 2 : 1;
+        const w = lead === _geoNorm(b) ? 2 : 1;                            // lead-weighted SoV (occurrence weights)
         mw += w;
         if (_geoNorm(b) === clientN) cw += w; else compw += w;
       }
-      cMent += ms.filter((b) => _geoNorm(b) !== clientN).length;
       const cp = citePos(r, [clientDomain].filter(Boolean));
       if (cp > 0) { bCit++; posSum += cp; posCount++; citScore += 1 / cp; }
-      cCit += hostsIn(r).filter((h) => competitorDomains.some((d) => d && h.includes(d))).length;
+      if (hostsIn(r).some((h) => competitorDomains.some((d) => _hostMatches(h, d)))) cCitResp++; // prompts citing a competitor
+      for (const h of hostsIn(r)) { sourceHosts.add(h); sourceTypes.add(_geoClassifyDomain(h, clientDomain, competitorDomains)); totalCites++; }
     }
     return {
       prompts: rs.length,
       brand_mentions: bMent, brand_mention_rate: r1((bMent / n) * 100), brand_citations: bCit,
-      competitor_mentions: cMent, competitor_citations: cCit,
+      competitor_mentions: cMentResp, competitor_citations: cCitResp,
       sov: r1(mw > 0 ? (cw / mw) * 100 : 0), competitor_sov: r1(mw > 0 ? (compw / mw) * 100 : 0),
       citation_score: r1((citScore / n) * 100),
       citation_position_score: r1(posCount ? Math.max(0, 100 - (posSum / posCount - 1) * 20) : 0),
       topic_coverage: r1((themes.size / n) * 100), intent_match: r1((bMent / n) * 100), freshness: 50,
+      source_diversity: sourceHosts.size, source_type_diversity: sourceTypes.size, citation_count: totalCites,
     };
   };
   const scoreOf = (m, crossEngine) => Math.round(

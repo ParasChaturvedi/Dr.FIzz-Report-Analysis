@@ -1598,7 +1598,7 @@ export default function DoctorFizzReport({ data }) {
                       ))}
                     </tbody>
                   </table>
-                  <div className="px-3 py-2 text-[10.5px]" style={{ color: C.greyText, background: C.ivory }}>{geo.geo_metrics.note}</div>
+                  <div className="px-3 py-2 text-[10.5px]" style={{ color: C.greyText, background: C.ivory }}>Source diversity: {geo.geo_metrics.overall?.source_diversity ?? 0} distinct domains across {geo.geo_metrics.overall?.source_type_diversity ?? 0} source types · {geo.geo_metrics.note}</div>
                 </div>
               )}
 
@@ -1649,6 +1649,14 @@ export default function DoctorFizzReport({ data }) {
                       <div className="text-[11px] font-bold mb-1" style={{ color: C.textDark }}>Why competitors win</div>
                       {geo.geo_insights.competitor_reasoning.map((c, i) => (
                         <div key={i} className="text-[12px] mb-0.5 flex gap-1.5" style={{ color: C.greyText }}><span style={{ color: C.orange }}>▸</span><span><strong style={{ color: C.textDark }}>{c.competitor}</strong>: {c.why}</span></div>
+                      ))}
+                    </div>
+                  )}
+                  {(geo.geo_insights.gaps || []).length > 0 && (
+                    <div className="mb-2">
+                      <div className="text-[11px] font-bold mb-1" style={{ color: C.textDark }}>Biggest AI-visibility gaps</div>
+                      {geo.geo_insights.gaps.map((g, i) => (
+                        <div key={i} className="text-[12px] mb-0.5 flex gap-1.5" style={{ color: C.greyText }}><span style={{ color: "#B3261E" }}>•</span><span>{g}</span></div>
                       ))}
                     </div>
                   )}
