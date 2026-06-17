@@ -13,7 +13,10 @@
 import { useMemo } from "react";
 import { buildStoryNarrative, buildGeoVisibility } from "@/lib/seo/doctor-fizz-logic";
 
-const LOGO_URL = "https://doctorfizz.com/wp-content/uploads/2025/09/doctorfizzlogo_1-scaled.png";
+// Brand wordmarks extracted from the reference deck — each keeps the orange gauge "O".
+// Two real assets (NOT a CSS-inverted single logo, which killed the orange on dark bg).
+const LOGO_WHITE = "/brand/doctorfizz-white.png"; // white wordmark — for dark backgrounds
+const LOGO_BLACK = "/brand/doctorfizz-black.png"; // black wordmark — for light backgrounds
 // Typography matched to the reference deck: Trebuchet MS bold headings + Calibri body.
 // SERIF kept as the constant name (used throughout) but now resolves to the
 // reference's bold humanist-sans display stack.
@@ -43,29 +46,33 @@ function Wordmark({ dark = false, height = 22 }) {
   return (
     <span className="inline-flex items-center">
       <img
-        src={LOGO_URL}
+        src={dark ? LOGO_WHITE : LOGO_BLACK}
         alt="DoctorFizz"
-        style={{ height, width: "auto", objectFit: "contain", filter: dark ? "brightness(0) invert(1)" : "none" }}
+        style={{ height, width: "auto", objectFit: "contain", display: "block" }}
         onError={(e) => { const t = e.currentTarget.nextSibling; if (t) t.style.display = "inline"; e.currentTarget.style.display = "none"; }}
       />
       <span style={{ display: "none", fontFamily: "'Trebuchet MS', system-ui, sans-serif", fontWeight: 800, fontSize: Math.round(height * 0.72), letterSpacing: "-0.02em", color: dark ? "#fff" : "#1A1A1A" }}>
-        DOCTOR<span style={{ color: "#D4541A" }}>FIZZ</span>
+        DOCTOR<span style={{ color: "#C35328" }}>FIZZ</span>
       </span>
     </span>
   );
 }
 
 // ── Color palette — EXACT V2 spec values (Part 2) ─────────────────────────────
+// Palette — sampled EXACT from the reference deck (orange #C35328, near-black #0E0E0E,
+// pure-white pages, neutral borders/zebra). Tokens keep their original names so the
+// whole component picks up the reference look without renaming every usage.
 const C = {
-  nearBlack:  "#141414",  // cover background
-  ivory:      "#F9F7F4",  // body background (warm ivory)
-  orange:     "#D4541A",  // burnt orange — signature accent (emphasis only)
-  orangeLite: "#D4541A",
-  diagTint:   "#FDF1EB",  // diagnosis card background (orange tint)
+  nearBlack:  "#0E0E0E",  // cover + dark slides (reference-exact)
+  ivory:      "#FFFFFF",  // page background — reference uses pure white, not ivory
+  orange:     "#C35328",  // burnt orange — reference-exact signature accent
+  orangeLite: "#C35328",
+  diagTint:   "#FBF1EB",  // light orange tint (callout backgrounds)
   rxGreen:    "#2D6B32",  // prescription label
-  border:     "#E8E4DF",  // borders, dividers
-  tableHead:  "#F2EEE9",  // table header bg
-  rowEven:    "#F9F7F4",  // even table row
+  border:     "#E5E5E5",  // card borders, dividers (neutral)
+  tableHead:  "#EFEFEF",  // light neutral — also used as bar/chart track background
+  headDark:   "#0E0E0E",  // reference table HEADER row (near-black, white text)
+  rowEven:    "#F5F5F5",  // neutral zebra row
   textDark:   "#1A1A1A",  // primary text
   greyText:   "#6B6B6B",  // secondary text
   greyMid:    "#A8A8A8",  // dot separator, tertiary

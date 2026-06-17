@@ -6,24 +6,23 @@ import { useEffect, useRef } from "react";
 // UTILITY COMPONENTS
 // ═══════════════════════════════════════════════════════════════════
 
+// Reference-deck design tokens (sampled exact from the OnitServices reference PDF).
+const LOGO_WHITE = "/brand/doctorfizz-white.png"; // white wordmark + orange gauge "O" — dark bg
+const LOGO_BLACK = "/brand/doctorfizz-black.png"; // black wordmark + orange gauge "O" — light bg
+const ORANGE = "#C35328";  // flat burnt orange — the only accent (no gradients/gold)
+const INK = "#0E0E0E";     // cover + dark slides
+const HEAD = "'Trebuchet MS', 'Segoe UI', var(--font-inter), system-ui, sans-serif"; // rounded bold display
+const BODY = "Calibri, 'Segoe UI', var(--font-inter), system-ui, sans-serif";         // neutral body
+
+// DOCTORFIZZ wordmark — real asset per background (NO css-invert, so the orange "O" survives).
 function ItzFizzLogo({ white = false, size = "md" }) {
-  const dim = size === "lg" ? 32 : size === "sm" ? 16 : 22;
-  const textCls = size === "lg" ? "text-2xl" : size === "sm" ? "text-sm" : "text-[1.1rem]";
+  const dim = size === "lg" ? 44 : size === "sm" ? 20 : 30;
   return (
-    <div className="flex items-center gap-1.5">
-      <svg width={dim} height={dim} viewBox="0 0 32 32" fill="none">
-        <defs>
-          <linearGradient id="itzGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#d45427" />
-            <stop offset="100%" stopColor="#ffa615" />
-          </linearGradient>
-        </defs>
-        <polygon points="16,1.5 19.8,11.8 30.5,16 19.8,20.2 16,30.5 12.2,20.2 1.5,16 12.2,11.8" fill="url(#itzGrad)" />
-      </svg>
-      <span className={`font-black tracking-tight leading-none ${textCls} ${white ? "text-white" : "text-gray-900"}`}>
-        Itz<span style={{ color: "#ffa615" }}>Fizz</span>
-      </span>
-    </div>
+    <img
+      src={white ? LOGO_WHITE : LOGO_BLACK}
+      alt="DoctorFizz"
+      style={{ height: dim, width: "auto", objectFit: "contain", display: "block" }}
+    />
   );
 }
 
@@ -51,51 +50,46 @@ function AnimatedSection({ children, className = "" }) {
   );
 }
 
-function SNum({ n, total }) {
+// Reference section header = small eyebrow "▪ 0N · NAME" + big Trebuchet title + hairline.
+// SNum/SNumDark render "▪ 0N ·", SHead renders the NAME (inline, same line), OBar is
+// retired (null), SSub is the big Title-Case heading. Section call-sites stay unchanged.
+function Eyebrow({ n }) {
   return (
-    <div className="flex items-center justify-between mb-5">
-      <span className="text-[10px] tracking-[0.25em] font-bold text-[#d45427] uppercase">{String(n).padStart(2, "0")} ·</span>
-      <span className="text-[10px] tracking-widest text-gray-400 font-medium">{String(n).padStart(2, "0")} / {String(total).padStart(2, "0")}</span>
-    </div>
+    <span className="inline-flex items-center align-middle" style={{ marginRight: 9 }}>
+      <span style={{ width: 11, height: 11, background: ORANGE, display: "inline-block", borderRadius: 1, marginRight: 9 }} />
+      <span className="uppercase" style={{ fontFamily: BODY, fontSize: "11px", fontWeight: 700, letterSpacing: "0.2em", color: ORANGE }}>{String(n).padStart(2, "0")} ·</span>
+    </span>
   );
 }
-
-function SNumDark({ n, total }) {
-  return (
-    <div className="flex items-center justify-between mb-5">
-      <span className="text-[10px] tracking-[0.25em] font-bold text-[#ffa615] uppercase">{String(n).padStart(2, "0")} ·</span>
-      <span className="text-[10px] tracking-widest text-gray-600 font-medium">{String(n).padStart(2, "0")} / {String(total).padStart(2, "0")}</span>
-    </div>
-  );
-}
-
-function OBar() {
-  return <div className="h-[3px] w-14 bg-gradient-to-r from-[#d45427] to-[#ffa615] rounded-full mb-5" />;
-}
+function SNum({ n }) { return <Eyebrow n={n} />; }
+function SNumDark({ n }) { return <Eyebrow n={n} />; }
+function OBar() { return null; }
 
 function SHead({ children, white = false }) {
   return (
-    <h2 className={`text-[1.6rem] md:text-[2rem] font-black uppercase tracking-tighter leading-tight mb-1 ${white ? "text-white" : "text-gray-900"}`}>
-      {children}
-    </h2>
+    <span className="uppercase align-middle" style={{ fontFamily: BODY, fontSize: "11px", fontWeight: 700, letterSpacing: "0.2em", color: white ? "#9A9A9A" : "#7A7A7A" }}>{children}</span>
   );
 }
 
 function SSub({ children, white = false }) {
   return (
-    <p className={`text-xs mb-8 leading-relaxed ${white ? "text-gray-400" : "text-gray-500"}`}>{children}</p>
+    <>
+      <h2 style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "clamp(1.55rem,3vw,2.25rem)", lineHeight: 1.12, letterSpacing: "-0.01em", color: white ? "#FFFFFF" : INK, marginTop: 12 }}>{children}</h2>
+      <div style={{ height: 1, background: white ? "rgba(255,255,255,0.12)" : "#E5E5E5", marginTop: 16, marginBottom: 28 }} />
+    </>
   );
 }
 
 function PBadge({ p }) {
   const map = {
-    CRITICAL: "bg-red-600 text-white",
-    HIGH: "bg-orange-500 text-white",
-    MEDIUM: "bg-emerald-600 text-white",
-    LOW: "bg-blue-500 text-white",
+    CRITICAL: { background: ORANGE, color: "#fff" },
+    HIGH:     { background: "#4A4A4A", color: "#fff" },
+    MEDIUM:   { background: "#8A8A8A", color: "#fff" },
+    LOW:      { background: "#BDBDBD", color: "#fff" },
   };
+  const s = map[p] || { background: "#9A9A9A", color: "#fff" };
   return (
-    <span className={`inline-block px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest ${map[p] || "bg-gray-400 text-white"}`}>
+    <span className="inline-block px-2.5 py-0.5 rounded text-[9px] font-black uppercase tracking-widest" style={s}>
       {p}
     </span>
   );
@@ -105,9 +99,20 @@ function PBadge({ p }) {
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════
 
-const CLIENTS = [
-  "CYBERSPACE", "5K MEDIA", "URBAN", "ABCOM",
-  "HEALTHEX", "CURA", "FRESHWAYS", "SNAPCART",
+// Real partner logos (rendered on a dark slide, matching the reference track-record page).
+const CLIENT_LOGOS = [
+  { name: "Acenteus Accounting", file: "/clientele/acenteus.png" },
+  { name: "AxXonet",             file: "/clientele/axxonet.png" },
+  { name: "RNB Hospitality",     file: "/clientele/rnb.png" },
+  { name: "Loyora Design",       file: "/clientele/loyora.png" },
+  { name: "DexWin",              file: "/clientele/dexwin.png" },
+  { name: "AVIA",                file: "/clientele/avia.png" },
+  { name: "Waterstone",          file: "/clientele/waterstone.png" },
+  { name: "tipplr",              file: "/clientele/tipplr.png" },
+  { name: "Content Whale",       file: "/clientele/contentwhale.png" },
+  { name: "Shiva Manvi",         file: "/clientele/shivamanvi.png" },
+  { name: "Vakkal Impex",        file: "/clientele/vakkalimpex.png" },
+  { name: "Scripple Masters",    file: "/clientele/scripplemasters.png" },
 ];
 
 const N = 18; // total sections
@@ -119,6 +124,9 @@ const N = 18; // total sections
 export default function WebsiteReport({ data }) {
   const d = data || {};
   const domain = d.domain || "yourdomain.com";
+  const bd = d.businessData || {};
+  const loc = bd.location || bd.city || bd.market || bd.region || bd.address || "";
+  const marketLabel = loc ? `${loc} Market` : "";
   const bm = d.baselineMetrics || {};
   const cl = d.competitorLandscape || {};
   const ks = d.keywordStrategy || {};
@@ -145,76 +153,38 @@ export default function WebsiteReport({ data }) {
     ? new Date(d.generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
+  // Clean integer formatting for counts (rounds stray floats like 1289.367 → "1,289",
+  // adds thousands separators). Leaves pre-formatted strings ("1.3K") and "—" untouched.
+  const fmt = (v) => {
+    if (v == null || v === "") return "—";
+    const n = typeof v === "number" ? v : Number(String(v).replace(/[, ]/g, ""));
+    if (!isFinite(n)) return String(v);
+    return Math.round(n).toLocaleString("en-US");
+  };
+
   return (
     <div id="report-content" className="font-sans bg-white text-gray-900 antialiased">
 
       {/* ══════════════════════════════════════════════════════
           COVER PAGE
       ══════════════════════════════════════════════════════ */}
-      <section className="relative bg-[#090909] text-white overflow-hidden min-h-screen flex flex-col">
-        {/* Subtle dot grid */}
-        <div
-          className="absolute inset-0 opacity-[0.035]"
-          style={{ backgroundImage: "radial-gradient(#ffffff 1px, transparent 1px)", backgroundSize: "36px 36px" }}
-        />
-        {/* Top accent bar */}
-        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#d45427] via-[#ffa615] to-[#d45427]" />
-
-        <div className="relative z-10 flex flex-col flex-1 max-w-5xl mx-auto w-full px-8 md:px-14">
-          {/* Logo row */}
-          <div className="flex items-center justify-between pt-10 pb-20 md:pb-28">
-            <ItzFizzLogo white size="lg" />
-            <span className="text-[9px] tracking-[0.35em] text-gray-600 uppercase font-semibold hidden md:block">
-              Intelligence Report
-            </span>
+      <section className="relative overflow-hidden min-h-screen flex flex-col justify-center" style={{ background: INK, color: "#fff" }}>
+        <div className="w-full max-w-5xl mx-auto px-10 md:px-16 py-20">
+          <ItzFizzLogo white size="lg" />
+          <div className="h-[3px] w-12 mt-6 mb-7" style={{ background: ORANGE }} />
+          <div className="text-[12px] font-semibold uppercase mb-5" style={{ fontFamily: BODY, letterSpacing: "0.34em", color: ORANGE }}>
+            SEO &amp; GEO Strategy
           </div>
-
-          {/* Main title block */}
-          <div className="flex-1">
-            <div className="text-[9px] tracking-[0.35em] uppercase text-gray-500 font-semibold mb-8">
-              Doctor Fizz Intelligence Report
-            </div>
-            <h1 className="text-[clamp(3rem,9vw,6rem)] font-black uppercase leading-[0.88] tracking-tighter mb-1">
-              SEO &amp; GEO
-            </h1>
-            <h1 className="text-[clamp(3rem,9vw,6rem)] font-black uppercase leading-[0.88] tracking-tighter bg-gradient-to-r from-[#d45427] to-[#ffa615] bg-clip-text text-transparent mb-10">
-              STRATEGY
-            </h1>
-            <div className="text-lg md:text-xl font-semibold text-gray-200 mb-1">{domain}</div>
-            <div className="text-sm text-gray-500 mb-20">Comprehensive Digital Visibility Blueprint</div>
-          </div>
-        </div>
-
-        {/* Bottom block: meta + clients */}
-        <div className="relative z-10 max-w-5xl mx-auto w-full px-8 md:px-14">
-          <div className="border-t border-white/10 pt-6">
-            {/* Meta row */}
-            <div className="flex flex-wrap gap-10 mb-8">
-              {[
-                ["Prepared By", "ItzFizz Digital"],
-                ["Generated", dateStr],
-                ["Domain", domain],
-              ].map(([label, val]) => (
-                <div key={label}>
-                  <div className="text-[8px] uppercase tracking-widest text-gray-600 mb-0.5">{label}</div>
-                  <div className="text-sm font-bold text-white">{val}</div>
-                </div>
-              ))}
-            </div>
-            {/* Client names */}
-            <div className="border-t border-white/5 pt-5 pb-10">
-              <div className="text-[8px] uppercase tracking-widest text-gray-700 mb-4">Our Clientele</div>
-              <div className="flex flex-wrap gap-2.5">
-                {CLIENTS.map((c) => (
-                  <span
-                    key={c}
-                    className="text-[9px] font-bold tracking-widest text-gray-500 uppercase border border-white/10 rounded px-3 py-1.5"
-                  >
-                    {c}
-                  </span>
-                ))}
-              </div>
-            </div>
+          <h1 className="font-bold mb-7" style={{ fontFamily: HEAD, fontSize: "clamp(2.6rem,6.5vw,5rem)", lineHeight: 1.02, letterSpacing: "-0.01em", color: "#fff" }}>
+            {domain}
+          </h1>
+          <p className="max-w-2xl mb-16" style={{ fontFamily: BODY, fontSize: "16px", lineHeight: 1.65, color: "#B8B8B8" }}>
+            A data-led plan to grow {domain}&apos;s organic search visibility{loc ? ` across the ${loc} market` : ""}, built by reverse-engineering the competitors that already rank.
+          </p>
+          <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 text-[13px]" style={{ fontFamily: BODY }}>
+            {marketLabel && <span className="font-bold" style={{ color: "#fff" }}>{marketLabel}</span>}
+            <span style={{ color: "#8A8A8A" }}>{dateStr}</span>
+            <span style={{ color: "#8A8A8A" }}>Prepared by <span className="font-semibold" style={{ color: "#D8D8D8" }}>DOCTORFIZZ</span></span>
           </div>
         </div>
       </section>
@@ -232,9 +202,9 @@ export default function WebsiteReport({ data }) {
           {/* Primary metrics: 3-up */}
           <div className="grid grid-cols-3 gap-px bg-gray-200 rounded-xl overflow-hidden mb-px">
             {[
-              { label: "Domain Authority",  value: bm.domainRating    || "—" },
-              { label: "Organic Traffic",   value: bm.organicTraffic  || "—" },
-              { label: "Organic Keywords",  value: bm.organicKeywords || "—" },
+              { label: "Domain Authority",  value: bm.domainRating ?? "—" },
+              { label: "Organic Traffic",   value: fmt(bm.organicTraffic) },
+              { label: "Organic Keywords",  value: fmt(bm.organicKeywords) },
             ].map(({ label, value }) => (
               <div key={label} className="bg-white px-5 py-6">
                 <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-2">{label}</div>
@@ -261,17 +231,17 @@ export default function WebsiteReport({ data }) {
           {/* Backlink + health metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-200 rounded-xl overflow-hidden mt-px">
             {[
-              { label: "Referring Domains", value: bm.referringDomains || "—" },
-              { label: "404 Errors",        value: bm.errors404        || "—" },
+              { label: "Referring Domains", value: fmt(bm.referringDomains) },
+              { label: "404 Errors",        value: fmt(bm.errors404) },
               {
                 label: "Site Health Score",
                 value: crawlHealth != null ? `${crawlHealth}/100` : "—",
-                color: crawlHealth != null ? (crawlHealth >= 70 ? "#16a34a" : crawlHealth >= 40 ? "#d45427" : "#dc2626") : null,
+                color: crawlHealth != null ? (crawlHealth >= 70 ? "#16a34a" : crawlHealth >= 40 ? "#C35328" : "#dc2626") : null,
               },
               {
                 label: "GMB Completeness",
                 value: gmbScore != null ? `${gmbScore}/100` : "—",
-                color: gmbScore != null ? (gmbScore >= 70 ? "#16a34a" : gmbScore >= 40 ? "#d45427" : "#dc2626") : null,
+                color: gmbScore != null ? (gmbScore >= 70 ? "#16a34a" : gmbScore >= 40 ? "#C35328" : "#dc2626") : null,
               },
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-white px-5 py-5">
@@ -296,7 +266,7 @@ export default function WebsiteReport({ data }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-10">
               {(cl.localCompetitors || []).map((c, i) => (
-                <div key={i} className="bg-white rounded-xl p-5 border border-gray-100 hover:border-[#d45427]/30 hover:shadow-sm transition-all duration-200">
+                <div key={i} className="bg-white rounded-xl p-5 border border-gray-100 hover:border-[#C35328]/30 hover:shadow-sm transition-all duration-200">
                   <div className="flex items-start gap-3">
                     <div className="w-9 h-9 rounded-lg bg-gray-900 text-white grid place-items-center text-sm font-black flex-shrink-0 uppercase">
                       {(c.name || c.domain || "C")[0]}
@@ -342,8 +312,8 @@ export default function WebsiteReport({ data }) {
             </div>
 
             {cl.localOpening && (
-              <div className="bg-white border-l-4 border-[#d45427] rounded-r-xl p-5">
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#d45427] mb-1.5">The Local Opening</div>
+              <div className="bg-white border-l-4 border-[#C35328] rounded-r-xl p-5">
+                <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-1.5">The Local Opening</div>
                 <p className="text-sm text-gray-700 leading-relaxed">{cl.localOpening}</p>
               </div>
             )}
@@ -364,8 +334,8 @@ export default function WebsiteReport({ data }) {
           {/* Keyword gap summary banner */}
           {kwGap && (kwGap.summary?.totalGapKeywords || 0) > 0 && (
             <div className="flex flex-wrap gap-4 mb-6">
-              <div className="bg-[#090909] text-white rounded-xl px-5 py-3 flex items-center gap-3">
-                <span className="text-2xl font-black text-[#ffa615]">{kwGap.summary.totalGapKeywords}</span>
+              <div className="bg-[#0E0E0E] text-white rounded-xl px-5 py-3 flex items-center gap-3">
+                <span className="text-2xl font-black text-[#C35328]">{kwGap.summary.totalGapKeywords}</span>
                 <span className="text-xs text-gray-400">gap keywords<br />competitors rank for</span>
               </div>
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-3 flex items-center gap-3">
@@ -414,7 +384,7 @@ export default function WebsiteReport({ data }) {
               <ul className="space-y-2.5">
                 {(ks.tier2Neighborhood || []).map((kw, i) => (
                   <li key={i} className="flex items-start gap-2.5 text-sm text-gray-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#d45427] mt-[0.4rem] flex-shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C35328] mt-[0.4rem] flex-shrink-0" />
                     {kw}
                   </li>
                 ))}
@@ -428,7 +398,7 @@ export default function WebsiteReport({ data }) {
               <ul className="space-y-2.5">
                 {(ks.tier3Informational || []).map((kw, i) => (
                   <li key={i} className="flex items-start gap-2.5 text-sm text-gray-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#ffa615] mt-[0.4rem] flex-shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#C35328] mt-[0.4rem] flex-shrink-0" />
                     {kw}
                   </li>
                 ))}
@@ -442,7 +412,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           04 · CONTENT ARCHITECTURE
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#090909] text-white py-16">
+      <section className="bg-[#0E0E0E] text-white py-16">
         <div className="max-w-5xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNumDark n={4} total={N} />
@@ -452,13 +422,13 @@ export default function WebsiteReport({ data }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#ffa615] mb-4">
+                <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-4">
                   Recommended Site Structure
                 </div>
                 <div className="space-y-2">
                   {(ca.siteStructure || []).map((page, i) => (
                     <div key={i} className="flex items-start gap-3 bg-white/[0.05] rounded-lg p-3.5 hover:bg-white/[0.08] transition-colors">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#ffa615] mt-1.5 flex-shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#C35328] mt-1.5 flex-shrink-0" />
                       <div>
                         <div className="text-sm font-semibold text-white">{page.page}</div>
                         {page.url && <div className="text-xs text-gray-500 font-mono mt-0.5">{page.url}</div>}
@@ -472,13 +442,13 @@ export default function WebsiteReport({ data }) {
                 </div>
               </div>
               <div>
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#ffa615] mb-4">
+                <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-4">
                   Content Checklist
                 </div>
                 <ul className="space-y-3">
                   {(ca.checklist || []).map((item, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-gray-300">
-                      <svg className="w-4 h-4 text-[#ffa615] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 text-[#C35328] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
                       {item}
@@ -526,15 +496,15 @@ export default function WebsiteReport({ data }) {
             </div>
             <div className="bg-orange-50 border border-orange-100 rounded-xl p-6">
               <div className="flex items-center gap-2 mb-5">
-                <span className="w-2 h-2 rounded-full bg-[#d45427] flex-shrink-0" />
-                <div className="text-[9px] font-bold uppercase tracking-widest text-[#d45427]">
+                <span className="w-2 h-2 rounded-full bg-[#C35328] flex-shrink-0" />
+                <div className="text-[9px] font-bold uppercase tracking-widest text-[#C35328]">
                   Gaps You Can Exploit
                 </div>
               </div>
               <ul className="space-y-3">
                 {(ci.gapsYouCanExploit || []).map((item, i) => (
                   <li key={i} className="flex items-start gap-2 text-sm text-gray-700 leading-relaxed">
-                    <span className="text-[#d45427] font-bold flex-shrink-0 mt-0.5 text-xs">→</span>
+                    <span className="text-[#C35328] font-bold flex-shrink-0 mt-0.5 text-xs">→</span>
                     {item}
                   </li>
                 ))}
@@ -601,8 +571,8 @@ export default function WebsiteReport({ data }) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { title: "Citation Building", items: lb.citationBuilding || [], color: "#d45427" },
-              { title: "Content-Driven Links", items: lb.contentDrivenLinks || [], color: "#ffa615" },
+              { title: "Citation Building", items: lb.citationBuilding || [], color: "#C35328" },
+              { title: "Content-Driven Links", items: lb.contentDrivenLinks || [], color: "#C35328" },
               { title: "Competitor Link Gap", items: lb.competitorLinkGap || [], color: "#6366f1" },
             ].map((col) => (
               <div key={col.title} className="bg-[#f4f4f4] rounded-xl p-5 border border-gray-200">
@@ -627,7 +597,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           08 · LOCAL SEARCH
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#090909] text-white py-16">
+      <section className="bg-[#0E0E0E] text-white py-16">
         <div className="max-w-5xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNumDark n={8} total={N} />
@@ -646,7 +616,7 @@ export default function WebsiteReport({ data }) {
                 ].map(({ label, value, bad }) => (
                   <div key={label} className="bg-white/[0.04] px-5 py-4">
                     <div className="text-[8px] uppercase tracking-widest text-gray-500 mb-1">{label}</div>
-                    <div className={`text-lg font-black ${bad ? "text-red-400" : "text-[#ffa615]"}`}>{value}</div>
+                    <div className={`text-lg font-black ${bad ? "text-red-400" : "text-[#C35328]"}`}>{value}</div>
                   </div>
                 ))}
               </div>
@@ -654,13 +624,13 @@ export default function WebsiteReport({ data }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div>
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#ffa615] mb-4">
+                <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-4">
                   GBP Action Checklist
                 </div>
                 <ul className="space-y-3">
                   {(ls.gbpChecklist || []).map((item, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-gray-300">
-                      <svg className="w-4 h-4 text-[#ffa615] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 text-[#C35328] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                       </svg>
                       {item}
@@ -673,8 +643,8 @@ export default function WebsiteReport({ data }) {
               </div>
               <div className="space-y-4">
                 {ls.reviewTarget && (
-                  <div className="bg-[#ffa615]/10 border border-[#ffa615]/20 rounded-xl p-5">
-                    <div className="text-[8px] font-bold uppercase tracking-widest text-[#ffa615] mb-2">Review Target</div>
+                  <div className="bg-[#C35328]/10 border border-[#C35328]/20 rounded-xl p-5">
+                    <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-2">Review Target</div>
                     <p className="text-sm text-gray-300 leading-relaxed">{ls.reviewTarget}</p>
                   </div>
                 )}
@@ -682,11 +652,11 @@ export default function WebsiteReport({ data }) {
                   <div className="bg-white/[0.04] border border-white/10 rounded-xl p-5">
                     <div className="text-[8px] font-bold uppercase tracking-widest text-gray-500 mb-2">GMB Completeness Score</div>
                     <div className="flex items-end gap-2">
-                      <span className={`text-3xl font-black ${gmbScore >= 70 ? "text-[#ffa615]" : gmbScore >= 40 ? "text-orange-400" : "text-red-400"}`}>{gmbScore}</span>
+                      <span className={`text-3xl font-black ${gmbScore >= 70 ? "text-[#C35328]" : gmbScore >= 40 ? "text-orange-400" : "text-red-400"}`}>{gmbScore}</span>
                       <span className="text-gray-500 text-sm mb-1">/100</span>
                     </div>
                     <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-[#d45427] to-[#ffa615] rounded-full transition-all" style={{ width: `${gmbScore}%` }} />
+                      <div className="h-full bg-gradient-to-r from-[#C35328] to-[#C35328] rounded-full transition-all" style={{ width: `${gmbScore}%` }} />
                     </div>
                   </div>
                 )}
@@ -708,20 +678,20 @@ export default function WebsiteReport({ data }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {rm.map((phase, i) => (
-              <div key={i} className="bg-[#f4f4f4] border border-gray-200 rounded-xl p-6 hover:border-[#d45427]/30 hover:shadow-sm transition-all duration-200">
+              <div key={i} className="bg-[#f4f4f4] border border-gray-200 rounded-xl p-6 hover:border-[#C35328]/30 hover:shadow-sm transition-all duration-200">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#d45427] to-[#ffa615] text-white text-xs font-black grid place-items-center flex-shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#C35328] to-[#C35328] text-white text-xs font-black grid place-items-center flex-shrink-0">
                     {phase.phase}
                   </div>
                   <div>
                     <div className="font-bold text-gray-900 text-sm">{phase.title}</div>
-                    <div className="text-[9px] text-[#d45427] font-bold uppercase tracking-widest">{phase.duration}</div>
+                    <div className="text-[9px] text-[#C35328] font-bold uppercase tracking-widest">{phase.duration}</div>
                   </div>
                 </div>
                 <ul className="space-y-2">
                   {(phase.actions || []).map((action, j) => (
                     <li key={j} className="flex items-start gap-2 text-xs text-gray-700 leading-relaxed">
-                      <span className="w-1 h-1 rounded-full bg-[#d45427] mt-1.5 flex-shrink-0" />
+                      <span className="w-1 h-1 rounded-full bg-[#C35328] mt-1.5 flex-shrink-0" />
                       {action}
                     </li>
                   ))}
@@ -831,10 +801,10 @@ export default function WebsiteReport({ data }) {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {uc.map((item, i) => (
-                <div key={i} className="bg-white border border-gray-100 rounded-xl p-5 hover:border-[#d45427]/20 hover:shadow-sm transition-all duration-200">
+                <div key={i} className="bg-white border border-gray-100 rounded-xl p-5 hover:border-[#C35328]/20 hover:shadow-sm transition-all duration-200">
                   <div className="text-sm font-bold text-gray-900 mb-1">{item.page}</div>
                   <div className="text-xs text-gray-500 mb-3 leading-relaxed">{item.keyword}</div>
-                  <div className="text-2xl font-black text-[#d45427]">{item.volume}</div>
+                  <div className="text-2xl font-black text-[#C35328]">{item.volume}</div>
                   <div className="text-[8px] text-gray-400 uppercase tracking-widest mt-0.5">Monthly searches</div>
                 </div>
               ))}
@@ -849,7 +819,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           13 · THE NEXT FRONTIER — GEO & AI
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#090909] text-white py-16">
+      <section className="bg-[#0E0E0E] text-white py-16">
         <div className="max-w-5xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNumDark n={13} total={N} />
@@ -860,13 +830,13 @@ export default function WebsiteReport({ data }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-10">
               <div className="bg-white/[0.04] border border-white/10 rounded-xl p-6 sm:p-8 text-center overflow-hidden">
                 <div className="text-[8px] uppercase tracking-widest text-gray-500 mb-3 truncate">{domain} AI Citations</div>
-                <div className="text-2xl sm:text-3xl md:text-4xl font-black text-[#ffa615] leading-snug break-words hyphens-auto px-2">
+                <div className="text-2xl sm:text-3xl md:text-4xl font-black text-[#C35328] leading-snug break-words hyphens-auto px-2">
                   {gf.domainAICitations || "—"}
                 </div>
               </div>
               <div className="bg-white/[0.04] border border-white/10 rounded-xl p-6 sm:p-8 text-center overflow-hidden">
                 <div className="text-[8px] uppercase tracking-widest text-gray-500 mb-3">Competitor AI Citations</div>
-                <div className="text-2xl sm:text-3xl md:text-4xl font-black text-[#d45427] leading-snug break-words hyphens-auto px-2">
+                <div className="text-2xl sm:text-3xl md:text-4xl font-black text-[#C35328] leading-snug break-words hyphens-auto px-2">
                   {gf.competitorAICitations || "—"}
                 </div>
               </div>
@@ -874,13 +844,13 @@ export default function WebsiteReport({ data }) {
 
             {(gf.howToEarnCitations || []).length > 0 && (
               <div>
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#ffa615] mb-5">
+                <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-5">
                   How To Earn AI Citations
                 </div>
                 <ul className="space-y-3.5">
                   {gf.howToEarnCitations.map((step, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-gray-300 leading-relaxed">
-                      <span className="text-[#ffa615] font-black text-base flex-shrink-0 w-5 leading-none mt-0.5">{i + 1}.</span>
+                      <span className="text-[#C35328] font-black text-base flex-shrink-0 w-5 leading-none mt-0.5">{i + 1}.</span>
                       {step}
                     </li>
                   ))}
@@ -903,12 +873,12 @@ export default function WebsiteReport({ data }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {qw.map((block, i) => (
-              <div key={i} className="border-l-4 border-[#d45427] bg-[#f4f4f4] rounded-r-xl p-5">
-                <div className="text-[8px] font-black uppercase tracking-widest text-[#d45427] mb-3">{block.week}</div>
+              <div key={i} className="border-l-4 border-[#C35328] bg-[#f4f4f4] rounded-r-xl p-5">
+                <div className="text-[8px] font-black uppercase tracking-widest text-[#C35328] mb-3">{block.week}</div>
                 <ul className="space-y-2">
                   {(block.actions || []).map((action, j) => (
                     <li key={j} className="flex items-start gap-2 text-sm text-gray-700 leading-relaxed">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#d45427] mt-[0.4rem] flex-shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#C35328] mt-[0.4rem] flex-shrink-0" />
                       {action}
                     </li>
                   ))}
@@ -935,7 +905,7 @@ export default function WebsiteReport({ data }) {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {sp.map((p, i) => (
-                <div key={i} className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#d45427]/20 hover:shadow-sm transition-all duration-200">
+                <div key={i} className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#C35328]/20 hover:shadow-sm transition-all duration-200">
                   <div className="text-5xl font-black text-gray-100 mb-3 leading-none">{p.priority}</div>
                   <div className="font-bold text-gray-900 text-sm mb-2">{p.title}</div>
                   <p className="text-xs text-gray-600 leading-relaxed">{p.description}</p>
@@ -952,12 +922,13 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           16 · WHY ITZFIZZ DIGITAL
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#090909] text-white py-16">
+      <section className="bg-[#0E0E0E] text-white py-16">
         <div className="max-w-5xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNumDark n={16} total={N} />
             <OBar />
-            <SHead white>WHY ITZFIZZ DIGITAL</SHead>
+            <SHead white>WHY DOCTORFIZZ</SHead>
+            <SSub white>Evidence Over Guesswork</SSub>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
               {[
@@ -980,7 +951,7 @@ export default function WebsiteReport({ data }) {
               ].map((card, i) => (
                 <div
                   key={i}
-                  className="bg-white/[0.04] border border-white/10 rounded-xl p-6 hover:border-[#ffa615]/30 transition-colors duration-200"
+                  className="bg-white/[0.04] border border-white/10 rounded-xl p-6 hover:border-[#C35328]/30 transition-colors duration-200"
                 >
                   <div className="font-bold text-sm text-white mb-2">{card.title}</div>
                   <p className="text-xs text-gray-400 leading-relaxed">{card.desc}</p>
@@ -994,49 +965,35 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           17 · OUR CLIENTELE
       ══════════════════════════════════════════════════════ */}
-      <section className="max-w-5xl mx-auto px-8 md:px-14 py-16">
-        <AnimatedSection>
-          <SNum n={17} total={N} />
-          <OBar />
-          <SHead>OUR CLIENTELE</SHead>
-          <SSub>Brands That Trust ItzFizz Digital</SSub>
+      <section className="py-16" style={{ background: INK }}>
+        <div className="max-w-5xl mx-auto px-8 md:px-14">
+          <AnimatedSection>
+            <SNum n={17} total={N} />
+            <OBar />
+            <SHead white>OUR CLIENTELE</SHead>
+            <SSub white>Brands Itzfizz Digital has partnered with</SSub>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            {CLIENTS.map((name, i) => (
-              <div
-                key={i}
-                className="border border-gray-200 rounded-xl p-5 flex items-center justify-center text-center min-h-[72px] hover:border-[#d45427]/30 hover:bg-gray-50 transition-all duration-200"
-              >
-                <span className="text-xs font-black uppercase tracking-widest text-gray-500">{name}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Extra industry tags */}
-          <div className="flex flex-wrap gap-2">
-            {["E-Commerce", "B2B SaaS", "Healthcare", "Legal", "Real Estate", "Hospitality", "Manufacturing", "Education"].map(
-              (sector) => (
-                <span
-                  key={sector}
-                  className="text-[9px] font-semibold text-gray-500 uppercase tracking-widest border border-gray-200 rounded-full px-3 py-1"
-                >
-                  {sector}
-                </span>
-              )
-            )}
-          </div>
-        </AnimatedSection>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-10 gap-y-12 items-center mt-2">
+              {CLIENT_LOGOS.map((c, i) => (
+                <div key={i} className="flex items-center justify-center h-16">
+                  <img src={c.file} alt={c.name} style={{ maxHeight: "54px", maxWidth: "150px", width: "auto", objectFit: "contain" }} />
+                </div>
+              ))}
+            </div>
+          </AnimatedSection>
+        </div>
       </section>
 
       {/* ══════════════════════════════════════════════════════
           18 · FOUR STEPS TO LAUNCH
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#090909] text-white py-16">
+      <section className="bg-[#0E0E0E] text-white py-16">
         <div className="max-w-5xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNumDark n={18} total={N} />
             <OBar />
             <SHead white>FOUR STEPS TO LAUNCH</SHead>
+            <SSub white>Ready to Begin?</SSub>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-10 mb-12">
               {[
@@ -1046,7 +1003,7 @@ export default function WebsiteReport({ data }) {
                 { step: "04", title: "Execute & Report", desc: "Monthly implementation, tracking, and reporting." },
               ].map((s) => (
                 <div key={s.step} className="text-center">
-                  <div className="text-5xl font-black text-[#d45427] mb-3 leading-none">{s.step}</div>
+                  <div className="text-5xl font-black text-[#C35328] mb-3 leading-none">{s.step}</div>
                   <div className="font-bold text-sm text-white mb-2">{s.title}</div>
                   <p className="text-xs text-gray-500 leading-relaxed">{s.desc}</p>
                 </div>
@@ -1055,10 +1012,11 @@ export default function WebsiteReport({ data }) {
 
             <div className="flex justify-center">
               <a
-                href="https://itzfizz.com"
+                href="https://doctorfizz.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-8 py-4 rounded-full bg-gradient-to-r from-[#d45427] to-[#ffa615] text-white font-bold text-sm hover:opacity-90 transition-opacity"
+                className="inline-flex items-center gap-2 px-8 py-4 rounded-full text-white font-bold text-sm hover:opacity-90 transition-opacity"
+                style={{ background: ORANGE }}
               >
                 Book Your Discovery Call →
               </a>
@@ -1074,7 +1032,7 @@ export default function WebsiteReport({ data }) {
         <div className="flex items-center justify-center mb-3">
           <ItzFizzLogo size="md" />
         </div>
-        <div className="text-xs text-gray-400 mb-1">itzfizz.com · Prepared exclusively for {domain}</div>
+        <div className="text-xs text-gray-400 mb-1">doctorfizz.com · Prepared exclusively for {domain}</div>
         <div className="text-[10px] text-gray-300 max-w-xl mx-auto leading-relaxed">
           This report is confidential and prepared solely for the named client. All data sourced from real-time analytics as of {dateStr}.
         </div>
