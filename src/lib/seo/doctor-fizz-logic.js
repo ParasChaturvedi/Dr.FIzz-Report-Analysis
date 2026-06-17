@@ -1400,19 +1400,20 @@ export function buildGeoVisibility(input = {}) {
   // ── LIVE AI visibility (proprietary SoV + Citation logic) — computed ONLY when
   //    the multi-engine collector has supplied raw responses (input.aiResponses);
   //    null otherwise, so the deterministic placeholders above still show. ───────
-  let share_of_voice = null, citation_analysis = null;
+  let share_of_voice = null, citation_analysis = null, geo_metrics = null;
   const raw = input.aiResponses || input.ai_visibility_raw || null;
   if (raw && Array.isArray(raw.responses) && raw.responses.length) {
-    share_of_voice = buildShareOfVoice({
-      brandSet: raw.brandSet || [clientName || domain, ...(competitors || []).map(c => c.name || c.domain).filter(Boolean)],
-      client: clientName || domain,
-      responses: raw.responses,
-    });
+    const _brandSet = raw.brandSet || [clientName || domain, ...(competitors || []).map(c => c.name || c.domain).filter(Boolean)];
+    const _compDomains = raw.competitorDomains || (competitors || []).map(c => c.domain).filter(Boolean);
+    share_of_voice = buildShareOfVoice({ brandSet: _brandSet, client: clientName || domain, responses: raw.responses });
     citation_analysis = buildCitationAnalysis({
-      clientDomain: raw.clientDomain || domain,
-      clientName: clientName || domain,
-      competitorDomains: raw.competitorDomains || (competitors || []).map(c => c.domain).filter(Boolean),
-      responses: raw.responses,
+      clientDomain: raw.clientDomain || domain, clientName: clientName || domain,
+      competitorDomains: _compDomains, responses: raw.responses,
+    });
+    // §20 — full two-layer metric matrix (overall + per engine, brand + competitors).
+    geo_metrics = buildGeoMetrics({
+      brandSet: _brandSet, client: clientName || domain,
+      clientDomain: raw.clientDomain || domain, competitorDomains: _compDomains, responses: raw.responses,
     });
   }
   // §21 — weighted composite GEO score (only when the live scan supplied data).
@@ -1449,6 +1450,7 @@ export function buildGeoVisibility(input = {}) {
     share_of_voice,         // proprietary SoV table (null until collector runs)
     citation_analysis,      // proprietary citation intelligence + opportunity queue (§23-24)
     geo_score,              // §21 weighted composite GEO score (null until collector runs)
+    geo_metrics,            // §20 full two-layer metric matrix (overall + per engine)
     competitor_intel,       // §25 competitor intelligence (null until collector runs)
     geo_readiness,
     tracked_prompts,
@@ -1737,6 +1739,90 @@ export function computeGeoScore({ share_of_voice = null, citation_analysis = nul
       cross_engine_consistency: crossEngine, freshness, topic_coverage: Math.round(topicCoverage),
     },
     note: "Weighted composite (30% citation presence, 20% brand presence, 15% citation position, 15% intent match, 10% cross-engine consistency, 5% freshness, 5% topic coverage).",
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// §20 — FULL TWO-LAYER GEO METRICS (Layer A = overall, Layer B = per engine).
+// Every dimension computed for the brand AND competitors, from the raw multi-engine
+// responses: mentions, citations, SoV, citation score, citation-position score, topic
+// coverage, intent match, freshness, and a per-engine GEO score. "One of the most
+// important reporting refinements" in the spec — overall average + per-engine split.
+// ═══════════════════════════════════════════════════════════════════════════════
+export function buildGeoMetrics(input = {}) {
+  const responses = input.responses || [];
+  const brandSet = (input.brandSet || []).filter(Boolean);
+  if (!responses.length || !brandSet.length) return null;
+
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const client = input.client || brandSet[0];
+  const clientN = _geoNorm(client);
+  const clientDomain = _geoHost(input.clientDomain || "");
+  const competitorDomains = (input.competitorDomains || []).map(_geoHost).filter(Boolean);
+  const engines = [...new Set(responses.map((r) => r.engine).filter(Boolean))];
+
+  const mentionsIn = (r) => {
+    if (Array.isArray(r.brandsMentioned) && r.brandsMentioned.length) {
+      const set = new Set(r.brandsMentioned.map(_geoNorm));
+      return brandSet.filter((b) => set.has(_geoNorm(b)));
+    }
+    const t = _geoNorm(r.answerText || "");
+    return t ? brandSet.filter((b) => t.includes(_geoNorm(b))) : [];
+  };
+  const hostsIn = (r) => (r.citations || []).map(_geoHost).filter(Boolean);
+  const citePos = (r, targets) => {
+    const hosts = hostsIn(r);
+    for (let i = 0; i < hosts.length; i++) if (targets.some((d) => d && hosts[i].includes(d))) return i + 1;
+    return 0;
+  };
+
+  const compute = (rs) => {
+    const n = rs.length || 1;
+    let bMent = 0, bCit = 0, cMent = 0, cCit = 0, mw = 0, cw = 0, compw = 0, citScore = 0, posSum = 0, posCount = 0;
+    const themes = new Set();
+    for (const r of rs) {
+      const ms = mentionsIn(r);
+      if (ms.some((b) => _geoNorm(b) === clientN)) { bMent++; themes.add(String(r.prompt || "")); }
+      for (const b of ms) {
+        const w = _geoNorm(r.leadBrand) === _geoNorm(b) ? 2 : 1;
+        mw += w;
+        if (_geoNorm(b) === clientN) cw += w; else compw += w;
+      }
+      cMent += ms.filter((b) => _geoNorm(b) !== clientN).length;
+      const cp = citePos(r, [clientDomain].filter(Boolean));
+      if (cp > 0) { bCit++; posSum += cp; posCount++; citScore += 1 / cp; }
+      cCit += hostsIn(r).filter((h) => competitorDomains.some((d) => d && h.includes(d))).length;
+    }
+    return {
+      prompts: rs.length,
+      brand_mentions: bMent, brand_mention_rate: r1((bMent / n) * 100), brand_citations: bCit,
+      competitor_mentions: cMent, competitor_citations: cCit,
+      sov: r1(mw > 0 ? (cw / mw) * 100 : 0), competitor_sov: r1(mw > 0 ? (compw / mw) * 100 : 0),
+      citation_score: r1((citScore / n) * 100),
+      citation_position_score: r1(posCount ? Math.max(0, 100 - (posSum / posCount - 1) * 20) : 0),
+      topic_coverage: r1((themes.size / n) * 100), intent_match: r1((bMent / n) * 100), freshness: 50,
+    };
+  };
+  const scoreOf = (m, crossEngine) => Math.round(
+    0.30 * (m.brand_citations > 0 ? 100 : 0) + 0.20 * m.sov + 0.15 * m.citation_position_score +
+    0.15 * m.intent_match + 0.10 * crossEngine + 0.05 * m.freshness + 0.05 * m.topic_coverage
+  );
+
+  const by_engine = {};
+  for (const e of engines) {
+    const m = compute(responses.filter((r) => r.engine === e));
+    m.geo_score = scoreOf(m, m.brand_mentions > 0 ? 100 : 0);
+    by_engine[e] = m;
+  }
+  const overall = compute(responses);
+  const enginesPresent = engines.filter((e) => (by_engine[e].brand_mentions || 0) > 0).length;
+  overall.cross_engine_consistency = engines.length ? Math.round((enginesPresent / engines.length) * 100) : 0;
+  overall.geo_score = scoreOf(overall, overall.cross_engine_consistency);
+
+  return {
+    engines, overall, by_engine,
+    metric_keys: ["sov", "brand_mentions", "brand_citations", "competitor_sov", "competitor_mentions", "competitor_citations", "citation_score", "citation_position_score", "topic_coverage", "intent_match", "geo_score"],
+    note: "Layer A = overall across all engines; Layer B = per-engine split. Computed from the live multi-engine scan.",
   };
 }
 

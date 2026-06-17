@@ -1568,6 +1568,40 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               )}
 
+              {/* §20 — two-layer metric matrix: Layer A (overall) + Layer B (per engine) */}
+              {geo.geo_metrics && (
+                <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                  <div className="uppercase px-3 pt-2.5 pb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>GEO Metrics — overall + per engine</div>
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr style={{ background: C.nearBlack }}>
+                        <Th white>Engine</Th><Th white right>SoV</Th><Th white right>Comp SoV</Th>
+                        <Th white right>Brand mentions</Th><Th white right>Brand citations</Th>
+                        <Th white right>Citation score</Th><Th white right>Position</Th>
+                        <Th white right>Topic cov.</Th><Th white right>Intent</Th><Th white right>GEO score</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[{ label: "Overall", m: geo.geo_metrics.overall, hl: true }, ...geo.geo_metrics.engines.map((e) => ({ label: e, m: geo.geo_metrics.by_engine[e] || {}, hl: false }))].map((row, i) => (
+                        <tr key={i} style={{ background: row.hl ? C.diagTint : (i % 2 ? "#fff" : C.ivory) }}>
+                          <Td><span style={{ fontWeight: row.hl ? 700 : 400 }}>{row.label}</span></Td>
+                          <Td right><strong>{row.m.sov}%</strong></Td>
+                          <Td right>{row.m.competitor_sov}%</Td>
+                          <Td right>{row.m.brand_mentions}</Td>
+                          <Td right>{row.m.brand_citations}</Td>
+                          <Td right>{row.m.citation_score}</Td>
+                          <Td right>{row.m.citation_position_score}</Td>
+                          <Td right>{row.m.topic_coverage}%</Td>
+                          <Td right>{row.m.intent_match}%</Td>
+                          <Td right><strong>{row.m.geo_score}</strong></Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="px-3 py-2 text-[10.5px]" style={{ color: C.greyText, background: C.ivory }}>{geo.geo_metrics.note}</div>
+                </div>
+              )}
+
               {/* LIVE AI Share of Voice — proprietary SoV logic (only when collector ran) */}
               {geo.share_of_voice && (
                 <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
