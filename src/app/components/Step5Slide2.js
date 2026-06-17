@@ -913,10 +913,39 @@ export default function Step5Slide2({
       // Competitor Audit must run before Keyword Gap — the gap analysis compares
       // the client's keywords against the competitors' keywords.
       // ── Competitor Audit ──────────────────────────────────────────────────
-      const allCompetitors = [
+      let allCompetitors = [
         ...(competitorData?.businessCompetitors || []),
         ...(competitorData?.searchCompetitors   || []),
       ].slice(0, 4);
+
+      // Fallback: if no competitors were selected/persisted (Step 5 skipped, or the
+      // suggestion returned empty), auto-discover them now so the report's competitor
+      // analysis never goes blank.
+      if (allCompetitors.length === 0) {
+        try {
+          updateStage("competitorAudit", { state: "loading", value: "Finding competitors…" }, { force: true });
+          const sg = await fetch("/api/competitors/suggest", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              domain,
+              industry: businessData?.industrySector || businessData?.industry || businessData?.category || "",
+              offering: businessData?.offeringType || "",
+              category: businessData?.category || "",
+              location: businessData?.location || "",
+              country:  businessData?.country  || "in",
+              seedKeywords: keywords,
+            }),
+          });
+          if (sg.ok) {
+            const sj = await sg.json();
+            allCompetitors = [
+              ...(Array.isArray(sj?.businessCompetitors) ? sj.businessCompetitors : []),
+              ...(Array.isArray(sj?.searchCompetitors)   ? sj.searchCompetitors   : []),
+            ].map((c) => (typeof c === "string" ? c : c?.domain || c?.name)).filter(Boolean).slice(0, 4);
+          }
+        } catch (e) { console.warn("[Step5] competitor auto-discover failed:", e?.message); }
+      }
 
       let competitorAuditJson = null;
       if (allCompetitors.length > 0) {

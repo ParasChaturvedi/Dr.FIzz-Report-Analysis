@@ -1004,7 +1004,18 @@ function deriveTrustGap(client, strongest) {
 export function buildCompetitiveAnalysis(input = {}) {
   const { client = {}, competitorAudits = [] } = input;
   const comps = (competitorAudits || []).filter(c => c && (c.crawl || c.gmb) && !(c.crawl?.error && c.gmb?.error));
-  if (!comps.length) return null;
+  if (!comps.length) {
+    // Competitor names exist but no usable audit data → return a minimal structure
+    // (NOT null) so the section still shows the rivals + a note instead of vanishing.
+    const names = (competitorAudits || []).map(c => c?.name || c?.domain).filter(Boolean);
+    if (!names.length) return null;
+    return {
+      dimensions: [],
+      your_edges: [],
+      their_edges: [],
+      overall_verdict: `${names.length} competitor${names.length !== 1 ? "s" : ""} identified (${names.slice(0, 4).join(", ")}). The full head-to-head scorecard populates once each rival's live profile and crawl data are captured.`,
+    };
+  }
 
   const cCrawl = client.crawl || {};
   const cGmb   = client.gmb || {};
