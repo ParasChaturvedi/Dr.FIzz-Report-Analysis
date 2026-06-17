@@ -95,6 +95,37 @@ function PBadge({ p }) {
   );
 }
 
+// Reference metric card — white card, thin border, subtle shadow, LEFT accent bar,
+// big Trebuchet number + bold label + grey sub-label (matches reference p2 baseline cards).
+function MetricCard({ value, label, sub, accent = "ink" }) {
+  const c = accent === "orange" ? ORANGE : INK;
+  return (
+    <div className="flex rounded-lg overflow-hidden bg-white" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+      <div style={{ width: 4, background: c, flexShrink: 0 }} />
+      <div className="flex items-center gap-4 px-5 py-5 w-full">
+        <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "32px", lineHeight: 1, color: c, whiteSpace: "nowrap" }}>{value}</div>
+        <div className="min-w-0">
+          <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: "12.5px", color: INK }}>{label}</div>
+          {sub && <div style={{ fontFamily: BODY, fontSize: "11px", color: "#8A8A8A", marginTop: 2 }}>{sub}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Dark callout (orange left bar + label + body) — reference KEY TAKEAWAY / The Local Opening.
+function DarkCallout({ label, children }) {
+  return (
+    <div className="rounded-lg overflow-hidden flex" style={{ background: INK }}>
+      <div style={{ width: 4, background: ORANGE, flexShrink: 0 }} />
+      <div className="px-6 py-5">
+        <div className="uppercase mb-1.5" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.24em", color: ORANGE }}>{label}</div>
+        <p style={{ fontFamily: BODY, fontSize: "14px", lineHeight: 1.6, color: "#D8D8D8" }}>{children}</p>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════
@@ -199,56 +230,26 @@ export default function WebsiteReport({ data }) {
           <SHead>THE BASELINE</SHead>
           <SSub>Where {domain} Stands Today</SSub>
 
-          {/* Primary metrics: 3-up */}
-          <div className="grid grid-cols-3 gap-px bg-gray-200 rounded-xl overflow-hidden mb-px">
-            {[
-              { label: "Domain Authority",  value: bm.domainRating ?? "—" },
-              { label: "Organic Traffic",   value: fmt(bm.organicTraffic) },
-              { label: "Organic Keywords",  value: fmt(bm.organicKeywords) },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-white px-5 py-6">
-                <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-2">{label}</div>
-                <div className="text-4xl md:text-5xl font-black text-gray-900 leading-none">{value}</div>
-              </div>
-            ))}
+          {/* Metric cards — reference style (left accent bar + big number + label + sub) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <MetricCard value={bm.domainRating ?? "—"} label="Domain Authority" sub="Overall site authority" accent="orange" />
+            <MetricCard value={fmt(bm.organicTraffic)} label="Organic Traffic" sub="Est. visits / month" accent="orange" />
+            <MetricCard value={fmt(bm.organicKeywords)} label="Organic Keywords" sub="Terms you rank for" accent="orange" />
+            <MetricCard value={bm.performanceMobile != null ? `${bm.performanceMobile}/100` : "—"} label="Mobile Speed" sub="Google PageSpeed" accent={bm.performanceMobile != null && bm.performanceMobile < 50 ? "orange" : "ink"} />
+            <MetricCard value={bm.performanceDesktop != null ? `${bm.performanceDesktop}/100` : "—"} label="Desktop Speed" sub="Google PageSpeed" />
+            <MetricCard value={bm.lcp != null ? `${(Number(bm.lcp) / 1000).toFixed(1)}s` : "—"} label="LCP" sub="Largest content paint" />
+            <MetricCard value={bm.cls != null ? Number(bm.cls).toFixed(3) : "—"} label="CLS" sub="Layout stability" />
+            <MetricCard value={fmt(bm.referringDomains)} label="Referring Domains" sub="Sites linking to you" />
+            <MetricCard value={fmt(bm.errors404)} label="404 Errors" sub="Broken pages" accent="orange" />
+            <MetricCard value={crawlHealth != null ? `${crawlHealth}/100` : "—"} label="Site Health" sub="Crawl health score" />
+            <MetricCard value={gmbScore != null ? `${gmbScore}/100` : "—"} label="GMB Completeness" sub="Google Business Profile" />
           </div>
 
-          {/* Performance metrics: 4-up */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-200 rounded-xl overflow-hidden mt-px">
-            {[
-              { label: "Mobile Score",  value: bm.performanceMobile  != null ? `${bm.performanceMobile}/100`  : "—" },
-              { label: "Desktop Score", value: bm.performanceDesktop != null ? `${bm.performanceDesktop}/100` : "—" },
-              { label: "LCP", value: bm.lcp != null ? `${(Number(bm.lcp) / 1000).toFixed(1)}s` : "—" },
-              { label: "CLS", value: bm.cls != null ? Number(bm.cls).toFixed(3) : "—" },
-            ].map(({ label, value }) => (
-              <div key={label} className="bg-white px-5 py-5">
-                <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1.5">{label}</div>
-                <div className="text-2xl font-black text-gray-900">{value}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Backlink + health metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-200 rounded-xl overflow-hidden mt-px">
-            {[
-              { label: "Referring Domains", value: fmt(bm.referringDomains) },
-              { label: "404 Errors",        value: fmt(bm.errors404) },
-              {
-                label: "Site Health Score",
-                value: crawlHealth != null ? `${crawlHealth}/100` : "—",
-                color: crawlHealth != null ? (crawlHealth >= 70 ? "#16a34a" : crawlHealth >= 40 ? "#C35328" : "#dc2626") : null,
-              },
-              {
-                label: "GMB Completeness",
-                value: gmbScore != null ? `${gmbScore}/100` : "—",
-                color: gmbScore != null ? (gmbScore >= 70 ? "#16a34a" : gmbScore >= 40 ? "#C35328" : "#dc2626") : null,
-              },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="bg-white px-5 py-5">
-                <div className="text-[9px] uppercase tracking-widest text-gray-400 font-bold mb-1.5">{label}</div>
-                <div className="text-2xl font-black" style={{ color: color || "#111827" }}>{value}</div>
-              </div>
-            ))}
+          {/* KEY TAKEAWAY — grounded in the numbers above */}
+          <div className="mt-6">
+            <DarkCallout label="Key Takeaway">
+              {domain} sits at Domain Authority {bm.domainRating ?? "—"} with {fmt(bm.organicTraffic)} organic visits a month across {fmt(bm.organicKeywords)} ranking keywords{bm.performanceMobile != null ? `, on a ${bm.performanceMobile}/100 mobile speed score` : ""}. {bm.errors404 ? `${fmt(bm.errors404)} broken pages and the technical base must be fixed first` : "The technical base must be solid first"} — then content and authority gains compound on top.
+            </DarkCallout>
           </div>
         </AnimatedSection>
       </section>
@@ -256,7 +257,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           02 · COMPETITOR LANDSCAPE
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#f4f4f4] py-16">
+      <section className="py-16" style={{ background: "#FFFFFF" }}>
         <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={2} total={N} />
@@ -264,59 +265,44 @@ export default function WebsiteReport({ data }) {
             <SHead>COMPETITOR LANDSCAPE</SHead>
             <SSub>Local Competitors</SSub>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-10">
-              {(cl.localCompetitors || []).map((c, i) => (
-                <div key={i} className="bg-white rounded-xl p-5 border border-gray-100 hover:border-[#C35328]/30 hover:shadow-sm transition-all duration-200">
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-gray-900 text-white grid place-items-center text-sm font-black flex-shrink-0 uppercase">
-                      {(c.name || c.domain || "C")[0]}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                        <span className="font-bold text-gray-900 text-sm">{c.name || c.domain}</span>
-                        {c.strength && (
-                          <span className="text-[8px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                            {c.strength}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-400">{c.domain}</div>
-                      {c.description && (
-                        <div className="text-xs text-gray-600 mt-1 leading-relaxed">{c.description}</div>
-                      )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+              {(cl.localCompetitors || []).map((c, i) => {
+                const hot = /high|strong|dominant|leader|top/i.test(c.strength || "");
+                return (
+                  <div key={i} className="bg-white rounded-lg overflow-hidden" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                    <div style={{ height: 4, background: hot ? ORANGE : "#4A4A4A" }} />
+                    <div className="p-5">
+                      <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "16px", color: INK }}>{c.name || c.domain}</div>
+                      {c.strength && <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", color: hot ? ORANGE : "#6B6B6B", marginTop: 4 }}>{c.strength}</div>}
+                      {c.description && <p style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", marginTop: 10, lineHeight: 1.55 }}>{c.description}</p>}
+                      {c.domain && <div style={{ fontFamily: BODY, fontSize: "11px", color: "#A8A8A8", marginTop: 8 }}>{c.domain}</div>}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {!(cl.localCompetitors || []).length && (
                 <div className="col-span-2 text-sm text-gray-400 py-4">Competitor analysis loading…</div>
               )}
             </div>
 
-            {/* National platforms */}
-            <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-4">
-              National Platforms Intercepting Search
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-              {(cl.nationalPlatforms || []).map((p, i) => (
-                <div key={i} className="bg-white rounded-xl p-4 border border-gray-100">
-                  <div className="font-bold text-sm text-gray-900 mb-1">{p.name}</div>
-                  {p.description && <div className="text-xs text-gray-500 mb-2 leading-relaxed">{p.description}</div>}
-                  {p.threat && (
-                    <span className="text-[8px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wide">
-                      {p.threat}
-                    </span>
-                  )}
+            {(cl.nationalPlatforms || []).length > 0 && (
+              <>
+                <div className="uppercase mb-4" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", letterSpacing: "0.2em", color: "#7A7A7A" }}>National Platforms Intercepting Search</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
+                  {cl.nationalPlatforms.map((p, i) => (
+                    <div key={i} className="flex items-start gap-4 bg-white rounded-lg p-4" style={{ border: "1px solid #E5E5E5" }}>
+                      <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "14px", color: INK, minWidth: 104 }}>{p.name}</div>
+                      <div className="flex-1 min-w-0">
+                        {p.description && <p style={{ fontFamily: BODY, fontSize: "12.5px", color: "#5A5A5A", lineHeight: 1.5 }}>{p.description}</p>}
+                        {p.threat && <span className="inline-block mt-1.5 uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "9px", letterSpacing: "0.1em", color: ORANGE }}>{p.threat}</span>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-
-            {cl.localOpening && (
-              <div className="bg-white border-l-4 border-[#C35328] rounded-r-xl p-5">
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-1.5">The Local Opening</div>
-                <p className="text-sm text-gray-700 leading-relaxed">{cl.localOpening}</p>
-              </div>
+              </>
             )}
+
+            {cl.localOpening && <DarkCallout label="The Local Opening">{cl.localOpening}</DarkCallout>}
           </AnimatedSection>
         </div>
       </section>
