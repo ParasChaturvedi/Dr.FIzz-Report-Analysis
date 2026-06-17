@@ -13,8 +13,8 @@
 import ReportClient from "./ReportClient";
 
 export const metadata = {
-  title: "ItzFizz Intelligence Report",
-  description: "Comprehensive SEO & GEO intelligence report prepared by ItzFizz Digital",
+  title: "DoctorFizz Intelligence Report",
+  description: "Comprehensive SEO & GEO intelligence report prepared by DoctorFizz",
 };
 
 export default async function ReportPage({ params }) {

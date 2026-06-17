@@ -6,24 +6,17 @@ import { useEffect, useRef } from "react";
 // UTILITY COMPONENTS
 // ═══════════════════════════════════════════════════════════════════
 
+// DOCTORFIZZ wordmark — real asset per background (no css-invert; orange "O" preserved).
+const LOGO_WHITE_P = "/brand/doctorfizz-white.png";
+const LOGO_BLACK_P = "/brand/doctorfizz-black.png";
 function ItzFizzLogo({ white = false, size = "md" }) {
-  const dim = size === "lg" ? 32 : size === "sm" ? 16 : 22;
-  const textCls = size === "lg" ? "text-2xl" : size === "sm" ? "text-sm" : "text-[1.1rem]";
+  const dim = size === "lg" ? 44 : size === "sm" ? 20 : 30;
   return (
-    <div className="flex items-center gap-1.5">
-      <svg width={dim} height={dim} viewBox="0 0 32 32" fill="none">
-        <defs>
-          <linearGradient id="itzGradP" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#d45427" />
-            <stop offset="100%" stopColor="#ffa615" />
-          </linearGradient>
-        </defs>
-        <polygon points="16,1.5 19.8,11.8 30.5,16 19.8,20.2 16,30.5 12.2,20.2 1.5,16 12.2,11.8" fill="url(#itzGradP)" />
-      </svg>
-      <span className={`font-black tracking-tight leading-none ${textCls} ${white ? "text-white" : "text-gray-900"}`}>
-        Itz<span style={{ color: "#ffa615" }}>Fizz</span>
-      </span>
-    </div>
+    <img
+      src={white ? LOGO_WHITE_P : LOGO_BLACK_P}
+      alt="DoctorFizz"
+      style={{ height: dim, width: "auto", objectFit: "contain", display: "block" }}
+    />
   );
 }
 
@@ -223,7 +216,7 @@ export default function PageReport({ data }) {
                 ["Client", domain],
                 ["Target Page", url.length > 50 ? url.slice(0, 50) + "…" : url],
                 ["Date", dateStr],
-                ["Prepared By", "ItzFizz Digital"],
+                ["Prepared By", "DoctorFizz"],
               ].map(([label, val]) => (
                 <div key={label}>
                   <div className="text-[8px] uppercase tracking-widest text-gray-600 mb-0.5">{label}</div>
@@ -759,12 +752,12 @@ export default function PageReport({ data }) {
       </section>
 
       {/* ══════════════════════════════════════════════════════
-          WHY ITZFIZZ DIGITAL
+          WHY DOCTORFIZZ
       ══════════════════════════════════════════════════════ */}
       <section className="max-w-5xl mx-auto px-8 md:px-14 py-16">
         <AnimatedSection>
           <OBar />
-          <SHead>WHY ITZFIZZ DIGITAL</SHead>
+          <SHead>WHY DOCTORFIZZ</SHead>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
             {[
               { title: "Evidence, Not Guesswork", desc: "Every recommendation backed by real data from multiple sources — no guessing, no padding." },
@@ -789,7 +782,7 @@ export default function PageReport({ data }) {
           <AnimatedSection>
             <OBar />
             <SHead>OUR CLIENTELE</SHead>
-            <SSub>Brands That Trust ItzFizz Digital</SSub>
+            <SSub>Brands That Trust DoctorFizz</SSub>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {CLIENTS.map((name, i) => (
                 <div key={i} className="border border-gray-200 rounded-xl p-5 bg-white flex items-center justify-center min-h-[72px] hover:border-[#d45427]/30 transition-colors">
@@ -808,9 +801,9 @@ export default function PageReport({ data }) {
         <div className="flex items-center justify-center mb-3">
           <ItzFizzLogo size="md" />
         </div>
-        <div className="text-xs text-gray-400 mb-1">itzfizz.com · On-Page SEO Report for {domain}</div>
+        <div className="text-xs text-gray-400 mb-1">doctorfizz.com · On-Page SEO Report for {domain}</div>
         <div className="text-[10px] text-gray-300 max-w-xl mx-auto leading-relaxed">
-          This report is confidential and prepared solely for the named client. All analysis powered by ItzFizz Intelligence as of {dateStr}.
+          This report is confidential and prepared solely for the named client. All analysis powered by DoctorFizz Intelligence as of {dateStr}.
         </div>
       </footer>
     </div>

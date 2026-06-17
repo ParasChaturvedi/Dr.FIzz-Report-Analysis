@@ -90,7 +90,7 @@ export default function DownloadReportModal({ domain, data, onClose }) {
     const mmH     = canvas.height * 0.2646;
     const pdf     = new jsPDF({ orientation: "portrait", unit: "mm", format: [mmW, mmH] });
     pdf.addImage(imgData, "JPEG", 0, 0, mmW, mmH);
-    pdf.save(`ItzFizz-Report-${domain || "report"}-${Date.now()}.pdf`);
+    pdf.save(`DoctorFizz-Report-${domain || "report"}-${Date.now()}.pdf`);
   };
 
   // ── ConvertAPI HTML→PDF (production) ─────────────────────────────────────
@@ -202,7 +202,7 @@ export default function DownloadReportModal({ domain, data, onClose }) {
       "<head>",
       '<meta charset="UTF-8" />',
       '<meta name="viewport" content="width=1280, initial-scale=1.0" />',
-      "<title>ItzFizz Intelligence Report</title>",
+      "<title>DoctorFizz Intelligence Report</title>",
       `<style>${cssChunks.join("\n")}</style>`,
       `<style>${inlineStyles}</style>`,
       `<style>${pdfOverrides}</style>`,
@@ -230,7 +230,7 @@ export default function DownloadReportModal({ domain, data, onClose }) {
     const url    = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href     = url;
-    anchor.download = `ItzFizz-Report-${domain || "report"}-${Date.now()}.pdf`;
+    anchor.download = `DoctorFizz-Report-${domain || "report"}-${Date.now()}.pdf`;
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
@@ -363,7 +363,7 @@ export default function DownloadReportModal({ domain, data, onClose }) {
         <div className="bg-gray-950 text-white px-6 py-5">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-1">ItzFizz Digital</div>
+              <div className="text-xs font-bold uppercase tracking-widest text-orange-400 mb-1">DoctorFizz</div>
               <h2 className="text-lg font-black">Download Your Report</h2>
             </div>
             <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-800 grid place-items-center hover:bg-gray-700 transition-colors">
@@ -451,7 +451,7 @@ export default function DownloadReportModal({ domain, data, onClose }) {
               )}
 
               <p className="text-[10px] text-gray-400 text-center">
-                By downloading, you agree to be contacted by ItzFizz Digital regarding SEO services.
+                By downloading, you agree to be contacted by DoctorFizz regarding SEO services.
               </p>
             </>
           )}

@@ -163,13 +163,13 @@ export default function WebsiteReport({ data }) {
   };
 
   return (
-    <div id="report-content" className="font-sans bg-white text-gray-900 antialiased">
+    <div id="report-content" className="bg-white text-gray-900 antialiased" style={{ fontFamily: BODY }}>
 
       {/* ══════════════════════════════════════════════════════
           COVER PAGE
       ══════════════════════════════════════════════════════ */}
       <section className="relative overflow-hidden min-h-screen flex flex-col justify-center" style={{ background: INK, color: "#fff" }}>
-        <div className="w-full max-w-5xl mx-auto px-10 md:px-16 py-20">
+        <div className="w-full max-w-6xl mx-auto px-10 md:px-16 py-20">
           <ItzFizzLogo white size="lg" />
           <div className="h-[3px] w-12 mt-6 mb-7" style={{ background: ORANGE }} />
           <div className="text-[12px] font-semibold uppercase mb-5" style={{ fontFamily: BODY, letterSpacing: "0.34em", color: ORANGE }}>
@@ -192,7 +192,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           01 · THE BASELINE
       ══════════════════════════════════════════════════════ */}
-      <section className="max-w-5xl mx-auto px-8 md:px-14 py-16">
+      <section className="max-w-6xl mx-auto px-8 md:px-14 py-16">
         <AnimatedSection>
           <SNum n={1} total={N} />
           <OBar />
@@ -257,7 +257,7 @@ export default function WebsiteReport({ data }) {
           02 · COMPETITOR LANDSCAPE
       ══════════════════════════════════════════════════════ */}
       <section className="bg-[#f4f4f4] py-16">
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={2} total={N} />
             <OBar />
@@ -324,7 +324,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           03 · KEYWORD STRATEGY
       ══════════════════════════════════════════════════════ */}
-      <section className="max-w-5xl mx-auto px-8 md:px-14 py-16">
+      <section className="max-w-6xl mx-auto px-8 md:px-14 py-16">
         <AnimatedSection>
           <SNum n={3} total={N} />
           <OBar />
@@ -413,7 +413,7 @@ export default function WebsiteReport({ data }) {
           04 · CONTENT ARCHITECTURE
       ══════════════════════════════════════════════════════ */}
       <section className="bg-[#0E0E0E] text-white py-16">
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNumDark n={4} total={N} />
             <OBar />
@@ -467,7 +467,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           05 · COMPETITIVE INTELLIGENCE
       ══════════════════════════════════════════════════════ */}
-      <section className="max-w-5xl mx-auto px-8 md:px-14 py-16">
+      <section className="max-w-6xl mx-auto px-8 md:px-14 py-16">
         <AnimatedSection>
           <SNum n={5} total={N} />
           <OBar />
@@ -521,7 +521,7 @@ export default function WebsiteReport({ data }) {
           06 · TECHNICAL FOUNDATION
       ══════════════════════════════════════════════════════ */}
       <section className="bg-[#f4f4f4] py-16">
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={6} total={N} />
             <OBar />
@@ -562,7 +562,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           07 · AUTHORITY — LINK BUILDING
       ══════════════════════════════════════════════════════ */}
-      <section className="max-w-5xl mx-auto px-8 md:px-14 py-16">
+      <section className="max-w-6xl mx-auto px-8 md:px-14 py-16">
         <AnimatedSection>
           <SNum n={7} total={N} />
           <OBar />
@@ -598,7 +598,7 @@ export default function WebsiteReport({ data }) {
           08 · LOCAL SEARCH
       ══════════════════════════════════════════════════════ */}
       <section className="bg-[#0E0E0E] text-white py-16">
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNumDark n={8} total={N} />
             <OBar />
@@ -669,7 +669,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           09 · EXECUTION — 30-DAY PLAN
       ══════════════════════════════════════════════════════ */}
-      <section className="max-w-5xl mx-auto px-8 md:px-14 py-16">
+      <section className="max-w-6xl mx-auto px-8 md:px-14 py-16">
         <AnimatedSection>
           <SNum n={9} total={N} />
           <OBar />
@@ -709,7 +709,7 @@ export default function WebsiteReport({ data }) {
           10 · MEASURING SUCCESS
       ══════════════════════════════════════════════════════ */}
       <section className="bg-[#f4f4f4] py-16">
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={10} total={N} />
             <OBar />
@@ -752,7 +752,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           11 · CONTENT BLUEPRINT
       ══════════════════════════════════════════════════════ */}
-      <section className="max-w-5xl mx-auto px-8 md:px-14 py-16">
+      <section className="max-w-6xl mx-auto px-8 md:px-14 py-16">
         <AnimatedSection>
           <SNum n={11} total={N} />
           <OBar />
@@ -792,7 +792,7 @@ export default function WebsiteReport({ data }) {
           12 · UNCONTESTED TERRITORY
       ══════════════════════════════════════════════════════ */}
       <section className="bg-[#f4f4f4] py-16">
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={12} total={N} />
             <OBar />
@@ -820,7 +820,7 @@ export default function WebsiteReport({ data }) {
           13 · THE NEXT FRONTIER — GEO & AI
       ══════════════════════════════════════════════════════ */}
       <section className="bg-[#0E0E0E] text-white py-16">
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNumDark n={13} total={N} />
             <OBar />
@@ -864,7 +864,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           14 · QUICK WINS — 180-DAY ACTION PLAN
       ══════════════════════════════════════════════════════ */}
-      <section className="max-w-5xl mx-auto px-8 md:px-14 py-16">
+      <section className="max-w-6xl mx-auto px-8 md:px-14 py-16">
         <AnimatedSection>
           <SNum n={14} total={N} />
           <OBar />
@@ -896,7 +896,7 @@ export default function WebsiteReport({ data }) {
           15 · STRATEGIC PRIORITY STACK
       ══════════════════════════════════════════════════════ */}
       <section className="bg-[#f4f4f4] py-16">
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={15} total={N} />
             <OBar />
@@ -920,10 +920,10 @@ export default function WebsiteReport({ data }) {
       </section>
 
       {/* ══════════════════════════════════════════════════════
-          16 · WHY ITZFIZZ DIGITAL
+          16 · WHY DOCTORFIZZ
       ══════════════════════════════════════════════════════ */}
       <section className="bg-[#0E0E0E] text-white py-16">
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNumDark n={16} total={N} />
             <OBar />
@@ -966,12 +966,12 @@ export default function WebsiteReport({ data }) {
           17 · OUR CLIENTELE
       ══════════════════════════════════════════════════════ */}
       <section className="py-16" style={{ background: INK }}>
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={17} total={N} />
             <OBar />
             <SHead white>OUR CLIENTELE</SHead>
-            <SSub white>Brands Itzfizz Digital has partnered with</SSub>
+            <SSub white>Brands we have partnered with</SSub>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-x-10 gap-y-12 items-center mt-2">
               {CLIENT_LOGOS.map((c, i) => (
@@ -988,7 +988,7 @@ export default function WebsiteReport({ data }) {
           18 · FOUR STEPS TO LAUNCH
       ══════════════════════════════════════════════════════ */}
       <section className="bg-[#0E0E0E] text-white py-16">
-        <div className="max-w-5xl mx-auto px-8 md:px-14">
+        <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNumDark n={18} total={N} />
             <OBar />

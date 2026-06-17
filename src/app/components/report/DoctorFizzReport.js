@@ -2186,7 +2186,7 @@ export default function DoctorFizzReport({ data }) {
           <h2 style={{ fontFamily: SERIF, fontWeight: 700, fontSize: "30px", color: "#fff", marginBottom: "6px" }}>Our Clientele</h2>
           <div className="mb-3" style={{ borderBottom: `1px solid ${C.warmGrey}55` }} />
           <p className="mb-8" style={{ fontFamily: SANS, fontStyle: "italic", fontSize: "13px", color: "#9a948c" }}>
-            A selection of brands Itzfizz Digital has partnered with across SEO, web, branding, and growth.
+            A selection of brands we have partnered with across SEO, web, branding, and growth.
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-8 items-center">
             {CLIENT_LOGOS.map((c) => (
