@@ -18,6 +18,13 @@
 import { getOrFetch } from "@/lib/cache/mongo";
 import { runGeoScan } from "@/lib/seo/geo/collector";
 import { generateGeoPrompts } from "@/lib/seo/geo/prompt-generator";
+import { buildGeoMetrics, buildShareOfVoice } from "@/lib/seo/doctor-fizz-logic";
+import { claudeChat } from "@/lib/claude/client";
+
+// §25 — Claude explains WHY competitors win + what to do; raw metrics come from us.
+const GEO_ANALYST_SYS = `You are a senior GEO (Generative Engine Optimization) analyst. You are given a brand's AI-visibility metrics, competitor share-of-voice, and sample AI answers. Explain the competitive picture and what to do. Be specific and grounded ONLY in the data provided — do not invent numbers.
+Return ONLY valid JSON:
+{"competitor_reasoning":[{"competitor":"...","why":"one sentence on why they out-rank the brand in AI answers"}],"gaps":["the brand's biggest AI-visibility gaps, 2-4 items"],"actions":["3-5 concrete actions to raise the brand's AI visibility — citable pages, sources to earn, topics to cover"],"summary":"2-3 sentence executive read of the brand's AI visibility vs competitors"}`;
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -66,8 +73,28 @@ export async function POST(req) {
           ...(promptObjs.length ? { prompts: promptObjs } : {}),
         });
         if (!scan?.responses?.length) return null;
-        // Store ONLY the raw signal — Section 10 (buildGeoVisibility) computes the
-        // proprietary SoV + citation metrics from these, so the math stays in one place.
+
+        // §25 — ONE Claude deep-analysis pass (cached 30 days with the scan) that
+        // explains WHY competitors win + what to do. Raw metrics stay deterministic;
+        // Claude only adds the qualitative read. Fail-safe → null on any error.
+        let geo_insights = null;
+        try {
+          const sov = buildShareOfVoice({ brandSet: scan.brandSet, client: brand, responses: scan.responses });
+          const metrics = buildGeoMetrics({ brandSet: scan.brandSet, client: brand, clientDomain: domain, competitorDomains: scan.competitorDomains || competitorDomains, responses: scan.responses });
+          const ctx = {
+            brand, competitors,
+            overall: metrics?.overall || null,
+            per_engine_sov: (sov?.by_brand || []).map(b => ({ brand: b.brand, is_client: b.is_client, avg: b.avg, per_engine: b.per_engine })),
+            sample_answers: scan.responses.slice(0, 8).map(r => ({ engine: r.engine, prompt: r.prompt, lead: r.leadBrand, brands: r.brandsMentioned, cites: (r.citations || []).slice(0, 3) })),
+          };
+          const { content } = await claudeChat({
+            messages: [{ role: "system", content: GEO_ANALYST_SYS }, { role: "user", content: JSON.stringify(ctx) }],
+            max_tokens: 1400, temperature: 0.3, meta: { domain, api: "claude-geo-analysis" },
+          });
+          const m = content.match(/\{[\s\S]*\}/);
+          if (m) geo_insights = JSON.parse(m[0]);
+        } catch (e) { console.warn("[geo-scan] Claude analysis failed:", e?.message); }
+
         return {
           responses: scan.responses,
           brandSet: scan.brandSet,
@@ -75,6 +102,7 @@ export async function POST(req) {
           competitorDomains: scan.competitorDomains || competitorDomains,
           prompts,                       // the neutral prompts actually run (§17)
           engines: engineKeys,
+          geo_insights,                  // §25 Claude deep analysis (why competitors win + actions)
           errors: (scan.errors || []).map((e) => ({ engine: e.engine, error: e.error })),
         };
       },

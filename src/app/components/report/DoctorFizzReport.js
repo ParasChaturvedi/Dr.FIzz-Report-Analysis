@@ -1639,6 +1639,30 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               )}
 
+              {/* §25 — Claude deep analysis: why competitors win + recommended actions */}
+              {geo.geo_insights && (
+                <div className="rounded-lg p-3 mb-3" style={{ border: `1px solid ${C.warmGrey}30`, background: C.ivory }}>
+                  <div className="uppercase mb-1.5" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>AI Visibility — Deep Analysis</div>
+                  {geo.geo_insights.summary && <p className="text-[13px] mb-2" style={{ color: C.textDark, lineHeight: 1.6 }}>{geo.geo_insights.summary}</p>}
+                  {(geo.geo_insights.competitor_reasoning || []).length > 0 && (
+                    <div className="mb-2">
+                      <div className="text-[11px] font-bold mb-1" style={{ color: C.textDark }}>Why competitors win</div>
+                      {geo.geo_insights.competitor_reasoning.map((c, i) => (
+                        <div key={i} className="text-[12px] mb-0.5 flex gap-1.5" style={{ color: C.greyText }}><span style={{ color: C.orange }}>▸</span><span><strong style={{ color: C.textDark }}>{c.competitor}</strong>: {c.why}</span></div>
+                      ))}
+                    </div>
+                  )}
+                  {(geo.geo_insights.actions || []).length > 0 && (
+                    <div>
+                      <div className="text-[11px] font-bold mb-1" style={{ color: C.textDark }}>Recommended actions</div>
+                      {geo.geo_insights.actions.map((a, i) => (
+                        <div key={i} className="text-[12px] mb-0.5 flex gap-1.5" style={{ color: C.greyText }}><span style={{ color: C.rxGreen }}>✓</span><span>{a}</span></div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* LIVE Citation intelligence — proprietary citation logic (only when collector ran) */}
               {geo.citation_analysis && (
                 <>

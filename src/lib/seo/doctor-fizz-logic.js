@@ -1452,6 +1452,7 @@ export function buildGeoVisibility(input = {}) {
     geo_score,              // §21 weighted composite GEO score (null until collector runs)
     geo_metrics,            // §20 full two-layer metric matrix (overall + per engine)
     competitor_intel,       // §25 competitor intelligence (null until collector runs)
+    geo_insights: raw?.geo_insights || null, // §25 Claude deep analysis (why competitors win + actions)
     geo_readiness,
     tracked_prompts,
     ai_platforms,
