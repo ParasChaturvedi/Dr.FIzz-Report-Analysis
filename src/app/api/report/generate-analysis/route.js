@@ -246,6 +246,7 @@ Rules:
 - Keyword volumes: use realistic industry estimates (format: "2K–5K/mo", "800/mo"). Never use "—" for volumes.
 - Content blueprint vol/pos: realistic estimates like "1.2K/mo", "Top 5".
 - Do NOT mention Claude, Anthropic, or any AI tool by name.
+- Describe the client and its competitors by their ACTUAL category from the data (use the client's stated industry, e.g. "digital marketing agency"). NEVER invent size/type descriptors like "boutique", "small", "startup", or "niche" unless the data explicitly supports them.
 - Do NOT give generic advice. Every sentence must be specific to THIS business.`;
 
   const domainCtx = seoData ? `

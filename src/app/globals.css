@@ -186,6 +186,17 @@ html.dark .bg-gray-50  { background-color: #2a2c2c !important; }
 html.dark .text-gray-500 { color: #9ca3af !important; }
 html.dark .border-gray-300 { border-color: #4b5563 !important; }
 
+/* ── The generated report (#report-content) is a FIXED print-style artifact: white
+   slides + an inline-dark cover. It must NEVER follow the app's dark theme, or the
+   .bg-white→#1f2121 remap above bleeds a second, mismatched dark behind the cover and
+   turns the white slides grey. Re-pin its surfaces to fixed light values. The inline
+   dark cover/callouts (background set via style=, not .bg-white) are unaffected. ── */
+#report-content { background-color: #ffffff !important; color-scheme: light; }
+#report-content .bg-white { background-color: #ffffff !important; }
+#report-content .bg-gray-50 { background-color: #f7f7f7 !important; }
+#report-content .bg-gray-100 { background-color: #f3f4f6 !important; }
+html.dark #report-content .text-gray-500 { color: #6b7280 !important; }
+
 /* bg-white with Tailwind opacity modifier (/95 etc.) — not caught by .bg-white remap */
 html.dark .bg-white\/95 { background-color: rgb(31 33 33 / 0.95) !important; }
 html.dark .bg-white\/90 { background-color: rgb(31 33 33 / 0.90) !important; }

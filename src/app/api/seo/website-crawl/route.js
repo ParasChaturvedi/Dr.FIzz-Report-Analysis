@@ -12,7 +12,7 @@ export const runtime    = "nodejs";
 export const maxDuration = 90;
 
 const FETCH_TIMEOUT_MS  = 10000;
-const MAX_PAGES         = 25;     // pages we deep-audit (HTML parsed)
+const MAX_PAGES         = 50;     // pages we deep-audit (HTML parsed) — sample of the full index
 const SITEMAP_SCAN_CAP  = 5000;   // sitemap URLs we count for the total estimate
 const CONCURRENCY       = 5;
 

@@ -89,23 +89,21 @@ function formatCrawlValue(crawl) {
 const INITIAL_STAGES = [
   { id: "validation",     label: "1. Website Validation",
     desc: "Site scope, crawl access, indexability, technical health, and whether the site is valid for analysis." },
-  { id: "indexedPages",   label: "2. Indexed Pages & Audit Pages",
-    desc: "Reviews the site's key discovered pages — service pages, blogs and other important indexed URLs that search engines have found." },
-  { id: "crawlability",   label: "3. Crawlability Check",
-    desc: "Whether search engines can properly crawl the site — robots, sitemap, internal linking, and page discovery." },
-  { id: "technical",      label: "4. Technical SEO",
+  { id: "crawlability",   label: "2. Indexed Pages & Crawlability",
+    desc: "Discovers the site's key pages (service pages, blogs, important URLs) and checks whether search engines can properly crawl & index them — robots.txt, sitemap, noindex tags, internal linking, and page discovery." },
+  { id: "technical",      label: "3. Technical SEO",
     desc: "Performance, Core Web Vitals, structured data, redirects, canonicals, duplicate issues, and indexation blockers." },
-  { id: "onpage",         label: "5. On-Page SEO & Content",
+  { id: "onpage",         label: "4. On-Page SEO & Content",
     desc: "Titles, meta descriptions, headers, content quality, keyword mapping, internal links, and topical coverage." },
-  { id: "offpage",        label: "6. Off-Page & Authority Signals",
+  { id: "offpage",        label: "5. Off-Page & Authority Signals",
     desc: "Backlinks, citations, directory presence, brand mentions, and trust signals." },
-  { id: "geoLlm",         label: "7. GEO & LLM Check",
+  { id: "geoLlm",         label: "6. GEO & LLM Check",
     desc: "Checks the on-page AI-readiness signals in the collected content — structured data / schema and answer-style formatting. (Full multi-engine AI-visibility scan is a separate module.)" },
-  { id: "dataValidation", label: "8. Data Validation",
+  { id: "dataValidation", label: "7. Data Validation",
     desc: "Confirms the data is complete, accurate, formatted properly, and that no fields are missing or broken." },
-  { id: "seoGeoReport",   label: "9. SEO & GEO Report",
+  { id: "seoGeoReport",   label: "8. SEO & GEO Report",
     desc: "Turns the findings into a clear business summary — opportunities, priorities, and recommendations." },
-  { id: "storytelling",   label: "10. Final Intelligence Report",
+  { id: "storytelling",   label: "9. Final Intelligence Report",
     desc: "The final intelligence report — where the business stands, what is holding it back, the biggest opportunity, and the prioritized action plan." },
 ];
 
@@ -144,12 +142,12 @@ const REALISTIC_LOAD_SPAN_MS = 60000;  // + up to 1 min of jitter → 2.5–3.5 
 // Heavier stages take longer (off-page APIs, the two Opus analysis steps), matching
 // where the real pipeline actually spends its time.
 const REPLAY_STAGE_WEIGHTS = {
-  validation: 1.0, indexedPages: 1.2, crawlability: 1.0, technical: 1.6,
+  validation: 1.0, crawlability: 1.4, technical: 1.6,
   onpage: 1.9, offpage: 2.6, geoLlm: 1.2, dataValidation: 0.8,
   seoGeoReport: 2.6, storytelling: 2.6,
 };
 const REPLAY_STAGE_VALUES = {
-  validation: "Checked", indexedPages: "Reviewed", crawlability: "Crawlable",
+  validation: "Checked", crawlability: "Crawlable",
   technical: "Analyzed", onpage: "Analyzed", offpage: "Analyzed",
   geoLlm: "Checked", dataValidation: "Validated", seoGeoReport: "Generated",
   storytelling: "Complete",
@@ -817,7 +815,6 @@ export default function Step5Slide2({
       // 2–3) Indexed Pages & Crawlability — crawl the validated site FIRST so the
       //      diagnostics that follow run against the site's real, discovered pages
       //      (retried, soft-fail). One crawl feeds both journey steps.
-      updateStage("indexedPages", { state: "loading" });
       updateStage("crawlability", { state: "loading" });
       {
         const r = await withRetry(async () => {
@@ -832,10 +829,9 @@ export default function Step5Slide2({
         if (r.ok) {
           crawlJson = r.data;
           const pages = crawlJson?.pageCount ?? crawlJson?.pages?.length ?? null;
-          updateStage("indexedPages", { state: "done", value: pages != null ? `${pages} pages reviewed` : "Reviewed" });
-          updateStage("crawlability", { state: "done", value: formatCrawlValue(crawlJson) });
+          const cv = formatCrawlValue(crawlJson);
+          updateStage("crawlability", { state: "done", value: pages != null ? `${pages} pages · ${cv}` : cv });
         } else {
-          updateStage("indexedPages", { state: "done", value: "Limited data" });
           updateStage("crawlability", { state: "done", value: "Limited data" });
         }
       }
