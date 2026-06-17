@@ -238,9 +238,10 @@ async function generateWebsiteAnalysis({ domain, keywords, competitors, business
   const competitorList = (competitors || []).slice(0, 5).join(", ") || "major industry players";
   const industry = businessData?.industrySector || businessData?.industry || "business";
 
-  const systemPrompt = `You are ItzFizz Intelligence, an elite SEO & GEO strategy engine.
+  const systemPrompt = `You are DoctorFizz Intelligence, an elite SEO & GEO strategy engine.
 You produce ruthlessly specific, data-backed strategy for real businesses. Every item must reference the client's actual data — industry, keywords, competitors, domain metrics.
 Rules:
+- ANALYZE FIRST: before writing anything, deeply read ALL the metrics provided below (domain rating, organic traffic & keywords, mobile/desktop PSI, site-health/crawl, schema coverage, GMB rating/reviews/completeness, and the real keyword-gap data). Identify THIS site's specific weaknesses and opportunities, then make every recommendation address a concrete finding and cite the actual number/fact from the data. Never give a recommendation the data does not justify, and never output generic boilerplate.
 - Return STRICT JSON matching the exact schema below.
 - Keyword volumes: use realistic industry estimates (format: "2K–5K/mo", "800/mo"). Never use "—" for volumes.
 - Content blueprint vol/pos: realistic estimates like "1.2K/mo", "Top 5".

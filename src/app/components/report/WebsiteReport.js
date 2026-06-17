@@ -502,35 +502,26 @@ export default function WebsiteReport({ data }) {
             <div className="text-sm text-gray-400 mb-10 py-4">Keyword research processing…</div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div>
-              <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b border-gray-200 pb-2.5 mb-4">
-                Tier 2 — Neighbourhood Hyper-Local
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {[
+              { title: "Tier 2 — Neighbourhood Hyper-Local", items: ks.tier2Neighborhood },
+              { title: "Tier 3 — Informational Blog", items: ks.tier3Informational },
+            ].map((t) => (
+              <div key={t.title} className="bg-white rounded-lg overflow-hidden" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                <div style={{ height: 4, background: ORANGE }} />
+                <div className="p-6">
+                  <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "15px", color: INK, marginBottom: 12 }}>{t.title}</div>
+                  <ul className="space-y-2.5">
+                    {(t.items || []).map((kw, i) => (
+                      <li key={i} className="flex items-start gap-2.5" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A" }}>
+                        <span style={{ width: 6, height: 6, borderRadius: "50%", background: ORANGE, marginTop: 6, flexShrink: 0 }} />{kw}
+                      </li>
+                    ))}
+                    {!(t.items || []).length && <li className="text-sm text-gray-400">Analysing…</li>}
+                  </ul>
+                </div>
               </div>
-              <ul className="space-y-2.5">
-                {(ks.tier2Neighborhood || []).map((kw, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm text-gray-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#C35328] mt-[0.4rem] flex-shrink-0" />
-                    {kw}
-                  </li>
-                ))}
-                {!(ks.tier2Neighborhood || []).length && <li className="text-sm text-gray-400">Analysing…</li>}
-              </ul>
-            </div>
-            <div>
-              <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 border-b border-gray-200 pb-2.5 mb-4">
-                Tier 3 — Informational Blog
-              </div>
-              <ul className="space-y-2.5">
-                {(ks.tier3Informational || []).map((kw, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm text-gray-700">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#C35328] mt-[0.4rem] flex-shrink-0" />
-                    {kw}
-                  </li>
-                ))}
-                {!(ks.tier3Informational || []).length && <li className="text-sm text-gray-400">Analysing…</li>}
-              </ul>
-            </div>
+            ))}
           </div>
         </AnimatedSection>
       </section>
@@ -538,51 +529,42 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           04 · CONTENT ARCHITECTURE
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#0E0E0E] text-white py-16">
+      <section className="bg-white py-16">
         <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
-            <SNumDark n={4} total={N} />
+            <SNum n={4} total={N} />
             <OBar />
-            <SHead white>CONTENT ARCHITECTURE</SHead>
-            <SSub white>What Pages To Build</SSub>
+            <SHead>CONTENT ARCHITECTURE</SHead>
+            <SSub>What Pages To Build</SSub>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-4">
-                  Recommended Site Structure
-                </div>
-                <div className="space-y-2">
-                  {(ca.siteStructure || []).map((page, i) => (
-                    <div key={i} className="flex items-start gap-3 bg-white/[0.05] rounded-lg p-3.5 hover:bg-white/[0.08] transition-colors">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#C35328] mt-1.5 flex-shrink-0" />
-                      <div>
-                        <div className="text-sm font-semibold text-white">{page.page}</div>
-                        {page.url && <div className="text-xs text-gray-500 font-mono mt-0.5">{page.url}</div>}
-                        {page.purpose && <div className="text-xs text-gray-400 mt-0.5 leading-relaxed">{page.purpose}</div>}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* dark site-structure box (reference p7) */}
+              <div className="rounded-lg overflow-hidden flex" style={{ background: INK }}>
+                <div style={{ width: 4, background: ORANGE, flexShrink: 0 }} />
+                <div className="p-5 w-full">
+                  <div className="uppercase mb-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: ORANGE }}>Recommended Site Structure</div>
+                  <div className="space-y-2.5">
+                    {(ca.siteStructure || []).map((page, i) => (
+                      <div key={i}>
+                        <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: "13px", color: "#fff" }}>{page.page}</div>
+                        {page.url && <div style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: "11px", color: "#9A9A9A" }}>{page.url}</div>}
+                        {page.purpose && <div style={{ fontFamily: BODY, fontSize: "11.5px", color: "#8A8A8A", lineHeight: 1.5 }}>{page.purpose}</div>}
                       </div>
-                    </div>
-                  ))}
-                  {!(ca.siteStructure || []).length && (
-                    <div className="text-sm text-gray-500">Structure generating…</div>
-                  )}
+                    ))}
+                    {!(ca.siteStructure || []).length && <div style={{ color: "#8A8A8A", fontSize: 13 }}>Structure generating…</div>}
+                  </div>
                 </div>
               </div>
-              <div>
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-4">
-                  Content Checklist
-                </div>
+              {/* white checklist card */}
+              <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "15px", color: INK, marginBottom: 14 }}>Every Page Must Include</div>
                 <ul className="space-y-3">
                   {(ca.checklist || []).map((item, i) => (
-                    <li key={i} className="flex items-start gap-3 text-sm text-gray-300">
-                      <svg className="w-4 h-4 text-[#C35328] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                      {item}
+                    <li key={i} className="flex items-start gap-2.5" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.5 }}>
+                      <span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>✓</span>{item}
                     </li>
                   ))}
-                  {!(ca.checklist || []).length && (
-                    <li className="text-sm text-gray-500">Checklist generating…</li>
-                  )}
+                  {!(ca.checklist || []).length && <li className="text-sm text-gray-400">Checklist generating…</li>}
                 </ul>
               </div>
             </div>
@@ -704,66 +686,56 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           08 · LOCAL SEARCH
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#0E0E0E] text-white py-16">
+      <section className="bg-white py-16">
         <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
-            <SNumDark n={8} total={N} />
+            <SNum n={8} total={N} />
             <OBar />
-            <SHead white>LOCAL SEARCH</SHead>
-            <SSub white>Google Business Profile: The Fastest Win</SSub>
+            <SHead>LOCAL SEARCH</SHead>
+            <SSub>Google Business Profile: The Fastest Win</SSub>
 
-            {/* Real GMB status strip */}
+            {/* Real GMB status strip — white cards */}
             {gmbInfo && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-white/10 rounded-xl overflow-hidden mb-8">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
                 {[
-                  { label: "GMB Listing",    value: gmbInfo.found ? "Found ✓" : "Not Found ✗", bad: !gmbInfo.found },
-                  { label: "Verified",       value: gmbInfo.isVerified ? "Yes ✓" : "No ✗", bad: !gmbInfo.isVerified },
-                  { label: "Rating",         value: gmbInfo.rating ? `${gmbInfo.rating}★` : "N/A", bad: !gmbInfo.rating || gmbInfo.rating < 4 },
-                  { label: "Reviews",        value: gmbInfo.reviewCount != null ? String(gmbInfo.reviewCount) : "—", bad: (gmbInfo.reviewCount || 0) < 10 },
+                  { label: "GMB Listing", value: gmbInfo.found ? "Found ✓" : "Not Found ✗", bad: !gmbInfo.found },
+                  { label: "Verified", value: gmbInfo.isVerified ? "Yes ✓" : "No ✗", bad: !gmbInfo.isVerified },
+                  { label: "Rating", value: gmbInfo.rating ? `${gmbInfo.rating}★` : "N/A", bad: !gmbInfo.rating || gmbInfo.rating < 4 },
+                  { label: "Reviews", value: gmbInfo.reviewCount != null ? String(gmbInfo.reviewCount) : "—", bad: (gmbInfo.reviewCount || 0) < 10 },
                 ].map(({ label, value, bad }) => (
-                  <div key={label} className="bg-white/[0.04] px-5 py-4">
-                    <div className="text-[8px] uppercase tracking-widest text-gray-500 mb-1">{label}</div>
-                    <div className={`text-lg font-black ${bad ? "text-red-400" : "text-[#C35328]"}`}>{value}</div>
+                  <div key={label} className="bg-white rounded-lg p-4" style={{ border: "1px solid #E5E5E5" }}>
+                    <div className="uppercase mb-1" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "9px", letterSpacing: "0.12em", color: "#8A8A8A" }}>{label}</div>
+                    <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "18px", color: bad ? "#B3261E" : ORANGE }}>{value}</div>
                   </div>
                 ))}
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div>
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-4">
-                  GBP Action Checklist
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* checklist white card */}
+              <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "15px", color: INK, marginBottom: 14 }}>GBP Action Checklist</div>
                 <ul className="space-y-3">
                   {(ls.gbpChecklist || []).map((item, i) => (
-                    <li key={i} className="flex items-start gap-3 text-sm text-gray-300">
-                      <svg className="w-4 h-4 text-[#C35328] mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                      </svg>
-                      {item}
+                    <li key={i} className="flex items-start gap-2.5" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.5 }}>
+                      <span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>✓</span>{item}
                     </li>
                   ))}
-                  {!(ls.gbpChecklist || []).length && (
-                    <li className="text-sm text-gray-500">Checklist generating…</li>
-                  )}
+                  {!(ls.gbpChecklist || []).length && <li className="text-sm text-gray-400">Checklist generating…</li>}
                 </ul>
               </div>
+              {/* review target (dark callout) + GMB completeness */}
               <div className="space-y-4">
-                {ls.reviewTarget && (
-                  <div className="bg-[#C35328]/10 border border-[#C35328]/20 rounded-xl p-5">
-                    <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-2">Review Target</div>
-                    <p className="text-sm text-gray-300 leading-relaxed">{ls.reviewTarget}</p>
-                  </div>
-                )}
+                {ls.reviewTarget && <DarkCallout label="Review Target">{ls.reviewTarget}</DarkCallout>}
                 {gmbScore != null && (
-                  <div className="bg-white/[0.04] border border-white/10 rounded-xl p-5">
-                    <div className="text-[8px] font-bold uppercase tracking-widest text-gray-500 mb-2">GMB Completeness Score</div>
+                  <div className="bg-white rounded-lg p-5" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                    <div className="uppercase mb-2" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: "#8A8A8A" }}>GMB Completeness Score</div>
                     <div className="flex items-end gap-2">
-                      <span className={`text-3xl font-black ${gmbScore >= 70 ? "text-[#C35328]" : gmbScore >= 40 ? "text-orange-400" : "text-red-400"}`}>{gmbScore}</span>
-                      <span className="text-gray-500 text-sm mb-1">/100</span>
+                      <span style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "30px", color: gmbScore >= 70 ? ORANGE : gmbScore >= 40 ? "#9A6A12" : "#B3261E" }}>{gmbScore}</span>
+                      <span style={{ color: "#8A8A8A", fontSize: 13, marginBottom: 4 }}>/100</span>
                     </div>
-                    <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-[#C35328] to-[#C35328] rounded-full transition-all" style={{ width: `${gmbScore}%` }} />
+                    <div className="mt-2 h-1.5 rounded-full overflow-hidden" style={{ background: "#EDEDED" }}>
+                      <div className="h-full rounded-full" style={{ width: `${gmbScore}%`, background: ORANGE }} />
                     </div>
                   </div>
                 )}
@@ -783,31 +755,29 @@ export default function WebsiteReport({ data }) {
           <SHead>EXECUTION</SHead>
           <SSub>30-Day Execution Plan</SSub>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {rm.map((phase, i) => (
-              <div key={i} className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#C35328]/30 hover:shadow-sm transition-all duration-200">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#C35328] to-[#C35328] text-white text-xs font-black grid place-items-center flex-shrink-0">
-                    {phase.phase}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {rm.map((phase, i) => {
+              const hdr = ["#C35328", "#A8431E", "#4A4A4A", "#8A8A8A"][i % 4];
+              return (
+                <div key={i} className="rounded-lg overflow-hidden bg-white flex flex-col" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                  <div className="px-4 py-3" style={{ background: hdr }}>
+                    <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "15px", color: "#fff" }}>Phase {i + 1}</div>
+                    {phase.duration && <div style={{ fontFamily: BODY, fontSize: "11px", color: "rgba(255,255,255,0.85)" }}>{phase.duration}</div>}
                   </div>
-                  <div>
-                    <div className="font-bold text-gray-900 text-sm">{phase.title}</div>
-                    <div className="text-[9px] text-[#C35328] font-bold uppercase tracking-widest">{phase.duration}</div>
+                  <div className="p-4 flex-1">
+                    {phase.title && <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "13px", color: INK, marginBottom: 8 }}>{phase.title}</div>}
+                    <ul className="space-y-2">
+                      {(phase.actions || []).map((action, j) => (
+                        <li key={j} className="flex items-start gap-2" style={{ fontFamily: BODY, fontSize: "12px", color: "#5A5A5A", lineHeight: 1.45 }}>
+                          <span style={{ width: 5, height: 5, borderRadius: "50%", background: ORANGE, marginTop: 6, flexShrink: 0 }} />{action}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
-                <ul className="space-y-2">
-                  {(phase.actions || []).map((action, j) => (
-                    <li key={j} className="flex items-start gap-2 text-xs text-gray-700 leading-relaxed">
-                      <span className="w-1 h-1 rounded-full bg-[#C35328] mt-1.5 flex-shrink-0" />
-                      {action}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-            {!rm.length && (
-              <div className="col-span-2 text-sm text-gray-400 py-4">Execution plan generating…</div>
-            )}
+              );
+            })}
+            {!rm.length && <div className="col-span-full text-sm text-gray-400 py-4">Execution plan generating…</div>}
           </div>
         </AnimatedSection>
       </section>
@@ -1002,13 +972,13 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           16 · WHY DOCTORFIZZ
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#0E0E0E] text-white py-16">
+      <section className="bg-white py-16">
         <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
-            <SNumDark n={16} total={N} />
+            <SNum n={16} total={N} />
             <OBar />
-            <SHead white>WHY DOCTORFIZZ</SHead>
-            <SSub white>Evidence Over Guesswork</SSub>
+            <SHead>WHY DOCTORFIZZ</SHead>
+            <SSub>Evidence Over Guesswork</SSub>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-8">
               {[
@@ -1029,12 +999,12 @@ export default function WebsiteReport({ data }) {
                   desc: "Full visibility into what we do, what moved, and what's next. No black boxes.",
                 },
               ].map((card, i) => (
-                <div
-                  key={i}
-                  className="bg-white/[0.04] border border-white/10 rounded-xl p-6 hover:border-[#C35328]/30 transition-colors duration-200"
-                >
-                  <div className="font-bold text-sm text-white mb-2">{card.title}</div>
-                  <p className="text-xs text-gray-400 leading-relaxed">{card.desc}</p>
+                <div key={i} className="bg-white rounded-lg overflow-hidden" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                  <div style={{ height: 4, background: ORANGE }} />
+                  <div className="p-6">
+                    <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "15px", color: INK, marginBottom: 6 }}>{card.title}</div>
+                    <p style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.55 }}>{card.desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
