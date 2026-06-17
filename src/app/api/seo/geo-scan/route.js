@@ -17,6 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { getOrFetch } from "@/lib/cache/mongo";
 import { runGeoScan } from "@/lib/seo/geo/collector";
+import { loadGeoSessions } from "@/lib/seo/geo/sessions";
 import { generateGeoPrompts } from "@/lib/seo/geo/prompt-generator";
 import { buildGeoMetrics, buildShareOfVoice } from "@/lib/seo/doctor-fizz-logic";
 import { claudeChat } from "@/lib/claude/client";
@@ -59,17 +60,26 @@ export async function POST(req) {
     // The SAME 20 prompt templates for EVERY domain (1st scan or 100th) — filled with
     // this domain's industry + location. Deterministic + zero LLM cost + Share-of-Voice
     // stays comparable across every business. Brand/competitor-neutral by construction.
-    const prompts = generateGeoPrompts({ industry, category: body.category || "", location, count: promptCount });
+    const prompts = generateGeoPrompts({
+      industry, category: body.category || "", location,
+      keywords: Array.isArray(body.keywords) ? body.keywords : [],   // §17 fallback for {ind}
+      count: promptCount,
+    });
     const promptObjs = prompts.map((p, i) => ({ id: `gp${i + 1}`, theme: "geo", prompt: p }));
 
     const { data, cached } = await getOrFetch({
       domain, dataType: "geo-visibility", ttlDays: 30, source: "geo-scan", fetchedBy: brand,
       fetchFn: async () => {
+        // §15/§19 — pull any login-engine session (ChatGPT/Gemini/Copilot) stored
+        // server-side (env GEO_SESSION_* or Mongo via /api/seo/geo-session). No-login
+        // engines always run; a login engine joins automatically once its session exists.
+        const sessions = await loadGeoSessions();
+        const allEngines = [...new Set([...engineKeys, ...Object.keys(sessions)])];
         const scan = await runGeoScan({
           mode: "live", transport: "browserless",
           brand, clientDomain: domain, competitors, competitorDomains,
           industry, location, proxyCountry: body.countryCode || "in",
-          engineKeys, sessions: {},
+          engineKeys: allEngines, sessions,
           ...(promptObjs.length ? { prompts: promptObjs } : {}),
         });
         if (!scan?.responses?.length) return null;
@@ -101,7 +111,7 @@ export async function POST(req) {
           clientDomain: domain,
           competitorDomains: scan.competitorDomains || competitorDomains,
           prompts,                       // the neutral prompts actually run (§17)
-          engines: engineKeys,
+          engines: allEngines,           // engines actually measured (no-login + any login session)
           geo_insights,                  // §25 Claude deep analysis (why competitors win + actions)
           errors: (scan.errors || []).map((e) => ({ engine: e.engine, error: e.error })),
         };

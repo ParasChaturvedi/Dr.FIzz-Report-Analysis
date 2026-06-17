@@ -1399,7 +1399,7 @@ export function buildGeoVisibility(input = {}) {
   // ── LIVE AI visibility (proprietary SoV + Citation logic) — computed ONLY when
   //    the multi-engine collector has supplied raw responses (input.aiResponses);
   //    null otherwise, so the deterministic placeholders above still show. ───────
-  let share_of_voice = null, citation_analysis = null, geo_metrics = null;
+  let share_of_voice = null, citation_analysis = null, geo_metrics = null, topic_dominance = null;
   const raw = input.aiResponses || input.ai_visibility_raw || null;
   if (raw && Array.isArray(raw.responses) && raw.responses.length) {
     const _brandSet = raw.brandSet || [clientName || domain, ...(competitors || []).map(c => c.name || c.domain).filter(Boolean)];
@@ -1414,6 +1414,8 @@ export function buildGeoVisibility(input = {}) {
       brandSet: _brandSet, client: clientName || domain,
       clientDomain: raw.clientDomain || domain, competitorDomains: _compDomains, responses: raw.responses,
     });
+    // §25 — deterministic per-topic dominance (hard numbers alongside Claude's read).
+    topic_dominance = buildTopicDominance({ brandSet: _brandSet, client: clientName || domain, responses: raw.responses });
   }
   // §21 — weighted composite GEO score (only when the live scan supplied data).
   const geo_score = (share_of_voice || citation_analysis)
@@ -1450,6 +1452,7 @@ export function buildGeoVisibility(input = {}) {
     citation_analysis,      // proprietary citation intelligence + opportunity queue (§23-24)
     geo_score,              // §21 weighted composite GEO score (null until collector runs)
     geo_metrics,            // §20 full two-layer metric matrix (overall + per engine)
+    topic_dominance,        // §25 deterministic per-topic dominance (lost/contested topics)
     competitor_intel,       // §25 competitor intelligence (null until collector runs)
     geo_insights: raw?.geo_insights || null, // §25 Claude deep analysis (why competitors win + actions)
     geo_readiness,
@@ -1520,6 +1523,34 @@ const _geoHost = (url) => {
 const _hostMatches = (hostOrUrl, domain) => {
   const h = _geoHost(hostOrUrl), d = _geoHost(domain);
   return !!d && d.length > 1 && (h === d || h.endsWith("." + d));
+};
+const _pct1 = (n, d) => Math.round((Number(n) / (Number(d) || 1)) * 1000) / 10;
+
+// Current year — doctor-fizz-logic runs only inside Next.js routes (never a Workflow
+// script), so new Date() is safe here. Falls back to a constant if it ever throws.
+const _nowYear = () => { try { return new Date().getFullYear(); } catch { return 2026; } };
+// The only date signal AI engines reliably expose is a 4-digit year embedded in the
+// cited URL (e.g. /2026/, -2025-, ?y=2024). Returns 0 when none is present/plausible.
+const _citationYear = (url) => {
+  const cur = _nowYear();
+  const m = String(url || "").match(/(?:^|[^0-9])(20[1-9][0-9])(?:[^0-9]|$)/);
+  const y = m ? Number(m[1]) : 0;
+  return y >= 2010 && y <= cur + 1 ? y : 0;
+};
+// §21 FRESHNESS (0-100) — real, from the dated citations across a response set: the
+// share that are current-or-last-year. No dated citations → softer baseline, nudged up
+// when the answers themselves reference a recent year. Honest proxy (engines rarely
+// surface true publish dates) but data-driven, not a hard-coded 50.
+const _computeFreshness = (responses = []) => {
+  const cur = _nowYear();
+  let dated = 0, recent = 0;
+  for (const r of responses) for (const u of (r.citations || [])) {
+    const y = _citationYear(u); if (y) { dated++; if (y >= cur - 1) recent++; }
+  }
+  if (dated >= 2) return Math.round((recent / dated) * 100);
+  if (dated === 1) return recent ? 70 : 40;
+  const txt = responses.map((r) => String(r.answerText || "")).join(" ");
+  return new RegExp(`(?:^|[^0-9])(${cur}|${cur - 1})(?:[^0-9]|$)`).test(txt) ? 60 : 45;
 };
 
 /**
@@ -1670,9 +1701,46 @@ export function buildCitationAnalysis(input = {}) {
       difficulty: d.link_acquisition_difficulty, cited_in_responses: d.responses,
     }));
 
+  // §23 — PER-CITATION store: every cited URL classified individually (page-level),
+  // not just aggregated by domain. Powers page-level opportunity targeting, cross-engine
+  // counting, and per-citation freshness — the spec's deeper citation layer.
+  const perCite = new Map();   // url -> record
+  responses.forEach((r) => {
+    (r.citations || []).filter(Boolean).forEach((url, i) => {
+      const host = _geoHost(url); if (!host) return;
+      if (!perCite.has(url)) {
+        const cl = classifyCitation(url, { clientDomain, competitorDomains });
+        perCite.set(url, {
+          url, domain: host, engine: r.engine || "", prompt: r.prompt || "",
+          first_position: i + 1, published_year: _citationYear(url) || null,
+          is_client: _hostMatches(host, clientDomain),
+          is_competitor: competitorDomains.some((c) => _hostMatches(host, c)),
+          citation_class: cl.citation_class, source_type: cl.source_type,
+          action: cl.action_type, opportunity_score: cl.link_opportunity_score,
+          difficulty: cl.link_acquisition_difficulty, authority_score: cl.authority_score,
+          _engines: new Set([r.engine].filter(Boolean)), times_cited: 1,
+        });
+      } else {
+        const e = perCite.get(url); e.times_cited++; if (r.engine) e._engines.add(r.engine);
+      }
+    });
+  });
+  const citations = [...perCite.values()]
+    .map(({ _engines, ...c }) => ({ ...c, engines: [..._engines], cross_engine: _engines.size }))
+    .sort((a, b) => b.cross_engine - a.cross_engine || b.opportunity_score - a.opportunity_score);
+  // Page-level (URL) opportunity queue — complements the domain-level one above.
+  const page_opportunities = citations
+    .filter((c) => !c.is_client && c.action !== "no_action" && c.action !== "citation_only" && c.opportunity_score > 0)
+    .sort((a, b) => b.opportunity_score - a.opportunity_score || b.cross_engine - a.cross_engine)
+    .slice(0, 10);
+  const freshness = _computeFreshness(responses);   // §21 real freshness signal
+
   return {
     most_cited_domains: classified, client_cited, citation_gap, brand_presence,
-    opportunity_queue,                       // §23-24 backlink/citation opportunity queue
+    opportunity_queue,                       // §23-24 domain-level backlink/citation queue
+    citations: citations.slice(0, 60),       // §23 per-citation (page-level) store
+    page_opportunities,                      // §24 page-level opportunity queue
+    freshness,                               // §21 measured freshness (feeds the GEO score)
     responses_analysed: responses.length,
   };
 }
@@ -1757,8 +1825,8 @@ export function computeGeoScore({ share_of_voice = null, citation_analysis = nul
   // cross-engine consistency — appears in how many engines (of those scanned)
   const enginesPresent = clientRow ? engines.filter(e => (clientRow.per_engine[e] || 0) > 0).length : 0;
   const crossEngine = engines.length ? Math.round((enginesPresent / engines.length) * 100) : 0;
-  // freshness — proxy (we don't have per-citation dates yet); neutral baseline
-  const freshness = 50;
+  // freshness — measured from dated citations (see _computeFreshness); 50 only if absent
+  const freshness = (typeof cites.freshness === "number") ? cites.freshness : 50;
   // topic coverage — same prompt-coverage proxy as intent for now
   const topicCoverage = intentMatch;
 
@@ -1847,7 +1915,7 @@ export function buildGeoMetrics(input = {}) {
       sov: r1(mw > 0 ? (cw / mw) * 100 : 0), competitor_sov: r1(mw > 0 ? (compw / mw) * 100 : 0),
       citation_score: r1((citScore / n) * 100),
       citation_position_score: r1(posCount ? Math.max(0, 100 - (posSum / posCount - 1) * 20) : 0),
-      topic_coverage: r1((themes.size / n) * 100), intent_match: r1((bMent / n) * 100), freshness: 50,
+      topic_coverage: r1((themes.size / n) * 100), intent_match: r1((bMent / n) * 100), freshness: _computeFreshness(rs),
       source_diversity: sourceHosts.size, source_type_diversity: sourceTypes.size, citation_count: totalCites,
     };
   };
@@ -1871,6 +1939,74 @@ export function buildGeoMetrics(input = {}) {
     engines, overall, by_engine,
     metric_keys: ["sov", "brand_mentions", "brand_citations", "competitor_sov", "competitor_mentions", "competitor_citations", "citation_score", "citation_position_score", "topic_coverage", "intent_match", "geo_score"],
     note: "Layer A = overall across all engines; Layer B = per-engine split. Computed from the live multi-engine scan.",
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// §25 — DETERMINISTIC TOPIC DOMINANCE. For each prompt (topic): which brand each AI
+// engine leads with, who appears, and which competitor dominates the most topics.
+// Reproducible hard numbers that complement Claude's qualitative geo_insights.
+//   • lost_topics    = a competitor leads a topic where YOU are absent (highest priority)
+//   • contested_topics = you appear but a competitor still leads
+// ═══════════════════════════════════════════════════════════════════════════════
+export function buildTopicDominance(input = {}) {
+  const brandSet = (input.brandSet || []).filter(Boolean);
+  const responses = input.responses || [];
+  if (brandSet.length < 2 || !responses.length) return null;
+  const client = input.client || brandSet[0];
+  const clientN = _geoNorm(client);
+
+  const mentionsIn = (r) => {
+    if (Array.isArray(r.brandsMentioned) && r.brandsMentioned.length) {
+      const set = new Set(r.brandsMentioned.map(_geoNorm));
+      return brandSet.filter((b) => set.has(_geoNorm(b)));
+    }
+    const t = _geoNorm(r.answerText || "");
+    return t ? brandSet.filter((b) => t.includes(_geoNorm(b))) : [];
+  };
+  const leadOf = (r) => {
+    if (r.leadBrand) { const m = brandSet.find((b) => _geoNorm(b) === _geoNorm(r.leadBrand)); if (m) return m; }
+    const t = _geoNorm(r.answerText || ""); if (!t) return "";
+    let best = "", bi = Infinity;
+    for (const b of brandSet) { const i = t.indexOf(_geoNorm(b)); if (i >= 0 && i < bi) { bi = i; best = b; } }
+    return best;
+  };
+
+  const byTopic = new Map();
+  for (const r of responses) {
+    const key = String(r.prompt || "").trim().toLowerCase();
+    if (!byTopic.has(key)) byTopic.set(key, []);
+    byTopic.get(key).push(r);
+  }
+  const led = {}, present = {};
+  brandSet.forEach((b) => { led[b] = 0; present[b] = 0; });
+  const topics = [];
+  for (const [prompt, rs] of byTopic) {
+    const leadVotes = {}, presentSet = new Set();
+    for (const r of rs) {
+      const l = leadOf(r); if (l) leadVotes[l] = (leadVotes[l] || 0) + 1;
+      for (const b of mentionsIn(r)) presentSet.add(b);
+    }
+    const lead = Object.entries(leadVotes).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+    if (lead) led[lead] = (led[lead] || 0) + 1;
+    for (const b of presentSet) present[b] = (present[b] || 0) + 1;
+    const clientPresent = [...presentSet].some((b) => _geoNorm(b) === clientN);
+    topics.push({ topic: prompt, lead, brands_present: [...presentSet], client_present: clientPresent, client_lead: _geoNorm(lead) === clientN });
+  }
+  const total = topics.length;
+  const competitor_dominance = brandSet.filter((b) => _geoNorm(b) !== clientN)
+    .map((b) => ({ brand: b, topics_led: led[b] || 0, topics_present: present[b] || 0, lead_share: _pct1(led[b] || 0, total) }))
+    .sort((a, b) => b.topics_led - a.topics_led || b.topics_present - a.topics_present);
+  return {
+    total_topics: total,
+    client_topics_led: led[client] || 0,
+    client_topics_present: present[client] || 0,
+    client_lead_share: _pct1(led[client] || 0, total),
+    competitor_dominance,
+    lost_topics: topics.filter((t) => !t.client_present && t.lead).map((t) => ({ topic: t.topic, lead: t.lead })).slice(0, 12),
+    contested_topics: topics.filter((t) => t.client_present && !t.client_lead && t.lead).map((t) => ({ topic: t.topic, lead: t.lead })).slice(0, 12),
+    topics: topics.slice(0, 20),
+    note: "Per-topic dominance: which brand each AI engine leads with. Lost = a competitor leads a topic where you are absent; contested = you appear but a competitor leads.",
   };
 }
 

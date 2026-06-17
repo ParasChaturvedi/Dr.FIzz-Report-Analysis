@@ -44,15 +44,34 @@ export const GEO_PROMPT_TEMPLATES = [
 
 const clean = (s) => String(s || "").trim().replace(/\s+/g, " ");
 
+// Derive a category/industry phrase from collected KEYWORDS — used ONLY when industry
+// and category are both absent. This keeps the 20 templates LOCKED (identical structure
+// for every domain) while filling the {ind} slot from real data instead of the generic
+// default. Picks the most representative short head phrase (1-4 words, no location/brand
+// noise, no digits) so Share-of-Voice stays comparable across businesses.
+function _indFromKeywords(keywords = []) {
+  const list = (Array.isArray(keywords) ? keywords : [])
+    .map((k) => clean(typeof k === "string" ? k : (k?.keyword || k?.term || k?.text || k?.name || "")))
+    .filter(Boolean);
+  if (!list.length) return "";
+  const STOP = /\b(best|top|near|me|cheap|affordable|price|cost|reviews?|in|the|for|company|companies|services?|agency|agencies|2024|2025|2026)\b/gi;
+  const scored = list
+    .map((k) => clean(k.replace(STOP, " ")).toLowerCase())
+    .map((core) => ({ k: core, n: core.split(" ").filter(Boolean).length }))
+    .filter((x) => x.k && x.n >= 1 && x.n <= 4 && !/\d/.test(x.k));
+  const pick = scored.find((x) => x.n >= 2 && x.n <= 3) || scored[0];
+  return pick ? pick.k : "";
+}
+
 /**
  * Fill the LOCKED 20 templates with this domain's industry + location. Synchronous,
  * deterministic, zero LLM cost — the same 20 prompts (by structure) for every domain.
  *
- * @param {object} opts industry, category, location, count (default 20)
+ * @param {object} opts industry, category, location, keywords (fallback for {ind}), count (default 20)
  * @returns {string[]}
  */
-export function generateGeoPrompts({ industry = "", category = "", location = "", count = 20 } = {}) {
-  const ind = clean(industry || category || "service providers").toLowerCase();
+export function generateGeoPrompts({ industry = "", category = "", location = "", keywords = [], count = 20 } = {}) {
+  const ind = clean(industry || category || _indFromKeywords(keywords) || "service providers").toLowerCase();
   const loc = clean(location || "India");
   const prompts = GEO_PROMPT_TEMPLATES.map((t) =>
     clean(t.replace(/\{ind\}/g, ind).replace(/\{loc\}/g, loc))

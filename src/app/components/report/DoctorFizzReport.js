@@ -1639,6 +1639,52 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               )}
 
+              {/* §25 — deterministic per-topic dominance (hard, reproducible numbers) */}
+              {geo.topic_dominance && geo.topic_dominance.total_topics > 0 && (
+                <div className="rounded-lg mb-3 overflow-hidden" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                  <div className="uppercase px-3 pt-2.5 pb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>Topic Dominance — who leads each AI query</div>
+                  <div className="px-3 pb-2 text-[12px]" style={{ color: C.greyText }}>
+                    You lead <strong style={{ color: C.textDark }}>{geo.topic_dominance.client_topics_led}</strong> of {geo.topic_dominance.total_topics} topics ({geo.topic_dominance.client_lead_share}%) and appear in {geo.topic_dominance.client_topics_present}.
+                  </div>
+                  {(geo.topic_dominance.competitor_dominance || []).length > 0 && (
+                    <table className="w-full text-[12px]">
+                      <thead>
+                        <tr style={{ background: C.nearBlack }}>
+                          <Th white>Competitor</Th><Th white right>Topics led</Th><Th white right>Topics present</Th><Th white right>Lead share</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {geo.topic_dominance.competitor_dominance.map((c, i) => (
+                          <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
+                            <Td>{c.brand}</Td><Td right>{c.topics_led}</Td><Td right>{c.topics_present}</Td><Td right>{c.lead_share}%</Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                  {(geo.topic_dominance.lost_topics || []).length > 0 && (
+                    <div className="px-3 py-2" style={{ borderTop: `1px solid ${C.warmGrey}20` }}>
+                      <div className="text-[11px] font-bold mb-1" style={{ color: "#B3261E" }}>Lost topics — a competitor leads where you are absent</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {geo.topic_dominance.lost_topics.map((t, i) => (
+                          <span key={i} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: "#FBE9E7", color: "#B3261E" }}>&ldquo;{t.topic}&rdquo; → {t.lead}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(geo.topic_dominance.contested_topics || []).length > 0 && (
+                    <div className="px-3 py-2" style={{ borderTop: `1px solid ${C.warmGrey}20` }}>
+                      <div className="text-[11px] font-bold mb-1" style={{ color: C.textDark }}>Contested topics — you appear but a competitor leads</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {geo.topic_dominance.contested_topics.map((t, i) => (
+                          <span key={i} className="text-[11px] px-2 py-0.5 rounded-full" style={{ background: C.ivory, border: `1px solid ${C.border}`, color: C.textDark }}>&ldquo;{t.topic}&rdquo; → {t.lead}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* §25 — Claude deep analysis: why competitors win + recommended actions */}
               {geo.geo_insights && (
                 <div className="rounded-lg p-3 mb-3" style={{ border: `1px solid ${C.warmGrey}30`, background: C.ivory }}>
@@ -1722,6 +1768,31 @@ export default function DoctorFizzReport({ data }) {
                               <Td>{String(o.action || "").replace(/_/g, " ")}</Td>
                               <Td right><strong>{o.opportunity_score}</strong></Td>
                               <Td>{o.difficulty}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* §23-24 — PAGE-LEVEL (per-URL) citation opportunities */}
+                  {(geo.citation_analysis.page_opportunities || []).length > 0 && (
+                    <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                      <div className="uppercase px-3 pt-2.5 pb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>Page-Level Citation Opportunities — the exact URLs AI quotes</div>
+                      <table className="w-full text-[12px]">
+                        <thead>
+                          <tr style={{ background: C.nearBlack }}>
+                            <Th white>Cited page</Th><Th white>Class</Th><Th white>Action</Th><Th white right>Engines</Th><Th white right>Score</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {geo.citation_analysis.page_opportunities.map((o, i) => (
+                            <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
+                              <Td><span style={{ wordBreak: "break-all" }}>{String(o.url || "").replace(/^https?:\/\//, "").slice(0, 64)}</span></Td>
+                              <Td>{String(o.citation_class || "").replace(/_/g, " ")}</Td>
+                              <Td>{String(o.action || "").replace(/_/g, " ")}</Td>
+                              <Td right>{o.cross_engine}</Td>
+                              <Td right><strong>{o.opportunity_score}</strong></Td>
                             </tr>
                           ))}
                         </tbody>
