@@ -126,6 +126,145 @@ function DarkCallout({ label, children }) {
   );
 }
 
+// §14-25 GEO renderer (reference light style). Renders the FULL model (geo_score, SoV,
+// metrics, topic dominance, citation intelligence, Claude deep analysis) when a live scan
+// exists, and ALWAYS renders the readiness scorecard + tracked prompts + actions. Reads
+// data.doctorFizz.geo_and_ai_visibility so NO GEO data is lost on the reference layout.
+function GeoVisibility({ geo = {}, domain, gf = {} }) {
+  const m = geo;
+  const cardB = { border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" };
+  const cell = { fontFamily: BODY, fontSize: "12px", padding: "8px 12px" };
+  const thS = { fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", padding: "9px 12px", textAlign: "left", color: "#fff" };
+  const Lbl = ({ children }) => <div className="uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: ORANGE, marginBottom: 8 }}>{children}</div>;
+  return (
+    <div className="space-y-4">
+      {m.current_ai_citation_count && (
+        <DarkCallout label="AI Citation Status">{domain}&apos;s current AI-citation footprint: <strong style={{ color: "#fff" }}>{m.current_ai_citation_count}</strong>. The actions below make the site liftable by ChatGPT, Google AI Overviews, and Perplexity.</DarkCallout>
+      )}
+
+      {m.geo_score && (
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <div className="flex items-baseline gap-3 flex-wrap mb-2">
+            <Lbl>GEO Score</Lbl>
+            <span style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "26px", color: INK }}>{m.geo_score.score}<span style={{ fontSize: "13px", color: "#8A8A8A" }}>/100</span></span>
+            <span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: ORANGE, color: "#fff" }}>{m.geo_score.band}</span>
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1" style={{ fontFamily: BODY, fontSize: "11px", color: "#6B6B6B" }}>
+            {Object.entries(m.geo_score.breakdown || {}).map(([k, v]) => <span key={k}>{k.replace(/_/g, " ")}: <strong style={{ color: INK }}>{v}</strong></span>)}
+          </div>
+        </div>
+      )}
+
+      {m.geo_metrics && (
+        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>GEO Metrics — overall + per engine</Lbl></div>
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}>{["Engine", "SoV", "Comp SoV", "Mentions", "Citations", "Cit. score", "Position", "Topic", "Intent", "GEO"].map((h, i) => <th key={i} style={{ ...thS, textAlign: i ? "right" : "left" }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {[{ label: "Overall", mm: m.geo_metrics.overall, hl: true }, ...m.geo_metrics.engines.map((e) => ({ label: e, mm: m.geo_metrics.by_engine[e] || {}, hl: false }))].map((r, i) => (
+                <tr key={i} style={{ background: r.hl ? "#FBF1EB" : (i % 2 ? "#fff" : "#F7F7F7") }}>
+                  <td style={{ ...cell, fontWeight: r.hl ? 700 : 400 }}>{r.label}</td>
+                  <td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{r.mm.sov}%</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.competitor_sov}%</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.brand_mentions}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.brand_citations}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.citation_score}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.citation_position_score}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.topic_coverage}%</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.intent_match}%</td>
+                  <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: ORANGE }}>{r.mm.geo_score}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {m.share_of_voice && (
+        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>AI Share of Voice — by engine (estimate)</Lbl></div>
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}><th style={thS}>Brand</th>{m.share_of_voice.engines.map((e, i) => <th key={i} style={{ ...thS, textAlign: "right" }}>{e}</th>)}<th style={{ ...thS, textAlign: "right" }}>Avg</th></tr></thead>
+            <tbody>
+              {m.share_of_voice.by_brand.map((b, i) => (
+                <tr key={i} style={{ background: b.is_client ? "#FBF1EB" : (i % 2 ? "#fff" : "#F7F7F7") }}>
+                  <td style={{ ...cell, fontWeight: b.is_client ? 700 : 400, color: b.is_client ? ORANGE : INK }}>{b.brand}{b.is_client ? " (you)" : ""}</td>
+                  {m.share_of_voice.engines.map((e, j) => <td key={j} style={{ ...cell, textAlign: "right" }}>{b.per_engine[e]}%</td>)}
+                  <td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{b.avg}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {m.topic_dominance && m.topic_dominance.total_topics > 0 && (
+        <div className="rounded-lg overflow-hidden bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>Topic Dominance — who leads each AI query</Lbl></div>
+          <div className="px-3 pb-2" style={{ fontFamily: BODY, fontSize: "12px", color: "#6B6B6B" }}>You lead <strong style={{ color: INK }}>{m.topic_dominance.client_topics_led}</strong> of {m.topic_dominance.total_topics} topics ({m.topic_dominance.client_lead_share}%).</div>
+          {(m.topic_dominance.lost_topics || []).length > 0 && (
+            <div className="px-3 py-2" style={{ borderTop: "1px solid #EEE" }}>
+              <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", color: "#B3261E", marginBottom: 4 }}>Lost topics — a competitor leads where you&apos;re absent</div>
+              <div className="flex flex-wrap gap-1.5">{m.topic_dominance.lost_topics.map((t, i) => <span key={i} className="px-2 py-0.5 rounded-full" style={{ fontFamily: BODY, fontSize: "11px", background: "#FBE9E7", color: "#B3261E" }}>&ldquo;{t.topic}&rdquo; → {t.lead}</span>)}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {m.geo_insights && (
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <Lbl>AI Visibility — Deep Analysis</Lbl>
+          {m.geo_insights.summary && <p style={{ fontFamily: BODY, fontSize: "13px", color: INK, lineHeight: 1.6, marginBottom: 8 }}>{m.geo_insights.summary}</p>}
+          {(m.geo_insights.actions || []).map((a, i) => <div key={i} className="flex gap-2" style={{ fontFamily: BODY, fontSize: "12.5px", color: "#5A5A5A", marginBottom: 3 }}><span style={{ color: ORANGE }}>✓</span>{a}</div>)}
+        </div>
+      )}
+
+      {m.citation_analysis && (m.citation_analysis.most_cited_domains || []).length > 0 && (
+        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>Most-Cited Sources — what AI quotes instead of you</Lbl></div>
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}><th style={thS}>Source</th><th style={{ ...thS, textAlign: "right" }}>Pages</th><th style={{ ...thS, textAlign: "right" }}>Responses</th><th style={thS}>Type</th></tr></thead>
+            <tbody>{m.citation_analysis.most_cited_domains.map((dm, i) => (
+              <tr key={i} style={{ background: dm.is_client ? "#FBF1EB" : dm.is_competitor ? "#FBE9E7" : (i % 2 ? "#fff" : "#F7F7F7") }}>
+                <td style={cell}>{dm.domain}</td><td style={{ ...cell, textAlign: "right" }}>{dm.pages_cited}</td><td style={{ ...cell, textAlign: "right" }}>{dm.responses}</td><td style={cell}>{dm.type}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+
+      {(m.geo_readiness || []).length > 0 && (
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <Lbl>AI / LLM Readiness</Lbl>
+          {m.geo_readiness.map((f, i) => { const ok = /present|strong|moderate/i.test(f.status); return (
+            <div key={i} className="flex items-start gap-2.5 py-1.5" style={{ borderBottom: i < m.geo_readiness.length - 1 ? "1px solid #EEE" : "none" }}>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 text-center" style={{ background: ok ? "#E3F0E6" : "#FBE9E7", color: ok ? "#1E7B3E" : "#B3261E", minWidth: 74 }}>{f.status}</span>
+              <div><div style={{ fontFamily: BODY, fontWeight: 700, fontSize: "12.5px", color: INK }}>{f.factor}</div><div style={{ fontFamily: BODY, fontSize: "11.5px", color: "#6B6B6B" }}>{f.detail}</div></div>
+            </div>
+          ); })}
+        </div>
+      )}
+
+      {(m.tracked_prompts || []).length > 0 && (
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <Lbl>Prompts We Track — AI Search Visibility</Lbl>
+          <div className="flex flex-wrap gap-1.5 mb-2">{m.tracked_prompts.map((p, i) => <span key={i} className="px-2 py-0.5 rounded-full" style={{ fontFamily: BODY, fontSize: "11px", border: "1px solid #E5E5E5", color: INK }}>&ldquo;{p}&rdquo;</span>)}</div>
+          {(m.ai_platforms || []).length > 0 && <div className="flex flex-wrap gap-1.5">{m.ai_platforms.map((pl, i) => <span key={i} className="px-2 py-0.5 rounded" style={{ fontFamily: BODY, fontSize: "10px", background: "#F2EEE9", color: "#6B6B6B" }}>{pl.platform}: {pl.visibility}</span>)}</div>}
+        </div>
+      )}
+
+      {((m.recommended_actions || gf.howToEarnCitations || []).length > 0) && (
+        <div className="rounded-lg bg-white p-6" style={cardB}>
+          <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "16px", color: INK, marginBottom: 14 }}>How To Earn AI Citations</div>
+          <ul className="space-y-3">{(m.recommended_actions || gf.howToEarnCitations).map((step, i) => (
+            <li key={i} className="flex items-start gap-3" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.55 }}><span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>{i + 1}.</span>{step}</li>
+          ))}</ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════
@@ -239,8 +378,9 @@ export default function WebsiteReport({ data }) {
             <MetricCard value={bm.performanceDesktop != null ? `${bm.performanceDesktop}/100` : "—"} label="Desktop Speed" sub="Google PageSpeed" />
             <MetricCard value={bm.lcp != null ? `${(Number(bm.lcp) / 1000).toFixed(1)}s` : "—"} label="LCP" sub="Largest content paint" />
             <MetricCard value={bm.cls != null ? Number(bm.cls).toFixed(3) : "—"} label="CLS" sub="Layout stability" />
+            <MetricCard value={fmt(bm.backlinks)} label="Total Backlinks" sub="Inbound links (Moz)" />
             <MetricCard value={fmt(bm.referringDomains)} label="Referring Domains" sub="Sites linking to you" />
-            <MetricCard value={fmt(bm.errors404)} label="404 Errors" sub="Broken pages" accent="orange" />
+            <MetricCard value={fmt(bm.errors404)} label="404 Errors" sub="Broken pages" accent={Number(bm.errors404) > 0 ? "orange" : "ink"} />
             <MetricCard value={crawlHealth != null ? `${crawlHealth}/100` : "—"} label="Site Health" sub="Crawl health score" />
             <MetricCard value={gmbScore != null ? `${gmbScore}/100` : "—"} label="GMB Completeness" sub="Google Business Profile" />
           </div>
@@ -793,34 +933,10 @@ export default function WebsiteReport({ data }) {
             <SHead>THE NEXT FRONTIER</SHead>
             <SSub>GEO and AI Visibility</SSub>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {[
-                { who: domain, val: gf.domainAICitations || "—", sub: "AI citations across answer engines", bar: ORANGE, num: ORANGE },
-                { who: "Top competitor", val: gf.competitorAICitations || "—", sub: "Already cited in AI answers", bar: "#4A4A4A", num: INK },
-              ].map((c, i) => (
-                <div key={i} className="flex rounded-lg overflow-hidden bg-white" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-                  <div style={{ width: 4, background: c.bar, flexShrink: 0 }} />
-                  <div className="p-5 min-w-0">
-                    <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: "12px", color: "#8A8A8A" }} className="truncate">{c.who}</div>
-                    <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "30px", color: c.num, marginTop: 4, lineHeight: 1.12 }} className="break-words">{c.val}</div>
-                    <div style={{ fontFamily: BODY, fontSize: "12px", color: "#5A5A5A", marginTop: 4 }}>{c.sub}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {(gf.howToEarnCitations || []).length > 0 && (
-              <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-                <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "16px", color: INK, marginBottom: 14 }}>How To Earn AI Citations</div>
-                <ul className="space-y-3">
-                  {gf.howToEarnCitations.map((step, i) => (
-                    <li key={i} className="flex items-start gap-3" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.55 }}>
-                      <span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>{i + 1}.</span>{step}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            {/* Full §14-25 GEO model (SoV, metrics, topic dominance, citation intelligence,
+                Claude deep analysis) when a live scan exists; readiness + tracked prompts +
+                actions always. Real data — replaces the old hallucinated citation counts. */}
+            <GeoVisibility geo={d.doctorFizz?.geo_and_ai_visibility || {}} domain={domain} gf={gf} />
           </AnimatedSection>
         </div>
       </section>

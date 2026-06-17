@@ -6,7 +6,6 @@ import DownloadReportModal from "@/app/components/report/DownloadReportModal";
 
 const WebsiteReport     = dynamic(() => import("@/app/components/report/WebsiteReport"), { ssr: false });
 const PageReport        = dynamic(() => import("@/app/components/report/PageReport"),    { ssr: false });
-const DoctorFizzReport  = dynamic(() => import("@/app/components/report/DoctorFizzReport"), { ssr: false });
 
 export default function ReportClient({ id }) {
   const [reportType, setReportType]   = useState(null);
@@ -169,15 +168,12 @@ export default function ReportClient({ id }) {
 
       {/* Report content — horizontally scrollable on very small screens */}
       <div id="report-content" className="min-w-0 overflow-x-auto">
-        {/* Single source of truth: the Doctor Fizz branded diagnostic report
-            (spec-compliant) renders when the business-logic layer produced a
-            structured payload. The legacy report is used ONLY as a fallback for
-            page reports or when the structured payload is absent — never both,
-            so sections are not duplicated. */}
+        {/* Website reports render via WebsiteReport — the reference-deck design (18
+            sections, DOCTORFIZZ branding, flat orange). It now also renders the full
+            §14-25 GEO model from data.doctorFizz.geo_and_ai_visibility, so nothing is
+            lost vs the old DoctorFizzReport renderer. PageReport handles page reports. */}
         {reportType === "page" ? (
           <PageReport data={data} />
-        ) : data?.doctorFizz ? (
-          <DoctorFizzReport data={data} />
         ) : (
           <WebsiteReport data={data} />
         )}
