@@ -352,7 +352,17 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry }) 
         let browser;
         try {
           browser = await connectBrowserless(proxyCountry);
-          responses.push({ ...(await askEngine(browser, ek, p.prompt, sessions[ek], proxyCountry)), ...tag });
+          const _r = await askEngine(browser, ek, p.prompt, sessions[ek], proxyCountry);
+          // §16 — capture per-run metadata (timestamp, region, answer length, citation
+          // count, attempts) alongside the raw signal.
+          responses.push({
+            ...(_r), ...tag,
+            region: proxyCountry || "in",
+            timestamp: new Date().toISOString(),
+            answer_length: String(_r?.answerText || "").length,
+            citation_count: Array.isArray(_r?.citations) ? _r.citations.length : 0,
+            attempts: a + 1,
+          });
           lastErr = null;
           break; // success
         } catch (err) { lastErr = err; }
