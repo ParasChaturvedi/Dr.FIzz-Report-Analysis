@@ -1552,6 +1552,22 @@ export default function DoctorFizzReport({ data }) {
                 Current AI citation status: <strong>{geo.current_ai_citation_count}</strong>. The site is not yet a citable source for ChatGPT, Google AI Overviews, or Perplexity — the prescription below makes the content liftable by answer engines.
               </DiagnosisCard>
 
+              {/* §21 — Weighted composite GEO score (only when the live scan ran) */}
+              {geo.geo_score && (
+                <div className="rounded-lg mb-4 p-3" style={{ border: `1px solid ${C.warmGrey}30`, background: C.ivory }}>
+                  <div className="flex items-baseline gap-3 mb-2 flex-wrap">
+                    <span className="uppercase" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>GEO Score</span>
+                    <span className="text-[22px] font-extrabold" style={{ color: C.nearBlack }}>{geo.geo_score.score}<span className="text-[13px]" style={{ color: C.greyText }}>/100</span></span>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded" style={{ background: C.orange, color: "#fff" }}>{geo.geo_score.band}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10.5px]" style={{ color: C.greyText }}>
+                    {Object.entries(geo.geo_score.breakdown || {}).map(([k, v]) => (
+                      <span key={k}>{k.replace(/_/g, " ")}: <strong style={{ color: C.textDark }}>{v}</strong></span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* LIVE AI Share of Voice — proprietary SoV logic (only when collector ran) */}
               {geo.share_of_voice && (
                 <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
@@ -1581,6 +1597,14 @@ export default function DoctorFizzReport({ data }) {
                 </div>
               )}
 
+              {/* §25 — competitor intelligence summary */}
+              {geo.competitor_intel && (
+                <div className="rounded-lg p-3 mb-3" style={{ background: C.diagTint, borderLeft: `3px solid ${C.orange}` }}>
+                  <div className="uppercase mb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "2px", color: C.orange }}>Competitor Intelligence</div>
+                  <p className="text-[13px]" style={{ color: C.textDark, lineHeight: 1.6 }}>{geo.competitor_intel.summary}</p>
+                </div>
+              )}
+
               {/* LIVE Citation intelligence — proprietary citation logic (only when collector ran) */}
               {geo.citation_analysis && (
                 <>
@@ -1607,6 +1631,31 @@ export default function DoctorFizzReport({ data }) {
                               <Td right>{d.pages_cited}</Td>
                               <Td right>{d.responses}</Td>
                               <Td>{d.type}</Td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* §24 — Citation → backlink/listing opportunity queue */}
+                  {(geo.citation_analysis.opportunity_queue || []).length > 0 && (
+                    <div className="overflow-x-auto rounded-lg mb-4" style={{ border: `1px solid ${C.warmGrey}30` }}>
+                      <div className="uppercase px-3 pt-2.5 pb-1" style={{ fontFamily: SANS, fontWeight: 600, fontSize: "10px", letterSpacing: "1.5px", color: C.orange }}>Citation → Link Opportunities — turn AI sources into backlinks</div>
+                      <table className="w-full text-[12px]">
+                        <thead>
+                          <tr style={{ background: C.nearBlack }}>
+                            <Th white>Source</Th><Th white>Class</Th><Th white>Recommended action</Th><Th white right>Score</Th><Th white>Difficulty</Th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {geo.citation_analysis.opportunity_queue.map((o, i) => (
+                            <tr key={i} style={{ background: i % 2 ? "#fff" : C.ivory }}>
+                              <Td>{o.domain}</Td>
+                              <Td>{String(o.citation_class || "").replace(/_/g, " ")}</Td>
+                              <Td>{String(o.action || "").replace(/_/g, " ")}</Td>
+                              <Td right><strong>{o.opportunity_score}</strong></Td>
+                              <Td>{o.difficulty}</Td>
                             </tr>
                           ))}
                         </tbody>

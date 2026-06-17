@@ -1415,6 +1415,29 @@ export function buildGeoVisibility(input = {}) {
       responses: raw.responses,
     });
   }
+  // §21 — weighted composite GEO score (only when the live scan supplied data).
+  const geo_score = (share_of_voice || citation_analysis)
+    ? computeGeoScore({ share_of_voice, citation_analysis })
+    : null;
+
+  // §25 — competitor intelligence (raw metrics from the SoV; deterministic).
+  let competitor_intel = null;
+  if (share_of_voice?.by_brand?.length > 1) {
+    const bb = share_of_voice.by_brand;
+    const me = bb.find(b => b.is_client);
+    const top = bb.filter(b => !b.is_client).sort((a, c) => c.avg - a.avg)[0];
+    if (top) {
+      const eng = (share_of_voice.engines || []).slice().sort((a, c) => (top.per_engine[c] || 0) - (top.per_engine[a] || 0))[0] || null;
+      competitor_intel = {
+        leader: top.brand, leader_sov: top.avg, client_sov: me ? me.avg : 0,
+        gap: Math.round((top.avg - (me ? me.avg : 0)) * 10) / 10,
+        leader_strongest_engine: eng,
+        competitors: bb.filter(b => !b.is_client).map(b => ({ brand: b.brand, sov_avg: b.avg, per_engine: b.per_engine })),
+        summary: `${top.brand} leads AI visibility at ${top.avg}% average share of voice${me ? ` versus your ${me.avg}%` : ""}${eng ? `, strongest on ${eng}` : ""}. Match their cited sources and topic coverage to close the gap.`,
+      };
+    }
+  }
+
   const live = !!(share_of_voice || citation_analysis);
   const prompt_tracking_status = live
     ? `Live — measured across ${(share_of_voice?.engines || []).join(", ") || "the AI engines"} from the multi-engine scan.`
@@ -1424,7 +1447,9 @@ export function buildGeoVisibility(input = {}) {
     current_ai_citation_count: currentCitations,
     competitor_citation_benchmarks: competitorBenchmarks,
     share_of_voice,         // proprietary SoV table (null until collector runs)
-    citation_analysis,      // proprietary citation intelligence (null until collector runs)
+    citation_analysis,      // proprietary citation intelligence + opportunity queue (§23-24)
+    geo_score,              // §21 weighted composite GEO score (null until collector runs)
+    competitor_intel,       // §25 competitor intelligence (null until collector runs)
     geo_readiness,
     tracked_prompts,
     ai_platforms,
@@ -1615,7 +1640,104 @@ export function buildCitationAnalysis(input = {}) {
     sources_cited: [...new Set((r.citations || []).map(_geoHost).filter(Boolean))].slice(0, 4),
   }));
 
-  return { most_cited_domains, client_cited, citation_gap, brand_presence, responses_analysed: responses.length };
+  // §24 — classify every cited domain into a link-opportunity, and build the queue.
+  const classified = most_cited_domains.map(d => ({ ...d, ...classifyCitation(d.domain, { clientDomain, competitorDomains }) }));
+  const opportunity_queue = classified
+    .filter(d => !d.is_client && d.action_type !== "no_action" && d.action_type !== "citation_only" && d.link_opportunity_score > 0)
+    .sort((a, b) => b.link_opportunity_score - a.link_opportunity_score)
+    .slice(0, 10)
+    .map(d => ({
+      domain: d.domain, citation_class: d.citation_class, source_type: d.source_type,
+      action: d.action_type, opportunity_score: d.link_opportunity_score,
+      difficulty: d.link_acquisition_difficulty, cited_in_responses: d.responses,
+    }));
+
+  return {
+    most_cited_domains: classified, client_cited, citation_gap, brand_presence,
+    opportunity_queue,                       // §23-24 backlink/citation opportunity queue
+    responses_analysed: responses.length,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// §24 CITATION → OPPORTUNITY CLASSIFICATION (rule-based; the spec's "most important
+// new logic"). Each cited URL becomes a typed link/citation opportunity with a clear
+// next action — turning the GEO citation layer into a backlink-discovery engine.
+// ═══════════════════════════════════════════════════════════════════════════════
+// [regex, citation_class, source_type, opportunity_score, difficulty, editorial_control, action_type]
+const _CITATION_RULES = [
+  [/wikipedia\.org|wikidata\.org/,                                          "wikipedia",          "Encyclopedia",     70, "hard",   "community", "build_similar_page"],
+  [/reddit\.com/,                                                            "reddit",             "Community",        75, "medium", "community", "outreach"],
+  [/quora\.com|stackexchange|stackoverflow/,                                 "forums",             "Q&A / forum",      65, "easy",   "community", "outreach"],
+  [/(facebook|instagram|twitter|x|linkedin|youtube|tiktok|pinterest)\.com/,  "social_media",       "Social",           60, "easy",   "self",      "claim_listing"],
+  [/(justdial|sulekha|indiamart|tradeindia|yellowpages|yelp|foursquare|99acres|urbanpro)\./, "business_directory", "Directory", 85, "easy", "self", "claim_listing"],
+  [/trustpilot|g2\.com|capterra|getapp|clutch\.co|goodfirms|glassdoor|designrush|ambitionbox|mouthshut/, "review_site", "Review platform", 88, "easy", "self", "claim_listing"],
+  [/(amazon|flipkart|etsy|ebay|meesho)\./,                                   "marketplace",        "Marketplace",      50, "medium", "self",      "claim_listing"],
+  [/(forbes|techcrunch|businessinsider|economictimes|livemint|yourstory|inc42|hindustantimes|timesofindia|cnbc|reuters|bloomberg|entrepreneur|mashable)\./, "pr_news", "News / PR", 80, "hard", "editorial", "outreach"],
+  [/\.edu(\.|\/|$)|\.ac\.|coursera|udemy|edx/,                              "educational",        "Education",        55, "hard",   "editorial", "build_similar_page"],
+  [/\.gov(\.|\/|$)|gov\.in|nic\.in/,                                         "government",         "Government",       40, "hard",   "editorial", "monitor"],
+  [/\b(vs|versus|compare|comparison|alternatives?|top-?\d|best-)\b/,         "comparison_page",    "Comparison",       78, "medium", "editorial", "build_similar_page"],
+  [/medium\.com|substack|wordpress|blogspot|\/blog\/|blog\./,               "blog",               "Blog",             70, "medium", "editorial", "outreach"],
+];
+
+export function classifyCitation(url, { clientDomain = "", competitorDomains = [] } = {}) {
+  const host = _geoHost(url);
+  const full = String(url || "").toLowerCase();
+  const base = { domain: host, relevance_score: 70, authority_score: null };
+  if (clientDomain && host.includes(_geoHost(clientDomain)))
+    return { ...base, citation_class: "brand_page", source_type: "Your site", link_opportunity_score: 0, link_acquisition_difficulty: "owned", editorial_control: "self", relevance_score: 100, action_type: "citation_only" };
+  if ((competitorDomains || []).some(c => c && host.includes(_geoHost(c))))
+    return { ...base, citation_class: "competitor_page", source_type: "Competitor", link_opportunity_score: 25, link_acquisition_difficulty: "hard", editorial_control: "none", relevance_score: 85, action_type: "build_similar_page" };
+  for (const [re, cls, src, score, diff, ctrl, action] of _CITATION_RULES)
+    if (re.test(host) || re.test(full))
+      return { ...base, citation_class: cls, source_type: src, link_opportunity_score: score, link_acquisition_difficulty: diff, editorial_control: ctrl, action_type: action };
+  return { ...base, citation_class: "unknown", source_type: "Other", link_opportunity_score: 45, link_acquisition_difficulty: "medium", editorial_control: "unknown", relevance_score: 50, action_type: "monitor" };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// §21 WEIGHTED GEO SCORE — composite 0-100 from the measured signals.
+//   30% citation presence · 20% brand presence · 15% citation position ·
+//   15% intent match · 10% cross-engine consistency · 5% freshness · 5% topic coverage
+// ═══════════════════════════════════════════════════════════════════════════════
+export function computeGeoScore({ share_of_voice = null, citation_analysis = null } = {}) {
+  if (!share_of_voice && !citation_analysis) return null;
+  const sov = share_of_voice || {};
+  const cites = citation_analysis || {};
+  const clientRow = (sov.by_brand || []).find(b => b.is_client) || null;
+  const engines = sov.engines || [];
+
+  // citation presence — is the brand's own domain cited at all?
+  const citationPresence = cites.client_cited ? 100 : 0;
+  // brand presence — relative SoV inside the answers (0-100 already)
+  const brandPresence = clientRow ? clientRow.avg : 0;
+  // citation position — rank of the brand's domain among cited domains (earlier = better)
+  const idx = (cites.most_cited_domains || []).findIndex(d => d.is_client);
+  const citationPosition = idx >= 0 ? Math.max(0, 100 - idx * 12) : 0;
+  // intent match — share of prompts where the brand surfaced at all
+  const bp = cites.brand_presence || [];
+  const intentMatch = bp.length ? Math.round((bp.filter(p => p.client_present).length / bp.length) * 100) : brandPresence;
+  // cross-engine consistency — appears in how many engines (of those scanned)
+  const enginesPresent = clientRow ? engines.filter(e => (clientRow.per_engine[e] || 0) > 0).length : 0;
+  const crossEngine = engines.length ? Math.round((enginesPresent / engines.length) * 100) : 0;
+  // freshness — proxy (we don't have per-citation dates yet); neutral baseline
+  const freshness = 50;
+  // topic coverage — same prompt-coverage proxy as intent for now
+  const topicCoverage = intentMatch;
+
+  const score = Math.round(
+    0.30 * citationPresence + 0.20 * brandPresence + 0.15 * citationPosition +
+    0.15 * intentMatch + 0.10 * crossEngine + 0.05 * freshness + 0.05 * topicCoverage
+  );
+  const band = score >= 70 ? "Strong" : score >= 40 ? "Developing" : score >= 15 ? "Emerging" : "Invisible";
+  return {
+    score, band,
+    breakdown: {
+      citation_presence: Math.round(citationPresence), brand_presence: Math.round(brandPresence),
+      citation_position: Math.round(citationPosition), intent_match: Math.round(intentMatch),
+      cross_engine_consistency: crossEngine, freshness, topic_coverage: Math.round(topicCoverage),
+    },
+    note: "Weighted composite (30% citation presence, 20% brand presence, 15% citation position, 15% intent match, 10% cross-engine consistency, 5% freshness, 5% topic coverage).",
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
