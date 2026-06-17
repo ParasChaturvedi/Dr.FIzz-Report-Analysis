@@ -15,13 +15,9 @@
 // Fail-safe: any error returns { geo: null } so the report falls back to the GEO
 // readiness placeholders rather than breaking.
 // ─────────────────────────────────────────────────────────────────────────────
-import { getOrFetch, getCached, putCached } from "@/lib/cache/mongo";
+import { getOrFetch } from "@/lib/cache/mongo";
 import { runGeoScan } from "@/lib/seo/geo/collector";
 import { generateGeoPrompts } from "@/lib/seo/geo/prompt-generator";
-
-// Locked prompts live ~indefinitely (1 year) so the SAME prompts are reused on every
-// re-scan → SoV is comparable over time. Force a regenerate with GEO_PROMPTS_FORCE=1.
-const LOCKED_PROMPT_TTL_DAYS = 365;
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -49,26 +45,14 @@ export async function POST(req) {
     ? body.competitorDomains : competitors).map(normDomain).filter(Boolean).slice(0, 4);
   const engineKeys = String(process.env.GEO_INLINE_ENGINES || "aioverviews,perplexity,claude")
     .split(",").map((s) => s.trim()).filter(Boolean);
-  const keywords = Array.isArray(body.keywords) ? body.keywords : [];
   const promptCount = Number(process.env.GEO_PROMPT_COUNT || 20);
 
   try {
     // ── LOCKED PROMPTS (§17) ──────────────────────────────────────────────────
-    // Generate ONCE per domain by deeply analysing all collected data, then LOCK
-    // (store ~1 year) and reuse on every re-scan so Share-of-Voice stays comparable
-    // over time and we never pay to regenerate. Brand/competitor-neutral, hard-filtered.
-    const force = String(process.env.GEO_PROMPTS_FORCE || "") === "1";
-    let prompts = force ? null : (await getCached({ domain, dataType: "geo-prompts", ttlDays: LOCKED_PROMPT_TTL_DAYS }).catch(() => null))?.prompts;
-    if (!Array.isArray(prompts) || !prompts.length) {
-      prompts = await generateGeoPrompts({
-        industry, category: body.category || "", location, keywords,
-        excludeTerms: [brand, domain, ...competitors, ...competitorDomains],
-        count: promptCount,
-      });
-      if (prompts.length) {
-        await putCached({ domain, dataType: "geo-prompts", payload: { prompts, generatedAt: new Date().toISOString(), count: prompts.length }, source: "geo-prompt-gen", fetchedBy: brand });
-      }
-    }
+    // The SAME 20 prompt templates for EVERY domain (1st scan or 100th) — filled with
+    // this domain's industry + location. Deterministic + zero LLM cost + Share-of-Voice
+    // stays comparable across every business. Brand/competitor-neutral by construction.
+    const prompts = generateGeoPrompts({ industry, category: body.category || "", location, count: promptCount });
     const promptObjs = prompts.map((p, i) => ({ id: `gp${i + 1}`, theme: "geo", prompt: p }));
 
     const { data, cached } = await getOrFetch({
