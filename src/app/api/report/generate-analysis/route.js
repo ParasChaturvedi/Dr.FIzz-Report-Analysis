@@ -662,6 +662,16 @@ export async function POST(request) {
     const gmbRaw     = prefetchedSeoData?.gmbCheck     ?? null;
     const kwGapRaw   = prefetchedSeoData?.keywordGap   ?? null;
 
+    // Real broken-page count from the crawl (status >= 400 / unreachable) → the "404
+    // Errors" baseline metric. Only set when the crawl actually ran (else stays null).
+    const _brokenLinks = Array.isArray(crawlRaw?.brokenLinks) ? crawlRaw.brokenLinks : null;
+    if (_brokenLinks) {
+      baselineMetrics.errors404 = _brokenLinks.filter((l) => {
+        const s = Number(l?.status);
+        return s >= 400 || /unreachable|timeout|error/i.test(String(l?.status || ""));
+      }).length;
+    }
+
     const realTechnical     = buildTechnicalPrioritiesFromCrawl(crawlRaw);
     const realLocalSearch   = buildLocalSearchFromGmb(gmbRaw);
     const realKwTiers       = buildKeywordTiersFromGap(kwGapRaw);
@@ -711,7 +721,7 @@ export async function POST(request) {
           gbpReviewCount:       gmbRaw?.gmb?.reviewCount ?? gmbRaw?.reviewCount ?? null,
           gbpRating:            gmbRaw?.gmb?.rating ?? null,
           // Site-audit counts — surfaced only when the crawl/audit actually provides them.
-          errors404:            crawlRaw?.errors404 ?? crawlRaw?.summary?.errors404 ?? null,
+          errors404:            baselineMetrics.errors404,
           redirectChains:       crawlRaw?.redirectChains ?? crawlRaw?.summary?.redirectChains ?? null,
         },
         competitors,

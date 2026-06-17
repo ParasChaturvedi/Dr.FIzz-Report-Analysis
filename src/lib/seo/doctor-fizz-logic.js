@@ -1553,6 +1553,18 @@ const _computeFreshness = (responses = []) => {
   return new RegExp(`(?:^|[^0-9])(${cur}|${cur - 1})(?:[^0-9]|$)`).test(txt) ? 60 : 45;
 };
 
+// Word-boundary brand match on the RAW answer text — fixes the substring bug where a
+// brand like "Onit" would match "m(onit)or". _brandInText → bool; _brandIdx → match index.
+const _escRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const _brandRe = (brand) => {
+  const core = String(brand || "").trim().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  if (!core) return null;
+  const pat = core.split(/\s+/).map(_escRe).join("[^\\p{L}\\p{N}]*");
+  try { return new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${pat})(?:[^\\p{L}\\p{N}]|$)`, "iu"); } catch { return null; }
+};
+const _brandInText = (brand, text) => { const re = _brandRe(brand); return !!re && re.test(String(text || "")); };
+const _brandIdx = (brand, text) => { const re = _brandRe(brand); if (!re) return Infinity; const m = re.exec(String(text || "")); return m ? m.index : Infinity; };
+
 /**
  * SHARE OF VOICE LOGIC — % visibility of each brand inside each AI engine, plus a
  * Doctor-Fizz-calculated Avg (ESTIMATE). A lead brand (the one the answer leads
@@ -1574,16 +1586,16 @@ export function buildShareOfVoice(input = {}) {
       const set = new Set(r.brandsMentioned.map(_geoNorm));
       return brandSet.filter(b => set.has(_geoNorm(b)));
     }
-    const text = _geoNorm(r.answerText || "");
-    return text ? brandSet.filter(b => text.includes(_geoNorm(b))) : [];
+    const text = r.answerText || "";
+    return text ? brandSet.filter(b => _brandInText(b, text)) : [];
   };
-  // Lead brand: explicit, else the brand named earliest in the answer (works live).
+  // Lead brand: explicit, else the brand named earliest in the answer (word-boundary).
   const leadOf = (r) => {
     if (r.leadBrand) return _geoNorm(r.leadBrand);
-    const t = _geoNorm(r.answerText || "");
+    const t = r.answerText || "";
     if (!t) return "";
     let best = "", bestIdx = Infinity;
-    for (const b of brandSet) { const i = t.indexOf(_geoNorm(b)); if (i >= 0 && i < bestIdx) { bestIdx = i; best = _geoNorm(b); } }
+    for (const b of brandSet) { const i = _brandIdx(b, t); if (i < bestIdx) { bestIdx = i; best = _geoNorm(b); } }
     return best;
   };
 
@@ -1623,11 +1635,13 @@ export function buildShareOfVoice(input = {}) {
   };
 }
 
+// Host-anchored (label boundaries) so "sometimesfood.com" / "myforumisbad.com" don't
+// false-match. The bare host (no path) is tested, hence the (?:^|\.)…\. anchoring.
 const _GEO_DOMAIN_TYPES = [
-  [/wikipedia\.org|wikidata\.org/, "Encyclopedia"],
-  [/reddit\.com|quora\.com|stackexchange|forum/, "Community"],
-  [/justdial|sulekha|indiamart|tradeindia|yelp|trustpilot|clutch\.co|goodfirms|g2\.com|glassdoor|yellowpages|designrush|foodierate|hargamenu|cuponation|hemat\.|katalogpromosi|kumparan/, "Aggregator / directory"],
-  [/times|news|liputan|kompas|tribun|detik|cnbc|forbes|techcrunch|businessinsider|\.com\/(blog|news)|blog\./, "Media"],
+  [/(?:^|\.)(wikipedia|wikidata)\.org$/, "Encyclopedia"],
+  [/(?:^|\.)(reddit|quora|stackexchange|stackoverflow|discourse)\.|(?:^|\.)forums?\./, "Community"],
+  [/(?:^|\.)(justdial|sulekha|indiamart|tradeindia|yelp|trustpilot|clutch|goodfirms|g2|glassdoor|yellowpages|designrush|foodierate|hargamenu|cuponation|hemat|katalogpromosi|kumparan)\./, "Aggregator / directory"],
+  [/(?:^|\.)(cnbc|forbes|techcrunch|businessinsider|liputan6|kompas|tribun|detik|nytimes|timesofindia|economictimes|hindustantimes)\.|(?:^|\.)(news|times)\.|(?:^|\.)blog\./, "Media"],
 ];
 function _geoClassifyDomain(domain, clientDomain, competitorDomains) {
   const d = String(domain || "").toLowerCase();
@@ -1685,7 +1699,7 @@ export function buildCitationAnalysis(input = {}) {
   const brand_presence = responses.slice(0, 10).map(r => ({
     prompt: r.prompt || "",
     brands_surfaced: r.brandsMentioned || [],
-    client_present: (r.brandsMentioned || []).some(b => _geoNorm(b).includes(_geoNorm(input.clientName || ""))),
+    client_present: !!input.clientName && (_brandInText(input.clientName, r.answerText || "") || (r.brandsMentioned || []).some(b => _geoNorm(b) === _geoNorm(input.clientName))),
     sources_cited: [...new Set((r.citations || []).map(_geoHost).filter(Boolean))].slice(0, 4),
   }));
 
@@ -1870,17 +1884,17 @@ export function buildGeoMetrics(input = {}) {
       const set = new Set(r.brandsMentioned.map(_geoNorm));
       return brandSet.filter((b) => set.has(_geoNorm(b)));
     }
-    const t = _geoNorm(r.answerText || "");
-    return t ? brandSet.filter((b) => t.includes(_geoNorm(b))) : [];
+    const t = r.answerText || "";
+    return t ? brandSet.filter((b) => _brandInText(b, t)) : [];
   };
   // Lead brand = explicit leadBrand if the live adapter set one, else the brand named
-  // EARLIEST in the answer text (so lead-weighting works for real scans too).
+  // EARLIEST in the answer text (word-boundary, so lead-weighting works for real scans).
   const leadOf = (r) => {
     if (r.leadBrand) return _geoNorm(r.leadBrand);
-    const t = _geoNorm(r.answerText || "");
+    const t = r.answerText || "";
     if (!t) return "";
     let best = "", bestIdx = Infinity;
-    for (const b of brandSet) { const i = t.indexOf(_geoNorm(b)); if (i >= 0 && i < bestIdx) { bestIdx = i; best = _geoNorm(b); } }
+    for (const b of brandSet) { const i = _brandIdx(b, t); if (i < bestIdx) { bestIdx = i; best = _geoNorm(b); } }
     return best;
   };
   const hostsIn = (r) => (r.citations || []).map(_geoHost).filter(Boolean);
@@ -1891,7 +1905,9 @@ export function buildGeoMetrics(input = {}) {
   };
 
   const compute = (rs) => {
-    const n = rs.length || 1;
+    // Rate denominators exclude responses with no answer AND no citations (e.g. an AI
+    // Overview that simply didn't render) — those aren't "asked-and-absent", they're misses.
+    const n = rs.filter((r) => String(r.answerText || "").trim() || (r.citations || []).length).length || 1;
     let bMent = 0, bCit = 0, cMentResp = 0, cCitResp = 0, mw = 0, cw = 0, compw = 0, citScore = 0, posSum = 0, posCount = 0, totalCites = 0;
     const themes = new Set(), sourceHosts = new Set(), sourceTypes = new Set();
     for (const r of rs) {
@@ -1961,14 +1977,14 @@ export function buildTopicDominance(input = {}) {
       const set = new Set(r.brandsMentioned.map(_geoNorm));
       return brandSet.filter((b) => set.has(_geoNorm(b)));
     }
-    const t = _geoNorm(r.answerText || "");
-    return t ? brandSet.filter((b) => t.includes(_geoNorm(b))) : [];
+    const t = r.answerText || "";
+    return t ? brandSet.filter((b) => _brandInText(b, t)) : [];
   };
   const leadOf = (r) => {
     if (r.leadBrand) { const m = brandSet.find((b) => _geoNorm(b) === _geoNorm(r.leadBrand)); if (m) return m; }
-    const t = _geoNorm(r.answerText || ""); if (!t) return "";
+    const t = r.answerText || ""; if (!t) return "";
     let best = "", bi = Infinity;
-    for (const b of brandSet) { const i = t.indexOf(_geoNorm(b)); if (i >= 0 && i < bi) { bi = i; best = b; } }
+    for (const b of brandSet) { const i = _brandIdx(b, t); if (i < bi) { bi = i; best = b; } }
     return best;
   };
 
