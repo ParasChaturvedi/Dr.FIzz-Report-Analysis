@@ -1001,6 +1001,35 @@ export default function Step5Slide2({
         updateStage("keywordGap", { state: "done", value: "Limited data" });
       }
 
+      // ── GEO / AI-VISIBILITY SCAN (GEO Vision §14-25) ──────────────────────────
+      // Runs the multi-engine browser scan now (competitors are known) → caches the
+      // raw responses in MongoDB (30 days). The report's Section 10 reads that cache
+      // and computes real Share-of-Voice + citations. Fail-safe: on error/timeout the
+      // report falls back to the GEO readiness placeholders.
+      updateStage("geoLlm", { state: "loading", value: "Scanning AI engines (ChatGPT, Gemini, AI Overview, Perplexity, Claude)…" }, { force: true });
+      try {
+        const geoRes = await fetch("/api/seo/geo-scan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url,
+            brand: businessData?.businessName || businessData?.name || domain,
+            industry: businessData?.industrySector || businessData?.industry || businessData?.category || "",
+            category: businessData?.category || "",
+            location: businessData?.location || "",
+            competitors: allCompetitors,
+            keywords,            // real keywords → higher-quality neutral prompts (§17)
+            countryCode: "in",
+          }),
+        });
+        const geoJson = geoRes.ok ? await geoRes.json() : null;
+        const nResp = geoJson?.geo?.responses?.length || 0;
+        updateStage("geoLlm", { state: "done", value: nResp ? `AI visibility scanned (${nResp} answers)` : "AI-readiness assessed" });
+      } catch (e) {
+        console.warn("[Step5] GEO scan failed:", e?.message);
+        updateStage("geoLlm", { state: "done", value: "AI-readiness assessed" });
+      }
+
       // ═══════════════════════════════════════════════════════════════════════
       // DATA VALIDATION LAYER (quality checkpoint — NON-BLOCKING)
       // Cross-checks every module for completeness and contradictions. Any gaps

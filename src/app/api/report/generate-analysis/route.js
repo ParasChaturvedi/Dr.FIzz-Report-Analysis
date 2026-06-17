@@ -688,10 +688,16 @@ export async function POST(request) {
       ? kwGapRaw.competitorBacklinks
       : [];
 
+    // Live GEO/AI-visibility scan (cached 30 days by /api/seo/geo-scan). When present,
+    // Section 10 shows REAL Share-of-Voice + citation intelligence (overall + per engine)
+    // instead of the "pending" placeholders. null = scan hasn't run → placeholders.
+    const geoViz = await getCached({ domain, dataType: "geo-visibility", ttlDays: 30 }).catch(() => null);
+
     let structuredPayload = null;
     let qaResult = null;
     try {
       structuredPayload = runBusinessLogic({
+        aiVisibility: geoViz,
         domain,
         clientName: businessData?.businessName || businessData?.name || domain,
         industry:   businessData?.industrySector || businessData?.industry || businessData?.category || "",

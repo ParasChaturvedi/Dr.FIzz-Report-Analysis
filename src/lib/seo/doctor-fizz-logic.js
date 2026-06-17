@@ -1975,6 +1975,10 @@ export function runBusinessLogic(input = {}) {
     crawlData = null, verifiedData = null, competitorAudits = [],
     // V3 Part 3 setup-flow inputs (each with a downstream purpose, per rule 2.2)
     reportMode = "", businessScope = "", coreServices = [], negativeExclusions = [],
+    // Live GEO/AI-visibility scan output (GEO Vision §14-25): { responses, brandSet,
+    // clientDomain, competitorDomains }. When present, Section 10 shows REAL Share-of-
+    // Voice + citation intelligence instead of "pending" placeholders.
+    aiVisibility = null,
   } = input;
 
   // ── V3 COMPETITOR SEGMENTATION (Part 4) — only VALIDATED BUSINESS competitors
@@ -2068,6 +2072,7 @@ export function runBusinessLogic(input = {}) {
   const geo_and_ai_visibility = buildGeoVisibility({
     domain, clientName, industry, baseline, hasSchema,
     competitors: normalizeCompetitorObjects(comparableCompetitors, comparableGmbs),
+    aiResponses: aiVisibility, // live multi-engine scan → real SoV + citations (else null = placeholders)
   });
   // Schema additions belong to the GEO layer (kept out of content_architecture per spec)
   content_architecture.schema_additions = geo_and_ai_visibility.schema_additions.map(s => ({
