@@ -461,44 +461,25 @@ export default function WebsiteReport({ data }) {
           <SSub>Reverse-Engineering the Market Leader</SSub>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div className="bg-[#f0faf4] border border-emerald-100 rounded-xl p-6">
-              <div className="flex items-center gap-2 mb-5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
-                <div className="text-[9px] font-bold uppercase tracking-widest text-emerald-700">
-                  What Works For Them
+            {[
+              { title: "What Works For Them", items: ci.whatWorksForThem, bar: ORANGE, empty: "Analysis in progress…" },
+              { title: "Gaps You Can Exploit", items: ci.gapsYouCanExploit, bar: "#4A4A4A", empty: "Gap analysis loading…" },
+            ].map((c) => (
+              <div key={c.title} className="bg-white rounded-lg overflow-hidden" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                <div style={{ height: 4, background: c.bar }} />
+                <div className="p-6">
+                  <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "16px", color: INK, marginBottom: 14 }}>{c.title}</div>
+                  <ul className="space-y-3">
+                    {(c.items || []).map((item, i) => (
+                      <li key={i} className="flex items-start gap-2.5" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.55 }}>
+                        <span style={{ color: c.bar, fontWeight: 700, marginTop: 1, flexShrink: 0 }}>•</span>{item}
+                      </li>
+                    ))}
+                    {!(c.items || []).length && <li className="text-sm text-gray-400">{c.empty}</li>}
+                  </ul>
                 </div>
               </div>
-              <ul className="space-y-3">
-                {(ci.whatWorksForThem || []).map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700 leading-relaxed">
-                    <span className="text-emerald-500 font-bold flex-shrink-0 mt-0.5 text-xs">+</span>
-                    {item}
-                  </li>
-                ))}
-                {!(ci.whatWorksForThem || []).length && (
-                  <li className="text-sm text-gray-400">Analysis in progress…</li>
-                )}
-              </ul>
-            </div>
-            <div className="bg-orange-50 border border-orange-100 rounded-xl p-6">
-              <div className="flex items-center gap-2 mb-5">
-                <span className="w-2 h-2 rounded-full bg-[#C35328] flex-shrink-0" />
-                <div className="text-[9px] font-bold uppercase tracking-widest text-[#C35328]">
-                  Gaps You Can Exploit
-                </div>
-              </div>
-              <ul className="space-y-3">
-                {(ci.gapsYouCanExploit || []).map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700 leading-relaxed">
-                    <span className="text-[#C35328] font-bold flex-shrink-0 mt-0.5 text-xs">→</span>
-                    {item}
-                  </li>
-                ))}
-                {!(ci.gapsYouCanExploit || []).length && (
-                  <li className="text-sm text-gray-400">Gap analysis loading…</li>
-                )}
-              </ul>
-            </div>
+            ))}
           </div>
         </AnimatedSection>
       </section>
@@ -506,7 +487,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           06 · TECHNICAL FOUNDATION
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#f4f4f4] py-16">
+      <section className="bg-white py-16">
         <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={6} total={N} />
@@ -525,7 +506,7 @@ export default function WebsiteReport({ data }) {
                 </thead>
                 <tbody>
                   {tp.map((row, i) => (
-                    <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-[#f4f4f4]"}>
+                    <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-white"}>
                       <td className="px-4 py-3"><PBadge p={row.priority} /></td>
                       <td className="px-4 py-3 font-semibold text-gray-900">{row.issue}</td>
                       <td className="px-4 py-3 text-gray-600 text-sm leading-relaxed">{row.action}</td>
@@ -555,25 +536,25 @@ export default function WebsiteReport({ data }) {
           <SHead>AUTHORITY</SHead>
           <SSub>Link Building to Raise Domain Rating</SSub>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-4">
             {[
-              { title: "Citation Building", items: lb.citationBuilding || [], color: "#C35328" },
-              { title: "Content-Driven Links", items: lb.contentDrivenLinks || [], color: "#C35328" },
-              { title: "Competitor Link Gap", items: lb.competitorLinkGap || [], color: "#6366f1" },
+              { title: "Citation Building", items: lb.citationBuilding || [] },
+              { title: "Content-Driven Links", items: lb.contentDrivenLinks || [] },
+              { title: "Competitor Link Gap", items: lb.competitorLinkGap || [] },
             ].map((col) => (
-              <div key={col.title} className="bg-[#f4f4f4] rounded-xl p-5 border border-gray-200">
-                <div className="text-[8px] font-bold uppercase tracking-widest mb-4" style={{ color: col.color }}>
-                  {col.title}
+              <div key={col.title} className="flex rounded-lg overflow-hidden bg-white" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                <div style={{ width: 4, background: ORANGE, flexShrink: 0 }} />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 w-full">
+                  <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "15px", color: INK }}>{col.title}</div>
+                  <ul className="md:col-span-2 space-y-2">
+                    {col.items.map((item, j) => (
+                      <li key={j} className="flex items-start gap-2" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.5 }}>
+                        <span style={{ color: ORANGE, marginTop: 2, flexShrink: 0 }}>•</span>{item}
+                      </li>
+                    ))}
+                    {!col.items.length && <li className="text-xs text-gray-400">Loading…</li>}
+                  </ul>
                 </div>
-                <ul className="space-y-2.5">
-                  {col.items.map((item, j) => (
-                    <li key={j} className="flex items-start gap-2 text-xs text-gray-700 leading-relaxed">
-                      <span className="w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: col.color }} />
-                      {item}
-                    </li>
-                  ))}
-                  {!col.items.length && <li className="text-xs text-gray-400">Loading…</li>}
-                </ul>
               </div>
             ))}
           </div>
@@ -664,7 +645,7 @@ export default function WebsiteReport({ data }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {rm.map((phase, i) => (
-              <div key={i} className="bg-[#f4f4f4] border border-gray-200 rounded-xl p-6 hover:border-[#C35328]/30 hover:shadow-sm transition-all duration-200">
+              <div key={i} className="bg-white border border-gray-200 rounded-xl p-6 hover:border-[#C35328]/30 hover:shadow-sm transition-all duration-200">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#C35328] to-[#C35328] text-white text-xs font-black grid place-items-center flex-shrink-0">
                     {phase.phase}
@@ -694,7 +675,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           10 · MEASURING SUCCESS
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#f4f4f4] py-16">
+      <section className="bg-white py-16">
         <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={10} total={N} />
@@ -702,30 +683,29 @@ export default function WebsiteReport({ data }) {
             <SHead>MEASURING SUCCESS</SHead>
             <SSub>Visibility KPIs We Report Monthly</SSub>
 
-            <div className="rounded-xl overflow-hidden border border-gray-200">
-              <table className="w-full text-sm border-collapse">
+            <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #E5E5E5" }}>
+              <table className="w-full border-collapse">
                 <thead>
-                  <tr className="bg-gray-900 text-white">
-                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Metric</th>
-                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Baseline (Now)</th>
-                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">6 Months Target</th>
-                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">12 Months Target</th>
+                  <tr style={{ background: INK, color: "#fff" }}>
+                    {["Metric", "Now", "6 Months", "12 Months"].map((h, i) => (
+                      <th key={i} className="px-4 py-3 text-left uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.12em" }}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {(msRows || [
-                    { metric: "Domain Rating",     now: bm.domainRating    || "—", s6: "Growing",  s12: "Target +"  },
-                    { metric: "Organic Keywords",  now: bm.organicKeywords || "—", s6: "+60%",     s12: "+200%"     },
-                    { metric: "Organic Traffic",   now: bm.organicTraffic  || "—", s6: "+80%",     s12: "+300%"     },
-                    { metric: "Referring Domains", now: bm.referringDomains|| "—", s6: "+15",      s12: "+40"       },
+                    { metric: "Domain Rating",     now: bm.domainRating    ?? "—", s6: "Growing",  s12: "Target +"  },
+                    { metric: "Organic Keywords",  now: fmt(bm.organicKeywords),   s6: "+60%",     s12: "+200%"     },
+                    { metric: "Organic Traffic",   now: fmt(bm.organicTraffic),    s6: "+80%",     s12: "+300%"     },
+                    { metric: "Referring Domains", now: fmt(bm.referringDomains),  s6: "+15",      s12: "+40"       },
                     { metric: "Site Health Score", now: crawlHealth != null ? `${crawlHealth}/100` : "—", s6: "75/100", s12: "90/100" },
                     { metric: "GMB Completeness",  now: gmbScore    != null ? `${gmbScore}/100`    : "—", s6: "80/100", s12: "95/100" },
                   ]).map((row, i) => (
-                    <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-[#f4f4f4]"}>
-                      <td className="px-4 py-3 font-semibold text-gray-900">{row.metric}</td>
-                      <td className="px-4 py-3 text-gray-700">{row.now}</td>
-                      <td className="px-4 py-3 text-emerald-700 font-semibold">{row.s6}</td>
-                      <td className="px-4 py-3 text-emerald-700 font-bold">{row.s12}</td>
+                    <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#F7F7F7" }}>
+                      <td className="px-4 py-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "13px", color: INK }}>{row.metric}</td>
+                      <td className="px-4 py-3" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A" }}>{row.now}</td>
+                      <td className="px-4 py-3" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A" }}>{row.s6}</td>
+                      <td className="px-4 py-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "13px", color: ORANGE }}>{row.s12}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -777,7 +757,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           12 · UNCONTESTED TERRITORY
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#f4f4f4] py-16">
+      <section className="bg-white py-16">
         <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={12} total={N} />
@@ -805,39 +785,37 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           13 · THE NEXT FRONTIER — GEO & AI
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#0E0E0E] text-white py-16">
+      <section className="py-16" style={{ background: "#FFFFFF" }}>
         <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
-            <SNumDark n={13} total={N} />
+            <SNum n={13} total={N} />
             <OBar />
-            <SHead white>THE NEXT FRONTIER</SHead>
-            <SSub white>GEO and AI Visibility</SSub>
+            <SHead>THE NEXT FRONTIER</SHead>
+            <SSub>GEO and AI Visibility</SSub>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-10">
-              <div className="bg-white/[0.04] border border-white/10 rounded-xl p-6 sm:p-8 text-center overflow-hidden">
-                <div className="text-[8px] uppercase tracking-widest text-gray-500 mb-3 truncate">{domain} AI Citations</div>
-                <div className="text-2xl sm:text-3xl md:text-4xl font-black text-[#C35328] leading-snug break-words hyphens-auto px-2">
-                  {gf.domainAICitations || "—"}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              {[
+                { who: domain, val: gf.domainAICitations || "—", sub: "AI citations across answer engines", bar: ORANGE, num: ORANGE },
+                { who: "Top competitor", val: gf.competitorAICitations || "—", sub: "Already cited in AI answers", bar: "#4A4A4A", num: INK },
+              ].map((c, i) => (
+                <div key={i} className="flex rounded-lg overflow-hidden bg-white" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                  <div style={{ width: 4, background: c.bar, flexShrink: 0 }} />
+                  <div className="p-5 min-w-0">
+                    <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: "12px", color: "#8A8A8A" }} className="truncate">{c.who}</div>
+                    <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "30px", color: c.num, marginTop: 4, lineHeight: 1.12 }} className="break-words">{c.val}</div>
+                    <div style={{ fontFamily: BODY, fontSize: "12px", color: "#5A5A5A", marginTop: 4 }}>{c.sub}</div>
+                  </div>
                 </div>
-              </div>
-              <div className="bg-white/[0.04] border border-white/10 rounded-xl p-6 sm:p-8 text-center overflow-hidden">
-                <div className="text-[8px] uppercase tracking-widest text-gray-500 mb-3">Competitor AI Citations</div>
-                <div className="text-2xl sm:text-3xl md:text-4xl font-black text-[#C35328] leading-snug break-words hyphens-auto px-2">
-                  {gf.competitorAICitations || "—"}
-                </div>
-              </div>
+              ))}
             </div>
 
             {(gf.howToEarnCitations || []).length > 0 && (
-              <div>
-                <div className="text-[8px] font-bold uppercase tracking-widest text-[#C35328] mb-5">
-                  How To Earn AI Citations
-                </div>
-                <ul className="space-y-3.5">
+              <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "16px", color: INK, marginBottom: 14 }}>How To Earn AI Citations</div>
+                <ul className="space-y-3">
                   {gf.howToEarnCitations.map((step, i) => (
-                    <li key={i} className="flex items-start gap-3 text-sm text-gray-300 leading-relaxed">
-                      <span className="text-[#C35328] font-black text-base flex-shrink-0 w-5 leading-none mt-0.5">{i + 1}.</span>
-                      {step}
+                    <li key={i} className="flex items-start gap-3" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.55 }}>
+                      <span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>{i + 1}.</span>{step}
                     </li>
                   ))}
                 </ul>
@@ -859,7 +837,7 @@ export default function WebsiteReport({ data }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {qw.map((block, i) => (
-              <div key={i} className="border-l-4 border-[#C35328] bg-[#f4f4f4] rounded-r-xl p-5">
+              <div key={i} className="border-l-4 border-[#C35328] bg-white rounded-r-xl p-5">
                 <div className="text-[8px] font-black uppercase tracking-widest text-[#C35328] mb-3">{block.week}</div>
                 <ul className="space-y-2">
                   {(block.actions || []).map((action, j) => (
@@ -881,7 +859,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           15 · STRATEGIC PRIORITY STACK
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-[#f4f4f4] py-16">
+      <section className="bg-white py-16">
         <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={15} total={N} />
