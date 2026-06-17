@@ -242,16 +242,28 @@ async function askInContext(context, cfg, prompt) {
   }
 }
 
+// Market timezone so answers are region-aligned and never time-personalised by drift.
+const _TZ_FOR = { in: "Asia/Kolkata", us: "America/New_York", gb: "Europe/London", au: "Australia/Sydney", ca: "America/Toronto", ae: "Asia/Dubai", sg: "Asia/Singapore", de: "Europe/Berlin", fr: "Europe/Paris" };
+
 // Browserless transport: fresh context seeded with the captured storageState.
-async function askEngine(browser, engineKey, prompt, storageState) {
+// HISTORY-FREE GUARANTEE: each query runs in a BRAND-NEW context (no state bleeds
+// between queries). For no-login engines there is no account → cookies are cleared so
+// the answer is 100% logged-out and un-personalised. Session engines keep ONLY their
+// auth; ChatGPT additionally uses Temporary Chat and every engine opens a fresh chat,
+// so no chat history or account memory is ever read. Account-level memory/activity
+// (e.g. Gemini Apps Activity) must be turned OFF once on each login account.
+async function askEngine(browser, engineKey, prompt, storageState, proxyCountry = "in") {
   const cfg = ENGINES[engineKey];
   if (!cfg) throw new Error(`Unknown engine: ${engineKey}`);
   if (cfg.needsSession && !storageState) throw new Error(`${cfg.name}: no logged-in session provided (needs storageState).`);
   const context = await browser.newContext({
     storageState: storageState || undefined,
     locale: "en-US",
+    timezoneId: _TZ_FOR[String(proxyCountry || "in").toLowerCase()] || "Asia/Kolkata",
     userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
   });
+  // No-login engine → guarantee a clean, logged-out, un-personalised session every query.
+  if (!storageState) { try { await context.clearCookies(); } catch {} }
   try { return await askInContext(context, cfg, prompt); }
   finally { await context.close().catch(() => {}); }
 }
@@ -340,7 +352,7 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry }) 
         let browser;
         try {
           browser = await connectBrowserless(proxyCountry);
-          responses.push({ ...(await askEngine(browser, ek, p.prompt, sessions[ek])), ...tag });
+          responses.push({ ...(await askEngine(browser, ek, p.prompt, sessions[ek], proxyCountry)), ...tag });
           lastErr = null;
           break; // success
         } catch (err) { lastErr = err; }
