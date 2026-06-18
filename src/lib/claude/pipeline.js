@@ -406,6 +406,7 @@ Return ONLY valid JSON. No markdown, no explanation — just the JSON object.
 
 Hard rules:
 - Keywords must match the business universe described by offerings/primaryOffering.
+- Be SPECIFIC to the client's actual niche/offerings — avoid broad industry catch-all terms (e.g. for a focused firm, prefer its real services over generic umbrella phrases like "technology solutions" or "digital transformation").
 - Prefer real search phrases (2–5 words).
 - Include a mix: informational, commercial, transactional.
 - DO NOT append location to every keyword.
@@ -501,9 +502,10 @@ Definitions:
 - searchCompetitors: websites that rank for these keywords — can include aggregators, directories, publishers (return domain names).
 
 Hard rules:
-- ALWAYS return real domain names with extensions (e.g. amazon.com, flipkart.com, nykaa.com, zomato.com).
-- businessCompetitors MUST be same universe as offerings.
-- searchCompetitors MUST be different from businessCompetitors.
+- ALWAYS return real, EXISTING domain names with extensions.
+- businessCompetitors MUST be REAL companies DIRECTLY COMPARABLE to the client in size, segment, and region — the businesses a real buyer would shortlist alongside this client. Do NOT return industry mega-corporations, conglomerates, or household-name giants (e.g. for a small/mid IT-services firm do NOT return tcs.com / infosys.com / wipro.com / cognizant.com; for a small store do NOT return amazon.com / flipkart.com) UNLESS the client itself genuinely operates at that scale. Match the client's tier.
+- businessCompetitors MUST be in the same universe as the offerings AND specific to the client's actual niche (not the whole broad industry).
+- searchCompetitors are sites that RANK for these keywords (aggregators/directories/publishers allowed) and MUST differ from businessCompetitors.
 
 Return JSON in EXACTLY this format:
 {
