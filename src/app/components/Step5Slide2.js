@@ -1472,7 +1472,7 @@ export default function Step5Slide2({
                       Building your ItzFizz Intelligence Report{loadingDots}
                     </p>
                     <p className="text-[11px] sm:text-[12px] text-[var(--muted)] mt-1">
-                      This takes 30–90 seconds — please don't close this tab.
+                      This takes 3–5 minutes — please don't close this tab.
                     </p>
                   </div>
 
