@@ -23,6 +23,10 @@
 //   Problem 7 — Missing data labeling
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Track 1.2 — evidence framework (every recommendation → 10-field evidence structure,
+// existing-page checks, honest GEO status, findings-vs-projections separation).
+import { buildEvidencePlan, buildGeoStatus, separateKpis } from "./report-evidence.js";
+
 // ── Missing data labels (Problem 7) ───────────────────────────────────────────
 export const MISSING_LABELS = {
   EMPTY:          "Not available from current data sources. Manual verification recommended.",
@@ -2681,6 +2685,15 @@ export function runBusinessLogic(input = {}) {
     kpis,
     scores,
     priority_action_plan,
+    // Track 1.2 — evidence-first execution layer (all the above recommendations, each
+    // restructured into the 10-field evidence format; existing-page checks applied so we
+    // never recommend a page that already exists).
+    evidence_plan: buildEvidencePlan({ technical_issues, content_architecture, priority_action_plan }, crawlData),
+    // #14 — current metrics vs targets vs forecasts vs assumptions, kept separate.
+    kpi_breakdown: separateKpis(kpis),
+    // #9 — honest GEO state (planned / methodology-ready / prompts-ready / collection-not-run).
+    // No SoV / citations / mentions are shown until real Phase-3 collection runs.
+    geo_status: buildGeoStatus({ geo: geo_and_ai_visibility }),
     v2_additions,
     story,
     _meta: { competitorBrands, kpiCtx },

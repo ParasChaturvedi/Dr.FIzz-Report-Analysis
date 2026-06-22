@@ -127,16 +127,133 @@ function DarkCallout({ label, children }) {
   );
 }
 
+// ── EVIDENCE-FIRST recommendation card (Track 1.2). Renders the 10-field structure so
+//    every recommendation is implementation-ready: Finding · Evidence · Competitor
+//    Benchmark · Action · Expected Impact · Validation Metric + confidence/owner/effort/
+//    impact badges. Reads data.doctorFizz.evidence_plan.
+function EvBadge({ children, bg = "#4A4A4A", color = "#fff" }) {
+  return <span className="inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider" style={{ background: bg, color }}>{children}</span>;
+}
+const EV_IMPACT_BG = { High: "#C35328", Medium: "#8A6A52", Low: "#BDBDBD" };
+const EV_OWNER_BG = { SEO: "#2F5D62", Development: "#3A3A6A", Content: "#5A4A2E", Client: "#6A2E4A" };
+function EvidenceRow({ label, children }) {
+  if (!children) return null;
+  return (
+    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+      <div style={{ flex: "0 0 132px", fontFamily: BODY, fontSize: "9px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#9A9A9A", paddingTop: 2 }}>{label}</div>
+      <div style={{ fontFamily: BODY, fontSize: "12.5px", lineHeight: 1.55, color: "#3A3A3A", minWidth: 0 }}>{children}</div>
+    </div>
+  );
+}
+function EvidenceCard({ r }) {
+  return (
+    <div className="rounded-lg bg-white p-4" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "14px", color: INK, lineHeight: 1.3, flex: "1 1 60%", minWidth: 0 }}>{r.finding}</div>
+        <div className="flex gap-1.5 flex-wrap">
+          <EvBadge bg={EV_IMPACT_BG[r.impact] || "#8A8A8A"}>{r.impact} impact</EvBadge>
+          <EvBadge bg={EV_OWNER_BG[r.owner] || "#4A4A4A"}>{r.owner}</EvBadge>
+        </div>
+      </div>
+      <EvidenceRow label="Evidence / data">{r.evidence}</EvidenceRow>
+      <EvidenceRow label="Competitor benchmark">{r.competitor_benchmark || <span style={{ color: "#B8B8B8" }}>Competitor ranking evidence added in Track 2</span>}</EvidenceRow>
+      <EvidenceRow label="Recommended action">{r.action}</EvidenceRow>
+      <EvidenceRow label="Expected impact">{r.expected_impact}</EvidenceRow>
+      <EvidenceRow label="Validation metric">{r.validation_metric}</EvidenceRow>
+      <div className="flex gap-1.5 flex-wrap mt-3 pt-2" style={{ borderTop: "1px solid #F0F0F0" }}>
+        <EvBadge bg="#EDEDED" color="#4A4A4A">{r.confidence}</EvBadge>
+        <EvBadge bg="#EDEDED" color="#4A4A4A">Effort: {r.effort_band}{r.effort ? ` · ${r.effort}` : ""}</EvBadge>
+        {r.priority && <EvBadge bg="#EDEDED" color="#4A4A4A">{r.priority}</EvBadge>}
+        {(r.sources || []).length > 0 && <EvBadge bg="#EDEDED" color="#7A7A7A">Source: {r.sources.join(", ")}</EvBadge>}
+      </div>
+    </div>
+  );
+}
+function EvidencePlanSection({ plan }) {
+  if (!plan || !plan.by_category || !Object.keys(plan.by_category).length) return null;
+  const cats = Object.keys(plan.by_category);
+  const c = plan.counts || {};
+  return (
+    <section className="max-w-6xl mx-auto px-8 md:px-14 py-16">
+      <AnimatedSection>
+        <OBar />
+        <SHead>THE IMPLEMENTATION PLAN</SHead>
+        <SSub>Every recommendation, evidence → action → validation</SSub>
+        <p style={{ fontFamily: BODY, fontSize: "14px", lineHeight: 1.65, color: "#5A5A5A", marginTop: -10, marginBottom: 18, maxWidth: "46rem" }}>
+          {c.total} prioritised recommendations. Each one states the finding, the evidence behind it, the exact action, who owns it, the effort, and the metric that proves it worked — so this reads as an execution plan, not a presentation.{c.pages_existing_flagged > 0 ? ` ${c.pages_existing_flagged} page(s) already exist and are flagged to optimise — not rebuild.` : ""}
+        </p>
+        <div className="space-y-8">
+          {cats.map((cat) => (
+            <div key={cat}>
+              <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "16px", color: ORANGE, marginBottom: 10 }}>{cat} <span style={{ color: "#B0B0B0", fontSize: 13 }}>({plan.by_category[cat].length})</span></div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+                {plan.by_category[cat].map((r, i) => <EvidenceCard key={i} r={r} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </AnimatedSection>
+    </section>
+  );
+}
+
 // §14-25 GEO renderer (reference light style). Renders the FULL model (geo_score, SoV,
 // metrics, topic dominance, citation intelligence, Claude deep analysis) when a live scan
 // exists, and ALWAYS renders the readiness scorecard + tracked prompts + actions. Reads
 // data.doctorFizz.geo_and_ai_visibility so NO GEO data is lost on the reference layout.
-function GeoVisibility({ geo = {}, domain, gf = {} }) {
+function GeoVisibility({ geo = {}, domain, gf = {}, status = null }) {
   const m = geo;
   const cardB = { border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" };
   const cell = { fontFamily: BODY, fontSize: "12px", padding: "8px 12px" };
   const thS = { fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", padding: "9px 12px", textAlign: "left", color: "#fff" };
   const Lbl = ({ children }) => <div className="uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: ORANGE, marginBottom: 8 }}>{children}</div>;
+
+  // ── #9 HONEST GEO STATE — until real Phase-3 browser collection runs, GEO is PLANNED.
+  //    NO Share-of-Voice / citation / mention / LLM-answer numbers are shown (none exist
+  //    yet). This early-return guarantees nothing fabricated reaches the report. ──
+  if (!status?.collection_run) {
+    const prompts = m.tracked_prompts || m.prompts_used || m.prompts || [];
+    const promptCount = status?.prompt_count || (Array.isArray(prompts) ? prompts.length : 0);
+    const steps = [
+      ["Methodology", status?.methodology_ready ? "Ready" : "Pending"],
+      ["Prompts (neutral)", status?.prompts_ready ? `Ready · ${promptCount}` : "Not generated yet"],
+      ["Collection (Playwright / Browserless)", "Not run yet"],
+    ];
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <Lbl>GEO Collection</Lbl>
+            <span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: "#8A6A52", color: "#fff" }}>PLANNED</span>
+          </div>
+          <p style={{ fontFamily: BODY, fontSize: "13px", lineHeight: 1.6, color: "#4A4A4A", maxWidth: "46rem" }}>
+            {status?.message || `GEO visibility for ${domain} has not been measured yet. No Share-of-Voice, citation or mention numbers are shown until they come from real AI-engine answers.`}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
+            {steps.map(([k, v], i) => (
+              <div key={i} className="rounded border p-3" style={{ borderColor: "#E5E5E5" }}>
+                <div style={{ fontFamily: BODY, fontSize: "9px", letterSpacing: "0.14em", textTransform: "uppercase", color: "#8A8A8A" }}>{k}</div>
+                <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "14px", color: INK, marginTop: 4 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          {status?.note && <p style={{ fontFamily: BODY, fontSize: "11px", color: "#8A8A8A", marginTop: 10 }}>{status.note}</p>}
+        </div>
+        {/* #8 — transparency: show the neutral prompts queued for collection, if generated */}
+        {Array.isArray(prompts) && prompts.length > 0 && (
+          <div className="rounded-lg bg-white p-5" style={cardB}>
+            <Lbl>Prompts ready for AI-engine collection ({prompts.length})</Lbl>
+            <ul className="mt-2 space-y-1">
+              {prompts.slice(0, 24).map((p, i) => (
+                <li key={i} style={{ fontFamily: BODY, fontSize: "12px", color: "#4A4A4A" }}>• {typeof p === "string" ? p : (p.prompt || p.prompt_text || "")}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {(m.engines_unavailable || []).length > 0 && (
@@ -1050,11 +1167,16 @@ export default function WebsiteReport({ data }) {
             <SHead>MEASURING SUCCESS</SHead>
             <SSub>Visibility KPIs We Report Monthly</SSub>
 
+            {/* #14 — separate CURRENT (measured) from TARGETS (projections). */}
+            <p style={{ fontFamily: BODY, fontSize: "13px", lineHeight: 1.6, color: "#5A5A5A", marginTop: -10, marginBottom: 16, maxWidth: "46rem" }}>
+              The <strong style={{ color: INK }}>Current</strong> column is measured today (DataForSEO / Moz / Doctor Fizz crawler). The 6- and 12-month columns are <strong style={{ color: ORANGE }}>targets — projections, not current performance</strong>: directional estimates that assume the plan below is implemented. They are not guarantees.
+            </p>
+
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid #E5E5E5" }}>
               <table className="w-full border-collapse">
                 <thead>
                   <tr style={{ background: INK, color: "#fff" }}>
-                    {["Metric", "Now", "6 Months", "12 Months"].map((h, i) => (
+                    {["Metric", "Current (measured)", "6-Month Target", "12-Month Target"].map((h, i) => (
                       <th key={i} className="px-4 py-3 text-left uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.12em" }}>{h}</th>
                     ))}
                   </tr>
@@ -1150,6 +1272,12 @@ export default function WebsiteReport({ data }) {
       </section>
 
       {/* ══════════════════════════════════════════════════════
+          THE IMPLEMENTATION PLAN — every recommendation in the 10-field evidence
+          structure (Track 1.2). Reads data.doctorFizz.evidence_plan.
+      ══════════════════════════════════════════════════════ */}
+      <EvidencePlanSection plan={d.doctorFizz?.evidence_plan} />
+
+      {/* ══════════════════════════════════════════════════════
           13 · THE NEXT FRONTIER — GEO & AI
       ══════════════════════════════════════════════════════ */}
       <section className="py-16" style={{ background: "#FFFFFF" }}>
@@ -1182,7 +1310,7 @@ export default function WebsiteReport({ data }) {
             {/* Full §14-25 GEO model (SoV, metrics, topic dominance, citation intelligence,
                 Claude deep analysis) when a live scan exists; readiness + tracked prompts +
                 actions always. Real data — replaces the old hallucinated citation counts. */}
-            <GeoVisibility geo={d.doctorFizz?.geo_and_ai_visibility || {}} domain={domain} gf={gf} />
+            <GeoVisibility geo={d.doctorFizz?.geo_and_ai_visibility || {}} domain={domain} gf={gf} status={d.doctorFizz?.geo_status || null} />
           </AnimatedSection>
         </div>
       </section>
