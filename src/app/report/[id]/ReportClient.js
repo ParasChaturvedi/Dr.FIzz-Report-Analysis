@@ -166,8 +166,12 @@ export default function ReportClient({ id }) {
         </div>
       )}
 
-      {/* Report content — horizontally scrollable on very small screens */}
-      <div id="report-content" className="min-w-0 overflow-x-auto">
+      {/* Report content — horizontally scrollable on very small screens.
+          NOTE: the `id="report-content"` lives on each renderer's root
+          (WebsiteReport / PageReport), NOT on this wrapper — duplicate ids are
+          invalid HTML and break getElementById/PDF capture. Keep this wrapper
+          id-free so exactly one #report-content (the real report) survives. */}
+      <div className="min-w-0 overflow-x-auto">
         {/* Website reports render via WebsiteReport — the reference-deck design (18
             sections, DOCTORFIZZ branding, flat orange). It now also renders the full
             §14-25 GEO model from data.doctorFizz.geo_and_ai_visibility, so nothing is

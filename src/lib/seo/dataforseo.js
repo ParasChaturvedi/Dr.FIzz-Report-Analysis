@@ -1102,6 +1102,9 @@ export async function fetchDomainRankOverview(domain, options = {}) {
       paidTraffic: toNumber(paid?.etv) ?? 0,
       rank: toNumber(item?.rank) ?? toNumber(result?.rank) ?? null,
     };
+    // Normalize the Labs domain rank to 0-100 (it's a 0-1000 scale, like the backlinks
+    // 'rank' path) so a Moz-down DR fallback never renders >100 / "Not available". (570→57)
+    if (typeof out.rank === "number" && out.rank > 100) out.rank = Math.round(out.rank / 10);
 
     cacheSet(CACHE.seo, cacheKey, out, 30 * 60 * 1000);
     return out;

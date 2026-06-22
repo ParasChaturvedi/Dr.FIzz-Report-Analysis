@@ -171,7 +171,7 @@ async function fetchGmbViaMaps(keyword, location, auth) {
         additionalCategories: b.additional_categories || [],
         rating:         b.rating?.value ?? null,
         reviewCount:    b.rating?.votes_count ?? b.rating?.reviews_count ?? null,
-        isVerified:     b.is_claimed ?? true,           // appearing in Maps ⇒ effectively live
+        isVerified:     b.is_claimed ?? null,           // Maps appearance ≠ claimed; unknown stays null (not confirmed)
         hoursAvailable: !!(b.work_hours?.timetable || b.work_time),
         hoursDetail:    b.work_hours?.timetable || null,
         placeId:        b.place_id || null,

@@ -1021,7 +1021,8 @@ export default function Step5Slide2({
             industry: businessData?.industrySector || businessData?.industry || businessData?.category || "",
             category: businessData?.category || "",
             location: businessData?.location || "",
-            competitors: allCompetitors,
+            competitors: allCompetitors,            // geo-scan derives the brand label (name) for SoV
+            competitorDomains: allCompetitors,      // domains → citation host-matching (kept distinct from names)
             keywords,            // real keywords → higher-quality neutral prompts (§17)
             countryCode: "in",
           }),

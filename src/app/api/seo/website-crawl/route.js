@@ -344,6 +344,7 @@ async function auditPage(url, keywords = [], host = "") {
   let statusCode = null;
   let lastModified = null;
   let contentType = null;
+  let xRobotsHeader = "";
   let fetchError = null;
 
   try {
@@ -351,6 +352,7 @@ async function auditPage(url, keywords = [], host = "") {
     statusCode  = res.status;
     lastModified = res.headers.get("last-modified") || null;
     contentType  = res.headers.get("content-type") || "";
+    xRobotsHeader = res.headers.get("x-robots-tag") || "";   // noindex/nofollow can be set via HTTP header, not just <meta>
     if (!res.ok) return { url, statusCode, error: `HTTP ${res.status}`, issues: [] };
     if (!contentType.includes("html")) return { url, statusCode, error: "Not HTML", issues: [] };
     html = await res.text();
@@ -372,8 +374,8 @@ async function auditPage(url, keywords = [], host = "") {
     first(html, /<meta\s[^>]*name=["']robots["'][^>]*content=["']([^"']*)["']/i) ||
     first(html, /<meta\s[^>]*content=["']([^"']*)["'][^>]*name=["']robots["']/i) ||
     "index, follow";
-  const isNoindex = /noindex/i.test(robotsMeta || "");
-  const isNofollow = /nofollow/i.test(robotsMeta || "");
+  const isNoindex = /noindex/i.test(robotsMeta || "") || /noindex/i.test(xRobotsHeader);
+  const isNofollow = /nofollow/i.test(robotsMeta || "") || /nofollow/i.test(xRobotsHeader);
   const viewport  = first(html, /<meta\s[^>]*name=["']viewport["'][^>]*content=["']([^"']*)["']/i);
   const charset   = first(html, /<meta\s[^>]*charset=["']([^"']*)["']/i);
   const hreflang  = all(html, /<link\s[^>]*hreflang=["']([^"']*)["'][^>]*>/gi);

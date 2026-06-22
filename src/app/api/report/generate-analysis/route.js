@@ -274,10 +274,17 @@ function buildMeasuringSuccessRows(baselineMetrics, crawlData, gmbData) {
 
 // ─── Website-level AI analysis ────────────────────────────────────────────────
 
-async function generateWebsiteAnalysis({ domain, keywords, competitors, businessData, seoData, crawlData, gmbData, keywordGapData }) {
+async function generateWebsiteAnalysis({ domain, keywords, competitors, businessData, seoData, crawlData, gmbData, keywordGapData, negativeExclusions }) {
   const primaryKw = (keywords || []).slice(0, 5).join(", ") || domain;
   const competitorList = (competitors || []).slice(0, 5).join(", ") || "major industry players";
   const industry = businessData?.industrySector || businessData?.industry || "business";
+  // Terms the user explicitly wants excluded — never let Claude surface them in any section.
+  const exclusions = (Array.isArray(negativeExclusions) ? negativeExclusions : [])
+    .map((t) => String(t || "").trim())
+    .filter(Boolean);
+  const exclusionRule = exclusions.length
+    ? `\n- NEVER recommend, mention, or target these excluded terms (the user has explicitly excluded them from this business): ${exclusions.join(", ")}. Do not surface them in any keyword, competitor, content blueprint, uncontested page, or recommendation.`
+    : "";
 
   const systemPrompt = `You are DoctorFizz Intelligence, an elite SEO & GEO strategy engine.
 You produce ruthlessly specific, data-backed strategy for real businesses. Every item must reference the client's actual data — industry, keywords, competitors, domain metrics.
@@ -292,7 +299,7 @@ Rules:
 - contentArchitecture.siteStructure must list ONLY NEW pages the site should BUILD to capture keyword gaps / uncovered services — do NOT list pages that already exist (Homepage, About, Contact, existing service pages). Each entry maps to a real keyword opportunity.
 - competitorLandscape.localCompetitors AND nationalPlatforms must BOTH be REAL businesses that DIRECTLY compete with the client (same offering, comparable tier) — draw them from the "Competitors listed" above. localCompetitors = local/regional rivals; nationalPlatforms = the same kind of direct competitor operating at national scale. NEVER list search aggregators, directories, marketplaces, review sites, or listing platforms (e.g. Justdial, Sulekha, Clutch, GoodFirms, Techreviewer, Yelp) — those are search intermediaries, NOT business competitors, and must never appear here.
 - Every keyword, competitor, and recommendation MUST be genuinely relevant to what THIS business actually offers. If a data point looks irrelevant to the business, DROP it — do not include it just to fill the list.
-- Do NOT give generic advice. Every sentence must be specific to THIS business.`;
+- Do NOT give generic advice. Every sentence must be specific to THIS business.${exclusionRule}`;
 
   const domainCtx = seoData ? `
 DOMAIN AUTHORITY & TRAFFIC (live data):
@@ -301,7 +308,8 @@ DOMAIN AUTHORITY & TRAFFIC (live data):
   Organic Keywords:   ${seoData.organicKeywords || "—"}
   Monthly Traffic:    ${seoData.organicTraffic || "—"}
   Mobile PSI:         ${seoData.performanceMobile || "—"}
-  Desktop PSI:        ${seoData.performanceDesktop || "—"}` : "";
+  Desktop PSI:        ${seoData.performanceDesktop || "—"}
+  Core Web Vitals — LCP: ${seoData.lcp != null ? `${seoData.lcp} ms` : "—"} | CLS: ${seoData.cls != null ? seoData.cls : "—"}` : "";
 
   const crawlCtx = crawlData ? `
 
@@ -440,17 +448,25 @@ Return ONLY this JSON (no markdown, no commentary):
 
 // ─── Page-level AI analysis ───────────────────────────────────────────────────
 
-async function generatePageAnalysis({ url, domain, keyword, businessData, psiData }) {
+async function generatePageAnalysis({ url, domain, keyword, businessData, psiData, pageData }) {
   const targetKeyword = keyword || domain;
   const industry = businessData?.industrySector || businessData?.industry || "business";
   const lcp = psiData?.coreWebVitals?.LCP || psiData?.coreWebVitals?.lcp;
   const cls = psiData?.coreWebVitals?.CLS || psiData?.coreWebVitals?.cls;
   const perfScore = psiData?.performanceScoreMobile || psiData?.performanceScore;
 
-  const systemPrompt = `You are ItzFizz Intelligence, an expert on-page SEO analyst.
+  // REAL crawled values for THIS page (so Claude never fabricates the current state).
+  // crawl page shape: { metaTitle, metaDesc, h1s[], content: { wordCount } }
+  const curTitle    = pageData?.metaTitle || "—";
+  const curMetaDesc = pageData?.metaDesc || "—";
+  const curH1       = (Array.isArray(pageData?.h1s) ? pageData.h1s.filter(Boolean) : []).join(" | ") || "—";
+  const curWordCount = pageData?.content?.wordCount != null ? String(pageData.content.wordCount) : "—";
+
+  const systemPrompt = `You are DoctorFizz Intelligence, an expert on-page SEO analyst.
 You analyze individual web pages and produce specific, actionable optimization recommendations.
 Always return STRICT JSON. Never mention Claude, Anthropic, or DataForSEO.
-Use "ItzFizz Intelligence" as the analysis source label.`;
+Use "DoctorFizz Intelligence" as the analysis source label.
+CRITICAL: The CURRENT page values (title, meta description, H1, word count) are PROVIDED below from a live crawl. Use the PROVIDED current values EXACTLY as given — NEVER invent, guess, or fabricate them. Only generate the recommended/optimized versions yourself. If a current value is given as "—" it was genuinely empty/missing on the page, so treat it as missing (do not make one up).`;
 
   const userPrompt = `Analyze this page and produce a complete on-page SEO optimization report.
 
@@ -459,6 +475,13 @@ Domain: ${domain}
 Target Keyword: ${targetKeyword}
 Industry: ${industry}
 LCP: ${lcp || "—"} | CLS: ${cls || "—"} | Performance Score: ${perfScore || "—"}
+
+CURRENT PAGE CONTENT (live crawl — use these EXACT values for every "current" field; do NOT invent):
+  Current Title:       ${curTitle}
+  Current Meta Desc:   ${curMetaDesc}
+  Current H1:          ${curH1}
+  Current Word Count:  ${curWordCount}
+Use the values above verbatim wherever the schema asks for a "current" title/meta/H1/word-count (e.g. metadata.titleTag.current, metadata.metaDescription.current, heroExecution.h1.current). Generate ONLY the "recommended"/optimized versions yourself.
 
 Return JSON with exactly these keys:
 {
@@ -844,10 +867,15 @@ export async function POST(request) {
           organicTraffic:   organicTraffic   != null ? fmt(organicTraffic)   : "—",
           performanceMobile:  mobileScore  != null ? `${mobileScore}/100`  : "—",
           performanceDesktop: desktopScore != null ? `${desktopScore}/100` : "—",
+          // Core Web Vitals (already rounded + null-safe in baselineMetrics) so Claude can cite them
+          lcp: baselineMetrics.lcp,
+          cls: baselineMetrics.cls,
         },
         crawlData:      crawlRaw,
         gmbData:        gmbRaw,
         keywordGapData: kwGapRaw,
+        // Pass excluded terms so Claude never surfaces them in contentBlueprint/uncontested/etc.
+        negativeExclusions: Array.isArray(negativeExclusions) ? negativeExclusions : (businessData?.negativeExclusions || []),
       });
 
       // Override AI placeholders with real computed sections
@@ -862,12 +890,27 @@ export async function POST(request) {
         };
       }
     } else {
+      // Find the REAL crawled content for THIS page so Claude uses the actual
+      // current title/meta/H1/word-count instead of inventing them. Match on the
+      // normalized full URL first, then fall back to pathname (handles www / trailing
+      // slash / protocol differences between safeUrl and the crawled url).
+      const _normUrl = (u) => String(u || "").replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "").toLowerCase();
+      const _normPath = (u) => { try { return new URL(ensureHttpUrl(u)).pathname.replace(/\/+$/, "") || "/"; } catch { return null; } };
+      const _crawlPages = Array.isArray(crawlRaw?.pages) ? crawlRaw.pages : [];
+      const _targetNorm = _normUrl(safeUrl);
+      const _targetPath = _normPath(safeUrl);
+      const pageData =
+        _crawlPages.find((p) => _normUrl(p?.url) === _targetNorm) ||
+        (_targetPath ? _crawlPages.find((p) => _normPath(p?.url) === _targetPath) : null) ||
+        null;
+
       aiSections = await generatePageAnalysis({
         url: safeUrl,
         domain,
         keyword: keywords[0] || keyword || domain,
         businessData,
         psiData,
+        pageData,
       });
     }
 

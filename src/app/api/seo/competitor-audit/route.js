@@ -56,6 +56,25 @@ async function auditOneDomain(competitor, keywords = [], location = "India", bas
 }
 
 // ── Build a comparative insight ────────────────────────────────────────────────
+// Average a crawl-derived percentage across competitors that actually have crawl
+// data (domain entries). Business-name-only competitors have no crawl → excluded.
+// Returns null when no competitor has the data so callers can show "—".
+function avgCompetitorPct(competitors, pctFn) {
+  const vals = competitors
+    .map((c) => (c.crawl?.pageCount ? pctFn(c.crawl) : null))
+    .filter((v) => v != null && Number.isFinite(v));
+  if (!vals.length) return null;
+  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+}
+
+function avgCompetitorCount(competitors, countFn) {
+  const vals = competitors
+    .map((c) => (c.crawl?.pageCount ? countFn(c.crawl) : null))
+    .filter((v) => v != null && Number.isFinite(v));
+  if (!vals.length) return null;
+  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+}
+
 function compareAudit(target, competitors) {
   // For each SEO signal, compare target vs competitors
   const signals = [];
@@ -85,29 +104,34 @@ function compareAudit(target, competitors) {
   const targetMissingDesc = target.crawl?.summary?.pagesMissingMetaDesc || 0;
   const targetTotal       = target.crawl?.pageCount || 1;
   const targetDescPct     = Math.round((targetMissingDesc / targetTotal) * 100);
+  const compDescPct       = avgCompetitorPct(competitors, (c) =>
+    Math.round(((c.summary?.pagesMissingMetaDesc || 0) / (c.pageCount || 1)) * 100));
   signals.push({
     signal:  "Pages Missing Meta Description",
     target:  `${targetMissingDesc}/${targetTotal} pages (${targetDescPct}%)`,
-    competitors: "N/A",
+    competitors: compDescPct != null ? `avg ${compDescPct}%` : "—",
     gap: targetDescPct > 30 ? "high" : targetDescPct > 10 ? "medium" : "none",
   });
 
   // Missing H1s
   const targetMissingH1 = target.crawl?.summary?.pagesMissingH1 || 0;
   const targetH1Pct     = Math.round((targetMissingH1 / targetTotal) * 100);
+  const compH1Pct       = avgCompetitorPct(competitors, (c) =>
+    Math.round(((c.summary?.pagesMissingH1 || 0) / (c.pageCount || 1)) * 100));
   signals.push({
     signal:  "Pages Missing H1",
     target:  `${targetMissingH1}/${targetTotal} pages (${targetH1Pct}%)`,
-    competitors: "N/A",
+    competitors: compH1Pct != null ? `avg ${compH1Pct}%` : "—",
     gap: targetH1Pct > 20 ? "high" : "none",
   });
 
   // Alt text issues
   const targetAltIssues = target.crawl?.summary?.totalImgsWithoutAlt || 0;
+  const compAltIssues   = avgCompetitorCount(competitors, (c) => c.summary?.totalImgsWithoutAlt || 0);
   signals.push({
     signal:  "Images Without Alt Text",
     target:  `${targetAltIssues} images`,
-    competitors: "N/A",
+    competitors: compAltIssues != null ? `avg ${compAltIssues} images` : "—",
     gap: targetAltIssues > 5 ? "medium" : "none",
   });
 

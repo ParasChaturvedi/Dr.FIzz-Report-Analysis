@@ -96,6 +96,9 @@ export async function getCached({ domain, dataType, ttlDays = 30 } = {}) {
 // APPEND a document (never update/delete). Returns true on write, false otherwise.
 export async function putCached({ domain, dataType, payload, source = "", forClientDomain = null, fetchedBy = null } = {}) {
   if (!cacheConfigured() || !domain || !dataType || payload == null) return false;
+  // Universal guard (covers direct callers, not just getOrFetch): never persist an
+  // error / empty / explicitly-_partial payload — one bad fetch must not poison the TTL.
+  if (!_isCacheable(payload)) return false;
   try {
     const col = await collection();
     if (!col) return false;
@@ -122,6 +125,7 @@ function _isCacheable(d) {
   if (d == null) return false;
   if (typeof d === "object") {
     if (d.error) return false;
+    if (d._partial === true) return false;   // a degraded/incomplete fetch — don't lock it in for the TTL
     if (Array.isArray(d)) return d.length > 0;
     if (Object.keys(d).length === 0) return false;
   }

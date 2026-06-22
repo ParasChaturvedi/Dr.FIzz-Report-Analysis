@@ -32,7 +32,14 @@ export const maxDuration = 300;
 
 const normDomain = (u) =>
   String(u || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase().trim();
-const toName = (c) => (typeof c === "string" ? c : c?.name || c?.domain || "");
+// Brand NAME for Share-of-Voice matching: a competitor passed as a domain
+// ("schbang.com") must become "schbang" so it matches "Schbang" in AI prose —
+// otherwise competitor SoV is silently understated. A plain name passes through.
+const toName = (c) => {
+  const s = typeof c === "string" ? c : (c?.name || c?.domain || "");
+  const m = String(s).match(/^([a-z0-9-]+)\.[a-z0-9.]{2,}$/i);
+  return (m ? m[1] : String(s)).replace(/[-_]+/g, " ").trim();
+};
 
 export async function POST(req) {
   let body = {};

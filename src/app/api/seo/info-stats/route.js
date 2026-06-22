@@ -41,7 +41,18 @@ export async function POST(req) {
           : null;
         const organicTraffic = Number.isFinite(rank?.organicTraffic) ? Math.round(rank.organicTraffic) : null;
         const organicKeyword = Number.isFinite(rank?.organicKeywords) ? Math.round(rank.organicKeywords) : null;
-        return { domainAuthority, organicTraffic, organicKeyword, badge: { label: "Good", tone: "success" } };
+        // Derive the badge from the real DA / organic-traffic signals (was hardcoded "Good").
+        const da = Number.isFinite(domainAuthority) ? domainAuthority : null;
+        const traffic = Number.isFinite(organicTraffic) ? organicTraffic : null;
+        let badge;
+        if ((da != null && da >= 40) || (traffic != null && traffic >= 5000)) {
+          badge = { label: "Good", tone: "success" };
+        } else if ((da != null && da >= 20) || (traffic != null && traffic >= 500)) {
+          badge = { label: "Fair", tone: "warning" };
+        } else {
+          badge = { label: "Needs work", tone: "danger" };
+        }
+        return { domainAuthority, organicTraffic, organicKeyword, badge };
       },
     });
     return Response.json({ infoPanel: data, cached: Boolean(cached) });

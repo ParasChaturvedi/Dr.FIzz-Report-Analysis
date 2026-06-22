@@ -138,6 +138,11 @@ function GeoVisibility({ geo = {}, domain, gf = {} }) {
   const Lbl = ({ children }) => <div className="uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: ORANGE, marginBottom: 8 }}>{children}</div>;
   return (
     <div className="space-y-4">
+      {(m.engines_unavailable || []).length > 0 && (
+        <div style={{ fontFamily: BODY, fontSize: "11px", color: "#8A6A52", background: "#F7F0EA", border: "1px solid #ECD9CC", borderRadius: 8, padding: "8px 12px" }}>
+          Engines unavailable this scan (excluded from the figures below): <strong style={{ color: INK }}>{m.engines_unavailable.join(", ")}</strong>
+        </div>
+      )}
       {m.current_ai_citation_count && (
         <DarkCallout label="AI Citation Status">{domain}&apos;s current AI-citation footprint: <strong style={{ color: "#fff" }}>{m.current_ai_citation_count}</strong>. The actions below make the site liftable by ChatGPT, Google AI Overviews, and Perplexity.</DarkCallout>
       )}

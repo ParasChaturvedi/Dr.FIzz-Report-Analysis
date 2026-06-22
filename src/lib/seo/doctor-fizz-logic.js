@@ -1455,6 +1455,7 @@ export function buildGeoVisibility(input = {}) {
     topic_dominance,        // §25 deterministic per-topic dominance (lost/contested topics)
     competitor_intel,       // §25 competitor intelligence (null until collector runs)
     geo_insights: raw?.geo_insights || null, // §25 Claude deep analysis (why competitors win + actions)
+    engines_unavailable: Array.from(new Set((raw?.errors || []).map((e) => e?.engine).filter(Boolean))), // engines that errored every prompt this scan (surfaced so a silent failure is visible)
     geo_readiness,
     tracked_prompts,
     ai_platforms,

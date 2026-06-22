@@ -18,6 +18,33 @@ import { collectPublicSignals } from "@/lib/perplexity/publicSignals";
 import { cacheGet, cacheSet } from "@/lib/perplexity/cache";
 
 /* ----------------- helpers ----------------- */
+// Deterministic deny-list mirroring the "exclude giants" rule in the
+// getCompetitorsFromProfile prompt. The prompt instruction alone isn't enforced,
+// so this is the hard safety net (cf. PLATFORM_INTERCEPTOR_DOMAINS on the
+// aggregator side). A mega-corp is dropped from businessCompetitors UNLESS the
+// client's own domain is itself in this set (i.e. the client operates at that scale).
+const MEGACORP_DOMAINS = new Set([
+  // IT services / consulting giants
+  "tcs.com", "infosys.com", "wipro.com", "cognizant.com", "accenture.com",
+  "hcltech.com", "techmahindra.com", "capgemini.com", "ibm.com", "deloitte.com",
+  // marketplaces / retail giants
+  "amazon.com", "amazon.in", "flipkart.com", "alibaba.com", "ebay.com", "walmart.com",
+  // big tech / household names
+  "google.com", "microsoft.com", "apple.com", "meta.com", "facebook.com", "oracle.com",
+]);
+
+function isMegacorpDomain(domainOrHost) {
+  const host = normalizeHost(domainOrHost);
+  if (!host) return false;
+  return [...MEGACORP_DOMAINS].some((d) => {
+    if (host === d || host.endsWith("." + d)) return true;                  // exact or sub-domain
+    // same brand label under any TLD (google.co.uk) — but as a WHOLE label, so
+    // "mygoogle.foo.com" / "googleads-x.com" do NOT false-match "google".
+    const brand = d.split(".")[0].replace(/[^a-z0-9]/gi, "");
+    return brand && new RegExp(`(^|\\.)${brand}\\.`, "i").test(host);
+  });
+}
+
 function escapeRegex(s) {
   return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -556,10 +583,16 @@ TASK:
   const parsed = extractJsonObjectLoose(content) || {};
   const domain = profile.domain;
 
+  // Enforce the prompt's "exclude giants" rule deterministically — unless the
+  // client itself is a mega-corp (then a giant-vs-giant comparison is valid).
+  const clientIsMegacorp = isMegacorpDomain(domain);
+
   const businessCompetitors = cleanList(
     (parsed.businessCompetitors || []).map(toDomainish),
     { max: 12 }
-  ).filter((x) => normalizeHost(x) !== domain);
+  )
+    .filter((x) => normalizeHost(x) !== domain)
+    .filter((x) => clientIsMegacorp || !isMegacorpDomain(x));
 
   const bizSet = new Set(businessCompetitors.map((x) => normalizeHost(x)));
 
