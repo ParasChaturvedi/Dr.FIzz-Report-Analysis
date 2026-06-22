@@ -8,7 +8,7 @@
 //
 //   GET /api/seo/geo/report?projectId=…[&answers=1]
 // ─────────────────────────────────────────────────────────────────────────────
-import { getGeoReportBundle } from "@/lib/seo/geo/model/geoStore";
+import { getGeoReportBundle, getGeoProjectByDomain } from "@/lib/seo/geo/model/geoStore";
 import { buildGeoStatus } from "@/lib/seo/report-evidence";
 import { getEngineAdapters } from "@/lib/seo/geo/engineAdapters";
 import { resolveExecutionProvider } from "@/lib/seo/geo/executionProvider";
@@ -26,11 +26,18 @@ const GEO_METHODOLOGY = {
 
 export async function GET(req) {
   const sp = new URL(req.url).searchParams;
-  const projectId = sp.get("projectId");
+  let projectId = sp.get("projectId");
+  const domain = sp.get("domain");
   const withAnswers = sp.get("answers") === "1";
-  if (!projectId) return Response.json({ ok: false, error: "projectId required" }, { status: 400 });
+  if (!projectId && !domain) return Response.json({ ok: false, error: "projectId or domain required" }, { status: 400 });
 
   try {
+    // the report only knows the domain → resolve it to the latest geo_project
+    if (!projectId && domain) {
+      const proj = await getGeoProjectByDomain(domain);
+      if (!proj) return Response.json({ ok: true, measured: false, geo_status: buildGeoStatus({ geo: {}, promptsReady: false, runStatus: null }), engines_status: [], run: null, note: "No GEO project found for this domain yet — generate prompts and run collection." });
+      projectId = proj.project_id;
+    }
     const bundle = await getGeoReportBundle(projectId);
     const run = bundle.run;
 

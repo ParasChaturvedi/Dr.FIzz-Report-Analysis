@@ -71,6 +71,16 @@ export async function getGeoProject(projectId) {
   try { const c = await col(C.projects); if (!c) return null; return await c.findOne({ project_id: projectId }); }
   catch { return null; }
 }
+// Find the most recent geo_project for a website domain (so the report — which only
+// knows the domain — can locate its collected GEO data). Matches normalized brand_domain.
+export async function getGeoProjectByDomain(domain) {
+  try {
+    const c = await col(C.projects); if (!c) return null;
+    const d = String(domain || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    if (!d) return null;
+    return await c.find({ brand_domain: { $in: [d, `www.${d}`, `https://${d}`] } }).sort({ created_at: -1 }).limit(1).next();
+  } catch { return null; }
+}
 export async function updateGeoProject(projectId, patch = {}) {
   try { const c = await col(C.projects); if (!c) return false; await c.updateOne({ project_id: projectId }, { $set: { ...patch, updated_at: now() } }); return true; }
   catch { return false; }

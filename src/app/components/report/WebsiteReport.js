@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fmtNum, metricWithSource } from "@/lib/seo/report-format";
 
 // ═══════════════════════════════════════════════════════════════════
@@ -563,6 +563,131 @@ const GEO_GLOSS = {
 function plainFor(label, fbMap, fallback) {
   const fb = fbMap && (fbMap[label] || null);
   return (fb && fb.plain_language) || PLAIN_LANGUAGE[label] || fallback;
+}
+
+// ── LIVE GEO SECTION (Phase 3 report integration) — fetches the REAL collected results
+//    for this domain from MongoDB (/api/seo/geo/report) and renders them: GEO score,
+//    Share-of-Voice vs competitors, per-engine results, the prompts executed with their
+//    real answers, and the methodology. When nothing has been collected it shows the
+//    honest state (planned/queued/running/session_required/failed) — NEVER fake numbers.
+function GeoLiveSection({ domain, fallbackStatus = null }) {
+  const [live, setLive] = useState(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!domain) { setLoading(false); return; }
+    let cancelled = false;
+    fetch(`/api/seo/geo/report?domain=${encodeURIComponent(domain)}&answers=1`)
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setLive(d && d.ok ? d : null); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [domain]);
+
+  const cardB = { border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" };
+  const cell = { fontFamily: BODY, fontSize: "12px", padding: "8px 12px" };
+  const thS = { fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", padding: "9px 12px", textAlign: "left", color: "#fff" };
+  const Lbl = ({ children }) => <div className="uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: ORANGE, marginBottom: 8 }}>{children}</div>;
+  const pf = (n) => (n == null ? "—" : `${n}%`);
+  const status = live?.geo_status || fallbackStatus;
+  const enginesStatus = live?.engines_status || [];
+
+  // ── NOT measured → honest state panel ──
+  if (!live?.measured) {
+    const st = status?.state || (loading ? "loading" : "planned");
+    const BADGE = { planned: { l: "PLANNED", c: "#8A6A52" }, queued: { l: "QUEUED", c: "#5A6A8A" }, running: { l: "RUNNING", c: ORANGE }, partially_complete: { l: "PARTIAL", c: "#8A6A52" }, failed: { l: "FAILED", c: "#B3261E" }, session_required: { l: "SESSION REQUIRED", c: "#9A6A12" }, loading: { l: "CHECKING…", c: "#9A9A9A" } };
+    const b = BADGE[st] || BADGE.planned;
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <div className="flex items-center gap-2 flex-wrap mb-2"><Lbl>GEO Collection</Lbl><span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: b.c, color: "#fff" }}>{b.l}</span></div>
+          <p style={{ fontFamily: BODY, fontSize: "13px", lineHeight: 1.6, color: "#4A4A4A", maxWidth: "46rem" }}>{loading ? `Checking for collected GEO results for ${domain}…` : (status?.message || `No GEO results have been measured for ${domain} yet. No Share-of-Voice, citation or mention numbers are shown until they come from real AI-engine answers.`)}</p>
+          {enginesStatus.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4">
+              {enginesStatus.map((e, i) => (
+                <div key={i} className="rounded border p-2.5" style={{ borderColor: "#E5E5E5" }}>
+                  <div style={{ fontFamily: BODY, fontSize: "11px", fontWeight: 700, color: INK }}>{e.name}</div>
+                  <div style={{ fontFamily: BODY, fontSize: "10px", color: e.status === "ready" ? "#2F7D32" : "#9A6A12", textTransform: "capitalize" }}>{String(e.status).replace(/_/g, " ")}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {status?.note && <p style={{ fontFamily: BODY, fontSize: "11px", color: "#8A8A8A", marginTop: 10 }}>{status.note}</p>}
+        </div>
+      </div>
+    );
+  }
+
+  // ── MEASURED → real collected data ──
+  const o = live.overall || {};
+  const sov = live.share_of_voice || { engines: [], by_brand: [] };
+  const band = o.geo_score >= 60 ? "Strong" : o.geo_score >= 30 ? "Building" : "Low";
+  return (
+    <div className="space-y-4">
+      {live.run?.status === "partial" && (
+        <div style={{ fontFamily: BODY, fontSize: "11px", color: "#8A6A52", background: "#F7F0EA", border: "1px solid #ECD9CC", borderRadius: 8, padding: "8px 12px" }}>
+          Partial collection — {live.run.completed_count} of {live.run.prompt_count} prompt×engine results captured. Showing only what was actually measured.
+        </div>
+      )}
+      <div className="rounded-lg bg-white p-5" style={cardB}>
+        <div className="flex items-baseline gap-3 flex-wrap mb-2"><Lbl>GEO Score</Lbl><span style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "26px", color: INK }}>{o.geo_score}<span style={{ fontSize: "13px", color: "#8A8A8A" }}>/100</span></span><span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: ORANGE, color: "#fff" }}>{band}</span></div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1" style={{ fontFamily: BODY, fontSize: "12px", color: "#5A5A5A" }}>
+          <span>Share of Voice: <strong style={{ color: INK }}>{pf(o.sov)}</strong></span>
+          <span>Brand mention rate: <strong style={{ color: INK }}>{pf(o.mention_rate)}</strong></span>
+          <span>Citation rate: <strong style={{ color: INK }}>{pf(o.citation_rate)}</strong></span>
+          <span>Engines measured: <strong style={{ color: INK }}>{o.engines_tested}</strong></span>
+        </div>
+        <p style={{ fontFamily: BODY, fontSize: "11px", color: "#8A8A8A", marginTop: 8 }}>Measured from real AI-engine answers collected via Playwright/Browserless. DataForSEO/Moz are not used in this score.</p>
+      </div>
+
+      {sov.by_brand?.length > 0 && (
+        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>Share of Voice — your brand vs competitors</Lbl></div>
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}><th style={thS}>Brand</th>{(sov.engines || []).map((e, i) => <th key={i} style={{ ...thS, textAlign: "right" }}>{e}</th>)}<th style={{ ...thS, textAlign: "right" }}>Avg</th></tr></thead>
+            <tbody>{sov.by_brand.map((br, i) => (
+              <tr key={i} style={{ background: br.is_client ? "#FBF1EB" : (i % 2 ? "#fff" : "#F7F7F7") }}>
+                <td style={{ ...cell, fontWeight: br.is_client ? 700 : 400 }}>{br.brand}{br.is_client ? " (you)" : ""}</td>
+                {(sov.engines || []).map((e, j) => <td key={j} style={{ ...cell, textAlign: "right" }}>{br.per_engine?.[e] ?? 0}%</td>)}
+                <td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{br.avg}%</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+        <div className="px-3 pt-3"><Lbl>Per-engine results</Lbl></div>
+        <table className="w-full border-collapse">
+          <thead><tr style={{ background: INK }}>{["Engine", "Answers", "SoV", "Mention rate", "Brand mentions", "Brand citations", "GEO"].map((h, i) => <th key={i} style={{ ...thS, textAlign: i ? "right" : "left" }}>{h}</th>)}</tr></thead>
+          <tbody>{(live.by_engine || []).map((e, i) => (
+            <tr key={i} style={{ background: i % 2 ? "#fff" : "#F7F7F7" }}>
+              <td style={cell}>{e.engine}</td><td style={{ ...cell, textAlign: "right" }}>{e.prompts_answered}</td><td style={{ ...cell, textAlign: "right" }}>{pf(e.sov)}</td><td style={{ ...cell, textAlign: "right" }}>{pf(e.mention_rate)}</td><td style={{ ...cell, textAlign: "right" }}>{e.brand_mentions}</td><td style={{ ...cell, textAlign: "right" }}>{e.brand_citations}</td><td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{e.geo_score}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+
+      {live.prompts_executed?.length > 0 && (
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <Lbl>Prompts executed ({live.prompts_executed.length}) — real AI-engine answers</Lbl>
+          <div className="space-y-3 mt-2">{live.prompts_executed.slice(0, 12).map((p, i) => (
+            <div key={i} style={{ borderTop: i ? "1px solid #F0F0F0" : "none", paddingTop: i ? 10 : 0 }}>
+              <div style={{ fontFamily: BODY, fontSize: "12.5px", fontWeight: 700, color: INK }}>{p.prompt} <span style={{ color: "#8A8A8A", fontWeight: 400 }}>· {p.engine} · {p.citation_count} citations</span></div>
+              {p.answer && <div style={{ fontFamily: BODY, fontSize: "12px", color: "#5A5A5A", marginTop: 4, lineHeight: 1.5 }}>{String(p.answer).slice(0, 320)}{p.answer.length > 320 ? "…" : ""}</div>}
+            </div>
+          ))}</div>
+        </div>
+      )}
+
+      {live.methodology && (
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <Lbl>Methodology</Lbl>
+          <div className="space-y-1.5 mt-1" style={{ fontFamily: BODY, fontSize: "11.5px", color: "#5A5A5A", lineHeight: 1.5 }}>{Object.entries(live.methodology).map(([k, v]) => <div key={k}><strong style={{ color: INK, textTransform: "capitalize" }}>{k}:</strong> {v}</div>)}</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Story prose block — the reference-deck warm narration. Renders an array of
@@ -1324,7 +1449,9 @@ export default function WebsiteReport({ data }) {
             {/* Full §14-25 GEO model (SoV, metrics, topic dominance, citation intelligence,
                 Claude deep analysis) when a live scan exists; readiness + tracked prompts +
                 actions always. Real data — replaces the old hallucinated citation counts. */}
-            <GeoVisibility geo={d.doctorFizz?.geo_and_ai_visibility || {}} domain={domain} gf={gf} status={d.doctorFizz?.geo_status || null} />
+            {/* Phase 3 — live collected GEO results from MongoDB (real measured data or
+                the honest planned/queued/running/session-required state). */}
+            <GeoLiveSection domain={domain} fallbackStatus={d.doctorFizz?.geo_status || null} />
           </AnimatedSection>
         </div>
       </section>
