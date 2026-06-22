@@ -35,6 +35,9 @@ export async function ensureGeoIndexes() {
       [C.overallMetrics, { geo_run_id: 1 }],
       [C.validation, { geo_run_id: 1 }],
       [C.competitors, { geo_project_id: 1 }],
+      [C.rawAnswerVersions, { geo_project_id: 1, prompt_id: 1, engine: 1, version: -1 }],
+      [C.storytelling, { geo_run_id: 1, order: 1 }],
+      [C.errors, { geo_run_id: 1, created_at: -1 }],
     ];
     for (const [name, spec] of jobs) {
       const c = await col(name);
@@ -108,22 +111,80 @@ export async function createGeoRun(run = {}) {
   try {
     const c = await col(C.runs); if (!c) return null;
     await ensureGeoIndexes();
+    const cfg = run.config || {};
     const doc = {
       run_id: run.run_id || nid("run"),
       geo_project_id: run.geo_project_id,
       run_name: run.run_name || `Run ${now()}`,
-      status: "queued",
-      engines: Array.isArray(run.engines) ? run.engines : [],
-      location_context: run.location_context || { mode: "country" },
+      status: "queued",                 // JOB QUEUE: the worker claims "queued" runs
+      lease_until: new Date(0),
+      engines: cfg.selected_engines || (Array.isArray(run.engines) ? run.engines : []),
+      location_context: run.location_context || { mode: cfg.location_mode || "country" },
       prompt_count: Number(run.prompt_count) || 0,
-      valid_result_count: 0,
-      error_count: 0,
+      // progress (worker updates; Vercel polls)
+      completed_count: 0, valid_result_count: 0, failed_count: 0, error_count: 0,
+      per_engine_progress: {},
+      // §cost-control config (resolved by geoRunConfig.resolveGeoRunConfig)
+      run_mode: cfg.run_mode || "standard",
+      selected_engines: cfg.selected_engines || [],
+      prompt_limit: cfg.prompt_limit ?? null,
+      validation_enabled: !!cfg.validation_enabled,
+      validation_sample_percent: cfg.validation_sample_percent || 0,
+      location_mode: cfg.location_mode || "country",
+      proxy_enabled: !!cfg.proxy_enabled,
+      residential_proxy_enabled: !!cfg.residential_proxy_enabled,
+      execution_provider: cfg.execution_provider || "worker-playwright",
+      estimated_engine_runs: cfg.estimated_engine_runs || 0,
+      estimated_cost_level: cfg.estimated_cost_level || "medium",
+      estimated_cost_usd: cfg.estimated_cost_usd || 0,
+      actual_cost_usd: 0,
+      max_retries: cfg.max_retries ?? 2,
+      concurrency_limit: cfg.concurrency_limit || 4,
+      cache_reuse_enabled: cfg.cache_reuse_enabled ?? true,
+      force_refresh: !!cfg.force_refresh,
+      screenshot_mode: cfg.screenshot_mode || "on_error",
+      budget_limit: cfg.budget_limit ?? null,
+      stopped_by_user: false,
       started_at: null, completed_at: null,
       created_at: now(),
     };
     await c.insertOne(doc);
     return doc;
   } catch (e) { console.warn("[geoStore] createGeoRun:", e?.message); return null; }
+}
+
+// ── JOB QUEUE — Vercel creates a "queued" run; the WORKER atomically claims it ──
+export async function claimNextGeoJob() {
+  try {
+    const c = await col(C.runs); if (!c) return null;
+    const t = Date.now();
+    const res = await c.findOneAndUpdate(
+      { status: { $in: ["queued", "running"] }, stopped_by_user: { $ne: true }, lease_until: { $lt: new Date(t) } },
+      { $set: { status: "running", started_at: now(), lease_until: new Date(t + 10 * 60 * 1000) } },
+      { sort: { created_at: 1 }, returnDocument: "after" }
+    );
+    return (res && res.value) ? res.value : (res && res._id ? res : null);
+  } catch (e) { console.warn("[geoStore] claimNextGeoJob:", e?.message); return null; }
+}
+export async function stopGeoRun(runId) {
+  try { const c = await col(C.runs); if (!c) return false; await c.updateOne({ run_id: runId }, { $set: { stopped_by_user: true, status: "partial", completed_at: now() } }); return true; }
+  catch { return false; }
+}
+// Progress snapshot for the Vercel polling UI (none / in_progress / complete / failed).
+export async function getRunStatus(projectId) {
+  try {
+    const run = await getLatestRun(projectId);
+    if (!run) return { state: "none" };
+    const inProgress = ["queued", "running", "collecting", "parsing", "scoring"].includes(run.status);
+    const state = run.status === "completed" ? "complete" : run.status === "failed" ? "failed" : inProgress ? "in_progress" : run.status === "partial" ? "partial" : "in_progress";
+    return {
+      state, run_id: run.run_id, status: run.status,
+      prompt_count: run.prompt_count || 0, completed_count: run.completed_count || 0, failed_count: run.failed_count || 0,
+      per_engine_progress: run.per_engine_progress || {}, run_mode: run.run_mode, engines: run.engines,
+      estimated_cost_usd: run.estimated_cost_usd, actual_cost_usd: run.actual_cost_usd,
+      started_at: run.started_at, completed_at: run.completed_at,
+    };
+  } catch { return { state: "none" }; }
 }
 export async function updateGeoRun(runId, patch = {}) {
   try { const c = await col(C.runs); if (!c) return false; await c.updateOne({ run_id: runId }, { $set: patch }); return true; }
@@ -180,6 +241,17 @@ export async function saveRunResult({ runId, projectId, result }) {
       created_at: now(),
     };
     await rc.insertOne(doc);
+
+    // immutable raw-answer version (§ No Data Loss Rule — never overwritten)
+    try {
+      const rv = await col(C.rawAnswerVersions);
+      if (rv) await rv.insertOne({
+        geo_project_id: projectId, geo_run_id: runId, geo_run_result_id: resultId,
+        prompt_id: result.promptId, engine: result.engine, version,
+        raw_prompt: doc.raw_prompt, raw_html: doc.raw_html, rendered_text: doc.rendered_text,
+        parser_output: doc.parser_output, captured_at: now(),
+      });
+    } catch {}
 
     // children — mentions
     const mentions = [...(result.brandMentions || []), ...(result.competitorMentions || [])];
@@ -282,17 +354,41 @@ export async function getCompetitors(projectId) {
   try { const c = await col(C.competitors); if (!c) return []; return await c.find({ geo_project_id: projectId }).toArray(); } catch { return []; }
 }
 
+// ── RAW ANSWER VERSIONS (§ immutable history — full version trail per prompt/engine) ──
+export async function getRawAnswerVersions(projectId, promptId, engine) {
+  try { const c = await col(C.rawAnswerVersions); if (!c) return []; const q = { geo_project_id: projectId, prompt_id: promptId }; if (engine) q.engine = engine; return await c.find(q).sort({ version: -1 }).toArray(); }
+  catch { return []; }
+}
+
+// ── STORYTELLING (§ Claude narrative — stored in Mongo, fetched in the report) ─
+export async function saveStorytelling(runId, projectId, sections = []) {
+  try { const c = await col(C.storytelling); if (!c) return false; await c.deleteMany({ geo_run_id: runId }); if (sections.length) await c.insertMany(sections.map((s, i) => ({ geo_project_id: projectId, geo_run_id: runId, order: s.order ?? i, created_at: now(), ...s }))); return true; }
+  catch (e) { console.warn("[geoStore] saveStorytelling:", e?.message); return false; }
+}
+export async function getStorytelling(runId) {
+  try { const c = await col(C.storytelling); if (!c) return []; return await c.find({ geo_run_id: runId }).sort({ order: 1 }).toArray(); } catch { return []; }
+}
+
+// ── ERRORS (§ collection-health) ──────────────────────────────────────────────
+export async function logGeoError(err = {}) {
+  try { const c = await col(C.errors); if (!c) return false; await c.insertOne({ error_type: "other", retry_count: 0, ...err, created_at: now() }); return true; } catch { return false; }
+}
+export async function getGeoErrors(runId) {
+  try { const c = await col(C.errors); if (!c) return []; return await c.find({ geo_run_id: runId }).sort({ created_at: -1 }).toArray(); } catch { return []; }
+}
+
 /**
  * One-call assembly the report layer uses: the latest run + its results, metrics,
- * citations, opportunities, competitors — everything needed to render §14-25 with
- * full prompt-level evidence. Returns nulls/[] gracefully when no run exists yet.
+ * citations, opportunities, competitors, storytelling, errors — everything to render
+ * §14-25 with full prompt-level evidence. Graceful nulls/[] when no run exists yet.
  */
 export async function getGeoReportBundle(projectId) {
   const run = await getLatestRun(projectId);
-  if (!run) return { project: await getGeoProject(projectId), run: null, results: [], metrics: { overall: null, by_engine: [] }, citations: [], opportunities: [], competitors: [], validation: [] };
-  const [results, metrics, citations, opportunities, competitors, validation, project] = await Promise.all([
+  if (!run) return { project: await getGeoProject(projectId), run: null, results: [], metrics: { overall: null, by_engine: [] }, citations: [], opportunities: [], competitors: [], validation: [], storytelling: [], errors: [] };
+  const [results, metrics, citations, opportunities, competitors, validation, storytelling, errors, project] = await Promise.all([
     getRunResults(run.run_id), getRunMetrics(run.run_id), getCitations(run.run_id),
-    getOpportunities(projectId), getCompetitors(projectId), getValidation(run.run_id), getGeoProject(projectId),
+    getOpportunities(projectId), getCompetitors(projectId), getValidation(run.run_id),
+    getStorytelling(run.run_id), getGeoErrors(run.run_id), getGeoProject(projectId),
   ]);
-  return { project, run, results, metrics, citations, opportunities, competitors, validation };
+  return { project, run, results, metrics, citations, opportunities, competitors, validation, storytelling, errors };
 }

@@ -95,12 +95,42 @@ export const OPPORTUNITY_WEIGHTS = {
   difficulty_inverse: 0.15,
 };
 
+// ── COST CONTROL — run modes, execution providers, cost model ────────────────
+// The GEO system must be cost-effective: Browserless / residential proxy / validation
+// accounts must NOT fire on every prompt × engine × account by default.
+
+// Run modes (DEFAULT is "standard" — Full GEO is an advanced, higher-cost opt-in).
+export const RUN_MODES = ["dev_smoke", "standard", "full", "validation"];
+export const DEFAULT_RUN_MODE = "standard";
+
+// Execution-provider abstraction — Browserless is NOT hardcoded as the only path.
+export const EXECUTION_PROVIDERS = ["local-playwright", "worker-playwright", "browserless", "browserless-residential-proxy"];
+export const DEFAULT_EXECUTION_PROVIDER = "worker-playwright";
+
+export const COST_LEVELS = ["low", "medium", "high", "full"];
+export const SCREENSHOT_MODES = ["off", "on_error", "always"];
+
+// Cost-safe presets per run mode. Standard = the default; Full is opt-in.
+export const RUN_MODE_PRESETS = {
+  dev_smoke:  { label: "Dev / Smoke Test", prompt_limit: 25,  default_engines: ["aioverviews", "perplexity"], validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: false, cost_level: "low",    screenshot_mode: "on_error" },
+  standard:   { label: "Standard GEO",     prompt_limit: 80,  default_engines: GEO_ENGINES,                    validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: false, cost_level: "medium", screenshot_mode: "on_error" },
+  full:       { label: "Full GEO",         prompt_limit: 250, default_engines: GEO_ENGINES,                    validation_enabled: true,  validation_sample_percent: 15, residential_proxy_default: false, cost_level: "full",   screenshot_mode: "on_error" },
+  validation: { label: "Validation",       prompt_limit: 50,  default_engines: GEO_ENGINES,                    validation_enabled: true,  validation_sample_percent: 25, residential_proxy_default: false, cost_level: "high",   screenshot_mode: "on_error" },
+};
+
+// Per-engine, per-query cost estimate (USD) — configurable. Browser engines cost a
+// Browserless query; Claude runs via API (cheaper). Residential proxy adds a multiplier.
+export const ENGINE_QUERY_COST_USD = { aioverviews: 0.02, perplexity: 0.02, chatgpt: 0.025, gemini: 0.025, copilot: 0.025, claude: 0.006 };
+export const RESIDENTIAL_PROXY_MULTIPLIER = 1.6;
+// Validation re-runs a SUBSET of prompts across extra accounts — clamp the sample.
+export const VALIDATION_SAMPLE_BOUNDS = { min_percent: 10, max_percent: 25 };
+
 // Mongo collection names for the GEO subsystem (§ Required Database Models).
 export const GEO_COLLECTIONS = {
   projects: "geo_projects",
   prompts: "geo_prompts",
   clusters: "geo_prompt_clusters",
-  runs: "geo_runs",
+  runs: "geo_runs",                       // also the JOB QUEUE (status: queued → worker claims)
   results: "geo_run_results",
   mentions: "geo_mentions",
   citations: "geo_citations",
@@ -110,6 +140,9 @@ export const GEO_COLLECTIONS = {
   engineMetrics: "geo_engine_metrics",
   overallMetrics: "geo_overall_metrics",
   validation: "geo_validation_results",
+  storytelling: "geo_storytelling_sections",   // Claude narrative, stored + fetched in report
+  rawAnswerVersions: "geo_raw_answer_versions", // immutable raw-answer history (never overwritten)
+  errors: "geo_errors",                         // every failed run/retry, for collection-health UI
   accounts: "geo_accounts",
   sessionArtifacts: "geo_session_artifacts",
 };

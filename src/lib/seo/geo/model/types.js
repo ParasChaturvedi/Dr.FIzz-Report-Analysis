@@ -145,4 +145,72 @@
  * @property {string} created_at
  */
 
+/**
+ * § Cost control — the resolved config for a run (stored on geo_runs). Vercel builds
+ * this (run-mode preset + user overrides), shows the estimate, then creates the job.
+ * @typedef {Object} GeoRunConfig
+ * @property {"dev_smoke"|"standard"|"full"|"validation"} run_mode
+ * @property {GeoEngine[]} selected_engines
+ * @property {number} prompt_limit
+ * @property {boolean} validation_enabled
+ * @property {number} validation_sample_percent    10..25
+ * @property {LocationMode} location_mode
+ * @property {boolean} proxy_enabled
+ * @property {boolean} residential_proxy_enabled    only when country/state/city selected
+ * @property {"local-playwright"|"worker-playwright"|"browserless"|"browserless-residential-proxy"} execution_provider
+ * @property {number} estimated_engine_runs
+ * @property {"low"|"medium"|"high"|"full"} estimated_cost_level
+ * @property {number} [estimated_cost_usd]
+ * @property {number} max_retries
+ * @property {number} concurrency_limit
+ * @property {boolean} cache_reuse_enabled
+ * @property {boolean} force_refresh
+ * @property {"off"|"on_error"|"always"} screenshot_mode
+ * @property {number|null} budget_limit             max USD per project (null = no cap)
+ * @property {boolean} stopped_by_user
+ */
+
+/**
+ * § Claude storytelling — one narrative section, stored + fetched in the report.
+ * @typedef {Object} GeoStorytellingSection
+ * @property {string} geo_project_id
+ * @property {string} geo_run_id
+ * @property {string} section_key      e.g. "executive_geo_summary", "why_competitors_winning", "30_day_plan"
+ * @property {string} title
+ * @property {string} body             plain-language narrative
+ * @property {string[]} [evidence_refs] prompt/result/citation ids this maps back to (no invention)
+ * @property {number} [order]
+ * @property {string} created_at
+ */
+
+/**
+ * § Raw-answer version — immutable capture, never overwritten (No Data Loss Rule).
+ * @typedef {Object} GeoRawAnswerVersion
+ * @property {string} geo_project_id
+ * @property {string} geo_run_id
+ * @property {string} geo_run_result_id
+ * @property {string} prompt_id
+ * @property {GeoEngine} engine
+ * @property {number} version
+ * @property {string} raw_prompt
+ * @property {string} raw_html
+ * @property {string} rendered_text
+ * @property {Object} [parser_output]
+ * @property {string} captured_at
+ */
+
+/**
+ * § Collection error — every failed run/retry, for the collection-health UI.
+ * @typedef {Object} GeoError
+ * @property {string} geo_project_id
+ * @property {string} geo_run_id
+ * @property {string} [prompt_id]
+ * @property {string} [engine]
+ * @property {string} [account_id]
+ * @property {"timeout"|"blocked"|"session_expired"|"blank_answer"|"partial_answer"|"parse_failure"|"other"} error_type
+ * @property {string} message
+ * @property {number} retry_count
+ * @property {string} created_at
+ */
+
 export {}; // typedef-only module
