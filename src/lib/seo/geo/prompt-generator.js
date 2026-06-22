@@ -660,9 +660,9 @@ export async function generateGeoPrompts({
         // ~22 DETAILED prompts of JSON — keep headroom for long, data-rich prompts
         // (and any Opus adaptive-thinking preamble).
         max_tokens: 8000,
-        // The route's maxDuration is 300s; on timeout we fall through to the
-        // deterministic fallback (never empty).
-        timeoutMs: 120000,
+        // Keep prompt-gen FAST so it doesn't eat the scan's 300s budget — fall through to
+        // the (instant) deterministic clustered fallback if Claude is slow.
+        timeoutMs: 40000,
         meta: { domain, api: "claude-geo-prompts", label: "geo-prompt-generator" },
       });
       const parsed = extractJsonArrayLoose(content);

@@ -474,7 +474,10 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry, re
   // within the 300s function limit. The report then shows REAL (partial) Share-of-Voice
   // from whatever completed — never a perpetual "Pending live scan" caused by a timeout.
   const start = Date.now();
-  const DEADLINE_MS = Number(process.env.GEO_SCAN_DEADLINE_MS || 240000);
+  // Budget the SCAN to leave room for prompt-gen (~30s before) + §25 analysis (~15s after)
+  // + the in-flight tail, inside the 300s function limit. 170s here means the whole route
+  // returns by ~240s and ALWAYS caches the real (partial) Share-of-Voice it collected.
+  const DEADLINE_MS = Number(process.env.GEO_SCAN_DEADLINE_MS || 170000);
   const responses = new Array(tasks.length);
   let next = 0;
   const worker = async () => {
