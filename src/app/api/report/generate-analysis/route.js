@@ -79,7 +79,7 @@ async function generateWithAI(systemPrompt, userPrompt, fallback = {}, meta = {}
         { role: "user", content: userPrompt },
       ],
       model: "claude-opus-4-8", // Opus 4.8 = deepest, most-accurate analysis (user: max accuracy). Cached per site, so paid once per 30 days.
-      max_tokens: 7000,
+      max_tokens: 16000,  // large strategy JSON + adaptive-thinking tokens; 7000 truncated mid-JSON and silently blanked sections
       timeoutMs: 280000,
       meta,
     });
@@ -90,6 +90,11 @@ async function generateWithAI(systemPrompt, userPrompt, fallback = {}, meta = {}
     } catch {
       const m = content.match(/\{[\s\S]*\}/);
       try { parsed = m ? JSON.parse(m[0]) : null; } catch { parsed = null; }
+    }
+    if (!parsed) {
+      // Almost always a truncated/over-long response — make it VISIBLE in logs instead
+      // of silently returning empty strategy sections on a paid report.
+      console.error(`[generate-analysis] AI JSON parse FAILED (likely truncation) — len=${(content || "").length}, tail=${JSON.stringify(String(content || "").slice(-160))}`);
     }
     return parsed || fallback;
   } catch (e) {

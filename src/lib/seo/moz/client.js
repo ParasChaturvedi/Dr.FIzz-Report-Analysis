@@ -66,7 +66,9 @@ export async function fetchMozMetrics(domain, { listLimit = 25, withList = true 
     const m = (Array.isArray(um?.results) && um.results[0]) || null;
     if (!m) return null;
 
-    const da = num(m.domain_authority);
+    // DA stays NULL when Moz doesn't return it — coercing to 0 would both show
+    // "Domain Authority 0" for a real domain AND clobber a valid DataForSEO rank.
+    const da = Number.isFinite(Number(m.domain_authority)) ? Number(m.domain_authority) : null;
     const backlinks = num(m.external_pages_to_root_domain ?? m.external_pages_to_subdomain);
     const referring_domains = num(m.external_root_domains_to_root_domain ?? m.root_domains_to_root_domain);
     const referring_pages = num(m.pages_to_root_domain ?? m.external_pages_to_root_domain ?? backlinks);

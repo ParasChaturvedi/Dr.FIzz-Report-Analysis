@@ -41,7 +41,7 @@ export async function POST(req) {
   if (!domain) return Response.json({ geo: null }, { status: 400 });
 
   // GEO live scan is gated by the same flag as the marketplace scan.
-  if (String(process.env.GEO_MARKETPLACE_SOURCE || "").toLowerCase() !== "llm") {
+  if (String(process.env.GEO_MARKETPLACE_SOURCE || "").trim().toLowerCase() !== "llm") {
     return Response.json({ geo: null, disabled: true });
   }
 

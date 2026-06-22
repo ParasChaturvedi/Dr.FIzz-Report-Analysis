@@ -115,6 +115,19 @@ export async function putCached({ domain, dataType, payload, source = "", forCli
   }
 }
 
+// A payload is cacheable only if it carries real data — never persist an error object
+// or an empty {}/[], so one transient upstream failure can't poison the TTL window.
+// NOTE: a real "negative" answer like { found: false } IS cacheable (no .error, non-empty).
+function _isCacheable(d) {
+  if (d == null) return false;
+  if (typeof d === "object") {
+    if (d.error) return false;
+    if (Array.isArray(d)) return d.length > 0;
+    if (Object.keys(d).length === 0) return false;
+  }
+  return true;
+}
+
 // getOrFetch: serve a fresh cached payload, else run fetchFn() live and append it.
 // Returns { data, cached }. Errors in the cache layer never block fetchFn.
 export async function getOrFetch({ domain, dataType, ttlDays = 30, source = "", forClientDomain = null, fetchedBy = null, fetchFn } = {}) {
@@ -126,10 +139,14 @@ export async function getOrFetch({ domain, dataType, ttlDays = 30, source = "", 
     return { data: cached, cached: true };
   }
   const data = await fetchFn();
-  if (data != null) {
+  if (_isCacheable(data)) {
     // Await the write so it completes before a serverless function freezes.
     await putCached({ domain, dataType, payload: data, source, forClientDomain, fetchedBy });
     console.log(`[cache MISS] ${dataType}:${normDomain(domain)} — fetched live + saved`);
+  } else {
+    // Never persist an error/empty payload — one transient upstream failure must not
+    // poison this domain's report for the full TTL window.
+    console.log(`[cache SKIP] ${dataType}:${normDomain(domain)} — error/empty payload, not cached`);
   }
   return { data, cached: false };
 }

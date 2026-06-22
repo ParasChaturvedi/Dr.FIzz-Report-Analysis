@@ -66,10 +66,13 @@ async function getKeywordsForDomain(domain, auth, limit = 100) {
 // ── Infer keyword intent from text ────────────────────────────────────────────
 function inferIntent(kw) {
   const k = String(kw).toLowerCase();
-  if (/buy|price|cost|cheap|discount|deal|offer|near me|hire|book|order/.test(k)) return "transactional";
-  if (/how|what|why|when|who|guide|tutorial|learn|explain|difference/.test(k)) return "informational";
-  if (/best|top|review|vs|compare|alternative/.test(k)) return "commercial";
+  // Service/commercial intent is tested FIRST. A money keyword like "seo agency" or
+  // "web design services" must map to a Service/Landing page — never a blog. (These
+  // previously fell through to the informational default and were mis-typed "Blog/Guide".)
+  if (/buy|price|pricing|cost|quote|cheap|discount|deal|offer|near me|hire|book|order|agency|agencies|service|services|company|companies|provider|consultant|consultancy|firm|vendor|solution|solutions|software|platform|package/.test(k)) return "transactional";
+  if (/best|top|review|reviews|vs|versus|compare|comparison|alternative|alternatives/.test(k)) return "commercial";
   if (/\bin\b|\bnear\b|location|city|area|local/.test(k)) return "local";
+  if (/how|what|why|when|who|guide|tutorial|learn|explain|difference|tips|ideas|examples/.test(k)) return "informational";
   return "informational";
 }
 

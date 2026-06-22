@@ -1599,7 +1599,11 @@ export function buildShareOfVoice(input = {}) {
     return best;
   };
 
-  const engines = [...new Set(responses.map(r => r.engine).filter(Boolean))];
+  // Only engines that produced a USABLE answer count toward Share-of-Voice. An engine
+  // that returned an empty answer (e.g. an AI Overview that didn't render) must NOT
+  // become a 0% column that deflates every brand's SoV average (mirrors buildGeoMetrics).
+  const _usableResp = (r) => !!(String(r.answerText || "").trim() || (Array.isArray(r.brandsMentioned) && r.brandsMentioned.length) || (Array.isArray(r.citations) && r.citations.length));
+  const engines = [...new Set(responses.filter(_usableResp).map(r => r.engine).filter(Boolean))];
   const byEngine = {};
   for (const engine of engines) {
     const rs = responses.filter(r => r.engine === engine);

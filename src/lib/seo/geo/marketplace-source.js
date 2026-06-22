@@ -129,7 +129,7 @@ async function _runAndStoreScan({ domain, businessName, competitors = [], proxyC
 // allowLiveScan=true (the client's gmb call) runs the scan inline on a cache miss;
 // other callers read-only so the scan never runs twice per report.
 export async function loadMarketplaceDirectories({ domain, businessName = "", location = "", competitors = [], allowLiveScan = false, proxyCountry = "in" } = {}) {
-  if (String(process.env.GEO_MARKETPLACE_SOURCE || "").toLowerCase() !== "llm") return null;
+  if (String(process.env.GEO_MARKETPLACE_SOURCE || "").trim().toLowerCase() !== "llm") return null;
   if (!domain) return null;
   const ttlDays = Number(process.env.GEO_MARKETPLACE_TTL_DAYS || 30);
   let intel = await _readIntel(domain, ttlDays);
@@ -142,7 +142,7 @@ export async function loadMarketplaceDirectories({ domain, businessName = "", lo
 // chosen backlink source. Returns { count, sites:[{domain,backlinks,...}] } or null
 // (→ keep Moz/DataForSEO backlinks). Gated on the same GEO_MARKETPLACE_SOURCE flag.
 export async function loadLlmBacklinks({ domain } = {}) {
-  if (String(process.env.GEO_MARKETPLACE_SOURCE || "").toLowerCase() !== "llm") return null;
+  if (String(process.env.GEO_MARKETPLACE_SOURCE || "").trim().toLowerCase() !== "llm") return null;
   if (!domain) return null;
   const ttlDays = Number(process.env.GEO_MARKETPLACE_TTL_DAYS || 30);
   // Read-only (Mongo → local). The scan is triggered by loadMarketplaceDirectories,

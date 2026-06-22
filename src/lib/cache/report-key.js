@@ -6,8 +6,13 @@
 export function reportCacheType({ reportType = "website", businessData, competitorData, reportMode, keyword, countryCode } = {}) {
   const sig = JSON.stringify({
     bn: businessData?.businessName || businessData?.name || "",
-    comp: (Array.isArray(competitorData) ? competitorData : [])
-      .map((c) => (typeof c === "string" ? c : c?.domain || c?.name || "")).slice(0, 8),
+    // competitorData is normally the object { businessCompetitors, searchCompetitors }
+    // (NOT an array) — flatten BOTH into the key, else the competitor set is dropped and
+    // different-competitor reports collide / a post-fix regeneration is a false cache HIT.
+    comp: (Array.isArray(competitorData)
+            ? competitorData
+            : [...(competitorData?.businessCompetitors || []), ...(competitorData?.searchCompetitors || [])])
+      .map((c) => (typeof c === "string" ? c : c?.domain || c?.name || "")).filter(Boolean).slice(0, 8),
     mode: reportMode || "",
     kw: keyword || "",
     cc: countryCode || "in",
