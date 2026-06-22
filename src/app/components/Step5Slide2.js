@@ -9,6 +9,10 @@ import {
   Languages,
   Tag,
   UsersRound,
+  ShieldCheck,
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
 } from "lucide-react";
 
 import { prefetchOpportunitiesAndContent, getPlagiarismPages } from "@/lib/prefetch-opportunities";
@@ -254,6 +258,30 @@ export default function Step5Slide2({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [activeSection, setActiveSection] = useState(null);
+
+  // ── Final accuracy check (advisory) — Claude cross-checks the assembled Steps 1-5
+  //    inputs against the REAL website before the (costly) report runs, and flags
+  //    off-topic keywords / irrelevant competitors / industry mismatches. Non-blocking:
+  //    the user can fix issues with Back, or generate anyway.
+  const [accuracy, setAccuracy] = useState(null);
+  const [accuracyLoading, setAccuracyLoading] = useState(false);
+  const accuracyRanRef = useRef(false);
+  useEffect(() => {
+    if (accuracyRanRef.current) return;
+    const site = websiteData?.site || websiteData?.website || websiteData?.url || websiteData?.domain;
+    if (!site || !businessData) return; // wait until the essentials are present
+    accuracyRanRef.current = true;
+    setAccuracyLoading(true);
+    fetch("/api/seo/validate-inputs", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ websiteData, businessData, languageLocationData, keywordData, competitorData }),
+    })
+      .then((r) => r.json())
+      .then((d) => { if (d?.ok) setAccuracy(d); })
+      .catch(() => {})
+      .finally(() => setAccuracyLoading(false));
+  }, [websiteData, businessData, languageLocationData, keywordData, competitorData]);
 
   // Dots animation
   const [loadingDots, setLoadingDots] = useState(".");
@@ -1483,6 +1511,83 @@ export default function Step5Slide2({
                   </div>
                 </CardShell>
               </div>
+
+              {/* ── FINAL ACCURACY CHECK (advisory) ─────────────────────────── */}
+              {!loading && (accuracyLoading || accuracy) && (
+                <div className="mt-1 mb-6 w-full max-w-[880px] mx-auto">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--input)] px-4 sm:px-5 py-4">
+                    {accuracyLoading ? (
+                      <div className="flex items-center gap-2 text-[13px] sm:text-[14px] text-[var(--muted)]">
+                        <Loader2 size={16} className="animate-spin" />
+                        Running a final accuracy check on your inputs…
+                      </div>
+                    ) : accuracy ? (
+                      <>
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          {accuracy.verdict === "accurate" ? (
+                            <ShieldCheck size={18} className="text-emerald-500" />
+                          ) : accuracy.verdict === "needs_review" ? (
+                            <AlertTriangle size={18} className="text-[#d45427]" />
+                          ) : (
+                            <AlertTriangle size={18} className="text-amber-500" />
+                          )}
+                          <span className="text-[14px] sm:text-[15px] font-bold text-[var(--text)]">
+                            {accuracy.verdict === "accurate"
+                              ? "Your inputs look accurate"
+                              : accuracy.verdict === "needs_review"
+                              ? "A few inputs may need a quick review"
+                              : "Inputs look mostly accurate"}
+                          </span>
+                          {typeof accuracy.overall_confidence === "number" && (
+                            <span className="text-[11px] text-[var(--muted)]">
+                              ({Math.round(accuracy.overall_confidence * 100)}% confident)
+                            </span>
+                          )}
+                        </div>
+                        {accuracy.summary && (
+                          <p className="text-[12px] sm:text-[13px] text-[var(--muted)] mb-2 leading-relaxed">
+                            {accuracy.summary}
+                          </p>
+                        )}
+                        {Array.isArray(accuracy.issues) && accuracy.issues.length > 0 ? (
+                          <div className="space-y-2">
+                            {accuracy.issues.map((it, i) => (
+                              <div key={i} className="flex items-start gap-2 text-[12px] sm:text-[13px]">
+                                <span
+                                  className={`mt-[6px] inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                    it.severity === "high"
+                                      ? "bg-[#d45427]"
+                                      : it.severity === "medium"
+                                      ? "bg-amber-500"
+                                      : "bg-[var(--muted)]"
+                                  }`}
+                                />
+                                <div className="leading-relaxed">
+                                  <span className="text-[var(--text)] font-semibold">
+                                    {it.step}
+                                    {it.field ? ` · ${it.field}` : ""}:{" "}
+                                  </span>
+                                  <span className="text-[var(--text)]">{it.message}</span>
+                                  {it.suggestion && (
+                                    <span className="text-[var(--muted)]"> — {it.suggestion}</span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                            <div className="pt-1 text-[11px] sm:text-[12px] text-[var(--muted)]">
+                              Use <span className="font-semibold">Back</span> to fix these, or continue if they're intentional.
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-[12px] sm:text-[13px] text-emerald-600">
+                            <CheckCircle2 size={15} /> Everything matches your website — you're good to generate.
+                          </div>
+                        )}
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              )}
 
               {/* Instruction */}
               <div className="mt-2 text-center text-[12px] sm:text-[13px] md:text-[14px] text-[var(--muted)]">
