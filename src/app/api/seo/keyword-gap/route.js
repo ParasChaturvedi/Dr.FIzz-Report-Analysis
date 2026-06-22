@@ -25,7 +25,16 @@ async function dfsPost(endpoint, payload, auth) {
     signal:  AbortSignal.timeout(25000),
   });
   if (!res.ok) throw new Error(`DataForSEO ${endpoint} → ${res.status}`);
-  return res.json();
+  const json = await res.json();
+  // DataForSEO returns HTTP 200 even when a task fails on quota exhaustion (40402/40501)
+  // or other task-level errors. The per-task status_code (20000 = ok) is the real signal —
+  // throw so the caller's catch treats it as a FAILURE, not as legitimately-empty data
+  // (otherwise an empty result gets cached for 30 days during a quota outage).
+  const tStatus = json?.tasks?.[0]?.status_code;
+  if (tStatus != null && tStatus !== 20000) {
+    throw new Error(`DataForSEO ${endpoint} task status ${tStatus}: ${json?.tasks?.[0]?.status_message || "task error"}`);
+  }
+  return json;
 }
 
 // Normalise domain string
@@ -158,6 +167,12 @@ export async function POST(request) {
     ...compDomains.map(c => getKeywordsForDomain(c, auth, 100)),
   ]);
 
+  // When the target AND every competitor keyword map come back empty, the most likely
+  // cause is an upstream failure (e.g. DataForSEO task-level quota error now thrown by
+  // dfsPost) rather than a genuine "no keywords" result. Tag the payload _partial so the
+  // mongo _isCacheable guard refuses to lock an empty result in for the 30-day TTL.
+  const _allMapsEmpty = targetKwMap.size === 0 && compKwMaps.every(m => m.size === 0);
+
   // Build gap: keywords in any competitor but NOT in target
   const targetKws = new Set(targetKwMap.keys());
   const gapMap    = new Map();
@@ -224,6 +239,8 @@ export async function POST(request) {
       topGapByVolume:   [...gapMap.values()].sort((a,b) => b.volume - a.volume).slice(0, 5).map(k => k.keyword),
       intentBreakdown:  Object.fromEntries(Object.entries(byIntent).map(([k,v]) => [k, v.length])),
     },
+    // Empty because every keyword map failed to load → degraded, do NOT cache for 30 days.
+    ...(_allMapsEmpty ? { _partial: true } : {}),
   };
   try { await putCached({ domain: target, dataType: cacheType, payload: out, source: "keyword-gap" }); } catch {}
   await logUsage({ domain: target, api: "keyword-gap", costUSD: 0.08, cached: false });

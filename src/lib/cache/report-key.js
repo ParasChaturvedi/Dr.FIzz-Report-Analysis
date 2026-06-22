@@ -3,7 +3,9 @@
 // check (Step5 short-circuit + /api/report/cached) and the writer
 // (generate-analysis) ALWAYS compute the same key. Keyed by the inputs that change
 // the report: report type + business name + competitor set + mode + keyword + country.
-export function reportCacheType({ reportType = "website", businessData, competitorData, reportMode, keyword, countryCode } = {}) {
+// negativeExclusions is part of the key: adding an exclusion must bust the cache, else a
+// post-exclusion regenerate is a false HIT that returns the stale, unfiltered report.
+export function reportCacheType({ reportType = "website", businessData, competitorData, reportMode, keyword, countryCode, negativeExclusions } = {}) {
   const sig = JSON.stringify({
     bn: businessData?.businessName || businessData?.name || "",
     // competitorData is normally the object { businessCompetitors, searchCompetitors }
@@ -16,6 +18,7 @@ export function reportCacheType({ reportType = "website", businessData, competit
     mode: reportMode || "",
     kw: keyword || "",
     cc: countryCode || "in",
+    neg: [...(negativeExclusions || [])].map(String).sort(),
   });
   let h = 0;
   for (let i = 0; i < sig.length; i++) h = (Math.imul(h, 31) + sig.charCodeAt(i)) | 0;

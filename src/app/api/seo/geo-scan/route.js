@@ -96,11 +96,18 @@ export async function POST(req) {
           generated = (Array.isArray(body.keywords) ? body.keywords : []).slice(0, 20)
             .map((k, i) => ({ prompt: String(k), cluster: "geo", intent: "fallback", neutral: true, priority: i + 1 }));
         }
-        // Run ALL the detailed prompts (cap 25 for safety). GEO_PROMPT_COUNT can trim
-        // further if a plan's function-duration / Browserless concurrency is tight.
+        // Cap the inline scan by a QUERY BUDGET so it reliably finishes within the 300s
+        // function limit. (22 prompts × 6 engines ≈ 132 queries overran 300s in testing.)
+        // Prompts run = min(GEO_PROMPT_COUNT, floor(budget / engineCount)). With 6 engines
+        // + budget 108 → 18 prompts; with 3 engines → the full 25. Raise both
+        // GEO_INLINE_QUERY_BUDGET and GEO_CONCURRENCY if the Browserless plan supports more
+        // parallel sessions (the priority order still spans all 10 clusters).
+        const QUERY_BUDGET = Number(process.env.GEO_INLINE_QUERY_BUDGET || 108);
+        const maxByBudget  = Math.max(8, Math.floor(QUERY_BUDGET / Math.max(1, allEngines.length)));
+        const hardCap      = Math.max(1, Number(process.env.GEO_PROMPT_COUNT || 25));
         const ordered = generated.slice()
           .sort((a, b) => (a.priority || 999) - (b.priority || 999))
-          .slice(0, Math.max(1, Number(process.env.GEO_PROMPT_COUNT || 25)));
+          .slice(0, Math.min(hardCap, maxByBudget));
         const promptObjs = ordered.map((p, i) => ({ id: `gp${i + 1}`, theme: p.cluster || "geo", intent: p.intent || "", neutral: p.neutral !== false, prompt: p.prompt }));
 
         const scan = await runGeoScan({

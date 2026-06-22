@@ -381,6 +381,115 @@ function GeoVisibility({ geo = {}, domain, gf = {} }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// PLAIN-LANGUAGE LAYER
+// ═══════════════════════════════════════════════════════════════════
+
+// Mirror of the logic-layer PLAIN_LANGUAGE map (src/lib/seo/doctor-fizz-logic.js).
+// Keyed BOTH by the logic-layer metric key AND by WebsiteReport's card labels so a
+// non-technical reader gets a plain definition under every cryptic metric, even when
+// data.doctorFizz.formatted_baseline isn't on the payload. Source of truth stays the
+// payload's per-metric .plain_language; this is the local fallback.
+const PLAIN_LANGUAGE = {
+  domain_rating:            "a 0–100 measure of how trusted the site is by other websites",
+  "Domain Authority":       "a 0–100 measure of how trusted the site is by other websites",
+  organic_traffic:          "visitors who arrive from unpaid Google search results",
+  "Organic Traffic":        "visitors who arrive from unpaid Google search results",
+  organic_keywords:         "the number of search terms the site already shows up for",
+  "Organic Keywords":       "the number of search terms the site already shows up for",
+  referring_domains:        "the number of separate websites that link to this one",
+  "Referring Domains":      "the number of separate websites that link to this one",
+  mobile_performance_score: "Google's 0–100 speed grade for the site on phones",
+  "Mobile Speed":           "Google's 0–100 speed grade for the site on phones",
+  desktop_performance_score:"Google's 0–100 speed grade for the site on computers",
+  "Desktop Speed":          "Google's 0–100 speed grade for the site on computers",
+  lcp:                      "how long the main content takes to load",
+  LCP:                      "how long the main content takes to load",
+  cls:                      "how much the page jumps around while loading",
+  CLS:                      "how much the page jumps around while loading",
+  site_health_score:        "the share of pages free of technical errors",
+  "Site Health":            "the share of pages free of technical errors",
+  gbp_completeness:         "how fully the Google Business Profile is filled out",
+  "GMB Completeness":       "how fully the Google Business Profile is filled out",
+  gbp_review_count:         "the number of customer reviews on the Google profile",
+  gbp_rating:               "the average star rating on the Google profile",
+  errors_404:               "pages returning a not-found error to visitors and crawlers",
+  "404 Errors":             "pages returning a not-found error to visitors and crawlers",
+  "Total Backlinks":        "the total number of links from other websites pointing to yours",
+};
+
+// Plain one-line glosses for the GEO/AI jargon (above the §13 tables) so the section
+// reads as English, not acronyms.
+const GEO_GLOSS = {
+  "Share of Voice": "how often AI assistants mention you versus your competitors",
+  "Citation":       "when an AI answer links to a source or website as its evidence",
+  "GEO Score":      "how ready your site is to be quoted by AI answer engines (0–100)",
+};
+
+// Resolve the plain-language definition for a metric card: prefer the live payload's
+// per-metric .plain_language, fall back to the local PLAIN_LANGUAGE map (by metric key
+// or card label), and finally to the existing technical sub-label.
+function plainFor(label, fbMap, fallback) {
+  const fb = fbMap && (fbMap[label] || null);
+  return (fb && fb.plain_language) || PLAIN_LANGUAGE[label] || fallback;
+}
+
+// ── Story prose block — the reference-deck warm narration. Renders an array of
+//    paragraph strings (data.doctorFizz.story.*) as large, readable body copy with
+//    an orange eyebrow label. Mirrors DoctorFizzReport's StoryBlock in WebsiteReport
+//    design tokens (HEAD/BODY fonts, ORANGE/INK). Returns null when empty. ─────────
+function StoryNote({ label, points, big = false }) {
+  const list = (Array.isArray(points) ? points : [points]).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div className="rounded-lg bg-white" style={{ border: "1px solid #E5E5E5", borderLeft: `4px solid ${ORANGE}`, boxShadow: "0 1px 2px rgba(0,0,0,0.04)", padding: "18px 22px", marginBottom: 14 }}>
+      {label && <div className="uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.22em", color: ORANGE, marginBottom: 10 }}>{label}</div>}
+      {list.map((p, i) => (
+        <p key={i} style={{ fontFamily: BODY, fontSize: big ? "16px" : "14.5px", lineHeight: 1.7, color: "#2A2A2A", margin: 0, marginBottom: i === list.length - 1 ? 0 : 12 }}>{p}</p>
+      ))}
+    </div>
+  );
+}
+
+// ── EXECUTIVE STORY — the plain-language spine near the top of the report. Renders
+//    data.doctorFizz.story as one flowing read for a non-technical owner: where they
+//    stand → what's holding them back → the biggest opportunity → the plan. Guarded by
+//    the caller (only mounts when data.doctorFizz?.story is present). ────────────────
+function ExecutiveStory({ story, domain }) {
+  const s = story || {};
+  // Story panels in narrative order, each pulling a real data.doctorFizz.story.* array.
+  const panels = [
+    { label: "Where You Stand Today",      points: s.the_situation },
+    { label: "What's Holding You Back",    points: s.whats_blocking_growth },
+    { label: "Your Biggest Opportunity",   points: s.the_opportunity },
+    { label: "The Plan, In Plain English", points: s.priority_plan },
+    { label: "What Good Looks Like",       points: s.what_good_looks_like },
+  ].filter((p) => (Array.isArray(p.points) ? p.points.filter(Boolean).length : p.points));
+  if (!panels.length) return null;
+  return (
+    <section className="py-16" style={{ background: "#FAF7F4" }}>
+      <div className="max-w-6xl mx-auto px-8 md:px-14">
+        <AnimatedSection>
+          <span className="inline-flex items-center align-middle" style={{ marginRight: 9 }}>
+            <span style={{ width: 11, height: 11, background: ORANGE, display: "inline-block", borderRadius: 1, marginRight: 9 }} />
+            <span className="uppercase" style={{ fontFamily: BODY, fontSize: "11px", fontWeight: 700, letterSpacing: "0.2em", color: ORANGE }}>THE STORY ·</span>
+          </span>
+          <span className="uppercase align-middle" style={{ fontFamily: BODY, fontSize: "11px", fontWeight: 700, letterSpacing: "0.2em", color: "#7A7A7A" }}>READ THIS FIRST</span>
+          <h2 style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "clamp(1.55rem,3vw,2.25rem)", lineHeight: 1.12, letterSpacing: "-0.01em", color: INK, marginTop: 12 }}>
+            What This Report Says, In Plain English
+          </h2>
+          <p style={{ fontFamily: BODY, fontSize: "15px", lineHeight: 1.65, color: "#5A5A5A", marginTop: 10, marginBottom: 24, maxWidth: "44rem" }}>
+            The full report below has all the numbers and the detail. This is the short version — what&apos;s happening with {domain}, what to do, and why — written for a busy owner, not an SEO expert.
+          </p>
+          {panels.map((p, i) => (
+            <StoryNote key={i} label={p.label} points={p.points} big />
+          ))}
+        </AnimatedSection>
+      </div>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════
 
@@ -434,6 +543,19 @@ export default function WebsiteReport({ data }) {
   const crawlHealth = d.websiteCrawl?.healthScore ?? bm.crawlHealthScore ?? null;
   const kwGap = d.keywordGap || null;
 
+  // ── Storytelling + plain-language layer (built upstream, ignored until now) ──
+  // data.doctorFizz.story → the plain-language spine (the_situation, the_opportunity,
+  // whats_blocking_growth, priority_plan, what_good_looks_like, …).
+  const dfStory = d.doctorFizz?.story || null;
+  // data.doctorFizz.v2_additions.formatted_baseline → per-metric plain-language defs,
+  // keyed by the card label so plainFor() can look each metric up.
+  const fbMap = (() => {
+    const arr = d.doctorFizz?.v2_additions?.formatted_baseline || [];
+    const m = {};
+    for (const b of arr) { if (b && b.label) m[b.label] = b; }
+    return m;
+  })();
+
   const dateStr = d.generatedAt
     ? new Date(d.generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -475,6 +597,13 @@ export default function WebsiteReport({ data }) {
       </section>
 
       {/* ══════════════════════════════════════════════════════
+          EXECUTIVE STORY — plain-language spine (reads data.doctorFizz.story).
+          The warm, one-read summary for a non-technical owner, placed right after
+          the cover and before the metrics. Only renders when the story exists.
+      ══════════════════════════════════════════════════════ */}
+      {dfStory && <ExecutiveStory story={dfStory} domain={domain} />}
+
+      {/* ══════════════════════════════════════════════════════
           01 · THE BASELINE
       ══════════════════════════════════════════════════════ */}
       <section className="max-w-6xl mx-auto px-8 md:px-14 py-16">
@@ -484,21 +613,36 @@ export default function WebsiteReport({ data }) {
           <SHead>THE BASELINE</SHead>
           <SSub>Where {domain} Stands Today</SSub>
 
-          {/* Metric cards — reference style (left accent bar + big number + label + sub) */}
+          {/* Plain-language intro so the dashboard isn't a wall of jargon */}
+          <p style={{ fontFamily: BODY, fontSize: "14px", lineHeight: 1.65, color: "#5A5A5A", marginTop: -10, marginBottom: 22, maxWidth: "44rem" }}>
+            These are the health checks for {domain} right now. Each card explains in plain words what the number means — orange marks the ones worth attention first.
+          </p>
+
+          {/* Metric cards — reference style (left accent bar + big number + label + sub).
+              Sub-labels now carry the plain-language definition from
+              data.doctorFizz.v2_additions.formatted_baseline[].plain_language (via
+              plainFor), falling back to the local PLAIN_LANGUAGE map. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <MetricCard value={bm.domainRating ?? "—"} label="Domain Authority" sub="Overall site authority" accent="orange" />
-            <MetricCard value={fmt(bm.organicTraffic)} label="Organic Traffic" sub="Est. visits / month" accent="orange" />
-            <MetricCard value={fmt(bm.organicKeywords)} label="Organic Keywords" sub="Terms you rank for" accent="orange" />
-            <MetricCard value={bm.performanceMobile != null ? `${bm.performanceMobile}/100` : "—"} label="Mobile Speed" sub="Google PageSpeed" accent={bm.performanceMobile != null && bm.performanceMobile < 50 ? "orange" : "ink"} />
-            <MetricCard value={bm.performanceDesktop != null ? `${bm.performanceDesktop}/100` : "—"} label="Desktop Speed" sub="Google PageSpeed" />
-            <MetricCard value={bm.lcp != null ? `${(Number(bm.lcp) / 1000).toFixed(1)}s` : "—"} label="LCP" sub="Largest content paint" />
-            <MetricCard value={bm.cls != null ? Number(bm.cls).toFixed(3) : "—"} label="CLS" sub="Layout stability" />
-            <MetricCard value={fmt(bm.backlinks)} label="Total Backlinks" sub="Inbound links (Moz)" />
-            <MetricCard value={fmt(bm.referringDomains)} label="Referring Domains" sub="Sites linking to you" />
-            <MetricCard value={fmt(bm.errors404)} label="404 Errors" sub="Broken pages" accent={Number(bm.errors404) > 0 ? "orange" : "ink"} />
-            <MetricCard value={crawlHealth != null ? `${crawlHealth}/100` : "—"} label="Site Health" sub="Crawl health score" />
-            <MetricCard value={gmbScore != null ? `${gmbScore}/100` : "—"} label="GMB Completeness" sub="Google Business Profile" />
+            <MetricCard value={bm.domainRating ?? "—"} label="Domain Authority" sub={plainFor("Domain Authority", fbMap, "Overall site authority")} accent="orange" />
+            <MetricCard value={fmt(bm.organicTraffic)} label="Organic Traffic" sub={plainFor("Organic Traffic", fbMap, "Est. visits / month")} accent="orange" />
+            <MetricCard value={fmt(bm.organicKeywords)} label="Organic Keywords" sub={plainFor("Organic Keywords", fbMap, "Terms you rank for")} accent="orange" />
+            <MetricCard value={bm.performanceMobile != null ? `${bm.performanceMobile}/100` : "—"} label="Mobile Speed" sub={plainFor("Mobile Speed", fbMap, "Google PageSpeed")} accent={bm.performanceMobile != null && bm.performanceMobile < 50 ? "orange" : "ink"} />
+            <MetricCard value={bm.performanceDesktop != null ? `${bm.performanceDesktop}/100` : "—"} label="Desktop Speed" sub={plainFor("Desktop Speed", fbMap, "Google PageSpeed")} />
+            <MetricCard value={bm.lcp != null ? `${(Number(bm.lcp) / 1000).toFixed(1)}s` : "—"} label="LCP" sub={plainFor("LCP", fbMap, "how long the main content takes to load")} />
+            <MetricCard value={bm.cls != null ? Number(bm.cls).toFixed(3) : "—"} label="CLS" sub={plainFor("CLS", fbMap, "how much the page jumps around while loading")} />
+            <MetricCard value={fmt(bm.backlinks)} label="Total Backlinks" sub={plainFor("Total Backlinks", fbMap, "Inbound links (Moz)")} />
+            <MetricCard value={fmt(bm.referringDomains)} label="Referring Domains" sub={plainFor("Referring Domains", fbMap, "Sites linking to you")} />
+            <MetricCard value={fmt(bm.errors404)} label="404 Errors" sub={plainFor("404 Errors", fbMap, "Broken pages")} accent={Number(bm.errors404) > 0 ? "orange" : "ink"} />
+            <MetricCard value={crawlHealth != null ? `${crawlHealth}/100` : "—"} label="Site Health" sub={plainFor("Site Health", fbMap, "Crawl health score")} />
+            <MetricCard value={gmbScore != null ? `${gmbScore}/100` : "—"} label="GMB Completeness" sub={plainFor("GMB Completeness", fbMap, "Google Business Profile")} />
           </div>
+
+          {/* Plain-language narration of the baseline (data.doctorFizz.story.the_situation) */}
+          {dfStory?.the_situation && (
+            <div className="mt-6">
+              <StoryNote label="What This Means For You" points={dfStory.the_situation} />
+            </div>
+          )}
 
           {/* KEY TAKEAWAY — grounded in the numbers above */}
           <div className="mt-6">
@@ -536,7 +680,7 @@ export default function WebsiteReport({ data }) {
                 );
               })}
               {!(cl.localCompetitors || []).length && (
-                <div className="col-span-2 text-sm text-gray-400 py-4">Competitor analysis loading…</div>
+                <div className="col-span-2 text-sm text-gray-400 py-4">Not enough data to assess this yet.</div>
               )}
             </div>
 
@@ -614,7 +758,7 @@ export default function WebsiteReport({ data }) {
               </table>
             </div>
           ) : (
-            <div className="text-sm text-gray-400 mb-10 py-4">Keyword research processing…</div>
+            <div className="text-sm text-gray-400 mb-10 py-4">Not enough data to assess this yet.</div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -632,7 +776,7 @@ export default function WebsiteReport({ data }) {
                         <span style={{ width: 6, height: 6, borderRadius: "50%", background: ORANGE, marginTop: 6, flexShrink: 0 }} />{kw}
                       </li>
                     ))}
-                    {!(t.items || []).length && <li className="text-sm text-gray-400">Analysing…</li>}
+                    {!(t.items || []).length && <li className="text-sm text-gray-400">Not enough data to assess this yet.</li>}
                   </ul>
                 </div>
               </div>
@@ -666,7 +810,7 @@ export default function WebsiteReport({ data }) {
                         {page.purpose && <div style={{ fontFamily: BODY, fontSize: "11.5px", color: "#8A8A8A", lineHeight: 1.5 }}>{page.purpose}</div>}
                       </div>
                     ))}
-                    {!(ca.siteStructure || []).length && <div style={{ color: "#8A8A8A", fontSize: 13 }}>Structure generating…</div>}
+                    {!(ca.siteStructure || []).length && <div style={{ color: "#8A8A8A", fontSize: 13 }}>Not enough data to assess this yet.</div>}
                   </div>
                 </div>
               </div>
@@ -679,7 +823,7 @@ export default function WebsiteReport({ data }) {
                       <span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>✓</span>{item}
                     </li>
                   ))}
-                  {!(ca.checklist || []).length && <li className="text-sm text-gray-400">Checklist generating…</li>}
+                  {!(ca.checklist || []).length && <li className="text-sm text-gray-400">Not enough data to assess this yet.</li>}
                 </ul>
               </div>
             </div>
@@ -699,8 +843,8 @@ export default function WebsiteReport({ data }) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {[
-              { title: "What Works For Them", items: ci.whatWorksForThem, bar: ORANGE, empty: "Analysis in progress…" },
-              { title: "Gaps You Can Exploit", items: ci.gapsYouCanExploit, bar: "#4A4A4A", empty: "Gap analysis loading…" },
+              { title: "What Works For Them", items: ci.whatWorksForThem, bar: ORANGE, empty: "Not enough data to assess this yet." },
+              { title: "Gaps You Can Exploit", items: ci.gapsYouCanExploit, bar: "#4A4A4A", empty: "Not enough data to assess this yet." },
             ].map((c) => (
               <div key={c.title} className="bg-white rounded-lg overflow-hidden" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
                 <div style={{ height: 4, background: c.bar }} />
@@ -752,7 +896,7 @@ export default function WebsiteReport({ data }) {
                   {!tp.length && (
                     <tr>
                       <td colSpan={3} className="px-4 py-8 text-center text-gray-400 text-sm">
-                        Technical audit processing…
+                        Not enough data to assess this yet.
                       </td>
                     </tr>
                   )}
@@ -789,7 +933,7 @@ export default function WebsiteReport({ data }) {
                         <span style={{ color: ORANGE, marginTop: 2, flexShrink: 0 }}>•</span>{item}
                       </li>
                     ))}
-                    {!col.items.length && <li className="text-xs text-gray-400">Loading…</li>}
+                    {!col.items.length && <li className="text-xs text-gray-400">Not enough data to assess this yet.</li>}
                   </ul>
                 </div>
               </div>
@@ -836,7 +980,7 @@ export default function WebsiteReport({ data }) {
                       <span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>✓</span>{item}
                     </li>
                   ))}
-                  {!(ls.gbpChecklist || []).length && <li className="text-sm text-gray-400">Checklist generating…</li>}
+                  {!(ls.gbpChecklist || []).length && <li className="text-sm text-gray-400">Not enough data to assess this yet.</li>}
                 </ul>
               </div>
               {/* review target (dark callout) + GMB completeness */}
@@ -892,7 +1036,7 @@ export default function WebsiteReport({ data }) {
                 </div>
               );
             })}
-            {!rm.length && <div className="col-span-full text-sm text-gray-400 py-4">Execution plan generating…</div>}
+            {!rm.length && <div className="col-span-full text-sm text-gray-400 py-4">Not enough data to assess this yet.</div>}
           </div>
         </AnimatedSection>
       </section>
@@ -974,7 +1118,7 @@ export default function WebsiteReport({ data }) {
               </table>
             </div>
           ) : (
-            <div className="text-sm text-gray-400 py-4">Content blueprint generating…</div>
+            <div className="text-sm text-gray-400 py-4">Not enough data to assess this yet.</div>
           )}
         </AnimatedSection>
       </section>
@@ -1000,7 +1144,7 @@ export default function WebsiteReport({ data }) {
                 </div>
               ))}
               {!uc.length && (
-                <div className="col-span-3 text-sm text-gray-400 py-4">Opportunity analysis in progress…</div>
+                <div className="col-span-3 text-sm text-gray-400 py-4">Not enough data to assess this yet.</div>
               )}
             </div>
           </AnimatedSection>
@@ -1017,6 +1161,25 @@ export default function WebsiteReport({ data }) {
             <OBar />
             <SHead>THE NEXT FRONTIER</SHead>
             <SSub>GEO and AI Visibility</SSub>
+
+            {/* Plain-language narration of the GEO opportunity (data.doctorFizz.story.geo_ai_visibility) */}
+            {dfStory?.geo_ai_visibility && (
+              <StoryNote label="Why This Section Matters" points={dfStory.geo_ai_visibility} />
+            )}
+
+            {/* Plain one-line definitions so the jargon below reads as English */}
+            <div className="rounded-lg bg-white mb-4" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)", padding: "16px 20px" }}>
+              <div className="uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.22em", color: ORANGE, marginBottom: 10 }}>The Words In This Section, Explained</div>
+              <ul className="space-y-2">
+                {Object.entries(GEO_GLOSS).map(([term, def]) => (
+                  <li key={term} className="flex items-baseline gap-2" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 700, color: INK, whiteSpace: "nowrap" }}>{term}</span>
+                    <span style={{ color: "#A8A8A8" }}>—</span>
+                    <span>{def}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
 
             {/* Full §14-25 GEO model (SoV, metrics, topic dominance, citation intelligence,
                 Claude deep analysis) when a live scan exists; readiness + tracked prompts +
@@ -1051,7 +1214,7 @@ export default function WebsiteReport({ data }) {
               </div>
             ))}
             {!qw.length && (
-              <div className="col-span-2 text-sm text-gray-400 py-4">Action plan generating…</div>
+              <div className="col-span-2 text-sm text-gray-400 py-4">Not enough data to assess this yet.</div>
             )}
           </div>
         </AnimatedSection>
@@ -1077,7 +1240,7 @@ export default function WebsiteReport({ data }) {
                 </div>
               ))}
               {!sp.length && (
-                <div className="col-span-3 text-sm text-gray-400 py-4">Strategic priorities loading…</div>
+                <div className="col-span-3 text-sm text-gray-400 py-4">Not enough data to assess this yet.</div>
               )}
             </div>
           </AnimatedSection>

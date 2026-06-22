@@ -28,11 +28,11 @@ function isPageUrl(url) {
 export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { url, businessData, competitorData, reportMode, keyword, countryCode = "in" } = body || {};
+    const { url, businessData, competitorData, reportMode, keyword, countryCode = "in", negativeExclusions } = body || {};
     if (!url) return NextResponse.json({ found: false });
     const domain = getDomain(url);
     const reportType = isPageUrl(url) ? "page" : "website";
-    const dataType = reportCacheType({ reportType, businessData, competitorData, reportMode, keyword, countryCode });
+    const dataType = reportCacheType({ reportType, businessData, competitorData, reportMode, keyword, countryCode, negativeExclusions });
     const data = await getCached({ domain, dataType, ttlDays: 30 });
     if (data) {
       console.log(`[report/cached] HIT ${domain} (${dataType}) — serving saved report, pipeline skipped`);

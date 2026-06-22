@@ -610,7 +610,7 @@ export async function POST(request) {
     // ── 30-day REPORT cache, keyed by domain + the inputs that change the report ──
     // On a fresh hit we return the SAVED report (no fetches, no Claude). The id is
     // regenerated so each view has its own id; the data comes from the cache.
-    const reportDataType = reportCacheType({ reportType, businessData, competitorData, reportMode, keyword, countryCode });
+    const reportDataType = reportCacheType({ reportType, businessData, competitorData, reportMode, keyword, countryCode, negativeExclusions });
     const _cachedReport = await getCached({ domain, dataType: reportDataType, ttlDays: 30 });
     if (_cachedReport) {
       console.log(`[cache HIT] report:${domain} — returning saved report (no fetch, no Claude)`);

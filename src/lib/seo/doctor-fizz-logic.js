@@ -1461,7 +1461,16 @@ export function buildGeoVisibility(input = {}) {
     topic_dominance,        // §25 deterministic per-topic dominance (lost/contested topics)
     competitor_intel,       // §25 competitor intelligence (null until collector runs)
     geo_insights: raw?.geo_insights || null, // §25 Claude deep analysis (why competitors win + actions)
-    engines_unavailable: Array.from(new Set((raw?.errors || []).map((e) => e?.engine).filter(Boolean))), // engines that errored every prompt this scan (surfaced so a silent failure is visible)
+    engines_unavailable: (() => {
+      // An engine is "unavailable" only when it produced ZERO usable responses this
+      // scan — NOT merely because it errored on one prompt. Cross-check the error set
+      // against engines that have at least one usable response (answerText or citations):
+      // if an engine answered anywhere, it's available regardless of other-prompt errors.
+      const usable = (r) => !!(String(r?.answerText || "").trim() || (Array.isArray(r?.citations) && r.citations.length));
+      const availableEngines = new Set(((raw?.responses) || []).filter(usable).map((r) => r?.engine).filter(Boolean));
+      const erroredEngines = new Set(((raw?.errors) || []).map((e) => e?.engine).filter(Boolean));
+      return Array.from(erroredEngines).filter((eng) => !availableEngines.has(eng));
+    })(), // engines that errored AND produced no usable response this scan (surfaced so a silent failure is visible)
     geo_readiness,
     tracked_prompts,
     ai_platforms,
@@ -2389,8 +2398,20 @@ function bareHost(domainOrName) {
 export function classifyCompetitor(c, ctx = {}) {
   const host = bareHost(typeof c === "string" ? c : (c?.domain || c?.name || ""));
   // 1. Platform interceptor — directory/marketplace/review/publisher/aggregator.
+  //    Match the deny domain as a WHOLE LABEL only — never a bare substring. The old
+  //    `host.includes(stem + ".")` clause let a short stem like "x" (from "x.com")
+  //    substring-match fedex.com / netflix.com / xerox.com and silently reclassify
+  //    real businessCompetitors as platform_interceptor. The stem-anchored regex below
+  //    requires the stem to start a label (^ or after a dot) AND be its own label, and
+  //    only fires for stems ≥ 4 chars so single/short stems can't substring-match.
   const isPlatform =
-    PLATFORM_INTERCEPTOR_DOMAINS.some(d => host === d || host.endsWith("." + d) || host.includes(d.split(".")[0] + ".")) ||
+    PLATFORM_INTERCEPTOR_DOMAINS.some(d => {
+      if (host === d || host.endsWith("." + d)) return true;
+      const stem = String(d).split(".")[0];
+      if (stem.length < 4) return false;
+      const esc = stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp("(^|\\.)" + esc + "\\.", "i").test(host);
+    }) ||
     PLATFORM_INTERCEPTOR_SIGNALS.some(s => host.includes(s));
   if (isPlatform) return "platform_interceptor";
   // 2. Came from the SEARCH bucket → search competitor (SERP context only).

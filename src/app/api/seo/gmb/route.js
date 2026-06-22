@@ -44,7 +44,16 @@ async function dfsPost(endpoint, payload, auth) {
     signal: AbortSignal.timeout(20000),
   });
   if (!res.ok) throw new Error(`DFS ${endpoint} → ${res.status}`);
-  return res.json();
+  const json = await res.json();
+  // DataForSEO returns HTTP 200 even when a task fails on quota exhaustion (40402/40501)
+  // or other task-level errors. The per-task status_code (20000 = ok) is the real signal —
+  // throw so the caller's catch treats it as a FAILURE, not as legitimately-empty data
+  // (otherwise an empty result gets cached for 30 days during a quota outage).
+  const tStatus = json?.tasks?.[0]?.status_code;
+  if (tStatus != null && tStatus !== 20000) {
+    throw new Error(`DFS ${endpoint} task status ${tStatus}: ${json?.tasks?.[0]?.status_message || "task error"}`);
+  }
+  return json;
 }
 
 // Build a progressive list of name variants, most-specific → least-specific.
@@ -87,7 +96,7 @@ export function gmbNameVariants(rawName) {
 }
 
 // ── GMB Info — tries multiple keyword variants to maximise hit rate ───────────
-async function fetchGmbInfo(keyword, location, auth) {
+async function fetchGmbInfo(keyword, location, auth, errSink) {
   // Progressive variants: full → suffix-stripped → first-2-words → first word.
   const variants = gmbNameVariants(keyword);
 
@@ -126,6 +135,10 @@ async function fetchGmbInfo(keyword, location, auth) {
         serpRank:       b.rank || null,
       };
     } catch (err) {
+      // A THROWN error (transport / DataForSEO task-level quota) is distinct from a
+      // genuine empty-items "not found" — record it so the caller can tell a degraded
+      // lookup (don't cache) apart from a real negative (cache it).
+      if (errSink) errSink.push(err);
       console.warn(`[gmb] fetchGmbInfo kw="${kw}":`, err?.message);
     }
   }
@@ -137,7 +150,7 @@ async function fetchGmbInfo(keyword, location, auth) {
 // businesses when the location is country-level. The Maps SERP is what actually
 // powers the knowledge panel — searching it by name reliably surfaces the
 // listing (rating, reviews, address, phone) even for a city-level business.
-async function fetchGmbViaMaps(keyword, location, auth) {
+async function fetchGmbViaMaps(keyword, location, auth, errSink) {
   const variants = gmbNameVariants(keyword);
   const hostWords = variants.map(v => v.toLowerCase());
   for (const kw of variants) {
@@ -184,6 +197,7 @@ async function fetchGmbViaMaps(keyword, location, auth) {
         serpRank:       b.rank_absolute || b.rank_group || null,
       };
     } catch (err) {
+      if (errSink) errSink.push(err);
       console.warn(`[gmb] fetchGmbViaMaps kw="${kw}":`, err?.message);
     }
   }
@@ -441,11 +455,17 @@ export async function checkGmb(domain, businessName = "", location = "India", op
   // 1) Find the listing: my_business_info (each name variant) → Maps SERP
   //    fallback (more reliable for city-level businesses). 2) Then fetch reviews,
   //    Q&A and directories under the EXACT name that matched.
-  let info = await fetchGmbInfo(keyword, location, auth).catch(() => null);
+  // listingErrs collects THROWN errors (transport / DataForSEO task-level quota) from the
+  // listing lookup so an empty result caused by a failure is tagged _partial (not cached
+  // for 30 days), while a genuine empty-items "no listing" stays a cacheable real negative.
+  const listingErrs = [];
+  let info = await fetchGmbInfo(keyword, location, auth, listingErrs).catch(() => null);
   if (!info?.found) {
-    const viaMaps = await fetchGmbViaMaps(keyword, location, auth).catch(() => null);
+    const viaMaps = await fetchGmbViaMaps(keyword, location, auth, listingErrs).catch(() => null);
     if (viaMaps?.found) info = viaMaps;
   }
+  // Listing lookup errored AND nothing was found → degraded fetch, must not be cached.
+  const _listingDegraded = !info?.found && listingErrs.length > 0;
   const matchedKeyword = info?.keywordUsed || info?.name || keyword;
 
   const [reviewRes, qaRes, dirRes] = await Promise.allSettled([
@@ -522,6 +542,10 @@ export async function checkGmb(domain, businessName = "", location = "India", op
     issues,
     issueCount: issues.length,
     criticalCount: issues.filter(i => i.severity === "critical").length,
+    // Empty because the listing lookup ERRORED (not a genuine "no listing") → degraded:
+    // _isCacheable rejects { _partial: true } so the empty result isn't cached 30 days.
+    // A real "No GMB listing found" (no thrown errors) stays cacheable as a true negative.
+    ...(_listingDegraded ? { _partial: true } : {}),
   };
 }
 
