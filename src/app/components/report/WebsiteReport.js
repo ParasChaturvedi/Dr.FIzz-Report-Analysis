@@ -570,18 +570,35 @@ function plainFor(label, fbMap, fallback) {
 //    Share-of-Voice vs competitors, per-engine results, the prompts executed with their
 //    real answers, and the methodology. When nothing has been collected it shows the
 //    honest state (planned/queued/running/session_required/failed) — NEVER fake numbers.
-function GeoLiveSection({ domain, fallbackStatus = null }) {
+function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
   const [live, setLive] = useState(null);
   const [loading, setLoading] = useState(true);
+  const sourceRef = useRef(source);
+  sourceRef.current = source;
   useEffect(() => {
     if (!domain) { setLoading(false); return; }
-    let cancelled = false;
-    fetch(`/api/seo/geo/report?domain=${encodeURIComponent(domain)}&answers=1`)
-      .then((r) => r.json())
-      .then((d) => { if (!cancelled) setLive(d && d.ok ? d : null); })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    let cancelled = false, timer = null, ensured = false, tries = 0;
+    const POLL_MS = 15000, MAX_TRIES = 60; // poll up to ~15 min while collecting
+    const readReport = () => fetch(`/api/seo/geo/report?domain=${encodeURIComponent(domain)}&answers=1`).then((r) => r.json()).catch(() => null);
+    const tick = async () => {
+      const d = await readReport();
+      if (cancelled) return;
+      if (d) setLive(d);
+      setLoading(false);
+      if (d?.measured) return; // real data is in — stop polling
+      const state = d?.geo_status?.state;
+      // AUTO-TRIGGER collection once (no manual step, no "planned" dead-end)
+      if (!ensured && (!d || !d.run || state === "planned")) {
+        ensured = true;
+        try { await fetch(`/api/seo/geo/ensure`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ domain, source: sourceRef.current }) }); } catch {}
+      }
+      // keep polling while it's queued/running (worker collecting in the background)
+      if (tries < MAX_TRIES && (!d || ["planned", "queued", "running"].includes(state))) {
+        tries++; timer = setTimeout(tick, POLL_MS);
+      }
+    };
+    tick();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [domain]);
 
   const cardB = { border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" };
@@ -1533,7 +1550,18 @@ export default function WebsiteReport({ data }) {
                 actions always. Real data — replaces the old hallucinated citation counts. */}
             {/* Phase 3 — live collected GEO results from MongoDB (real measured data or
                 the honest planned/queued/running/session-required state). */}
-            <GeoLiveSection domain={domain} fallbackStatus={d.doctorFizz?.geo_status || null} />
+            <GeoLiveSection
+              domain={domain}
+              fallbackStatus={d.doctorFizz?.geo_status || null}
+              source={{
+                domain,
+                brand: d.doctorFizz?.report_meta?.client_name || domain,
+                industry: d.doctorFizz?.report_meta?.industry || "",
+                businessScope: d.doctorFizz?.report_meta?.business_scope || "",
+                competitors: d.doctorFizz?.competitors || [],
+                keywords: d.doctorFizz?.keywords?.accepted || d.doctorFizz?.keywords || [],
+              }}
+            />
           </AnimatedSection>
         </div>
       </section>
