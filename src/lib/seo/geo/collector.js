@@ -432,40 +432,54 @@ function mockResponses({ brandSet, prompts, engineKeys }) {
 // A FRESH connection per query: each stays well under the Browserless session
 // timeout AND is fully ephemeral (incognito) — no state bleeds between queries.
 async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry, regionLabel = "" }) {
-  const responses = [];
   const attempts = Number(process.env.GEO_QUERY_ATTEMPTS) || 2; // one retry by default: absorbs a transient Browserless/Cloudflare blip
   // §16 region label for the metadata: prefer the explicit STATE/CITY label, else
   // the country, else "global" for an un-localized international scan.
   const _regionMeta = String(regionLabel || "").trim() || (_isGlobal(proxyCountry) ? "global" : (proxyCountry || "in"));
-  for (const ek of engineKeys) {
+
+  // Build the full (engine × prompt) task list, then run it through a bounded CONCURRENCY
+  // POOL so ~20-25 prompts × up to 6 engines (100-150 queries) finish inside the 300s
+  // limit — sequentially this would take 10-20 min. Each query still uses a FRESH,
+  // ephemeral Browserless connection (no state bleed). Concurrency is capped to the
+  // Browserless plan's parallel-session limit via GEO_CONCURRENCY (default 6).
+  const tasks = [];
+  for (const ek of engineKeys) for (const p of prompts) tasks.push({ ek, p });
+
+  const runOne = async ({ ek, p }) => {
     const cfg = ENGINES[ek];
-    for (const p of prompts) {
-      const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
-      let lastErr = null;
-      for (let a = 0; a < attempts; a++) {
-        let browser;
-        try {
-          browser = await connectBrowserless(proxyCountry);
-          const _r = await askEngine(browser, ek, p.prompt, sessions[ek], proxyCountry, regionLabel);
-          // §16 — capture per-run metadata (timestamp, region, answer length, citation
-          // count, attempts) alongside the raw signal. raw_html / parse_confidence /
-          // screenshot ride along from `_r` via the spread.
-          responses.push({
-            ...(_r), ...tag,
-            region: _regionMeta,
-            timestamp: new Date().toISOString(),
-            answer_length: String(_r?.answerText || "").length,
-            citation_count: Array.isArray(_r?.citations) ? _r.citations.length : 0,
-            attempts: a + 1,
-          });
-          lastErr = null;
-          break; // success
-        } catch (err) { lastErr = err; }
-        finally { try { await browser?.close(); } catch {} }
-      }
-      if (lastErr) responses.push({ engine: cfg?.name || ek, prompt: p.prompt, ...tag, error: String(lastErr?.message || lastErr) });
+    const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
+    let lastErr = null;
+    for (let a = 0; a < attempts; a++) {
+      let browser;
+      try {
+        browser = await connectBrowserless(proxyCountry);
+        const _r = await askEngine(browser, ek, p.prompt, sessions[ek], proxyCountry, regionLabel);
+        // §16 — capture per-run metadata; raw_html/parse_confidence/screenshot ride along via the spread.
+        return {
+          ...(_r), ...tag,
+          region: _regionMeta,
+          timestamp: new Date().toISOString(),
+          answer_length: String(_r?.answerText || "").length,
+          citation_count: Array.isArray(_r?.citations) ? _r.citations.length : 0,
+          attempts: a + 1,
+        };
+      } catch (err) { lastErr = err; }
+      finally { try { await browser?.close(); } catch {} }
     }
-  }
+    return { engine: cfg?.name || ek, prompt: p.prompt, ...tag, error: String(lastErr?.message || lastErr) };
+  };
+
+  const CONCURRENCY = Math.max(1, Number(process.env.GEO_CONCURRENCY) || 6);
+  const responses = new Array(tasks.length);
+  let next = 0;
+  const worker = async () => {
+    while (true) {
+      const i = next++;
+      if (i >= tasks.length) return;
+      responses[i] = await runOne(tasks[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, tasks.length || 1) }, worker));
   return responses;
 }
 

@@ -18,7 +18,6 @@
 import { getOrFetch } from "@/lib/cache/mongo";
 import { runGeoScan } from "@/lib/seo/geo/collector";
 import { loadGeoSessions } from "@/lib/seo/geo/sessions";
-import { enqueueGeoJob } from "@/lib/seo/geo/queue";
 import { generateGeoPrompts } from "@/lib/seo/geo/prompt-generator";
 import { buildGeoMetrics, buildShareOfVoice } from "@/lib/seo/doctor-fizz-logic";
 import { claudeChat } from "@/lib/claude/client";
@@ -78,10 +77,10 @@ export async function POST(req) {
         const sessions = await loadGeoSessions();
         const allEngines = [...new Set([...engineKeys, ...Object.keys(sessions)])];
 
-        // §17 — semantic-clustered prompts (150-250), Claude-generated from the business
-        // signals (cache-miss only). The FULL set is stored for the background job queue;
-        // the inline scan runs the top-N by priority (spanning all clusters), sized to a
-        // query budget so 6 engines don't blow the 300s limit. The queue collects the rest.
+        // §17 — ~20-25 DETAILED clustered prompts, Claude-generated from the business
+        // signals (cache-miss only), sized to capture 100% of the GEO data WITHOUT the cost
+        // of 150-250 prompts. ALL of them run inline — the collector is parallelized
+        // (GEO_CONCURRENCY) so 20-25 prompts × up to 6 engines fit the 300s limit.
         let generated = [];
         try {
           generated = await generateGeoPrompts({
@@ -97,14 +96,12 @@ export async function POST(req) {
           generated = (Array.isArray(body.keywords) ? body.keywords : []).slice(0, 20)
             .map((k, i) => ({ prompt: String(k), cluster: "geo", intent: "fallback", neutral: true, priority: i + 1 }));
         }
-        const ordered = generated.slice().sort((a, b) => (a.priority || 999) - (b.priority || 999));
-        const QUERY_BUDGET = Number(process.env.GEO_INLINE_QUERY_BUDGET || 90);  // inline must finish in 300s; the job queue collects the full 150-250
-        const inlineCount = Math.max(8, Math.min(
-          Number(process.env.GEO_PROMPT_COUNT || 40),
-          Math.floor(QUERY_BUDGET / Math.max(1, allEngines.length))
-        ));
-        const inline = ordered.slice(0, inlineCount);
-        const promptObjs = inline.map((p, i) => ({ id: `gp${i + 1}`, theme: p.cluster || "geo", intent: p.intent || "", neutral: p.neutral !== false, prompt: p.prompt }));
+        // Run ALL the detailed prompts (cap 25 for safety). GEO_PROMPT_COUNT can trim
+        // further if a plan's function-duration / Browserless concurrency is tight.
+        const ordered = generated.slice()
+          .sort((a, b) => (a.priority || 999) - (b.priority || 999))
+          .slice(0, Math.max(1, Number(process.env.GEO_PROMPT_COUNT || 25)));
+        const promptObjs = ordered.map((p, i) => ({ id: `gp${i + 1}`, theme: p.cluster || "geo", intent: p.intent || "", neutral: p.neutral !== false, prompt: p.prompt }));
 
         const scan = await runGeoScan({
           mode: "live", transport: "browserless",
@@ -136,36 +133,19 @@ export async function POST(req) {
           if (m) geo_insights = JSON.parse(m[0]);
         } catch (e) { console.warn("[geo-scan] Claude analysis failed:", e?.message); }
 
-        const _geoPayload = {
+        return {
           responses: scan.responses,
           brandSet: scan.brandSet,
           clientDomain: domain,
           competitorDomains: scan.competitorDomains || competitorDomains,
           competitors: competitorPairs,  // §23 — name+domain pairs for citation attribution
-          prompts: inline.map((p) => p.prompt),    // prompts actually run inline this scan
-          all_prompts: ordered,          // §17 — full clustered 150-250 set (job queue collects these)
+          prompts: ordered.map((p) => p.prompt),   // the ~20-25 detailed prompts actually run
           prompt_clusters: [...new Set(ordered.map((p) => p.cluster).filter(Boolean))],
           engines: allEngines,           // engines actually measured (no-login + login sessions)
           region: proxyCountry || "global",
-          collection_progress: { done: inline.length, total: ordered.length, complete: ordered.length <= inline.length },
           geo_insights,                  // §25 Claude deep analysis (why competitors win + actions)
           errors: (scan.errors || []).map((e) => ({ engine: e.engine, error: e.error })),
         };
-        // §17 — enqueue the REMAINDER (beyond the inline top-N) so the background worker
-        // collects the full 150-250 across cron ticks. Seeds with the inline responses, so
-        // the geo-visibility cache grows from here as each batch completes.
-        if (ordered.length > inline.length) {
-          try {
-            await enqueueGeoJob({
-              domain, brand, clientDomain: domain,
-              competitors, competitorDomains, competitorPairs,
-              engines: allEngines, proxyCountry, regionLabel, industry, location,
-              prompts: ordered, cursor: inline.length, seedResponses: scan.responses,
-              brandSet: scan.brandSet, geo_insights,
-            });
-          } catch (e) { console.warn("[geo-scan] enqueue remainder failed:", e?.message); }
-        }
-        return _geoPayload;
       },
     });
     return Response.json({ geo: data, cached: Boolean(cached) });

@@ -2,11 +2,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // GEO Vision §17 — SEMANTIC-CLUSTERED PROMPT GENERATOR
 //
-// Produces 150–250 unique AI-visibility prompts per project, grouped into 10
-// intent clusters. Claude does the semantic clustering + generation from whatever
-// project signals are available (homepage title/content, DataForSEO keywords,
-// competitor keywords, search intent, industry, topic gaps, location, product/
-// service category). If Claude fails or returns junk, a DETERMINISTIC clustered
+// Produces ~22 (hard range 20–25) DETAILED, comprehensive AI-visibility prompts
+// per project, grouped into 10 intent clusters. The goal is QUALITY over QUANTITY:
+// instead of 150–250 shallow prompts, we generate ~22 specific, data-rich prompts
+// that still capture 100% of the GEO data needed (brand mentions, brand citations,
+// competitor mentions/citations, and all the §20–25 Share-of-Voice + citation
+// signals) — but WITHOUT the cost of 150–250 engine calls. Each prompt is picked
+// to maximize how often AI engines NAME brands and CITE sources.
+//
+// Claude does the semantic clustering + generation from whatever project signals
+// are available (homepage title/content, DataForSEO keywords, competitor keywords,
+// search intent, industry, topic gaps, location, product/service category),
+// selecting the 2–3 STRONGEST prompts per the most valuable clusters rather than
+// many shallow ones. If Claude fails or returns junk, a DETERMINISTIC clustered
 // expansion of the locked templates is used instead — the function NEVER returns
 // empty.
 //
@@ -30,8 +38,8 @@
 //                          //         round-robin) for a smaller inline run.
 //     }
 //
-//   Total is capped at 250 and de-duplicated by prompt text (case-insensitive).
-//   Target band is 150–250; the deterministic fallback also lands in this band.
+//   Total is capped at 25 and de-duplicated by prompt text (case-insensitive).
+//   Target is ~22 (hard range 20–25); the deterministic fallback also lands here.
 //
 // Back-compat note for callers (route is updated separately):
 //   • OLD: const prompts = generateGeoPrompts({...})        // string[]
@@ -83,23 +91,32 @@ const CLUSTER_INTENT = {
   "Competitor intent": "competitor",
 };
 
-// Roughly how many prompts to target per cluster. Sum ≈ 200 (inside 150–250).
-// Claude is asked to scale to this; the fallback expands to (at least) these.
+// Roughly how many DETAILED prompts to target per cluster. Sum ≈ 22 (range 20–25).
+// QUALITY over QUANTITY: pick the 2–3 STRONGEST prompts for the most data-revealing
+// clusters (those that make AI engines NAME brands + CITE sources) rather than many
+// shallow ones. Claude is asked to scale to this; the fallback returns the same.
+//   Brand comparison / Competitor intent / Best-tool intent → 3 (name brands most)
+//   GEO / Product / Use-case / Technical / Content / Local → 2
+//   Pricing intent → 1
 const CLUSTER_TARGET = {
-  "Technical SEO": 22,
-  "Content SEO": 24,
-  "Local SEO": 20,
-  GEO: 24,
-  "Brand comparison": 18,
-  "Product comparison": 18,
-  "Use-case comparison": 18,
-  "Pricing intent": 18,
-  "Best-tool intent": 20,
-  "Competitor intent": 18,
+  "Technical SEO": 2,
+  "Content SEO": 2,
+  "Local SEO": 2,
+  GEO: 2,
+  "Brand comparison": 3,
+  "Product comparison": 2,
+  "Use-case comparison": 2,
+  "Pricing intent": 1,
+  "Best-tool intent": 3,
+  "Competitor intent": 3,
 };
 
-const TOTAL_CAP = 250;
-const TOTAL_MIN = 150;
+const TOTAL_CAP = 25;
+const TOTAL_MIN = 20;
+// Relaxed acceptance gate: a valid ~15–25 prompt array from Claude is GOOD ENOUGH.
+// We only reject Claude output (and fall back / top-up) when fewer than this many
+// well-formed prompts survive validation. (Old code demanded ~75+.)
+const MIN_VALID = 12;
 
 const clean = (s) => String(s || "").trim().replace(/\s+/g, " ");
 const lc = (s) => clean(s).toLowerCase();
@@ -223,8 +240,9 @@ function _canonCluster(raw) {
 
 // ── DETERMINISTIC FALLBACK ───────────────────────────────────────────────────
 // Clustered expansion of the locked templates + light keyword/category/competitor
-// blending. No LLM. Always lands in the 150–250 band and is fully tagged so the
-// return shape is identical to the Claude path.
+// blending. No LLM. Always lands in the ~22 (20–25) band — one of the strongest
+// few per cluster — and is fully tagged so the return shape is identical to the
+// Claude path.
 function buildFallbackPrompts({ ind, loc, cat, keywordTerms, competitorNames }) {
   const subject = cat || ind; // product/service phrasing where we have a category
   const kw = keywordTerms.slice(0, 12);
@@ -367,7 +385,7 @@ function buildFallbackPrompts({ ind, loc, cat, keywordTerms, competitorNames }) 
 
   // Audience segments + qualifiers — used to expand a cluster with GENUINELY
   // distinct prompts when its base bank + keyword themes run dry, so every cluster
-  // reliably reaches its per-cluster target (and the total clears the 150 floor).
+  // reliably reaches its (small) per-cluster target and the total clears the 20 floor.
   const AUDIENCES = [
     "small businesses",
     "startups",
@@ -453,16 +471,18 @@ function buildClaudeMessages(ctx) {
     (c) => `  - ${c} (~${CLUSTER_TARGET[c]} prompts, neutral=${NEUTRAL_CLUSTERS.has(c)})`
   ).join("\n");
 
-  const sys = `You are a GEO (Generative Engine Optimization) prompt strategist. Your job is to generate a large, semantically-clustered set of natural-language prompts that real users would type into AI search engines (ChatGPT, AI Overviews, Perplexity) for a given business niche.
+  const sys = `You are a GEO (Generative Engine Optimization) prompt strategist. Your job is to generate a SMALL but POWERFUL, semantically-clustered set of natural-language prompts that real users would type into AI search engines (ChatGPT, AI Overviews, Perplexity, Gemini) for a given business niche.
 
-You MUST return BETWEEN ${TOTAL_MIN} AND ${TOTAL_CAP} prompts total, grouped across these 10 clusters (scale per-cluster counts to hit the total):
+QUALITY OVER QUANTITY. Return ONLY ~${(TOTAL_MIN + TOTAL_CAP) >> 1} prompts total (HARD RANGE ${TOTAL_MIN}–${TOTAL_CAP}, never more than ${TOTAL_CAP}). These few prompts must TOGETHER capture 100% of the GEO data needed for Share-of-Voice + citation analysis across ALL engines: how often AI engines NAME brands (the client's and competitors') and how often they CITE sources/domains. So every prompt must be DETAILED, specific, and data-rich — the kind of question that forces an AI engine to list named providers/products AND cite the sources behind them.
+
+Pick the 2–3 STRONGEST, most data-revealing prompts for the most VALUABLE clusters rather than many shallow ones. Distribute across these 10 clusters to hit ~${(TOTAL_MIN + TOTAL_CAP) >> 1} total:
 ${targetLines}
 
 RULES:
 1. NEUTRAL clusters (neutral=true: Technical SEO, Content SEO, Local SEO, GEO, Pricing intent, Best-tool intent) measure ORGANIC visibility. Their prompts MUST NOT contain the client's brand name or any specific competitor brand name — only the industry/category, location, and topic themes. This keeps Share-of-Voice organic.
 2. NON-NEUTRAL clusters (neutral=false: Brand comparison, Product comparison, Use-case comparison, Competitor intent) MAY reference competitor brand names and comparison framing ("vs", "alternatives to", "compared to").
-3. Every prompt must read like a genuine human query, be specific to the niche, and be UNIQUE (no duplicates, no trivial rewordings).
-4. Spread prompts across the supplied keywords, topic gaps, and use-cases — do not just repeat one phrasing.
+3. Each prompt must read like a genuine, well-formed human query — DETAILED and specific to the niche, not a 3-word fragment. Favour prompts that explicitly ask AI engines to recommend/list/rank NAMED providers, products, or tools and to back the answer with sources, so brand mentions and citations are maximised.
+4. Every prompt must be UNIQUE (no duplicates, no trivial rewordings). Spread the small set across the supplied keywords, topic gaps, and use-cases so the ~${(TOTAL_MIN + TOTAL_CAP) >> 1} together cover everything — do not waste a slot on a near-duplicate.
 
 Return ONLY valid JSON — an array of objects, no prose, no markdown fences:
 [{"prompt":"...","cluster":"<one of the 10 cluster names exactly>","intent":"short-intent-label","neutral":true|false}]`;
@@ -497,7 +517,7 @@ Return ONLY valid JSON — an array of objects, no prose, no markdown fences:
 
 // Validate + normalise Claude's array into our tagged shape. Returns [] if junk.
 function normalizeClaudePrompts(arr, { brandName }) {
-  if (!Array.isArray(arr) || arr.length < TOTAL_MIN * 0.5) return []; // implausibly small → reject
+  if (!Array.isArray(arr) || arr.length < 1) return []; // not an array / empty → reject
   const brand = lc(brandName);
   const out = [];
   for (const item of arr) {
@@ -568,7 +588,9 @@ function finalize(items) {
  * §17 — SEMANTIC-CLUSTERED GEO prompt generator. ASYNC.
  *
  * Resolves to an array of { prompt, cluster, intent, neutral, priority } objects
- * (150–250, deduped, capped at 250). Uses Claude for semantic clustering +
+ * (~22, hard range 20–25, deduped, capped at 25). QUALITY over QUANTITY: a few
+ * DETAILED, data-rich prompts that together capture 100% of the Share-of-Voice +
+ * citation signal across all engines. Uses Claude for semantic clustering +
  * generation; falls back to a deterministic clustered template expansion if Claude
  * fails or returns junk, so it NEVER returns empty.
  *
@@ -635,25 +657,27 @@ export async function generateGeoPrompts({
         messages,
         // Generation benefits from a little variety (ignored for Opus internally).
         temperature: 0.6,
-        // ~200 prompts of JSON needs headroom.
+        // ~22 DETAILED prompts of JSON — keep headroom for long, data-rich prompts
+        // (and any Opus adaptive-thinking preamble).
         max_tokens: 8000,
-        // Generous: ~200 JSON prompts is a heavy generation (esp. if CLAUDE_MODEL is
-        // an Opus with adaptive thinking). The route's maxDuration is 300s; on
-        // timeout we fall through to the deterministic fallback (never empty).
+        // The route's maxDuration is 300s; on timeout we fall through to the
+        // deterministic fallback (never empty).
         timeoutMs: 120000,
         meta: { domain, api: "claude-geo-prompts", label: "geo-prompt-generator" },
       });
       const parsed = extractJsonArrayLoose(content);
       const normalized = normalizeClaudePrompts(parsed, { brandName: brand });
-      if (normalized.length >= TOTAL_MIN) {
+      // RELAXED GATE: a valid ~15–25 array is ACCEPTED (require only ≥ MIN_VALID=12).
+      // finalize() dedupes + caps at TOTAL_CAP(25) so we still land in the 20–25 band.
+      if (normalized.length >= MIN_VALID) {
         return finalize(normalized);
       }
-      // Plausible-but-short Claude output → top it up with the fallback rather than
-      // discarding good prompts (still deduped + capped in finalize()).
+      // Too few well-formed prompts → top up with the deterministic fallback rather
+      // than discarding good prompts (still deduped + capped in finalize()).
       if (normalized.length > 0) {
         const topped = [...normalized, ...buildFallbackPrompts(fallbackArgs)];
         const result = finalize(topped);
-        if (result.length >= TOTAL_MIN) return result;
+        if (result.length >= MIN_VALID) return result;
       }
     } catch (e) {
       // swallow — fall through to deterministic path
