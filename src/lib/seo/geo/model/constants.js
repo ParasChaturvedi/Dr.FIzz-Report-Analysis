@@ -28,9 +28,47 @@ export const GEO_CLUSTERS = [
   "Problem aware", "Solution aware", "Service category", "Location specific",
 ];
 export const GEO_INTENTS = [
-  "commercial", "informational", "comparison", "local", "navigational",
-  "transactional", "best-tool", "problem-aware", "solution-aware",
+  "informational", "commercial", "comparison", "transactional",
+  "local", "pricing", "competitor", "best-provider", "troubleshooting",
 ];
+
+// ── §17 PROMPT-PLANNING maps (per-cluster behaviour for the generator) ─────────
+// COMPARISON clusters may name competitor brands; all others are NEUTRAL — their
+// prompt text MUST NOT contain the client's own brand, so Share-of-Voice stays
+// organic (we measure whether the brand surfaces on its own for a generic query).
+export const COMPARISON_CLUSTERS = ["Brand comparison", "Product comparison", "Use-case comparison", "Competitor intent"];
+export const CLUSTER_IS_NEUTRAL = Object.fromEntries(GEO_CLUSTERS.map((c) => [c, !COMPARISON_CLUSTERS.includes(c)]));
+
+// Clusters whose prompts get location-aware variants (city / region / country).
+export const LOCALIZED_CLUSTERS = ["Local SEO", "GEO", "Location specific", "Service category", "Best-tool intent", "Pricing intent"];
+
+// Default intent per cluster (one of GEO_INTENTS) — used when generation omits one.
+export const CLUSTER_DEFAULT_INTENT = {
+  "Technical SEO": "informational", "Content SEO": "informational", "Local SEO": "local",
+  GEO: "informational", "Brand comparison": "comparison", "Product comparison": "comparison",
+  "Use-case comparison": "comparison", "Pricing intent": "pricing", "Best-tool intent": "best-provider",
+  "Competitor intent": "competitor", "Problem aware": "troubleshooting", "Solution aware": "informational",
+  "Service category": "commercial", "Location specific": "local",
+};
+
+// Expected answer structure per cluster (one of ANSWER_STRUCTURES) — what a good AI
+// answer to this prompt should look like; guides the Phase-3 parser + the UI.
+export const CLUSTER_EXPECTED_ANSWER = {
+  "Technical SEO": "list", "Content SEO": "list", "Local SEO": "list", GEO: "recommendation",
+  "Brand comparison": "comparison", "Product comparison": "comparison", "Use-case comparison": "comparison",
+  "Pricing intent": "table", "Best-tool intent": "recommendation", "Competitor intent": "comparison",
+  "Problem aware": "paragraph", "Solution aware": "list", "Service category": "list", "Location specific": "list",
+};
+
+// Relative weight per cluster for quota distribution (§ "one topic must not dominate").
+// Higher = more prompts. Brand/citation-revealing clusters get a little more; every
+// cluster still gets a floor + a hard cap (applied in the planner) so the mix stays balanced.
+export const CLUSTER_WEIGHT = {
+  "Technical SEO": 0.8, "Content SEO": 1.0, "Local SEO": 1.2, GEO: 1.0,
+  "Brand comparison": 1.0, "Product comparison": 0.9, "Use-case comparison": 0.9,
+  "Pricing intent": 0.8, "Best-tool intent": 1.2, "Competitor intent": 1.1,
+  "Problem aware": 0.9, "Solution aware": 0.9, "Service category": 1.0, "Location specific": 1.1,
+};
 
 // §16 — location modes.
 export const LOCATION_MODES = ["global", "international", "country", "state", "city"];
@@ -58,8 +96,11 @@ export const ENTITY_TYPES = ["brand", "competitor", "third_party"];
 // §19 — account/session statuses.
 export const SESSION_STATUSES = ["active", "expired", "needs_reauth", "blocked", "rate_limited", "disabled"];
 
-// Run / result lifecycle.
-export const RUN_STATUSES = ["queued", "running", "collecting", "parsing", "scoring", "completed", "partial", "failed"];
+// Run / result lifecycle. "draft" = planned in Phase 2 (prompts generated, NOT yet
+// queued for the worker); the worker only claims "queued"/"running" (see claimNextGeoJob).
+export const RUN_STATUSES = ["draft", "queued", "running", "collecting", "parsing", "scoring", "completed", "partial", "failed"];
+// Prompt approval lifecycle (§ approve/edit prompts before execution).
+export const PROMPT_STATUSES = ["pending", "approved", "rejected", "edited"];
 export const RESULT_STATUSES = ["queued", "running", "success", "error", "retrying", "skipped"];
 
 // §18 — validation confidence bands.
@@ -117,6 +158,20 @@ export const RUN_MODE_PRESETS = {
   full:       { label: "Full GEO",         prompt_limit: 250, default_engines: GEO_ENGINES,                    validation_enabled: true,  validation_sample_percent: 15, residential_proxy_default: false, cost_level: "full",   screenshot_mode: "on_error" },
   validation: { label: "Validation",       prompt_limit: 50,  default_engines: GEO_ENGINES,                    validation_enabled: true,  validation_sample_percent: 25, residential_proxy_default: false, cost_level: "high",   screenshot_mode: "on_error" },
 };
+
+// Prompt-volume band per run mode (§ run modes). The planner targets the UPPER bound
+// and lands anywhere in the band based on how much real project data is available.
+export const RUN_MODE_PROMPT_RANGE = {
+  dev_smoke: [20, 25], standard: [60, 80], full: [150, 250], validation: [40, 50],
+};
+// Friendly aliases → canonical run-mode keys (so "smoke" resolves to "dev_smoke").
+export const RUN_MODE_ALIASES = { smoke: "dev_smoke", dev: "dev_smoke", "dev-smoke": "dev_smoke", default: "standard", production: "full" };
+export function normalizeRunMode(mode) {
+  const m = String(mode || "").trim().toLowerCase();
+  if (RUN_MODE_PRESETS[m]) return m;
+  if (RUN_MODE_ALIASES[m]) return RUN_MODE_ALIASES[m];
+  return DEFAULT_RUN_MODE;
+}
 
 // Per-engine, per-query cost estimate (USD) — configurable. Browser engines cost a
 // Browserless query; Claude runs via API (cheaper). Residential proxy adds a multiplier.

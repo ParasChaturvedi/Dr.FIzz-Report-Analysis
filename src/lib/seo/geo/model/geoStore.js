@@ -77,33 +77,74 @@ export async function updateGeoProject(projectId, patch = {}) {
 }
 
 // ── PROMPTS (§ geo_prompts) ───────────────────────────────────────────────────
-export async function saveGeoPrompts(projectId, prompts = []) {
+// `defaults` carries run-level metadata stamped on every prompt (run_mode,
+// selected_engines, target brand/domain, competitors, geo_run_id) so the planner's
+// per-prompt records stay lean. Each doc carries the full §8 field set plus the
+// approval `status` (pending|approved|rejected|edited) and execution `run_status`.
+export async function saveGeoPrompts(projectId, prompts = [], defaults = {}) {
   try {
     const c = await col(C.prompts); if (!c || !Array.isArray(prompts) || !prompts.length) return [];
-    const docs = prompts.map((p, i) => ({
-      prompt_id: p.prompt_id || nid("p"),
-      geo_project_id: projectId,
-      prompt_text: p.prompt_text || p.prompt || "",
-      cluster: p.cluster || "GEO",
-      intent: p.intent || "informational",
-      priority: Number(p.priority) || i + 1,
-      location_context: p.location_context || null,
-      source_keywords: Array.isArray(p.source_keywords) ? p.source_keywords : [],
-      target_brand: p.target_brand || "",
-      target_domain: p.target_domain || "",
-      competitors: Array.isArray(p.competitors) ? p.competitors : [],
-      expected_answer_type: p.expected_answer_type || "mixed",
-      neutral: p.neutral !== false,
-      run_status: "pending",
-      created_at: now(),
-    }));
+    const d = defaults || {};
+    const docs = prompts.map((p, i) => {
+      const srcKw = Array.isArray(p.source_keywords) ? p.source_keywords : (p.source_keyword ? [p.source_keyword] : []);
+      return {
+        prompt_id: p.prompt_id || nid("p"),
+        geo_project_id: projectId,
+        geo_run_id: p.geo_run_id || d.geo_run_id || null,
+        prompt_text: p.prompt_text || p.prompt || "",
+        cluster: p.cluster || "GEO",
+        intent: p.intent || "informational",
+        neutral: p.neutral !== false,
+        source_keywords: srcKw,
+        priority: Number(p.priority) || i + 1,
+        priority_score: Number(p.priority_score) || 0,
+        quality_score: Number(p.quality_score) || 0,
+        expected_answer_type: p.expected_answer_type || "mixed",
+        dedup_key: p.dedup_key || "",
+        location_context: p.location_context || d.location_context || null,
+        target_brand: p.target_brand || d.target_brand || "",
+        target_domain: p.target_domain || d.target_domain || "",
+        competitors: Array.isArray(p.competitors) ? p.competitors : (Array.isArray(d.competitors) ? d.competitors : []),
+        run_mode: p.run_mode || d.run_mode || "standard",
+        selected_engines: Array.isArray(p.selected_engines) ? p.selected_engines : (Array.isArray(d.selected_engines) ? d.selected_engines : []),
+        status: p.status || "pending",        // approval lifecycle (§ approve/edit)
+        run_status: p.run_status || "pending", // execution lifecycle (Phase 3 worker)
+        created_at: now(),
+      };
+    });
     await c.insertMany(docs);
     return docs;
   } catch (e) { console.warn("[geoStore] saveGeoPrompts:", e?.message); return []; }
 }
-export async function getGeoPrompts(projectId) {
-  try { const c = await col(C.prompts); if (!c) return []; return await c.find({ geo_project_id: projectId }).sort({ priority: 1 }).toArray(); }
-  catch { return []; }
+export async function getGeoPrompts(projectId, { status, limit = 0 } = {}) {
+  try {
+    const c = await col(C.prompts); if (!c) return [];
+    const q = { geo_project_id: projectId }; if (status) q.status = status;
+    let cur = c.find(q).sort({ priority: 1 });
+    if (limit > 0) cur = cur.limit(limit);
+    return await cur.toArray();
+  } catch { return []; }
+}
+export async function countGeoPrompts(projectId) {
+  try { const c = await col(C.prompts); if (!c) return 0; return await c.countDocuments({ geo_project_id: projectId }); } catch { return 0; }
+}
+// Wipe a project's prompts (used by "regenerate" before re-planning).
+export async function clearGeoPrompts(projectId) {
+  try { const c = await col(C.prompts); if (!c) return 0; const r = await c.deleteMany({ geo_project_id: projectId }); return r?.deletedCount || 0; } catch { return 0; }
+}
+// Edit one prompt's text/cluster/intent etc. (marks it "edited" unless caller overrides).
+export async function updateGeoPrompt(promptId, patch = {}) {
+  try { const c = await col(C.prompts); if (!c) return false; await c.updateOne({ prompt_id: promptId }, { $set: { ...patch, updated_at: now() } }); return true; } catch { return false; }
+}
+// Approve/reject a set of prompts (empty/[]-ids = all prompts in the project).
+export async function setPromptsStatus(projectId, promptIds, status) {
+  try {
+    const c = await col(C.prompts); if (!c) return 0;
+    const q = { geo_project_id: projectId };
+    if (Array.isArray(promptIds) && promptIds.length) q.prompt_id = { $in: promptIds };
+    const r = await c.updateMany(q, { $set: { status, updated_at: now() } });
+    return r?.modifiedCount || 0;
+  } catch { return 0; }
 }
 
 // ── RUNS (§ geo_runs) ─────────────────────────────────────────────────────────
@@ -116,7 +157,9 @@ export async function createGeoRun(run = {}) {
       run_id: run.run_id || nid("run"),
       geo_project_id: run.geo_project_id,
       run_name: run.run_name || `Run ${now()}`,
-      status: "queued",                 // JOB QUEUE: the worker claims "queued" runs
+      // "draft" = Phase-2 planned run (worker will NOT claim it); "queued" = ready for
+      // the worker. claimNextGeoJob only ever picks up "queued"/"running".
+      status: run.status || "queued",
       lease_until: new Date(0),
       engines: cfg.selected_engines || (Array.isArray(run.engines) ? run.engines : []),
       location_context: run.location_context || { mode: cfg.location_mode || "country" },
