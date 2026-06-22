@@ -214,17 +214,26 @@ function GeoVisibility({ geo = {}, domain, gf = {}, status = null }) {
   if (!status?.collection_run) {
     const prompts = m.tracked_prompts || m.prompts_used || m.prompts || [];
     const promptCount = status?.prompt_count || (Array.isArray(prompts) ? prompts.length : 0);
+    const st = status?.state || "planned";
+    const STATE_BADGE = {
+      planned: { label: "PLANNED", bg: "#8A6A52" }, queued: { label: "QUEUED", bg: "#5A6A8A" },
+      running: { label: "RUNNING", bg: ORANGE }, partially_complete: { label: "PARTIAL", bg: "#8A6A52" },
+      failed: { label: "FAILED", bg: "#B3261E" }, session_required: { label: "SESSION REQUIRED", bg: "#9A6A12" },
+    };
+    const badge = STATE_BADGE[st] || STATE_BADGE.planned;
+    const collectionLabel = { planned: "Not run yet", queued: "Queued", running: "Running…", session_required: "Sessions required", failed: "Failed" }[st] || "Not run yet";
+    const blocked = Array.isArray(status?.blocked_engines) ? status.blocked_engines : [];
     const steps = [
       ["Methodology", status?.methodology_ready ? "Ready" : "Pending"],
       ["Prompts (neutral)", status?.prompts_ready ? `Ready · ${promptCount}` : "Not generated yet"],
-      ["Collection (Playwright / Browserless)", "Not run yet"],
+      ["Collection (Playwright / Browserless)", collectionLabel],
     ];
     return (
       <div className="space-y-4">
         <div className="rounded-lg bg-white p-5" style={cardB}>
           <div className="flex items-center gap-2 flex-wrap mb-2">
             <Lbl>GEO Collection</Lbl>
-            <span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: "#8A6A52", color: "#fff" }}>PLANNED</span>
+            <span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: badge.bg, color: "#fff" }}>{badge.label}</span>
           </div>
           <p style={{ fontFamily: BODY, fontSize: "13px", lineHeight: 1.6, color: "#4A4A4A", maxWidth: "46rem" }}>
             {status?.message || `GEO visibility for ${domain} has not been measured yet. No Share-of-Voice, citation or mention numbers are shown until they come from real AI-engine answers.`}
@@ -237,6 +246,11 @@ function GeoVisibility({ geo = {}, domain, gf = {}, status = null }) {
               </div>
             ))}
           </div>
+          {blocked.length > 0 && (
+            <div className="mt-3" style={{ fontFamily: BODY, fontSize: "12px", color: "#9A6A12" }}>
+              Engines awaiting setup: {blocked.map((b) => `${b.engine || b.name}${b.status ? ` (${String(b.status).replace(/_/g, " ")})` : ""}`).join(", ")}
+            </div>
+          )}
           {status?.note && <p style={{ fontFamily: BODY, fontSize: "11px", color: "#8A8A8A", marginTop: 10 }}>{status.note}</p>}
         </div>
         {/* #8 — transparency: show the neutral prompts queued for collection, if generated */}

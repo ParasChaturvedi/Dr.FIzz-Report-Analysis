@@ -245,28 +245,46 @@ export function buildEvidencePlan(parts = {}, crawlData = null) {
 
 function tally(arr, key) { const o = {}; for (const r of arr) { const k = r[key] || "—"; o[k] = (o[k] || 0) + 1; } return o; }
 
-// ── #9 — honest GEO status. Until Phase-3 browser collection runs, GEO is PLANNED:
-// methodology + prompts may be ready, but there are NO real SoV/citation/mention numbers.
-// `collectionRun` is true only when real geo_run_results exist.
-export function buildGeoStatus({ geo = {}, promptsReady = null, collectionRun = false } = {}) {
-  // a real collection would carry per-engine results with at least one answer captured
-  const hasRealResults = !!collectionRun || !!(geo?.collection?.results_count > 0) || !!(geo?.results_collected);
+// ── #9 / #6 — honest GEO status across the FULL run lifecycle. The report shows exactly
+// one of: planned · queued · running · partially_complete · complete · failed ·
+// session_required. SoV / citations / mentions are "measured" ONLY for complete /
+// partially_complete (real geo_run_results). Everything else shows NO numbers.
+const GEO_STATE_MESSAGE = {
+  planned_ready: "GEO plan ready: methodology defined and neutral prompts generated. Queue real AI-engine collection (Playwright/Browserless) to measure visibility — Share-of-Voice, citations and mentions populate then. No GEO results are shown until they are actually measured.",
+  planned: "GEO plan in progress: methodology defined. Generate + approve the neutral prompt set, then queue real AI-engine collection. No GEO results are shown until they are actually measured.",
+  queued: "GEO run queued. The worker will collect real AI-engine answers shortly. No results are shown until they are measured.",
+  running: "GEO collection in progress — submitting prompts to the AI engines and capturing the rendered answers. Results populate as they complete.",
+  partially_complete: "GEO collection partially complete — some engines/prompts succeeded; others were blocked or pending. Showing ONLY what was actually measured.",
+  complete: "GEO visibility measured from real AI-engine answers collected via the Doctor Fizz GEO crawler (Playwright/Browserless).",
+  failed: "GEO collection did not complete and no results are shown. See the collection-health log for the cause.",
+  session_required: "GEO collection needs logged-in sessions for the selected login engines (ChatGPT / Gemini / Copilot). Capture them, then re-queue. No GEO results are shown until they are measured.",
+};
+export function buildGeoStatus({ geo = {}, promptsReady = null, collectionRun = false, runStatus = null, blockedEngines = [] } = {}) {
   const promptCount = Number(geo?.prompts_used?.length || geo?.prompt_count || 0) || 0;
   const ready = promptsReady != null ? !!promptsReady : promptCount > 0;
-  if (hasRealResults) {
-    return { state: "collected", methodology_ready: true, prompts_ready: true, collection_run: true,
-      message: "GEO visibility measured from real AI-engine answers collected via the Doctor Fizz GEO crawler." };
-  }
+  const rs = String(runStatus || "").toLowerCase();
+
+  let state;
+  if (rs === "completed" || (collectionRun && !rs)) state = "complete";
+  else if (rs === "partial") state = "partially_complete";
+  else if (rs === "session_required") state = "session_required";
+  else if (rs === "failed") state = "failed";
+  else if (["running", "collecting", "parsing", "scoring"].includes(rs)) state = "running";
+  else if (rs === "queued") state = "queued";
+  else state = "planned";
+
+  const measured = state === "complete" || state === "partially_complete";
+  const message = state === "planned" ? (ready ? GEO_STATE_MESSAGE.planned_ready : GEO_STATE_MESSAGE.planned) : GEO_STATE_MESSAGE[state];
   return {
-    state: "planned",
+    state,
+    measured,
     methodology_ready: true,
     prompts_ready: ready,
     prompt_count: promptCount,
-    collection_run: false,
-    message: ready
-      ? "GEO plan ready: methodology defined and neutral prompts generated. Real AI-engine collection (Playwright/Browserless) runs in the next phase — Share-of-Voice, citations and mentions will populate then. No GEO results are shown until they are actually measured."
-      : "GEO plan in progress: methodology defined. Generate the neutral prompt set, then run real AI-engine collection to measure visibility. No GEO results are shown until they are actually measured.",
-    note: "No Share-of-Voice, citations, mentions or LLM answers are invented before real collection (Phase 3).",
+    collection_run: measured,                  // GeoVisibility renders real numbers ONLY when true
+    blocked_engines: Array.isArray(blockedEngines) ? blockedEngines : [],
+    message,
+    note: measured ? undefined : "No Share-of-Voice, citations, mentions or LLM answers are invented before real collection.",
   };
 }
 

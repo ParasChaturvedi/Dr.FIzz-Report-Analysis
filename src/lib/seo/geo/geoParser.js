@@ -37,6 +37,21 @@ function firstOccurrence(text, term) {
   return { count, firstIndex };
 }
 
+// Sentiment toward the brand, ONLY when detectable from language NEAR the brand mention.
+// Returns "positive" | "negative" | "neutral" | null (null = brand not mentioned / no signal).
+const POS_CUES = /\b(best|top|leading|excellent|great|strong|recommended|trusted|reliable|popular|highly rated|standout|impressive|go-to|premier|award)\b/i;
+const NEG_CUES = /\b(avoid|poor|worst|bad|weak|unreliable|not recommended|disappointing|lacking|overpriced|limited|outdated|concerns?)\b/i;
+function detectSentiment(text, brand, brandIndex) {
+  if (!brand || brandIndex == null || brandIndex < 0) return null;
+  const window = String(text).slice(Math.max(0, brandIndex - 140), brandIndex + 180);
+  const pos = POS_CUES.test(window);
+  const neg = NEG_CUES.test(window);
+  if (pos && !neg) return "positive";
+  if (neg && !pos) return "negative";
+  if (pos && neg) return "neutral";
+  return "neutral"; // brand mentioned but no clear directional language
+}
+
 // answer structure from the rendered HTML/text (one of ANSWER_STRUCTURES).
 function detectStructure(text, html) {
   const h = String(html || ""); const t = String(text || "");
@@ -95,8 +110,12 @@ export function parseAnswer(response = {}, ctx = {}) {
   });
   const sourceDomains = [...new Set(citations.map((c) => c.cited_domain).filter(Boolean))];
 
+  const brandEntity = entities.find((e) => e.type === "brand");
+  const sentiment = brandEntity && brandEntity.count > 0 ? detectSentiment(text, brand, brandEntity.firstIndex) : null;
+
   return {
     promptId: response.promptId || response.prompt_id || null,
+    sentiment,
     engine,
     accountId: response.accountId || response.account_id || null,
     timestamp: response.timestamp || new Date().toISOString(),
