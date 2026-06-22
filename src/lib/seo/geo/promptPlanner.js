@@ -116,6 +116,84 @@ function extractJsonObjectLooseLocal(text) {
   return null;
 }
 
+// ── STRICT NEUTRALITY — no brand / company / competitor / domain / website name may
+// appear in ANY prompt (we measure ORGANIC AI visibility). Build the forbidden-term set
+// from the target brand + domain + ALL competitor names/domains, then drop anything that
+// is purely generic category language so we never strip legitimate neutral prompts.
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const GENERIC_NAME_TOKENS = new Set([
+  "seo", "digital", "marketing", "agency", "agencies", "service", "services", "web", "website",
+  "design", "development", "media", "group", "company", "companies", "solutions", "solution", "tech",
+  "technology", "online", "global", "best", "top", "pro", "the", "and", "of", "for", "in", "co", "ltd",
+  "inc", "llc", "pvt", "limited", "studio", "studios", "consulting", "consultants", "experts", "expert",
+  "creative", "labs", "lab", "hub", "world", "india", "usa", "ai", "data", "cloud", "soft", "systems",
+]);
+function isDistinctiveName(phrase) {
+  const toks = lc(phrase).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  return toks.some((t) => t.length >= 3 && !GENERIC_NAME_TOKENS.has(t));
+}
+function buildForbiddenTerms(source = {}, ctx = {}) {
+  const terms = new Set();
+  const addName = (s) => { const v = clean(s); if (v && v.length >= 3 && isDistinctiveName(v)) terms.add(lc(v)); };
+  const addDomain = (d) => {
+    const dom = lc(d).replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    if (!dom || !dom.includes(".")) return;
+    terms.add(dom);
+    const stem = dom.split(".")[0];
+    if (stem && stem.length >= 3 && !GENERIC_NAME_TOKENS.has(stem)) terms.add(stem);
+  };
+  addName(ctx.brand); addName(source.brand); addName(source.clientName); addName(source.brandName);
+  addDomain(source.domain);
+  for (const c of [...(source.competitors || source.businessCompetitors || []), ...(source.searchCompetitors || [])]) {
+    if (typeof c === "string") { c.includes(".") && !c.includes(" ") ? addDomain(c) : addName(c); }
+    else { addName(c?.name); addName(c?.brand); addName(c?.title); addDomain(c?.domain); }
+  }
+  return terms;
+}
+function isNeutralClean(text, forbidden) {
+  if (!text) return false;
+  for (const t of forbidden) {
+    if (!t) continue;
+    try { if (new RegExp(`\\b${escapeRegex(t)}\\b`, "i").test(text)) return false; }
+    catch { if (lc(text).includes(t)) return false; }
+  }
+  return true;
+}
+
+// Tidy a templated prompt: collapse adjacent duplicate words/bigrams ("services
+// services" → "services", "seo services seo services" → "seo services") so the
+// subject/keyword value injection never reads awkwardly.
+function tidyPrompt(s) {
+  let p = clean(s);
+  p = p.replace(/\b(\w+\s+\w+)\s+\1\b/gi, "$1");   // adjacent duplicate bigram
+  p = p.replace(/\b(\w+)(\s+\1\b)+/gi, "$1");        // adjacent duplicate word(s)
+  p = p.replace(/\bservices\s+services\b/gi, "services");
+  return clean(p);
+}
+
+// ── SERP SEEDS — real user questions (People-Also-Ask / related searches / content +
+// keyword gaps) become high-value NEUTRAL prompts directly (after the neutrality filter).
+function seedsFromSerp(ctx) {
+  const out = [];
+  const seen = new Set();
+  const pool = [...(ctx.serpPaa || []), ...(ctx.serpRelated || []), ...(ctx.serpContentGaps || []), ...(ctx.keywordGaps || [])];
+  for (const raw of pool) {
+    const q = clean(raw);
+    const k = lc(q);
+    if (!q || q.length < 8 || q.length > 160 || seen.has(k)) continue;
+    seen.add(k);
+    let cluster = "Solution aware";
+    if (/\b(best|top|which|recommend|leading)\b/.test(k)) cluster = "Best-tool intent";
+    else if (/\b(cost|price|pricing|cheap|afford|how much|budget)\b/.test(k)) cluster = "Pricing intent";
+    else if (/\b(near me|local)\b/.test(k)) cluster = "Local SEO";
+    else if (/\b(how to|how do|guide|tips|ways to)\b/.test(k)) cluster = "Content SEO";
+    else if (/\b(why|problem|issue|fix|not working|error)\b/.test(k)) cluster = "Problem aware";
+    else if (/\b(vs|versus|compare|comparison|difference|alternatives?)\b/.test(k)) cluster = "Use-case comparison";
+    out.push({ prompt: q, cluster, intent: CLUSTER_DEFAULT_INTENT[cluster], neutral: true, source_keyword: "", expected_answer_type: CLUSTER_EXPECTED_ANSWER[cluster], location: null });
+  }
+  return out.slice(0, 40);
+}
+
 // ── location handling (§13) — ONLY real locations, never fabricated ───────────
 // Build the list of real locations to vary across, from the location context plus
 // any explicit extra locations and "in <Place>" phrases mined from the keywords.
@@ -272,8 +350,17 @@ function deterministicForCluster(cluster, want, ctx) {
     seen.add(k);
     out.push({ prompt: p, cluster, source_keyword: kw || "", location: loc });
   };
-  // 1) base bank × locations × keyword themes
-  const kwPool = keywordThemes.length ? keywordThemes : [subject];
+  // 1) base bank × locations × keyword themes. Drop themes that just restate the
+  //    subject (± location) so {kw} injection adds a DISTINCT angle, not redundancy.
+  const subjTok = lc(subject);
+  const locTok = locations.map((l) => lc(l.label)).filter(Boolean);
+  const themePool = (keywordThemes || []).filter((k) => {
+    const lk = lc(k);
+    if (!lk || lk === subjTok) return false;
+    if (lk.includes(subjTok) && locTok.some((l) => lk.includes(l))) return false; // "seo services bangalore"
+    return true;
+  });
+  const kwPool = themePool.length ? themePool : [subject];
   outer: for (let li = 0; li < locs.length; li++) {
     for (let bi = 0; bi < bank.length; bi++) {
       const kw = kwPool[(bi + li) % kwPool.length];
@@ -281,16 +368,17 @@ function deterministicForCluster(cluster, want, ctx) {
       if (out.length >= want) break outer;
     }
   }
-  // 2) competitor-named variants for comparison clusters only
-  if (out.length < want && COMPARISON_CLUSTERS.includes(cluster) && comps.length) {
-    for (const c of comps) {
-      if (out.length >= want) break;
-      const loc = locs[0];
-      if (cluster === "Competitor intent") { push(`${c} alternatives`, loc); push(`${subject} providers similar to ${c}`, loc); }
-      else if (cluster === "Brand comparison") push(`${c} vs other ${subject} in {loc}`, loc);
-      else if (cluster === "Product comparison") push(`${c} vs other ${subject} products`, loc);
-      else push(`how does ${c} compare for ${subject}`, loc);
-    }
+  // 2) NEUTRAL comparison framing for comparison clusters — NEVER name a brand /
+  //    competitor (organic visibility only). Uses category + location language only.
+  if (out.length < want && COMPARISON_CLUSTERS.includes(cluster)) {
+    const loc = locs[0];
+    const neutralComparisons = {
+      "Competitor intent": [`best alternatives to the leading ${subject} providers in {loc}`, `top ${subject} providers compared in {loc}`, `how to choose between the top ${subject} providers in {loc}`],
+      "Brand comparison": [`how do the top ${subject} brands compare in {loc}`, `most reputable ${subject} brands in {loc}`, `${subject} brands ranked by results in {loc}`],
+      "Product comparison": [`best ${subject} solutions compared in {loc}`, `top ${subject} products compared by features`, `${subject} products ranked by value for money`],
+      "Use-case comparison": [`best ${subject} for different business sizes in {loc}`, `${subject} compared by use case`, `which type of ${subject} fits which kind of business`],
+    };
+    for (const t of (neutralComparisons[cluster] || [])) { if (out.length >= want) break; push(t, loc); }
   }
   // 3) audience × keyword expansion to top up to the quota
   for (let a = 0; a < AUDIENCES.length && out.length < want; a++) {
@@ -520,7 +608,12 @@ export function scoreQuality(rec, ctx) {
   if (ctx.keywordThemes.some((k) => k && lc(p).includes(lc(k)))) s += 10;
   if (ASK_SIGNAL.test(p)) s += 6;
   if (rec.neutral && ctx.brand && lc(p).includes(lc(ctx.brand))) s = Math.min(s, 8); // neutrality violation
-  if (!rec.neutral && ctx.comps.some((c) => lc(p).includes(lc(c)))) s += 6;
+  // redundancy penalty — repeated content words read as awkward templated text
+  const words = lc(p).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t.length >= 4);
+  const counts = {};
+  let dup = 0;
+  for (const wd of words) { counts[wd] = (counts[wd] || 0) + 1; if (counts[wd] === 2) dup++; }
+  if (dup) s -= dup * 9;
   return Math.max(0, Math.min(100, Math.round(s)));
 }
 
@@ -617,6 +710,20 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
     themes: null,
   };
 
+  // ── STRICT NEUTRALITY — scrub brand/company/competitor/domain names out of every
+  //    INJECTABLE VALUE so no name can ever leak into a prompt (organic visibility only).
+  //    The templates themselves carry no names; this guards the keyword/SERP values. ──
+  const forbidden = buildForbiddenTerms(source, ctx);
+  ctx.forbidden = forbidden;
+  ctx.keywordThemes = ctx.keywordThemes.filter((k) => isNeutralClean(k, forbidden));
+  ctx.keywordDetails = ctx.keywordDetails.filter((k) => isNeutralClean(k.term, forbidden));
+  ctx.keywordGaps = ctx.keywordGaps.filter((k) => isNeutralClean(k, forbidden));
+  ctx.serpPaa = ctx.serpPaa.filter((q) => isNeutralClean(q, forbidden));
+  ctx.serpRelated = ctx.serpRelated.filter((q) => isNeutralClean(q, forbidden));
+  ctx.serpContentGaps = ctx.serpContentGaps.filter((q) => isNeutralClean(q, forbidden));
+  ctx.competitorTopics = []; // competitor topics are name-bearing → never used in neutral prompts
+  if (!ctx.keywordThemes.length) ctx.keywordThemes = [ctx.subject]; // keep a safe injectable value
+
   // ── deep analysis (full mode) — distil the whole dataset into GEO themes FIRST,
   //    then seed generation from them (§"analyze, then generate") ──
   let analysisUsed = false;
@@ -628,12 +735,14 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
   // ── 1. quotas ──
   const quotas = allocateQuotas(target);
 
-  // ── 2. Claude batched generation (grounded in the full dataset + themes) ──
-  let records = [];
+  // ── 2. generation — start with REAL SERP user-questions (neutral seeds from PAA /
+  //    related searches / gaps), then fill with TEMPLATE (code) prompts. Claude is
+  //    OPTIONAL: with useClaude:false the whole set is token-free (templates + values). ──
+  let records = [...seedsFromSerp(ctx)];
   let usedClaude = false;
   if (useClaude && String(process.env.ANTHROPIC_API_KEY || "").trim()) {
     const claudeRecs = await generateWithClaude(quotas, ctx, source.domain || "");
-    if (claudeRecs.length) { records = claudeRecs; usedClaude = true; }
+    if (claudeRecs.length) { records.push(...claudeRecs); usedClaude = true; }
   }
 
   // ── 3. deterministic fill per cluster up to quota ──
@@ -652,6 +761,11 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
     }
   }
   let merged = GEO_CLUSTERS.flatMap((c) => byCluster[c]);
+
+  // ── STRICT NEUTRALITY (final guard) — drop ANY prompt that still contains a brand /
+  //    competitor / company / domain / website name. This catches Claude output too. ──
+  //    Also tidy templated redundancy ("services services" → "services").
+  merged = merged.filter((r) => isNeutralClean(r.prompt, forbidden)).map((r) => ({ ...r, prompt: tidyPrompt(r.prompt) }));
 
   // ── 4. (location variants already produced inside deterministic + Claude) ──
   // ── 5. dedupe ──
@@ -686,7 +800,7 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
     prompt: r.prompt,
     cluster: r.cluster,
     intent: r.intent || CLUSTER_DEFAULT_INTENT[r.cluster],
-    neutral: typeof r.neutral === "boolean" ? r.neutral : CLUSTER_IS_NEUTRAL[r.cluster],
+    neutral: true, // strict neutrality enforced — no brand/competitor/domain name in any prompt
     source_keyword: r.source_keyword || "",
     expected_answer_type: r.expected_answer_type || CLUSTER_EXPECTED_ANSWER[r.cluster],
     quality_score: r.quality_score,
