@@ -1408,6 +1408,9 @@ export function buildGeoVisibility(input = {}) {
     citation_analysis = buildCitationAnalysis({
       clientDomain: raw.clientDomain || domain, clientName: clientName || domain,
       competitorDomains: _compDomains, responses: raw.responses,
+      // §23/§25 — name⇄domain pairs so citations can be attributed to the right competitor
+      // brand (cited_brand) and grouped into per-competitor source patterns.
+      competitors: raw.competitors || (competitors || []).map(c => ({ name: c.name || c.domain, domain: c.domain })).filter(c => c.name || c.domain),
     });
     // §20 — full two-layer metric matrix (overall + per engine, brand + competitors).
     geo_metrics = buildGeoMetrics({
@@ -1435,6 +1438,9 @@ export function buildGeoVisibility(input = {}) {
         gap: Math.round((top.avg - (me ? me.avg : 0)) * 10) / 10,
         leader_strongest_engine: eng,
         competitors: bb.filter(b => !b.is_client).map(b => ({ brand: b.brand, sov_avg: b.avg, per_engine: b.per_engine })),
+        // §25 — per-competitor citation source patterns (the source types/domains each
+        // competitor earns citations from). Derived in buildCitationAnalysis; [] until cited.
+        competitor_citation_patterns: citation_analysis?.competitor_citation_patterns || [],
         summary: `${top.brand} leads AI visibility at ${top.avg}% average share of voice${me ? ` versus your ${me.avg}%` : ""}${eng ? `, strongest on ${eng}` : ""}. Match their cited sources and topic coverage to close the gap.`,
       };
     }
@@ -1668,6 +1674,18 @@ export function buildCitationAnalysis(input = {}) {
   if (!responses.length) return null;
   const clientDomain = _geoHost(input.clientDomain || "");
   const competitorDomains = (input.competitorDomains || []).map(_geoHost).filter(Boolean);
+  // §23/§25 — competitor {name, domain} pairs (when supplied) → resolve a cited host to
+  // the competitor BRAND it belongs to. Falls back to deriving a label from the host so
+  // cited_brand / competitor_citation_patterns still work when only domains are known.
+  const _compPairs = (input.competitors || [])
+    .map((c) => ({ name: String(c?.name || c?.domain || "").trim(), host: _geoHost(c?.domain || c?.name || "") }))
+    .filter((c) => c.host || c.name);
+  const _compNameForHost = (host) => {
+    for (const c of _compPairs) if (c.host && _hostMatches(host, c.host)) return c.name || c.host;
+    // domain known to be a competitor but no name pair — use the registrable label.
+    const d = competitorDomains.find((cd) => _hostMatches(host, cd));
+    return d ? d.replace(/\.[a-z.]+$/i, "") : host;
+  };
 
   const agg = new Map();   // host -> { pages:Set, responses:int }
   for (const r of responses) {
@@ -1729,11 +1747,18 @@ export function buildCitationAnalysis(input = {}) {
       const host = _geoHost(url); if (!host) return;
       if (!perCite.has(url)) {
         const cl = classifyCitation(url, { clientDomain, competitorDomains });
+        const _isClient = _hostMatches(host, clientDomain);
+        const _isComp = competitorDomains.some((c) => _hostMatches(host, c));
         perCite.set(url, {
           url, domain: host, engine: r.engine || "", prompt: r.prompt || "",
           first_position: i + 1, published_year: _citationYear(url) || null,
-          is_client: _hostMatches(host, clientDomain),
-          is_competitor: competitorDomains.some((c) => _hostMatches(host, c)),
+          is_client: _isClient,
+          is_competitor: _isComp,
+          // §23 — which brand the citation supports: client brand, the matched competitor
+          // brand, or "" for a third-party (neutral) source.
+          cited_brand: _isClient ? (input.clientName || clientDomain || "") : (_isComp ? _compNameForHost(host) : ""),
+          // §23 — how directly the page relates to the brand/category (direct/indirect/weakly_related).
+          relevance_tier: _relevanceTier(cl.citation_class),
           citation_class: cl.citation_class, source_type: cl.source_type,
           action: cl.action_type, opportunity_score: cl.link_opportunity_score,
           difficulty: cl.link_acquisition_difficulty, authority_score: cl.authority_score,
@@ -1754,11 +1779,76 @@ export function buildCitationAnalysis(input = {}) {
     .slice(0, 10);
   const freshness = _computeFreshness(responses);   // §21 real freshness signal
 
+  // §23 — COMPETITOR CITED PAGES: the actual pages/domains competitors earn citations
+  // from (one row per cited URL where is_competitor), ranked by how often it's cited.
+  const competitor_cited_pages = citations
+    .filter((c) => c.is_competitor)
+    .map((c) => ({
+      cited_brand: c.cited_brand, domain: c.domain, url: c.url,
+      citation_class: c.citation_class, source_type: c.source_type, times_cited: c.times_cited,
+    }))
+    .sort((a, b) => b.times_cited - a.times_cited)
+    .slice(0, 20);
+
+  // §23 — CONTENT REFINEMENT: prompts where the CLIENT brand is MENTIONED in the answer
+  // but the client's own domain is NOT cited. Mention-without-citation = an existing page
+  // to strengthen so it actually earns the citation (the gap between awareness and source).
+  const content_refinement = (() => {
+    if (!input.clientName) return [];
+    const seen = new Set(); const out = [];
+    for (const r of responses) {
+      const answer = String(r.answerText || "");
+      const mentioned = _brandInText(input.clientName, answer) ||
+        (r.brandsMentioned || []).some((b) => _geoNorm(b) === _geoNorm(input.clientName));
+      if (!mentioned) continue;
+      const clientCited = (r.citations || []).some((u) => _hostMatches(_geoHost(u), clientDomain));
+      if (clientCited) continue;                                  // already cited — not a refinement gap
+      const topic = String(r.prompt || "").trim();
+      const dedupe = topic.toLowerCase() || `idx_${out.length}`;
+      if (seen.has(dedupe)) continue; seen.add(dedupe);
+      out.push({
+        topic,
+        prompt: topic,
+        note: `${input.clientName} is mentioned in the ${r.engine || "AI"} answer but your domain isn't cited — strengthen the page behind this topic (answer-first block + schema) so it earns the citation.`,
+      });
+      if (out.length >= 15) break;
+    }
+    return out;
+  })();
+
+  // §25 — COMPETITOR CITATION PATTERNS: per competitor, the source types & domains they
+  // earn citations from (grouped from the per-citation store), so the gap is actionable.
+  const competitor_citation_patterns = (() => {
+    const byComp = new Map();   // cited_brand -> { types:Map, domains:Map, count }
+    for (const c of citations) {
+      if (!c.is_competitor) continue;
+      const key = c.cited_brand || c.domain;
+      if (!byComp.has(key)) byComp.set(key, { competitor: key, types: new Map(), domains: new Map(), citation_count: 0 });
+      const e = byComp.get(key);
+      e.citation_count += c.times_cited;
+      const st = c.source_type || "Other";
+      e.types.set(st, (e.types.get(st) || 0) + c.times_cited);
+      e.domains.set(c.domain, (e.domains.get(c.domain) || 0) + c.times_cited);
+    }
+    const topN = (m, n) => [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k);
+    return [...byComp.values()]
+      .map((e) => ({
+        competitor: e.competitor,
+        top_source_types: topN(e.types, 4),
+        top_domains: topN(e.domains, 5),
+        citation_count: e.citation_count,
+      }))
+      .sort((a, b) => b.citation_count - a.citation_count);
+  })();
+
   return {
     most_cited_domains: classified, client_cited, citation_gap, brand_presence,
     opportunity_queue,                       // §23-24 domain-level backlink/citation queue
     citations: citations.slice(0, 60),       // §23 per-citation (page-level) store
     page_opportunities,                      // §24 page-level opportunity queue
+    competitor_cited_pages,                  // §23 pages/domains competitors earn citations from
+    content_refinement,                      // §23 client mentioned-but-not-cited → pages to strengthen
+    competitor_citation_patterns,            // §25 per-competitor source types/domains they're cited from
     freshness,                               // §21 measured freshness (feeds the GEO score)
     responses_analysed: responses.length,
   };
@@ -1776,6 +1866,16 @@ const _CLASS_AUTHORITY = {
   marketplace: 70, competitor_page: 70, reddit: 70, partner_page: 62,
   forums: 60, communities: 60, comparison_page: 58, resource_page: 56, blog: 50, unknown: 40,
 };
+// §23 — relevance tier per citation_class: how directly the cited page speaks to the
+// brand/category (vs. a tangential community/blog mention). Used on each per-citation record.
+const _RELEVANCE_TIER = {
+  brand_page: "direct", competitor_page: "direct", comparison_page: "direct", educational: "direct", government: "direct",
+  business_directory: "indirect", review_site: "indirect", listings: "indirect", marketplace: "indirect",
+  pr_news: "indirect", resource_page: "indirect", partner_page: "indirect",
+  social_media: "weakly_related", reddit: "weakly_related", communities: "weakly_related",
+  forums: "weakly_related", blog: "weakly_related", unknown: "weakly_related",
+};
+const _relevanceTier = (cls) => _RELEVANCE_TIER[cls] || "weakly_related";
 // HOST rules: [hostRegex, class, source_type, opportunity_score, difficulty, editorial_control, action_type]
 const _CITATION_HOST_RULES = [
   [/(?:^|\.)wikipedia\.org$|(?:^|\.)wikidata\.org$/,                         "wikipedia",          "Encyclopedia",     70, "hard",   "community", "request_correction"],

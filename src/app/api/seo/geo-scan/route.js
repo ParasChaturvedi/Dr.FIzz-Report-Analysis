@@ -55,25 +55,19 @@ export async function POST(req) {
   const brand    = body.brand || body.businessName || domain.split(".")[0];
   const industry = body.industry || "";
   const location = body.location || "";
+  // §16 — state/city context + global. regionLabel weaves city/state into localized
+  // queries; countryCode "global"/"intl"/"" => no residential proxy, un-localized scan.
+  const regionLabel = String(body.regionLabel || [body.city, body.state].filter(Boolean).join(", ") || "").trim();
+  const ccRaw = String(body.countryCode || "in").trim().toLowerCase();
+  const proxyCountry = (ccRaw === "global" || ccRaw === "intl" || ccRaw === "") ? "" : ccRaw;
   const competitors      = (Array.isArray(body.competitors) ? body.competitors : []).map(toName).filter(Boolean).slice(0, 4);
   const competitorDomains = (Array.isArray(body.competitorDomains) && body.competitorDomains.length
     ? body.competitorDomains : competitors).map(normDomain).filter(Boolean).slice(0, 4);
+  const competitorPairs = competitors.map((name, i) => ({ name, domain: competitorDomains[i] || "" }));
   const engineKeys = String(process.env.GEO_INLINE_ENGINES || "aioverviews,perplexity,claude")
     .split(",").map((s) => s.trim()).filter(Boolean);
-  const promptCount = Number(process.env.GEO_PROMPT_COUNT || 20);
 
   try {
-    // ── LOCKED PROMPTS (§17) ──────────────────────────────────────────────────
-    // The SAME 20 prompt templates for EVERY domain (1st scan or 100th) — filled with
-    // this domain's industry + location. Deterministic + zero LLM cost + Share-of-Voice
-    // stays comparable across every business. Brand/competitor-neutral by construction.
-    const prompts = generateGeoPrompts({
-      industry, category: body.category || "", location,
-      keywords: Array.isArray(body.keywords) ? body.keywords : [],   // §17 fallback for {ind}
-      count: promptCount,
-    });
-    const promptObjs = prompts.map((p, i) => ({ id: `gp${i + 1}`, theme: "geo", prompt: p }));
-
     const { data, cached } = await getOrFetch({
       domain, dataType: "geo-visibility", ttlDays: 30, source: "geo-scan", fetchedBy: brand,
       fetchFn: async () => {
@@ -82,12 +76,41 @@ export async function POST(req) {
         // engines always run; a login engine joins automatically once its session exists.
         const sessions = await loadGeoSessions();
         const allEngines = [...new Set([...engineKeys, ...Object.keys(sessions)])];
+
+        // §17 — semantic-clustered prompts (150-250), Claude-generated from the business
+        // signals (cache-miss only). The FULL set is stored for the background job queue;
+        // the inline scan runs the top-N by priority (spanning all clusters), sized to a
+        // query budget so 6 engines don't blow the 300s limit. The queue collects the rest.
+        let generated = [];
+        try {
+          generated = await generateGeoPrompts({
+            industry, category: body.category || "", location, regionLabel,
+            keywords: Array.isArray(body.keywords) ? body.keywords : [],
+            competitorKeywords: Array.isArray(body.competitorKeywords) ? body.competitorKeywords : [],
+            competitors, brand, domain,
+            homepageTitle: body.homepageTitle || "", homepageContent: body.homepageContent || "",
+            searchIntent: body.searchIntent || "", topicGaps: Array.isArray(body.topicGaps) ? body.topicGaps : [],
+          });
+        } catch (e) { console.warn("[geo-scan] prompt generation failed:", e?.message); }
+        if (!Array.isArray(generated) || !generated.length) {
+          generated = (Array.isArray(body.keywords) ? body.keywords : []).slice(0, 20)
+            .map((k, i) => ({ prompt: String(k), cluster: "geo", intent: "fallback", neutral: true, priority: i + 1 }));
+        }
+        const ordered = generated.slice().sort((a, b) => (a.priority || 999) - (b.priority || 999));
+        const QUERY_BUDGET = Number(process.env.GEO_INLINE_QUERY_BUDGET || 90);  // inline must finish in 300s; the job queue collects the full 150-250
+        const inlineCount = Math.max(8, Math.min(
+          Number(process.env.GEO_PROMPT_COUNT || 40),
+          Math.floor(QUERY_BUDGET / Math.max(1, allEngines.length))
+        ));
+        const inline = ordered.slice(0, inlineCount);
+        const promptObjs = inline.map((p, i) => ({ id: `gp${i + 1}`, theme: p.cluster || "geo", intent: p.intent || "", neutral: p.neutral !== false, prompt: p.prompt }));
+
         const scan = await runGeoScan({
           mode: "live", transport: "browserless",
           brand, clientDomain: domain, competitors, competitorDomains,
-          industry, location, proxyCountry: body.countryCode || "in",
+          industry, location, regionLabel, proxyCountry,
           engineKeys: allEngines, sessions,
-          ...(promptObjs.length ? { prompts: promptObjs } : {}),
+          prompts: promptObjs,
         });
         if (!scan?.responses?.length) return null;
 
@@ -117,8 +140,12 @@ export async function POST(req) {
           brandSet: scan.brandSet,
           clientDomain: domain,
           competitorDomains: scan.competitorDomains || competitorDomains,
-          prompts,                       // the neutral prompts actually run (§17)
-          engines: allEngines,           // engines actually measured (no-login + any login session)
+          competitors: competitorPairs,  // §23 — name+domain pairs for citation attribution
+          prompts: inline.map((p) => p.prompt),    // prompts actually run inline this scan
+          all_prompts: ordered,          // §17 — full clustered 150-250 set (job queue collects these)
+          prompt_clusters: [...new Set(ordered.map((p) => p.cluster).filter(Boolean))],
+          engines: allEngines,           // engines actually measured (no-login + login sessions)
+          region: proxyCountry || "global",
           geo_insights,                  // §25 Claude deep analysis (why competitors win + actions)
           errors: (scan.errors || []).map((e) => ({ engine: e.engine, error: e.error })),
         };

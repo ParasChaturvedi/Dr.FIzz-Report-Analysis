@@ -81,16 +81,29 @@ export function buildGeoPrompts({ brand, industry = "your services", marketplace
   return list.map((p, i) => ({ id: `p${i + 1}`, ...p }));
 }
 
+// ── "global" / international detection ────────────────────────────────────────
+// When the caller asks for a borderless/international scan, proxyCountry is empty,
+// "global", or "intl". In that case we SKIP the residential proxy (connect plain)
+// and set NO country gl/locale → an un-localized query. Used by connectBrowserless
+// and the AI-Overview `gl` branch so both honour the international intent.
+function _isGlobal(proxyCountry) {
+  const c = String(proxyCountry == null ? "" : proxyCountry).trim().toLowerCase();
+  return c === "" || c === "global" || c === "intl";
+}
+
 // ── Connect Playwright → Browserless (live mode only) ────────────────────────
 async function connectBrowserless(proxyCountry = "") {
   const token = process.env.BROWSERLESS_TOKEN;
   if (!token) throw new Error("BROWSERLESS_TOKEN is not set — required for the live GEO scan.");
   const base = (process.env.BROWSERLESS_ENDPOINT_BASE || "https://production-sfo.browserless.io").replace(/^http/i, "ws");
   const residential = String(process.env.BROWSERLESS_USE_RESIDENTIAL || "").trim() === "1";
+  // GLOBAL scan → never attach the residential proxy or a country target (plain,
+  // un-localized international IP). Country scan → keep the existing behavior.
+  const global = _isGlobal(proxyCountry);
   // Country-target the residential IP so AI answers match the report's market
   // (verified: &proxy=residential&proxyCountry=in → an India IP).
-  const country = String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "").toLowerCase();
-  const proxyQs = residential ? `&proxy=residential${country ? `&proxyCountry=${country}` : ""}` : "";
+  const country = global ? "" : String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "").toLowerCase();
+  const proxyQs = (residential && !global) ? `&proxy=residential${country ? `&proxyCountry=${country}` : ""}` : "";
   // Browserless kills the session after `timeout` (default ~30s) — too short for a
   // streamed AI answer. Default 60,000 (the free-plan max) covers one query; a paid
   // plan can raise it via BROWSERLESS_TIMEOUT_MS for slow engines. A fresh connection
@@ -147,11 +160,28 @@ async function waitForStableAnswer(page, cfg) {
   return body.replace(/\s+/g, " ").slice(-6000);
 }
 
+// ── §16 DEBUG screenshot (opt-in) ────────────────────────────────────────────
+// Only when GEO_DEBUG_SCREENSHOT === "1": grab a small JPEG of the page as base64
+// so a failed/odd parse can be eyeballed. Off by default (a screenshot costs time
+// + Browserless units). Always best-effort — never throws into the ask flow.
+async function _maybeScreenshot(page) {
+  if (process.env.GEO_DEBUG_SCREENSHOT !== "1") return undefined;
+  try {
+    const buf = await page.screenshot({ type: "jpeg", quality: 40 });
+    return Buffer.from(buf).toString("base64");
+  } catch { return undefined; }
+}
+
 // Page-level ask flow. Works with ANY Playwright context — a Browserless
 // newContext seeded with storageState OR a local persistent-profile context.
 // Owns only the PAGE; the caller owns the context lifecycle.
-async function askInContext(context, cfg, prompt, proxyCountry = "") {
+// `regionLabel` (e.g. "Mumbai, Maharashtra") is an optional STATE/CITY string the
+// caller threads through: the residential proxy is country-level, but the SEARCH /
+// prompt context can carry a finer location — appended to the AI-Overview query so
+// the localized answer reflects the city/state, not just the country.
+async function askInContext(context, cfg, prompt, proxyCountry = "", regionLabel = "") {
   const page = await context.newPage();
+  const _region = String(regionLabel || "").trim();
   // Block heavy resources (images/media/fonts) → slashes residential-proxy
   // bandwidth (the main Browserless cost) and speeds loads. Text + links unaffected.
   if (String(process.env.GEO_BLOCK_HEAVY || "1") === "1") {
@@ -166,23 +196,42 @@ async function askInContext(context, cfg, prompt, proxyCountry = "") {
     // ── Search-type engine (Google AI Overviews): run a Google search and grab
     //    the AI Overview block + its source links. No chat composer. ──
     if (cfg.type === "search") {
-      const country = String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "in").toLowerCase();
-      await page.goto(`${cfg.url}?q=${encodeURIComponent(prompt)}&gl=${country}&hl=en&num=10`, { waitUntil: "domcontentloaded", timeout: 60000 });
+      // GLOBAL → no country gl (un-localized international SERP). Country scan →
+      // keep the existing `gl` (defaults to "in" when no explicit country).
+      const global = _isGlobal(proxyCountry);
+      const country = global ? "" : String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "in").toLowerCase();
+      // Residential proxy is country-level only; fold any finer STATE/CITY label
+      // into the search text so the AI Overview is localized to the city/state.
+      const q = _region ? `${prompt} ${_region}` : prompt;
+      const gp = country ? `&gl=${country}` : "";
+      await page.goto(`${cfg.url}?q=${encodeURIComponent(q)}${gp}&hl=en&num=10`, { waitUntil: "domcontentloaded", timeout: 60000 });
       await page.waitForTimeout(3000);
       try { await page.getByRole("button", { name: /show more/i }).first().click({ timeout: 1500 }); await page.waitForTimeout(1000); } catch {}
       // Extract ONLY the AI Overview block (+ its own source links). If Google shows
       // no AI Overview for this query, contribute NO signal — never scrape the
       // organic results list (that would just be a noisy SERP `site:` check again).
-      const { answerText, citations } = await page.evaluate(() => {
+      // Also return the block's raw HTML (capped) so §16 can audit the parse.
+      const { answerText, citations, raw_html, _matched } = await page.evaluate(() => {
         const sels = ['div[data-attrid="AIOverview"]', '[data-attrid*="AIOverview" i]', 'div[aria-label*="AI Overview" i]', 'div[jsname][data-rl]'];
         let el = null;
         for (const s of sels) { const e = document.querySelector(s); if (e && String(e.innerText || "").trim().length > 40) { el = e; break; } }
-        if (!el) return { answerText: "", citations: [] };
+        if (!el) return { answerText: "", citations: [], raw_html: "", _matched: false };
         const links = Array.from(el.querySelectorAll('a[href^="http"]')).map((a) => a.href)
           .filter((h) => !/google\.|gstatic|youtube\.com\/(redirect|results)|accounts\.|webcache/i.test(h));
-        return { answerText: String(el.innerText || "").slice(0, 8000), citations: [...new Set(links)].slice(0, 30) };
+        return {
+          answerText: String(el.innerText || "").slice(0, 8000),
+          citations: [...new Set(links)].slice(0, 30),
+          raw_html: String(el.innerHTML || el.outerHTML || "").slice(0, 20000),
+          _matched: true,
+        };
       });
-      return { engine: cfg.name, prompt, answerText, citations };
+      // §16 parse_confidence: high when the AI-Overview node was found AND it had
+      // citations; medium when text exists but no citations; low when empty.
+      const parse_confidence = !answerText ? 0.2 : (_matched && citations.length ? 0.9 : 0.5);
+      const screenshot = await _maybeScreenshot(page);
+      const out = { engine: cfg.name, prompt, answerText, citations, raw_html, parse_confidence };
+      if (screenshot) out.screenshot = screenshot;
+      return out;
     }
 
     // Ephemeral entry point (ChatGPT Temporary Chat etc.) → no history / no memory.
@@ -230,13 +279,40 @@ async function askInContext(context, cfg, prompt, proxyCountry = "") {
     // Wait for the assistant turn to APPEAR and stop growing (stream settled),
     // reading only the answer node — never the page chrome or the prompt echo.
     const answerText = await waitForStableAnswer(page, cfg);
-    const citations = await page.evaluate((sel) => {
+    // §16 raw_html: the answer node's innerHTML (capped). `nodeMatched` tells us the
+    // configured answerSel actually matched (so we know whether the text above came
+    // cleanly from the answer node or from the body-tail fallback) → feeds confidence.
+    const { raw_html, nodeMatched } = await page.evaluate((sel) => {
+      if (!sel) return { raw_html: "", nodeMatched: false };
+      let nodes = Array.from(document.querySelectorAll(sel));
+      if (!nodes.length) { // pierce Shadow DOM (same traversal as waitForStableAnswer)
+        const walk = (root) => {
+          try { root.querySelectorAll(sel).forEach((e) => nodes.push(e)); } catch {}
+          root.querySelectorAll("*").forEach((e) => { if (e.shadowRoot) walk(e.shadowRoot); });
+        };
+        walk(document);
+      }
+      if (!nodes.length) return { raw_html: "", nodeMatched: false };
+      const el = nodes[nodes.length - 1];
+      return { raw_html: String(el.innerHTML || el.outerHTML || "").slice(0, 20000), nodeMatched: true };
+    }, cfg.answerSel);
+    const citationsRaw = await page.evaluate((sel) => {
       let root = document.body;
       if (sel) { const n = document.querySelectorAll(sel); if (n.length) root = n[n.length - 1]; }
       return Array.from(root.querySelectorAll('a[href^="http"]')).map((a) => a.href)
         .filter((h) => !/(chatgpt|openai|google\.com|gemini|accounts\.|perplexity\.ai\/?$|microsoft\.com|bing\.com|copilot|claude\.ai|anthropic|gstatic)/i.test(h));
     }, cfg.answerSel);
-    return { engine: cfg.name, prompt, answerText, citations: [...new Set(citations)].slice(0, 30) };
+    const citations = [...new Set(citationsRaw)].slice(0, 30);
+    // §16 parse_confidence: high (0.9) when the answer node matched cleanly AND
+    // citations parsed; medium (0.5) when answer text exists but no citations OR we
+    // fell back off the answer node; low (0.2) when no usable answer at all.
+    const parse_confidence = (!answerText || answerText.length <= 40)
+      ? 0.2
+      : (nodeMatched && citations.length ? 0.9 : 0.5);
+    const screenshot = await _maybeScreenshot(page);
+    const out = { engine: cfg.name, prompt, answerText, citations, raw_html, parse_confidence };
+    if (screenshot) out.screenshot = screenshot;
+    return out;
   } finally {
     await page.close().catch(() => {});
   }
@@ -252,26 +328,29 @@ const _TZ_FOR = { in: "Asia/Kolkata", us: "America/New_York", gb: "Europe/London
 // auth; ChatGPT additionally uses Temporary Chat and every engine opens a fresh chat,
 // so no chat history or account memory is ever read. Account-level memory/activity
 // (e.g. Gemini Apps Activity) must be turned OFF once on each login account.
-async function askEngine(browser, engineKey, prompt, storageState, proxyCountry = "in") {
+async function askEngine(browser, engineKey, prompt, storageState, proxyCountry = "in", regionLabel = "") {
   const cfg = ENGINES[engineKey];
   if (!cfg) throw new Error(`Unknown engine: ${engineKey}`);
   if (cfg.needsSession && !storageState) throw new Error(`${cfg.name}: no logged-in session provided (needs storageState).`);
+  // GLOBAL scan → no country locale: keep the default en-US/UTC-ish neutral context
+  // (UTC timezone) instead of pinning a market tz. Country scan → unchanged.
+  const global = _isGlobal(proxyCountry);
   const context = await browser.newContext({
     storageState: storageState || undefined,
     locale: "en-US",
-    timezoneId: _TZ_FOR[String(proxyCountry || "in").toLowerCase()] || "Asia/Kolkata",
+    timezoneId: global ? "Etc/UTC" : (_TZ_FOR[String(proxyCountry || "in").toLowerCase()] || "Asia/Kolkata"),
     userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
   });
   // No-login engine → guarantee a clean, logged-out, un-personalised session every query.
   if (!storageState) { try { await context.clearCookies(); } catch {} }
-  try { return await askInContext(context, cfg, prompt, proxyCountry); }
+  try { return await askInContext(context, cfg, prompt, proxyCountry, regionLabel); }
   finally { await context.close().catch(() => {}); }
 }
 
 // ── API adapter: Claude via Anthropic SDK + web_search tool ──────────────────
 // Live web access → Claude can actually verify marketplace presence and cite real
 // URLs (not hallucinate). No browser, no session — just the API key.
-async function askClaudeAPI(prompt) {
+async function askClaudeAPI(prompt, regionLabel = "") {
   let Anthropic;
   try { ({ default: Anthropic } = await import("@anthropic-ai/sdk")); }
   catch { throw new Error("@anthropic-ai/sdk not installed — required for the Claude engine."); }
@@ -280,10 +359,16 @@ async function askClaudeAPI(prompt) {
   const model = process.env.GEO_CLAUDE_MODEL || process.env.CLAUDE_MODEL || "claude-sonnet-4-6";
   const client = new Anthropic({ apiKey, timeout: 60000 });
 
+  // The base prompt usually already carries the country location; if a finer
+  // STATE/CITY label is threaded through, fold it into the prompt text (no DOM
+  // here, so location can only live in the prompt for the chat/API transport).
+  const _region = String(regionLabel || "").trim();
+  const askText = _region ? `${prompt}\n\n(Focus on ${_region}.)` : prompt;
+
   const resp = await client.messages.create({
     model,
     max_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
+    messages: [{ role: "user", content: askText }],
     // Server-side web search → real, current, citable answers.
     tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
   });
@@ -300,11 +385,17 @@ async function askClaudeAPI(prompt) {
   }
   // also harvest any bare URLs in the prose
   const bare = (answerText.match(/https?:\/\/[^\s)>\]"'`]+/gi) || []).map((u) => u.replace(/[.,;)]+$/, ""));
+  const finalCitations = [...new Set([...citations, ...bare])]
+    .filter((h) => !/anthropic|claude\.ai/i.test(h)).slice(0, 30);
+  // §16 — no DOM on the API transport → raw_html is "". parse_confidence: high when
+  // an answer came back WITH citations, medium when text but no citations, low when empty.
+  const parse_confidence = !answerText.trim() ? 0.2 : (finalCitations.length ? 0.9 : 0.5);
   return {
     engine: ENGINES.claude.name, prompt,
     answerText: answerText.slice(0, 8000),
-    citations: [...new Set([...citations, ...bare])]
-      .filter((h) => !/anthropic|claude\.ai/i.test(h)).slice(0, 30),
+    citations: finalCitations,
+    raw_html: "",
+    parse_confidence,
   };
 }
 
@@ -340,9 +431,12 @@ function mockResponses({ brandSet, prompts, engineKeys }) {
 // ── Transport: Browserless (hosted browser, production) ──────────────────────
 // A FRESH connection per query: each stays well under the Browserless session
 // timeout AND is fully ephemeral (incognito) — no state bleeds between queries.
-async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry }) {
+async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry, regionLabel = "" }) {
   const responses = [];
   const attempts = Number(process.env.GEO_QUERY_ATTEMPTS) || 2; // one retry by default: absorbs a transient Browserless/Cloudflare blip
+  // §16 region label for the metadata: prefer the explicit STATE/CITY label, else
+  // the country, else "global" for an un-localized international scan.
+  const _regionMeta = String(regionLabel || "").trim() || (_isGlobal(proxyCountry) ? "global" : (proxyCountry || "in"));
   for (const ek of engineKeys) {
     const cfg = ENGINES[ek];
     for (const p of prompts) {
@@ -352,12 +446,13 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry }) 
         let browser;
         try {
           browser = await connectBrowserless(proxyCountry);
-          const _r = await askEngine(browser, ek, p.prompt, sessions[ek], proxyCountry);
+          const _r = await askEngine(browser, ek, p.prompt, sessions[ek], proxyCountry, regionLabel);
           // §16 — capture per-run metadata (timestamp, region, answer length, citation
-          // count, attempts) alongside the raw signal.
+          // count, attempts) alongside the raw signal. raw_html / parse_confidence /
+          // screenshot ride along from `_r` via the spread.
           responses.push({
             ...(_r), ...tag,
-            region: proxyCountry || "in",
+            region: _regionMeta,
             timestamp: new Date().toISOString(),
             answer_length: String(_r?.answerText || "").length,
             citation_count: Array.isArray(_r?.citations) ? _r.citations.length : 0,
@@ -377,13 +472,15 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry }) 
 // ── Transport: LOCAL persistent profiles (.geo-sessions/profile-<engine>) ────
 // Reuses the real Chrome profiles captured by scripts/geo-capture.mjs — already
 // logged in and Cloudflare-cleared. One window per engine, reused across prompts.
-async function _runLocal({ engineKeys, prompts }) {
+async function _runLocal({ engineKeys, prompts, proxyCountry = "", regionLabel = "" }) {
   let chromium;
   try { ({ chromium } = await import("playwright")); }
   catch { throw new Error("playwright (full) not installed — run `npm i -D playwright && npx playwright install chromium` for the local GEO scan."); }
   const path = await import("path");
   const fs = await import("fs");
   const responses = [];
+  // §16 region label for the metadata, mirroring the Browserless transport.
+  const _regionMeta = String(regionLabel || "").trim() || (_isGlobal(proxyCountry) ? "global" : (proxyCountry || "in"));
   for (const ek of engineKeys) {
     const cfg = ENGINES[ek];
     if (!cfg) continue;
@@ -403,11 +500,12 @@ async function _runLocal({ engineKeys, prompts }) {
       await context.addInitScript(() => { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); });
       for (const p of prompts) {
         try {
-          const _r = await askInContext(context, cfg, p.prompt);
+          const _r = await askInContext(context, cfg, p.prompt, proxyCountry, regionLabel);
           // §16 — capture per-run metadata, same fields as the Browserless transport.
+          // raw_html / parse_confidence / screenshot ride along from `_r` via the spread.
           responses.push({
             ...(_r), brand: p.brand, theme: p.theme, promptId: p.id,
-            region: "in",
+            region: _regionMeta,
             timestamp: new Date().toISOString(),
             answer_length: String(_r?.answerText || "").length,
             citation_count: Array.isArray(_r?.citations) ? _r.citations.length : 0,
@@ -424,19 +522,22 @@ async function _runLocal({ engineKeys, prompts }) {
 }
 
 // ── Transport: API engines (Claude) — no browser ────────────────────────────
-async function _runApi({ engineKeys, prompts, proxyCountry }) {
+async function _runApi({ engineKeys, prompts, proxyCountry, regionLabel = "" }) {
   const responses = [];
+  // §16 region label for the metadata, mirroring the Browserless transport.
+  const _regionMeta = String(regionLabel || "").trim() || (_isGlobal(proxyCountry) ? "global" : (proxyCountry || "in"));
   for (const ek of engineKeys) {
     const cfg = ENGINES[ek];
     for (const p of prompts) {
       const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
       try {
         if (ek === "claude") {
-          const _r = await askClaudeAPI(p.prompt);
+          const _r = await askClaudeAPI(p.prompt, regionLabel);
           // §16 — capture per-run metadata, same fields as the Browserless transport.
+          // raw_html ("") / parse_confidence ride along from `_r` via the spread.
           responses.push({
             ...(_r), ...tag,
-            region: proxyCountry || "in",
+            region: _regionMeta,
             timestamp: new Date().toISOString(),
             answer_length: String(_r?.answerText || "").length,
             citation_count: Array.isArray(_r?.citations) ? _r.citations.length : 0,
@@ -455,16 +556,16 @@ async function _runApi({ engineKeys, prompts, proxyCountry }) {
 // ── Unified runner ───────────────────────────────────────────────────────────
 // Splits engines by type: API engines (Claude) run keyless via the SDK; the rest
 // run through the chosen browser transport. Both contribute to the same response set.
-async function _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet }) {
+async function _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet, regionLabel = "" }) {
   if (mode !== "live") return mockResponses({ brandSet, prompts, engineKeys });
   const apiKeys = engineKeys.filter((k) => ENGINES[k]?.type === "api");
   const browserKeys = engineKeys.filter((k) => ENGINES[k] && ENGINES[k].type !== "api");
   const out = [];
-  if (apiKeys.length) out.push(...(await _runApi({ engineKeys: apiKeys, prompts, proxyCountry })));
+  if (apiKeys.length) out.push(...(await _runApi({ engineKeys: apiKeys, prompts, proxyCountry, regionLabel })));
   if (browserKeys.length) {
     out.push(...(transport === "local"
-      ? await _runLocal({ engineKeys: browserKeys, prompts })
-      : await _runBrowserless({ engineKeys: browserKeys, prompts, sessions, proxyCountry })));
+      ? await _runLocal({ engineKeys: browserKeys, prompts, proxyCountry, regionLabel })
+      : await _runBrowserless({ engineKeys: browserKeys, prompts, sessions, proxyCountry, regionLabel })));
   }
   return out;
 }
@@ -482,6 +583,8 @@ export async function runGeoScan(opts = {}) {
     marketplaces = [],
     location = "",
     proxyCountry = "in",    // residential-IP country (matches the report's market)
+    regionLabel = "",       // optional STATE/CITY label (e.g. "Mumbai, Maharashtra"),
+                            // woven into the localized query; proxy stays country-level.
     engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "claude"],
     sessions = {},          // { chatgpt: storageState, gemini: ..., ... }
     prompts: customPrompts,
@@ -491,7 +594,7 @@ export async function runGeoScan(opts = {}) {
   const brandSet = [brand, ...competitors].filter(Boolean);
   const prompts = customPrompts || buildGeoPrompts({ brand, industry, marketplaces, location });
 
-  const responses = await _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet });
+  const responses = await _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet, regionLabel });
 
   return {
     brandSet,
@@ -517,6 +620,7 @@ export async function runMarketplaceScan(opts = {}) {
     competitors = [],
     marketplaces,
     proxyCountry = "in",
+    regionLabel = "",       // optional STATE/CITY label, threaded into localized queries.
     engineKeys = ["chatgpt", "gemini", "aioverviews", "perplexity", "claude"],
     sessions = {},
   } = opts;
@@ -528,7 +632,7 @@ export async function runMarketplaceScan(opts = {}) {
   const prompts = buildMarketplacePrompts({ client: brand, clientSite: site, competitors, marketplaces: mps });
   const brandSet = [brand, ...competitors.map((c) => (typeof c === "string" ? c : c.name))].filter(Boolean);
 
-  const responses = await _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet });
+  const responses = await _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet, regionLabel });
 
   return {
     client: brand,
