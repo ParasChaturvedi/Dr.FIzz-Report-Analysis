@@ -17,9 +17,17 @@
 //    prompts-ready/collection-not-run until Phase-3 browser collection actually runs.
 //  • Current vs targets vs forecasts vs assumptions are separated (#14) — separateKpis.
 // ─────────────────────────────────────────────────────────────────────────────
-import { toEvidenceRec, CONFIDENCE, fmtInt } from "./report-format.js";
+import { toEvidenceRec, CONFIDENCE, fmtInt, fmtNum } from "./report-format.js";
 
 const lc = (s) => String(s || "").toLowerCase().trim();
+const fmtVal = (v) => (v == null || v === "" ? "—" : typeof v === "boolean" ? (v ? "yes" : "no") : typeof v === "number" ? fmtNum(v) : String(v));
+// #4 — opportunity score from real keyword signals (volume + difficulty + intent).
+function opportunityScore({ volume = 0, difficulty = 50, intent = "" } = {}) {
+  const v = Math.min(100, Math.log10(Math.max(10, Number(volume) || 0)) * 22);
+  const d = 100 - Math.min(100, Number(difficulty) || 50);
+  const boost = /transactional|commercial|local/.test(lc(intent)) ? 15 : 0;
+  return Math.round(Math.max(0, Math.min(100, v * 0.45 + d * 0.4 + boost)));
+}
 const clean = (s) => String(s == null ? "" : s).trim().replace(/\s+/g, " ");
 function tokenSet(s) { return new Set(lc(s).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t.length >= 3)); }
 function tokenOverlap(a, b) {
@@ -65,10 +73,75 @@ function validationFor(kind, item = {}) {
   return "Tracked KPI moves toward its 6-month target";
 }
 
+// names of the tracked business competitors (for content benchmark context).
+function competitorNameList(competitors = []) {
+  return (Array.isArray(competitors) ? competitors : [])
+    .map((c) => clean(typeof c === "string" ? c : c?.name || c?.brand || c?.domain || ""))
+    .filter(Boolean).slice(0, 5);
+}
+
+// #6 — Google Business Profile competitor benchmarking → evidence recs. Uses the REAL
+// client-vs-best-competitor numbers from gbp_comparison.field_analysis (no fabrication).
+function gbpRecs(gbp = {}) {
+  const out = [];
+  for (const f of (gbp?.field_analysis || [])) {
+    if (f.client_status !== "behind" && f.client_status !== "missing") continue;
+    const lead = f.best_name ? `${f.best_name} leads with ${fmtVal(f.best_value)}` : "";
+    out.push({ category: "Local SEO — GBP", ...toEvidenceRec({
+      finding: `Google Business Profile "${f.label || f.field}" is ${f.client_status} vs competitors`,
+      evidence: `Your value: ${fmtVal(f.client_value)}.${lead ? ` ${lead}.` : ""}`,
+      competitor_benchmark: f.gap_note || (f.best_name ? `${f.best_name}: ${fmtVal(f.best_value)} vs your ${fmtVal(f.client_value)}` : ""),
+      action: f.improvement || `Update "${f.label || f.field}" on the Google Business Profile`,
+      expected_impact: "Higher GBP completeness → stronger Local Pack ranking + more profile actions",
+      validation_metric: validationFor("gbp", f),
+      priority: f.client_status === "missing" ? "HIGH" : "MEDIUM",
+      confidence: CONFIDENCE.HIGH, owner: "Client", channel: "Client",
+      sources: ["GBP API"],
+    }) });
+  }
+  return out;
+}
+
+// #3 (backlinks) — citation + competitor-link gaps → evidence recs with the REAL platform,
+// domain rating, and which competitors are already listed.
+function backlinkRecs(bl = {}) {
+  const out = [];
+  for (const c of (bl?.citation || bl?.citation_links || [])) {
+    if (c.client_listed) continue;
+    const comp = (c.competitor_names || []).slice(0, 3);
+    out.push({ category: "Authority & Links", ...toEvidenceRec({
+      finding: `Not listed on ${c.platform}${c.domain_rating ? ` (DR ${fmtNum(c.domain_rating)})` : ""}`,
+      evidence: `${fmtInt(c.competitors_listed || 0)} of your competitors are already listed here${comp.length ? `: ${comp.join(", ")}` : ""}. ${c.signal || ""}`.trim(),
+      competitor_benchmark: comp.length ? `Listed: ${comp.join(", ")}` : `${fmtInt(c.competitors_listed || 0)} competitors listed`,
+      action: `Claim / build the ${c.platform} listing${c.listing_url ? ` (${c.listing_url})` : ""}`,
+      expected_impact: "New citation + local-authority signal; closes a gap competitors already use",
+      validation_metric: validationFor("backlink", c),
+      priority: (c.competitors_listed || 0) >= 2 ? "HIGH" : "MEDIUM",
+      confidence: CONFIDENCE.HIGH, channel: "SEO", effort: c.effort_hours || c.effort,
+      sources: ["DataForSEO"],
+    }) });
+  }
+  for (const g of (bl?.competitor_gap || [])) {
+    out.push({ category: "Authority & Links", ...toEvidenceRec({
+      finding: `Competitor backlink gap: ${g.referring_domain}${g.domain_rating ? ` (DR ${fmtNum(g.domain_rating)})` : ""}`,
+      evidence: `${g.referring_domain} links to ${g.links_to || "a competitor"} but not to ${"you"}.`,
+      competitor_benchmark: `${g.referring_domain} → ${g.links_to || "competitor"}`,
+      action: g.approach || `Earn a link from ${g.referring_domain}`,
+      expected_impact: "Referring-domain growth from a source proven relevant to your niche",
+      validation_metric: validationFor("backlink", g),
+      priority: "MEDIUM", confidence: CONFIDENCE.MEDIUM, channel: "SEO",
+      sources: ["DataForSEO"],
+    }) });
+  }
+  return out;
+}
+
 // ── Build the unified, evidence-structured plan from the report's recommendation parts.
-// Each entry is grouped by category and carries all 10 evidence fields.
+// Each entry is grouped by category and carries all 10 evidence fields. Track 2 plugs in
+// real competitor / GBP / backlink / keyword-intent data via the same framework.
 export function buildEvidencePlan(parts = {}, crawlData = null) {
   const crawlPages = Array.isArray(crawlData?.pages) ? crawlData.pages : (Array.isArray(parts.crawlPages) ? parts.crawlPages : []);
+  const competitorNames = competitorNameList(parts.competitors);
   const recs = [];
 
   // Technical SEO (#12 — implementation-ready: affected counts, validation)
@@ -104,18 +177,28 @@ export function buildEvidencePlan(parts = {}, crawlData = null) {
     const action = ex.exists
       ? `Optimise the EXISTING page (${ex.url}${ex.indexed === false ? " — currently noindex" : ""}) for this intent: tighten the title/H1, expand depth, add internal links. Do NOT build a duplicate.`
       : `Build a new ${p.asset_type || (p._kind === "geo" ? p.page_type : "page")}: "${label}" (${p.url_slug || "/" + lc(label).replace(/\s+/g, "-")})`;
+    // #4 — keyword intent mapping: intent + funnel stage + opportunity + page type.
+    const opp = opportunityScore({ volume: p.primary_volume, difficulty: p.keyword_difficulty, intent: p.intent_class });
+    const intentBits = [
+      p.intent_class && `Intent: ${p.intent_class}`,
+      p.funnel_role && `Funnel: ${p.funnel_role}`,
+      p.primary_volume != null && `Demand ≈ ${fmtInt(p.primary_volume)}/mo`,
+      `Opportunity ${opp}/100`,
+    ].filter(Boolean).join(" · ");
     recs.push({ category, ...toEvidenceRec({
       finding,
-      evidence: p.commercial_reason || p.why_separate_page || p.search_intent || (p.primary_volume != null ? `Search demand ≈ ${fmtInt(p.primary_volume)} searches/mo (${p.intent_class || "intent"})` : ""),
+      evidence: [clean(p.commercial_reason || p.why_separate_page || p.search_intent || ""), intentBits].filter(Boolean).join(" — "),
       action,
       expected_impact: `Capture the "${clean(p.keyword_cluster || label)}" demand → new ranking + organic traffic` + (p._kind === "commercial" ? " on a conversion page" : ""),
       validation_metric: validationFor("content", p),
-      competitor_benchmark: "", // filled in Track 2 (competitor ranking URL for this term)
+      // honest competitor context — names the tracked rivals; exact per-keyword ranking URL
+      // needs competitor SERP data (collected in the Track-2 data pipeline), not invented.
+      competitor_benchmark: competitorNames.length ? `Tracked competitors in this space: ${competitorNames.join(", ")} (per-keyword ranking URL added once competitor SERP data is collected)` : "",
       priority: p.priority,
       confidence: ex.exists ? CONFIDENCE.HIGH : CONFIDENCE.MEDIUM,
       channel: "Content",
       sources: ["DataForSEO"],
-    }), page_exists: ex.exists, existing_url: ex.url || null, search_volume: p.primary_volume ?? null });
+    }), page_exists: ex.exists, existing_url: ex.url || null, search_volume: p.primary_volume ?? null, intent: p.intent_class || null, funnel_stage: p.funnel_role || null, opportunity_score: opp, suggested_page_type: p.asset_type || p.page_type || null });
   }
 
   // Strategy / GEO actions from the priority plan
@@ -136,6 +219,10 @@ export function buildEvidencePlan(parts = {}, crawlData = null) {
       }), tier: tier.tier });
     }
   }
+
+  // Track 2 — GBP competitor benchmarking (#6) + backlink/citation gaps (#3), real data.
+  recs.push(...gbpRecs(parts.gbp_comparison));
+  recs.push(...backlinkRecs(parts.backlinks));
 
   // group + order by impact then confidence
   const order = { High: 0, Medium: 1, Low: 2 };

@@ -2688,7 +2688,7 @@ export function runBusinessLogic(input = {}) {
     // Track 1.2 — evidence-first execution layer (all the above recommendations, each
     // restructured into the 10-field evidence format; existing-page checks applied so we
     // never recommend a page that already exists).
-    evidence_plan: buildEvidencePlan({ technical_issues, content_architecture, priority_action_plan }, crawlData),
+    evidence_plan: buildEvidencePlan({ technical_issues, content_architecture, priority_action_plan, gbp_comparison, backlinks, competitors: comparableCompetitors }, crawlData),
     // #14 — current metrics vs targets vs forecasts vs assumptions, kept separate.
     kpi_breakdown: separateKpis(kpis),
     // #9 — honest GEO state (planned / methodology-ready / prompts-ready / collection-not-run).
