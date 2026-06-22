@@ -75,8 +75,16 @@ export async function POST(req) {
         // §15/§19 — pull any login-engine session (ChatGPT/Gemini/Copilot) stored
         // server-side (env GEO_SESSION_* or Mongo via /api/seo/geo-session). No-login
         // engines always run; a login engine joins automatically once its session exists.
-        const sessions = await loadGeoSessions();
-        const allEngines = [...new Set([...engineKeys, ...Object.keys(sessions)])];
+        // Login-gated engines (ChatGPT/Gemini/Copilot) auto-join when a session exists, BUT
+        // they are slow browser sessions that overran the 300s inline limit in live testing
+        // (→ a perpetual "Pending live scan"). So they are OFF by default; the no-login set
+        // (AI Overview, Perplexity, Claude) is fast, ~60% cheaper, and needs no session
+        // upkeep. Set GEO_USE_LOGIN_ENGINES=1 to opt back into all 6 (once timing allows).
+        const useLoginEngines = String(process.env.GEO_USE_LOGIN_ENGINES || "0").trim() === "1";
+        const sessions = useLoginEngines ? await loadGeoSessions() : {};
+        const allEngines = useLoginEngines
+          ? [...new Set([...engineKeys, ...Object.keys(sessions)])]
+          : engineKeys;
 
         // §17 — ~20-25 DETAILED clustered prompts, Claude-generated from the business
         // signals (cache-miss only), sized to capture 100% of the GEO data WITHOUT the cost
