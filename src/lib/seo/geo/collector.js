@@ -488,8 +488,14 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry, re
       responses[i] = await runOne(tasks[i]);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, tasks.length || 1) }, worker));
-  return responses.filter(Boolean);   // drop un-run slots from the time-guard; cache the real responses collected
+  // HARD cap: the launch-guard above stops TAKING new tasks, but Promise.all still waits for
+  // in-flight queries — and a single hung Browserless connect can block the return past the
+  // 300s function limit (→ the function is killed and nothing caches → "Pending live scan").
+  // This race abandons any stragglers so the scan ALWAYS returns the real responses it has.
+  const workers = Array.from({ length: Math.min(CONCURRENCY, tasks.length || 1) }, worker);
+  const hardCap = new Promise((res) => setTimeout(res, Number(process.env.GEO_SCAN_HARD_MS || 200000)));
+  await Promise.race([Promise.all(workers), hardCap]);
+  return responses.filter(Boolean);   // real responses collected so far (stragglers abandoned)
 }
 
 // ── Transport: LOCAL persistent profiles (.geo-sessions/profile-<engine>) ────
