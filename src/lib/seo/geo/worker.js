@@ -20,10 +20,23 @@ import { computeGeoMetrics } from "./geoScoring.js";
 import { loadGeoSessions } from "./sessions.js";
 import { resolveExecutionProvider, applyExecutionEnv } from "./executionProvider.js";
 import { getEngineAdapters, runnableEngines, blockedEngines, statusToErrorType } from "./engineAdapters.js";
+import { generateGeoStorytelling } from "./geoStorytelling.js";
 import {
   getGeoProject, getGeoPrompts, getGeoRun, updateGeoRun,
-  saveRunResult, saveEngineMetrics, saveOverallMetrics, claimNextGeoJob, logGeoError,
+  saveRunResult, saveEngineMetrics, saveOverallMetrics, saveStorytelling, claimNextGeoJob, logGeoError,
 } from "./model/geoStore.js";
+
+// citation breakdown from the parsed results (feeds the storytelling + report detail).
+function citationAnalysisFromParsed(parsed = []) {
+  const agg = {}; let brand = 0, comp = 0, third = 0;
+  for (const r of parsed) for (const c of (r.citations || [])) {
+    if (c.is_brand_domain) brand++; else if (c.is_competitor_domain) comp++; else third++;
+    const d = c.cited_domain; if (!d) continue;
+    agg[d] = agg[d] || { domain: d, count: 0, type: c.is_brand_domain ? "brand" : c.is_competitor_domain ? "competitor" : "third_party" };
+    agg[d].count++;
+  }
+  return { total: brand + comp + third, brand, competitor: comp, third_party: third, top_source_domains: Object.values(agg).sort((a, b) => b.count - a.count).slice(0, 10) };
+}
 
 const ENGINE_KEY_BY_NAME = Object.fromEntries(Object.entries(ENGINES).map(([k, v]) => [String(v.name || "").toLowerCase(), k]));
 const nowIso = () => new Date().toISOString();
@@ -127,6 +140,14 @@ export async function runGeoJob(run, opts = {}) {
   const metrics = computeGeoMetrics(parsed, ctx);
   await saveEngineMetrics(runId, metrics.engines.map((e) => ({ engine: e, ...metrics.by_engine[e] })));
   await saveOverallMetrics(runId, { ...metrics.overall, share_of_voice: metrics.share_of_voice, engines: metrics.engines });
+
+  // ── Claude storytelling FROM the real collected data (only when there are results) ──
+  if (saved > 0) {
+    try {
+      const sections = await generateGeoStorytelling({ brand, competitors, metrics, parsed, citationAnalysis: citationAnalysisFromParsed(parsed), domain: brandDomain });
+      if (sections.length) await saveStorytelling(runId, projectId, sections);
+    } catch (e) { try { console.warn("[geo-worker] storytelling:", e?.message); } catch {} }
+  }
 
   const status = stopped ? "partial" : (saved > 0 ? ((failed > 0 || blocked.length) ? "partial" : "completed") : "failed");
   await updateGeoRun(runId, {

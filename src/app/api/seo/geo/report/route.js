@@ -112,6 +112,8 @@ export async function GET(req) {
       citation_analysis: { total: citationDocs.length, brand: citeBrand, competitor: citeComp, third_party: citeThird, top_source_domains },
       sentiment_summary,
       collection_health: { results_saved: results.length, errors: errs.length, by_engine: Object.values(errByEngine) },
+      // Claude storytelling generated FROM the collected data (#10) — empty until generated.
+      storytelling: (bundle.storytelling || []).map((s) => ({ section_key: s.section_key, title: s.title, body: s.body, order: s.order })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
       by_engine: bundle.metrics?.by_engine || [],
       share_of_voice: overall.share_of_voice || null,
       prompts_executed,

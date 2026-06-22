@@ -629,6 +629,21 @@ function GeoLiveSection({ domain, fallbackStatus = null }) {
           Partial collection — {live.run.completed_count} of {live.run.prompt_count} prompt×engine results captured. Showing only what was actually measured.
         </div>
       )}
+      {/* Claude storytelling — deep analysis of the REAL collected GEO data (#10) */}
+      {Array.isArray(live.storytelling) && live.storytelling.length > 0 && (
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <Lbl>What the AI engines say about you — analysis</Lbl>
+          <div className="space-y-3 mt-1">
+            {live.storytelling.map((s, i) => (
+              <div key={i}>
+                {s.title && <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "13.5px", color: INK, marginBottom: 2 }}>{s.title}</div>}
+                <p style={{ fontFamily: BODY, fontSize: "13px", lineHeight: 1.6, color: "#4A4A4A" }}>{s.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="rounded-lg bg-white p-5" style={cardB}>
         <div className="flex items-baseline gap-3 flex-wrap mb-2"><Lbl>GEO Score</Lbl><span style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "26px", color: INK }}>{o.geo_score}<span style={{ fontSize: "13px", color: "#8A8A8A" }}>/100</span></span><span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: ORANGE, color: "#fff" }}>{band}</span></div>
         <div className="flex flex-wrap gap-x-4 gap-y-1" style={{ fontFamily: BODY, fontSize: "12px", color: "#5A5A5A" }}>
