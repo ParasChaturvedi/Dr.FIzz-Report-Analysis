@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { fmtNum, metricWithSource } from "@/lib/seo/report-format";
 
 // ═══════════════════════════════════════════════════════════════════
 // UTILITY COMPONENTS
@@ -560,14 +561,9 @@ export default function WebsiteReport({ data }) {
     ? new Date(d.generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
-  // Clean integer formatting for counts (rounds stray floats like 1289.367 → "1,289",
-  // adds thousands separators). Leaves pre-formatted strings ("1.3K") and "—" untouched.
-  const fmt = (v) => {
-    if (v == null || v === "") return "—";
-    const n = typeof v === "number" ? v : Number(String(v).replace(/[, ]/g, ""));
-    if (!isFinite(n)) return String(v);
-    return Math.round(n).toLocaleString("en-US");
-  };
+  // Consistent compact formatting (#17) — 1,248.774 → "1.25K", 3.4M, no stray precision.
+  // Small counts (<1000) stay as plain integers. Delegates to the shared report-format util.
+  const fmt = (v) => fmtNum(v);
 
   return (
     <div id="report-content" className="bg-white text-gray-900 antialiased" style={{ fontFamily: BODY }}>
@@ -623,18 +619,20 @@ export default function WebsiteReport({ data }) {
               data.doctorFizz.v2_additions.formatted_baseline[].plain_language (via
               plainFor), falling back to the local PLAIN_LANGUAGE map. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <MetricCard value={bm.domainRating ?? "—"} label="Domain Authority" sub={plainFor("Domain Authority", fbMap, "Overall site authority")} accent="orange" />
-            <MetricCard value={fmt(bm.organicTraffic)} label="Organic Traffic" sub={plainFor("Organic Traffic", fbMap, "Est. visits / month")} accent="orange" />
-            <MetricCard value={fmt(bm.organicKeywords)} label="Organic Keywords" sub={plainFor("Organic Keywords", fbMap, "Terms you rank for")} accent="orange" />
-            <MetricCard value={bm.performanceMobile != null ? `${bm.performanceMobile}/100` : "—"} label="Mobile Speed" sub={plainFor("Mobile Speed", fbMap, "Google PageSpeed")} accent={bm.performanceMobile != null && bm.performanceMobile < 50 ? "orange" : "ink"} />
-            <MetricCard value={bm.performanceDesktop != null ? `${bm.performanceDesktop}/100` : "—"} label="Desktop Speed" sub={plainFor("Desktop Speed", fbMap, "Google PageSpeed")} />
-            <MetricCard value={bm.lcp != null ? `${(Number(bm.lcp) / 1000).toFixed(1)}s` : "—"} label="LCP" sub={plainFor("LCP", fbMap, "how long the main content takes to load")} />
-            <MetricCard value={bm.cls != null ? Number(bm.cls).toFixed(3) : "—"} label="CLS" sub={plainFor("CLS", fbMap, "how much the page jumps around while loading")} />
-            <MetricCard value={fmt(bm.backlinks)} label="Total Backlinks" sub={plainFor("Total Backlinks", fbMap, "Inbound links (Moz)")} />
-            <MetricCard value={fmt(bm.referringDomains)} label="Referring Domains" sub={plainFor("Referring Domains", fbMap, "Sites linking to you")} />
-            <MetricCard value={fmt(bm.errors404)} label="404 Errors" sub={plainFor("404 Errors", fbMap, "Broken pages")} accent={Number(bm.errors404) > 0 ? "orange" : "ink"} />
-            <MetricCard value={crawlHealth != null ? `${crawlHealth}/100` : "—"} label="Site Health" sub={plainFor("Site Health", fbMap, "Crawl health score")} />
-            <MetricCard value={gmbScore != null ? `${gmbScore}/100` : "—"} label="GMB Completeness" sub={plainFor("GMB Completeness", fbMap, "Google Business Profile")} />
+            {/* Canonical terminology (Domain Rating, not "Domain Authority") + each metric
+                tagged with its data source (#15/#16). Sub = plain-language gloss · source. */}
+            <MetricCard value={bm.domainRating ?? "—"} label="Domain Rating" sub={`${plainFor("Domain Authority", fbMap, "0–100 link authority")} · Moz`} accent="orange" />
+            <MetricCard value={fmt(bm.organicTraffic)} label="Organic Traffic" sub={`${plainFor("Organic Traffic", fbMap, "Est. visits / month")} · DataForSEO`} accent="orange" />
+            <MetricCard value={fmt(bm.organicKeywords)} label="Organic Keywords" sub={`${plainFor("Organic Keywords", fbMap, "Terms you rank for")} · DataForSEO`} accent="orange" />
+            <MetricCard value={bm.performanceMobile != null ? `${bm.performanceMobile}/100` : "—"} label="Mobile Performance" sub={`${plainFor("Mobile Speed", fbMap, "Google PageSpeed")} · Lighthouse`} accent={bm.performanceMobile != null && bm.performanceMobile < 50 ? "orange" : "ink"} />
+            <MetricCard value={bm.performanceDesktop != null ? `${bm.performanceDesktop}/100` : "—"} label="Desktop Performance" sub={`${plainFor("Desktop Speed", fbMap, "Google PageSpeed")} · Lighthouse`} />
+            <MetricCard value={bm.lcp != null ? `${(Number(bm.lcp) / 1000).toFixed(1)}s` : "—"} label="LCP" sub={`${plainFor("LCP", fbMap, "how long the main content takes to load")} · Lighthouse`} />
+            <MetricCard value={bm.cls != null ? Number(bm.cls).toFixed(3) : "—"} label="CLS" sub={`${plainFor("CLS", fbMap, "how much the page jumps around while loading")} · Lighthouse`} />
+            <MetricCard value={fmt(bm.backlinks)} label="Total Backlinks" sub={`${plainFor("Total Backlinks", fbMap, "Total inbound links")} · DataForSEO`} />
+            <MetricCard value={fmt(bm.referringDomains)} label="Referring Domains" sub={`${plainFor("Referring Domains", fbMap, "Unique linking domains")} · DataForSEO`} />
+            <MetricCard value={fmt(bm.errors404)} label="404 Errors" sub={`${plainFor("404 Errors", fbMap, "Broken pages")} · Doctor Fizz crawler`} accent={Number(bm.errors404) > 0 ? "orange" : "ink"} />
+            <MetricCard value={crawlHealth != null ? `${crawlHealth}/100` : "—"} label="Site Health" sub={`${plainFor("Site Health", fbMap, "Crawl health score")} · Doctor Fizz crawler`} />
+            <MetricCard value={gmbScore != null ? `${gmbScore}/100` : "—"} label="GMB Completeness" sub={`${plainFor("GMB Completeness", fbMap, "Google Business Profile")} · GBP API`} />
           </div>
 
           {/* Plain-language narration of the baseline (data.doctorFizz.story.the_situation) */}
@@ -647,7 +645,7 @@ export default function WebsiteReport({ data }) {
           {/* KEY TAKEAWAY — grounded in the numbers above */}
           <div className="mt-6">
             <DarkCallout label="Key Takeaway">
-              {domain} sits at Domain Authority {bm.domainRating ?? "—"} with {fmt(bm.organicTraffic)} organic visits a month across {fmt(bm.organicKeywords)} ranking keywords{bm.performanceMobile != null ? `, on a ${bm.performanceMobile}/100 mobile speed score` : ""}. {bm.errors404 ? `${fmt(bm.errors404)} broken pages and the technical base must be fixed first` : "The technical base must be solid first"} — then content and authority gains compound on top.
+              {domain} sits at Domain Rating {bm.domainRating ?? "—"} (Moz) with {fmt(bm.organicTraffic)} organic visits a month across {fmt(bm.organicKeywords)} ranking keywords{bm.performanceMobile != null ? `, on a ${bm.performanceMobile}/100 mobile performance score` : ""}. {bm.errors404 ? `${fmt(bm.errors404)} broken pages and the technical base must be fixed first` : "The technical base must be solid first"} — then content and authority gains compound on top.
             </DarkCallout>
           </div>
         </AnimatedSection>
