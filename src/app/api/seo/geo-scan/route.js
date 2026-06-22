@@ -21,6 +21,7 @@ import { loadGeoSessions } from "@/lib/seo/geo/sessions";
 import { generateGeoPrompts } from "@/lib/seo/geo/prompt-generator";
 import { buildGeoMetrics, buildShareOfVoice } from "@/lib/seo/doctor-fizz-logic";
 import { claudeChat } from "@/lib/claude/client";
+import { logUsage } from "@/lib/cache/usage";
 
 // §25 — Claude explains WHY competitors win + what to do; raw metrics come from us.
 const GEO_ANALYST_SYS = `You are a senior GEO (Generative Engine Optimization) analyst. You are given a brand's AI-visibility metrics, competitor share-of-voice, and sample AI answers. Explain the competitive picture and what to do. Be specific and grounded ONLY in the data provided — do not invent numbers.
@@ -118,6 +119,14 @@ export async function POST(req) {
           prompts: promptObjs,
         });
         if (!scan?.responses?.length) return null;
+
+        // Cost meter: the GEO scan's Browserless queries aren't otherwise tracked, so log
+        // an estimate (prompts × engines × per-query cost) → the per-report cost meter is
+        // accurate. GEO_QUERY_COST_USD defaults to a conservative $0.02/residential query.
+        try {
+          const _queries = promptObjs.length * allEngines.length;
+          await logUsage({ domain, api: "geo-browserless", costUSD: _queries * Number(process.env.GEO_QUERY_COST_USD || 0.02), cached: false });
+        } catch {}
 
         // §25 — ONE Claude deep-analysis pass (cached 30 days with the scan) that
         // explains WHY competitors win + what to do. Raw metrics stay deterministic;

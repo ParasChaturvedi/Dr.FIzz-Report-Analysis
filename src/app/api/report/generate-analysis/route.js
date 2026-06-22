@@ -290,6 +290,7 @@ async function generateWebsiteAnalysis({ domain, keywords, competitors, business
 You produce ruthlessly specific, data-backed strategy for real businesses. Every item must reference the client's actual data — industry, keywords, competitors, domain metrics.
 Rules:
 - ANALYZE FIRST: before writing anything, deeply read ALL the metrics provided below (domain rating, organic traffic & keywords, mobile/desktop PSI, site-health/crawl, schema coverage, GMB rating/reviews/completeness, and the real keyword-gap data). Identify THIS site's specific weaknesses and opportunities, then make every recommendation address a concrete finding and cite the actual number/fact from the data. Never give a recommendation the data does not justify, and never output generic boilerplate.
+- AUDIENCE & STYLE: write for a NON-TECHNICAL small-business owner with ZERO SEO knowledge. Use plain, everyday English. The FIRST time you use any SEO term (schema, canonical, backlink, crawl, indexing, SoV, E-E-A-T, etc.), add a 2–4 word plain explanation in parentheses. Be CONCISE and SHORT — punchy, scannable, no filler, no repetition; the reader must NOT get bored. Make each recommendation a tiny guide: WHAT to do, WHY it matters (tie it to their actual number), and HOW (one concrete step). Encouraging and clear, never intimidating or jargon-heavy.
 - Return STRICT JSON matching the exact schema below.
 - Keyword volumes: use realistic industry estimates (format: "2K–5K/mo", "800/mo"). Never use "—" for volumes.
 - Content blueprint vol/pos: realistic estimates like "1.2K/mo", "Top 5".

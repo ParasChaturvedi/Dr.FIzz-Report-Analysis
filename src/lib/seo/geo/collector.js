@@ -470,17 +470,23 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry, re
   };
 
   const CONCURRENCY = Math.max(1, Number(process.env.GEO_CONCURRENCY) || 6);
+  // TIME GUARD: stop launching NEW queries past this deadline so the scan always returns
+  // within the 300s function limit. The report then shows REAL (partial) Share-of-Voice
+  // from whatever completed — never a perpetual "Pending live scan" caused by a timeout.
+  const start = Date.now();
+  const DEADLINE_MS = Number(process.env.GEO_SCAN_DEADLINE_MS || 240000);
   const responses = new Array(tasks.length);
   let next = 0;
   const worker = async () => {
     while (true) {
+      if (Date.now() - start > DEADLINE_MS) return;        // time-guard hit → stop taking new tasks
       const i = next++;
       if (i >= tasks.length) return;
       responses[i] = await runOne(tasks[i]);
     }
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, tasks.length || 1) }, worker));
-  return responses;
+  return responses.filter(Boolean);   // drop un-run slots from the time-guard; cache the real responses collected
 }
 
 // ── Transport: LOCAL persistent profiles (.geo-sessions/profile-<engine>) ────

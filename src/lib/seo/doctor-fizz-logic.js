@@ -2779,85 +2779,84 @@ export function buildStoryNarrative(input = {}) {
 
   // 01 — THE SITUATION  ·  OnIt "The Baseline" + "The Honest Assessment".
   story.the_situation = [
-    `${name} draws ${t} organic traffic from ${k} ranking keywords today${invisible ? " — effectively invisible in Google" : ""}${has(dr) ? `, on a Domain Rating of ${dr}` : ""}.`,
-    `Near-zero is an advantage: no penalty history, the commercial space wide open — the plan reverse-engineers the competitors already ranking.`,
+    `You rank for ${k} keywords and get ${t} monthly visits${invisible ? " — essentially invisible on Google" : " — barely visible"}${has(dr) ? `. Domain Rating ${dr} (site trust)` : ""}.`,
+    `Good news: a clean slate, no penalties. The plan targets the terms competitors already win.`,
   ];
 
   // 02 — THE OPPORTUNITY
   story.the_opportunity = [
-    `${has(totalDemand) ? `About ${n(totalDemand)} searches a month are up for grabs and barely reach you` : `Real commercial demand sits uncaptured today`} — even ${leaderRef} hasn't cracked the commercial rankings.`,
+    `${has(totalDemand) ? `${n(totalDemand)} searches a month are up for grabs` : `Real demand is going uncaptured`} — even ${leaderRef} hasn't locked down these rankings.`,
     (commercialPages || geoPages)
-      ? `To own it: build ${commercialPages ? `${commercialPages} commercial service pages` : `commercial service pages`}${geoPages ? ` and ${geoPages} location pages` : ""}.`
+      ? `To win it, build ${commercialPages ? `${commercialPages} service pages` : `service pages`}${geoPages ? ` and ${geoPages} location pages` : ""}.`
       : null,
   ].filter(Boolean);
 
   // 03 — WHAT IS BLOCKING GROWTH
   story.whats_blocking_growth = [
-    `${hasBroken ? "Broken pages and redirect chains" : "Technical errors"} make the site hard to crawl, so it ${invisible ? "stays invisible" : "barely ranks"} — ${k} keywords, ${t} visitors a month.${hasBlocked ? " Robots.txt hides key content too." : ""}`,
+    `${hasBroken ? "Broken pages and redirects" : "Technical errors"} make your site hard for Google to read, so it ${invisible ? "stays invisible" : "barely ranks"}.${hasBlocked ? " Robots.txt is also hiding key pages." : ""}`,
     (lowTrust || speedBad || reviewGap)
-      ? `Weak signals stack up${lowTrust ? `${has(dr) ? ` — DR ${dr}` : " — low authority"}${has(refDomains) ? `, ${n(refDomains)} referring domains` : ""}` : ""}${speedBad ? `${lowTrust ? "," : " —"} a ${lcpSec}s load (vs <2.5s)` : ""}${reviewGap ? `${(lowTrust || speedBad) ? "," : " —"} ${clientReviews} vs ${n(compReviews)} reviews` : ""} — keeping you off tougher terms.`
-      : `Each weak signal compounds the next.`,
-    `Fix the foundation first; everything else compounds on it.`,
+      ? `Weak signals add up:${lowTrust ? `${has(dr) ? ` trust (DR ${dr})` : " low authority"}${has(refDomains) ? `, ${n(refDomains)} linking sites` : ""}` : ""}${speedBad ? `${lowTrust ? "," : ""} a slow ${lcpSec}s load (aim under 2.5s)` : ""}${reviewGap ? `${(lowTrust || speedBad) ? "," : ""} only ${clientReviews} reviews vs ${n(compReviews)}` : ""}. Fix the foundation first.`
+      : `Fix the foundation first — everything else builds on it.`,
   ].filter(p => p && p.trim());
 
   // 04 — WHO COMPETES
   story.who_competes = [
-    `The strategy reverse-engineers the competitors already ranking${theirEdges ? ` — ${theirEdges} strength${theirEdges === 1 ? "" : "s"} to match` : ""}${yourEdges ? ` and ${yourEdges} gap${yourEdges === 1 ? "" : "s"} to exploit` : ""}.`,
-    `The big platforms are interceptors, not rivals — unbeatable nationally, but wide open in the local map pack and on hyper-local long-tail terms.`,
+    `We copy what the ranking competitors do right${theirEdges ? ` — ${theirEdges} strength${theirEdges === 1 ? "" : "s"} to match` : ""}${yourEdges ? ` and ${yourEdges} gap${yourEdges === 1 ? "" : "s"} to exploit` : ""}.`,
+    `Big platforms win nationally but leave the local map and long-tail searches wide open — that's where you win.`,
   ];
 
   // 05 — WHERE DEMAND SITS
   story.where_demand_sits = [
-    `${acceptedKw ? `Your ${acceptedKw} target keywords split` : `Demand splits`} into three tiers, each needing its own kind of page.`,
-    `Tier 1 — commercial buyer-intent (landing pages); Tier 2 — hyper-local terms (match the local leader); Tier 3 — informational blogs that build authority.`,
+    `${acceptedKw ? `Your ${acceptedKw} target keywords fall` : `Demand falls`} into three buckets, each needing its own page type.`,
+    `1: ready-to-buy searches (service pages). 2: local "near me" terms (location pages). 3: questions people ask (blogs that build trust).`,
   ];
 
   // 06 — WHAT PAGES NEED TO EXIST
   story.what_pages_needed = [
     (commercialPages || geoPages || blogPages)
-      ? `Build ${commercialPages} commercial service pages, ${geoPages} location pages, and ${blogPages} blog post${blogPages === 1 ? "" : "s"}.`
-      : `Here is the recommended site structure.`,
-    `Each location page needs the city in its H1, title and meta with unique local content — never a template. One page, one intent.`,
+      ? `Build ${commercialPages} service pages, ${geoPages} location pages, and ${blogPages} blog post${blogPages === 1 ? "" : "s"}.`
+      : `Here's the page structure to build.`,
+    `Every location page needs the city name in its heading and real local content — never a copy-paste template.`,
   ];
 
   // 07 — WHAT MUST BE FIXED FIRST
   story.what_to_fix_first = [
-    `Fix before you build — search engines read technical signals before a single word of content.`,
-    `${hasBroken ? "First, clear the broken pages and redirect chains" : (topTech ? `First, fix ${topTech.issue}` : "Start with the most critical issues")}${hasBlocked ? " and anything blocked in robots.txt" : ""}; then tighten titles, H1s and meta.`,
-    `Every page: 800–1,500 unique words, JSON-LD + FAQ schema, internal links${speedBad ? `, and a sub-2.5s load (yours is ${lcpSec}s)` : `, and a sub-2.5s load`}.`,
+    `Fix before you build — Google checks the technical basics before it reads your content.`,
+    `${hasBroken ? "Clear the broken pages and redirects" : (topTech ? `Fix ${topTech.issue}` : "Start with the most critical issues")}${hasBlocked ? " and unblock robots.txt" : ""}, then tighten page titles and headings.`,
+    `Every page needs solid content, FAQ markup, internal links${speedBad ? `, and a load under 2.5s (yours is ${lcpSec}s)` : `, and a fast load under 2.5s`}.`,
   ];
 
   // 08 — HOW AUTHORITY WILL BE BUILT
   story.how_authority_built = [
-    `Authority means raising Domain Rating${has(dr) ? ` from ${dr}` : ""}${drTargetLow ? ` toward 25–35 within twelve months` : ` with steady link building`}.`,
-    `Start with NAP citations (months 1–2), then content-driven links from local press and partners (2–4), then an ongoing link-gap against the leader.`,
+    `Authority means lifting Domain Rating (site trust)${has(dr) ? ` from ${dr}` : ""}${drTargetLow ? ` to 25–35 within a year` : ` with steady link building`}.`,
+    `Start with business directory listings, then earn links from local press and partners, then keep closing the gap on the leader.`,
   ];
 
   // 09 — LOCAL VISIBILITY
   story.local_visibility = [
-    `The map pack drives most local calls — your Google Business Profile is the single highest-impact win.`,
+    `Most local calls come from Google's map results, so your Google Business Profile is the biggest quick win.`,
     `${reviewGap
-        ? `Reviews are the top signal — ${clientReviews} vs the leader's ${n(compReviews)}${reviewLeader?.name ? ` (${reviewLeader.name})` : ""}; target 100+ in six months.`
-        : `Reviews are the top local signal; target 100+ in six months.`}`,
-    `Verify the listing, add every service, 20+ photos, set service areas, post weekly, and request a review after every job.`,
+        ? `Reviews matter most — you have ${clientReviews} vs the leader's ${n(compReviews)}${reviewLeader?.name ? ` (${reviewLeader.name})` : ""}. Aim for 100+ in six months.`
+        : `Reviews matter most — aim for 100+ in six months.`}`,
+    `Verify the listing, add every service and 20+ photos, post weekly, and ask for a review after every job.`,
   ];
 
   // 10 — GEO / AI VISIBILITY
   story.geo_ai_visibility = [
-    `The next frontier is GEO — being cited in AI answers like ChatGPT and Google AI Overviews${aiZero ? `, where you have zero citations today` : ""}.`,
-    `Earn citations with FAQ schema (5–8 Q&As per service page), authoritative mentions, and real E-E-A-T signals — author bios, a founder story, consistent NAP.`,
+    `The next frontier is getting named in AI answers like ChatGPT and Google's AI Overviews${aiZero ? ` — where you appear zero times today` : ""}.`,
+    `Win mentions with FAQ markup, citations from trusted sites, and proof you're real — author bios, a founder story, consistent contact details.`,
   ];
 
   // 11 — PRIORITY PLAN
   story.priority_plan = [
-    `In order: week one — fix the technical issues and optimise the Google Business Profile; months 1–3 — build the commercial and location pages; ongoing — acquire reviews.`,
-    `Blog content, links and AI citations compound on that foundation — which is why it comes first.`,
+    `Week one: fix technical issues and the Google Business Profile. Months 1–3: build the service and location pages. Ongoing: collect reviews.`,
+    `Blogs, links and AI mentions all build on that base — so the foundation comes first.`,
   ];
 
   // 12 — WHAT GOOD LOOKS LIKE
   story.what_good_looks_like = [
-    `Tracked monthly: ${has(uplift6) ? `~${n(uplift6)} organic visits by month six` : `organic visits climb steadily`}${has(uplift12) ? `, ~${n(uplift12)} by month twelve${enquiries12 ? ` and ~${n(enquiries12)} new enquiries` : ""}` : ""}${has(dr) && drTargetLow ? `, DR rising from ${dr} toward 25–35` : ""}${aiZero ? `, AI citations from zero into double digits` : ""}.`,
-    `These are directional targets — outcomes depend on the changes actually being implemented.`,
+    `Where this heads: ${has(uplift6) ? `~${n(uplift6)} visits by month six` : `steady growth in visits`}${has(uplift12) ? `, ~${n(uplift12)} by month twelve${enquiries12 ? ` and ~${n(enquiries12)} new enquiries` : ""}` : ""}${has(dr) && drTargetLow ? `, trust rising from ${dr} toward 25–35` : ""}${aiZero ? `, AI mentions climbing from zero` : ""}.`,
+    `These are targets, not promises — results depend on the work actually getting done.`,
   ];
 
   return story;
