@@ -909,14 +909,18 @@ export default function Step5Slide2({
       // Competitor Audit must run before Keyword Gap — the gap analysis compares
       // the client's keywords against the competitors' keywords.
       // ── Competitor Audit ──────────────────────────────────────────────────
-      let allCompetitors = [
-        ...(competitorData?.businessCompetitors || []),
-        ...(competitorData?.searchCompetitors   || []),
-      ].slice(0, 4);
+      // BUSINESS competitors drive ALL deep competitor analysis (GMB audit,
+      // keyword gap, GEO share-of-voice). Search competitors (SERP aggregators,
+      // directories, review sites) are kept SEPARATE — their off-topic keyword
+      // profiles would pollute the gap analysis — so they never enter here.
+      let allCompetitors = (competitorData?.businessCompetitors || [])
+        .map((c) => (typeof c === "string" ? c : c?.domain || c?.name))
+        .filter(Boolean)
+        .slice(0, 4);
 
-      // Fallback: if no competitors were selected/persisted (Step 5 skipped, or the
-      // suggestion returned empty), auto-discover them now so the report's competitor
-      // analysis never goes blank.
+      // Fallback: if no business competitors were selected/persisted (Step 5
+      // skipped, or the suggestion returned empty), auto-discover REAL business
+      // competitors now so the report's competitor analysis never goes blank.
       if (allCompetitors.length === 0) {
         try {
           updateStage("competitorAudit", { state: "loading", value: "Finding competitors…" }, { force: true });
@@ -935,10 +939,14 @@ export default function Step5Slide2({
           });
           if (sg.ok) {
             const sj = await sg.json();
-            allCompetitors = [
-              ...(Array.isArray(sj?.businessCompetitors) ? sj.businessCompetitors : []),
-              ...(Array.isArray(sj?.searchCompetitors)   ? sj.searchCompetitors   : []),
-            ].map((c) => (typeof c === "string" ? c : c?.domain || c?.name)).filter(Boolean).slice(0, 4);
+            allCompetitors = (Array.isArray(sj?.businessCompetitors) ? sj.businessCompetitors : [])
+              .map((c) => (typeof c === "string" ? c : c?.domain || c?.name)).filter(Boolean).slice(0, 4);
+            // Last resort only: if STILL no business competitors exist, borrow the
+            // search list so the audit isn't blank (degraded — clearly not ideal).
+            if (allCompetitors.length === 0) {
+              allCompetitors = (Array.isArray(sj?.searchCompetitors) ? sj.searchCompetitors : [])
+                .map((c) => (typeof c === "string" ? c : c?.domain || c?.name)).filter(Boolean).slice(0, 4);
+            }
           }
         } catch (e) { console.warn("[Step5] competitor auto-discover failed:", e?.message); }
       }

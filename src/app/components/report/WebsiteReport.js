@@ -427,7 +427,7 @@ export default function WebsiteReport({ data }) {
 
             {(cl.nationalPlatforms || []).length > 0 && (
               <>
-                <div className="uppercase mb-4" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", letterSpacing: "0.2em", color: "#7A7A7A" }}>National Platforms Intercepting Search</div>
+                <div className="uppercase mb-4" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", letterSpacing: "0.2em", color: "#7A7A7A" }}>National Competitors</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
                   {cl.nationalPlatforms.map((p, i) => (
                     <div key={i} className="flex items-start gap-4 bg-white rounded-lg p-4" style={{ border: "1px solid #E5E5E5" }}>

@@ -285,6 +285,7 @@ Rules:
 - Describe the client and its competitors by their ACTUAL category from the data. NEVER invent size/type descriptors like "boutique", "small", "startup", or "niche" unless the data explicitly supports them.
 - The provided "Industry" hint can be WRONG (it is a manual dropdown). Determine the client's REAL industry from the homepage title/content provided and use THAT throughout — never describe the business as something the website clearly is not.
 - contentArchitecture.siteStructure must list ONLY NEW pages the site should BUILD to capture keyword gaps / uncovered services — do NOT list pages that already exist (Homepage, About, Contact, existing service pages). Each entry maps to a real keyword opportunity.
+- competitorLandscape.localCompetitors AND nationalPlatforms must BOTH be REAL businesses that DIRECTLY compete with the client (same offering, comparable tier) — draw them from the "Competitors listed" above. localCompetitors = local/regional rivals; nationalPlatforms = the same kind of direct competitor operating at national scale. NEVER list search aggregators, directories, marketplaces, review sites, or listing platforms (e.g. Justdial, Sulekha, Clutch, GoodFirms, Techreviewer, Yelp) — those are search intermediaries, NOT business competitors, and must never appear here.
 - Every keyword, competitor, and recommendation MUST be genuinely relevant to what THIS business actually offers. If a data point looks irrelevant to the business, DROP it — do not include it just to fill the list.
 - Do NOT give generic advice. Every sentence must be specific to THIS business.`;
 
@@ -341,8 +342,8 @@ Return ONLY this JSON (no markdown, no commentary):
       {"name": "...", "domain": "...", "description": "...", "strength": "..."}
     ],
     "nationalPlatforms": [
-      {"name": "...", "description": "why they intercept ${industry} searches", "threat": "High/Medium"},
-      {"name": "...", "description": "...", "threat": "..."}
+      {"name": "real national-scale competitor (NOT an aggregator/directory)", "domain": "...", "description": "why this national competitor is a threat to ${domain}", "threat": "High/Medium"},
+      {"name": "...", "domain": "...", "description": "...", "threat": "..."}
     ],
     "localOpening": "2–3 sentences on the specific local opportunity for ${domain} given the competitor landscape"
   },
@@ -824,7 +825,12 @@ export async function POST(request) {
       aiSections = await generateWebsiteAnalysis({
         domain,
         keywords,
-        competitors,
+        // Competitor landscape (local + national) is built from BUSINESS competitors
+        // ONLY — real direct rivals, never SERP aggregators/directories. Falls back
+        // to the merged list only if no business competitors were found at all.
+        competitors: (Array.isArray(businessCompetitors) && businessCompetitors.length)
+          ? businessCompetitors
+          : competitors,
         businessData,
         seoData: {
           dr:               dr             != null ? String(dr)           : "—",
