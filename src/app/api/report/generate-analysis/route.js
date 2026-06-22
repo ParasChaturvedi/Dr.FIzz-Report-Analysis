@@ -18,6 +18,7 @@ import { fetchPsiForStrategy } from "@/lib/seo/psi";
 import { fetchMozMetrics } from "@/lib/seo/moz/client";
 import { runBusinessLogic } from "@/lib/seo/doctor-fizz-logic";
 import { runQaGate } from "@/lib/seo/doctor-fizz-qa";
+import { getSiteProfile } from "@/lib/claude/pipeline";
 
 export const runtime     = "nodejs";
 export const maxDuration = 300; // PSI alone can take 90-120 s; Claude adds another 30-60 s
@@ -182,22 +183,57 @@ function buildLocalSearchFromGmb(gmbData) {
   return { gbpChecklist: checklist.slice(0, 8), reviewTarget };
 }
 
-function buildKeywordTiersFromGap(keywordGapData) {
+// Relevance vocabulary — the strongest signals of what the business ACTUALLY is:
+// the user-selected keywords, declared services, and the real homepage title. Used to
+// drop off-topic gap keywords (e.g. "live location", "good colleges in pune for mba")
+// that a competitor happens to rank for but have nothing to do with the client.
+function buildNicheVocab({ businessData, userKeywords, crawlRaw }) {
+  const STOP = new Set("the a an of for in on to and or with your you our we is are this that best top near me services service company companies agency agencies india usa uk 2023 2024 2025 2026 how what why which can do does cost price guide list".split(/\s+/));
+  const homepageTitle = crawlRaw?.pages?.[0]?.metaTitle || crawlRaw?.pages?.[0]?.title || crawlRaw?.homepage?.title || "";
+  const src = [
+    ...(Array.isArray(userKeywords) ? userKeywords : []),
+    businessData?.category, businessData?.specificService, businessData?.offeringType,
+    businessData?.offering, businessData?.industry, businessData?.industrySector,
+    ...(Array.isArray(businessData?.coreServices) ? businessData.coreServices : []),
+    homepageTitle,
+  ].filter(Boolean).join(" ").toLowerCase();
+  const vocab = new Set();
+  for (const w of src.replace(/[^a-z0-9 ]+/g, " ").split(/\s+/)) {
+    if (w.length >= 3 && !STOP.has(w)) vocab.add(w);
+  }
+  return vocab;
+}
+function _kwRelevant(keyword, vocab, exclusions) {
+  const kw = String(keyword || "").toLowerCase();
+  if (!kw) return false;
+  for (const ex of (exclusions || [])) { const e = String(ex || "").toLowerCase().trim(); if (e && kw.includes(e)) return false; }
+  if (!vocab || !vocab.size) return true;                       // no signal → don't over-filter
+  const words = kw.replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(Boolean);
+  return words.some((w) => vocab.has(w));                       // share ≥1 meaningful token
+}
+
+function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions) {
   if (!keywordGapData) return null;
   const fmtVol = (v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K/mo` : v > 0 ? `${v}/mo` : "<100/mo";
+  const rel = (k) => _kwRelevant(k?.keyword ?? k?.question ?? k, vocab, exclusions);
+  // Commercial/transactional/local intent = a real PAGE to build; only true info → blog.
+  const pageType = (intent) =>
+    ["transactional", "commercial", "local", "navigational"].includes(String(intent || "").toLowerCase())
+      ? "Service/Landing Page" : "Blog/Guide";
 
-  const tier1 = (keywordGapData.easyWins || []).slice(0, 5).map(k => ({
+  const tier1 = (keywordGapData.easyWins || []).filter(rel).slice(0, 8).map(k => ({
     keyword:        k.keyword,
     volume:         fmtVol(k.volume),
-    targetPageType: k.intent === "transactional" ? "Service/Landing Page" : k.intent === "commercial" ? "Comparison Page" : "Blog/Guide",
+    targetPageType: pageType(k.intent),
   }));
 
   const localKws = (keywordGapData.gapKeywords || [])
     .filter(k => k.intent === "local" || k.intent === "transactional")
-    .slice(0, 5)
+    .filter(rel)
+    .slice(0, 6)
     .map(k => k.keyword);
 
-  const infoKws = (keywordGapData.paaQuestions || []).slice(0, 5).map(q => q.question);
+  const infoKws = (keywordGapData.paaQuestions || []).filter(rel).slice(0, 6).map(q => q.question);
 
   if (!tier1.length && !localKws.length) return null;
   return { tier1, tier2Neighborhood: localKws, tier3Informational: infoKws };
@@ -246,7 +282,10 @@ Rules:
 - Keyword volumes: use realistic industry estimates (format: "2K–5K/mo", "800/mo"). Never use "—" for volumes.
 - Content blueprint vol/pos: realistic estimates like "1.2K/mo", "Top 5".
 - Do NOT mention Claude, Anthropic, or any AI tool by name.
-- Describe the client and its competitors by their ACTUAL category from the data (use the client's stated industry, e.g. "digital marketing agency"). NEVER invent size/type descriptors like "boutique", "small", "startup", or "niche" unless the data explicitly supports them.
+- Describe the client and its competitors by their ACTUAL category from the data. NEVER invent size/type descriptors like "boutique", "small", "startup", or "niche" unless the data explicitly supports them.
+- The provided "Industry" hint can be WRONG (it is a manual dropdown). Determine the client's REAL industry from the homepage title/content provided and use THAT throughout — never describe the business as something the website clearly is not.
+- contentArchitecture.siteStructure must list ONLY NEW pages the site should BUILD to capture keyword gaps / uncovered services — do NOT list pages that already exist (Homepage, About, Contact, existing service pages). Each entry maps to a real keyword opportunity.
+- Every keyword, competitor, and recommendation MUST be genuinely relevant to what THIS business actually offers. If a data point looks irrelevant to the business, DROP it — do not include it just to fill the list.
 - Do NOT give generic advice. Every sentence must be specific to THIS business.`;
 
   const domainCtx = seoData ? `
@@ -283,7 +322,8 @@ KEYWORD GAP (real competitor data):
 
 BUSINESS PROFILE:
   Domain:    ${domain}
-  Industry:  ${industry}
+  Industry hint (MAY BE WRONG — verify from the homepage title): ${industry}
+  Homepage title (the REAL business — use this to determine the true industry): ${crawlData?.pages?.[0]?.metaTitle || crawlData?.pages?.[0]?.title || "(not captured)"}
   Offering:  ${businessData?.offeringType || "services"}
   Keywords:  ${primaryKw}
   Competitors listed: ${competitorList}
@@ -308,7 +348,7 @@ Return ONLY this JSON (no markdown, no commentary):
   },
   "contentArchitecture": {
     "siteStructure": [
-      {"page": "Homepage", "url": "/", "purpose": "..."},
+      {"page": "New page to build (must NOT already exist)", "url": "/new-page-slug", "purpose": "the keyword gap / uncovered service this NEW page captures"},
       {"page": "...", "url": "/slug", "purpose": "..."},
       {"page": "...", "url": "/slug", "purpose": "..."},
       {"page": "...", "url": "/slug", "purpose": "..."},
@@ -548,6 +588,24 @@ export async function POST(request) {
       return NextResponse.json({ id: randomUUID(), reportType, data: _cachedReport });
     }
 
+    // ── Authoritative industry from the LIVE site ────────────────────────────────
+    // The onboarding industry is a manual dropdown that's frequently wrong (e.g.
+    // "Technology & Software" for a digital-marketing agency). A wrong industry poisons
+    // the GEO prompts and the whole narrative, so detect the REAL one from the site and
+    // override it for everything downstream (report framing + GEO prompts).
+    if (reportType === "website" && businessData && typeof businessData === "object") {
+      try {
+        const { profile } = await getSiteProfile({ input: domain, industry: businessData?.industry || "", location: businessData?.location || "" });
+        if (profile?.industry) {
+          if (businessData.industry && profile.industry.toLowerCase() !== String(businessData.industry).toLowerCase())
+            console.log(`[generate-analysis] industry corrected: "${businessData.industry}" → "${profile.industry}"`);
+          businessData.industry = profile.industry;
+          businessData.industrySector = profile.industry;
+          if (profile.primaryOffering && !businessData.offering) businessData.offering = profile.primaryOffering;
+        }
+      } catch (e) { console.warn("[generate-analysis] industry detect failed:", e?.message); }
+    }
+
     const keywords = Array.isArray(keywordData)
       ? keywordData.map((k) => (typeof k === "string" ? k : k?.label)).filter(Boolean)
       : [];
@@ -675,7 +733,8 @@ export async function POST(request) {
 
     const realTechnical     = buildTechnicalPrioritiesFromCrawl(crawlRaw);
     const realLocalSearch   = buildLocalSearchFromGmb(gmbRaw);
-    const realKwTiers       = buildKeywordTiersFromGap(kwGapRaw);
+    const _nicheVocab       = buildNicheVocab({ businessData, userKeywords: keywords, crawlRaw });
+    const realKwTiers       = buildKeywordTiersFromGap(kwGapRaw, _nicheVocab, negativeExclusions);
     const measuringSuccessRows = buildMeasuringSuccessRows(baselineMetrics, crawlRaw, gmbRaw);
 
     // ── STAGE 3: Doctor Fizz business logic layer ─────────────────────────────
