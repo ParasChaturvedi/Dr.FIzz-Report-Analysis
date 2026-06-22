@@ -18,6 +18,7 @@
 import { getOrFetch } from "@/lib/cache/mongo";
 import { runGeoScan } from "@/lib/seo/geo/collector";
 import { loadGeoSessions } from "@/lib/seo/geo/sessions";
+import { enqueueGeoJob } from "@/lib/seo/geo/queue";
 import { generateGeoPrompts } from "@/lib/seo/geo/prompt-generator";
 import { buildGeoMetrics, buildShareOfVoice } from "@/lib/seo/doctor-fizz-logic";
 import { claudeChat } from "@/lib/claude/client";
@@ -135,7 +136,7 @@ export async function POST(req) {
           if (m) geo_insights = JSON.parse(m[0]);
         } catch (e) { console.warn("[geo-scan] Claude analysis failed:", e?.message); }
 
-        return {
+        const _geoPayload = {
           responses: scan.responses,
           brandSet: scan.brandSet,
           clientDomain: domain,
@@ -146,9 +147,25 @@ export async function POST(req) {
           prompt_clusters: [...new Set(ordered.map((p) => p.cluster).filter(Boolean))],
           engines: allEngines,           // engines actually measured (no-login + login sessions)
           region: proxyCountry || "global",
+          collection_progress: { done: inline.length, total: ordered.length, complete: ordered.length <= inline.length },
           geo_insights,                  // §25 Claude deep analysis (why competitors win + actions)
           errors: (scan.errors || []).map((e) => ({ engine: e.engine, error: e.error })),
         };
+        // §17 — enqueue the REMAINDER (beyond the inline top-N) so the background worker
+        // collects the full 150-250 across cron ticks. Seeds with the inline responses, so
+        // the geo-visibility cache grows from here as each batch completes.
+        if (ordered.length > inline.length) {
+          try {
+            await enqueueGeoJob({
+              domain, brand, clientDomain: domain,
+              competitors, competitorDomains, competitorPairs,
+              engines: allEngines, proxyCountry, regionLabel, industry, location,
+              prompts: ordered, cursor: inline.length, seedResponses: scan.responses,
+              brandSet: scan.brandSet, geo_insights,
+            });
+          } catch (e) { console.warn("[geo-scan] enqueue remainder failed:", e?.message); }
+        }
+        return _geoPayload;
       },
     });
     return Response.json({ geo: data, cached: Boolean(cached) });
