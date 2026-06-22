@@ -65,9 +65,20 @@ export function applyExecutionEnv(plan, run = {}) {
   // residential proxy ONLY when the plan enabled it (cost guard)
   set("BROWSERLESS_USE_RESIDENTIAL", plan.residentialProxy ? "1" : "0");
   if (plan.proxyCountry) set("BROWSERLESS_PROXY_COUNTRY", plan.proxyCountry);
-  // concurrency + retry limits from the run config (#7)
+  // concurrency limit from the run config (#7)
   if (run.concurrency_limit) set("GEO_CONCURRENCY", Math.max(1, Math.min(12, Number(run.concurrency_limit) || 4)));
-  if (run.max_retries != null) set("GEO_QUERY_ATTEMPTS", Math.max(1, (Number(run.max_retries) || 0) + 1));
+  // RETRIES — at least 3 attempts so transient Cloudflare/Browserless blips don't drop a
+  // prompt (complete collection). max_retries can raise it further.
+  set("GEO_QUERY_ATTEMPTS", Math.max(3, (Number(run.max_retries) || 0) + 1));
+  // ── NO SCAN-LEVEL TIMEOUT on the worker ──
+  // The worker is NOT on Vercel's 300s function limit. The collector's default 170s
+  // "stop taking new tasks" deadline + 200s hard cap would SKIP prompts on a large run —
+  // wrong here. Raise both to effectively unlimited so EVERY prompt × engine completes,
+  // and give slow engines more time per query. A very high hard cap remains only as a
+  // last-resort against a fully hung process. All overridable via GEO_WORKER_* env.
+  set("GEO_SCAN_DEADLINE_MS", String(process.env.GEO_WORKER_SCAN_DEADLINE_MS || 21600000));   // 6h — don't stop taking tasks
+  set("GEO_SCAN_HARD_MS", String(process.env.GEO_WORKER_SCAN_HARD_MS || 21900000));            // 6h05 — last-resort only
+  set("BROWSERLESS_TIMEOUT_MS", String(process.env.GEO_WORKER_QUERY_TIMEOUT_MS || 120000));    // 120s per query (slow answers render fully)
   // screenshots only on error/debug (never "always" from a normal run)
   set("GEO_SCREENSHOT", run.screenshot_mode === "always" ? "1" : "0");
   return () => { for (const [k, v] of Object.entries(prev)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } };

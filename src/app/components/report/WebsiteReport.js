@@ -656,6 +656,61 @@ function GeoLiveSection({ domain, fallbackStatus = null }) {
         </div>
       )}
 
+      {/* measured counts — brand mentions, citations, sentiment */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {live.mentions_summary && (
+          <div className="rounded-lg bg-white p-4" style={cardB}>
+            <Lbl>Brand mentions</Lbl>
+            <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "22px", color: INK }}>{live.mentions_summary.prompts_with_brand}<span style={{ fontSize: 13, color: "#8A8A8A" }}>/{live.mentions_summary.prompts_total} answers</span></div>
+            <div style={{ fontFamily: BODY, fontSize: 11, color: "#5A5A5A", marginTop: 2 }}>{live.mentions_summary.brand_mentions} brand vs {live.mentions_summary.competitor_mentions} competitor mentions</div>
+          </div>
+        )}
+        {live.citation_analysis && (
+          <div className="rounded-lg bg-white p-4" style={cardB}>
+            <Lbl>Citations</Lbl>
+            <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "22px", color: INK }}>{live.citation_analysis.total}</div>
+            <div style={{ fontFamily: BODY, fontSize: 11, color: "#5A5A5A", marginTop: 2 }}>{live.citation_analysis.brand} brand · {live.citation_analysis.competitor} competitor · {live.citation_analysis.third_party} third-party</div>
+          </div>
+        )}
+        {live.sentiment_summary && (
+          <div className="rounded-lg bg-white p-4" style={cardB}>
+            <Lbl>Sentiment (brand)</Lbl>
+            <div style={{ fontFamily: BODY, fontSize: 12, color: "#5A5A5A", marginTop: 8 }}>
+              <span style={{ color: "#2F7D32" }}>▲ {live.sentiment_summary.positive}</span> positive · {live.sentiment_summary.neutral} neutral · <span style={{ color: "#B3261E" }}>▼ {live.sentiment_summary.negative}</span> negative
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* §21 GEO score breakdown — the 7 weighted signals */}
+      {live.score_breakdown?.signals && Object.keys(live.score_breakdown.signals).length > 0 && (
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <Lbl>GEO score breakdown (§21 weighted signals, 0–100)</Lbl>
+          <div className="space-y-1.5 mt-2">
+            {Object.entries(live.score_breakdown.signals).map(([k, v]) => (
+              <div key={k} className="flex items-center gap-2">
+                <div style={{ flex: "0 0 184px", fontFamily: BODY, fontSize: 11.5, color: "#5A5A5A", textTransform: "capitalize" }}>{k.replace(/_/g, " ")}</div>
+                <div style={{ flex: 1, height: 8, background: "#F0F0F0", borderRadius: 4, overflow: "hidden" }}><div style={{ width: `${Math.max(0, Math.min(100, Number(v) || 0))}%`, height: "100%", background: ORANGE }} /></div>
+                <div style={{ flex: "0 0 34px", textAlign: "right", fontFamily: BODY, fontSize: 11.5, fontWeight: 700, color: INK }}>{v}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* most-cited source domains */}
+      {live.citation_analysis?.top_source_domains?.length > 0 && (
+        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>Most-cited sources — which domains the AI engines cite</Lbl></div>
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}><th style={thS}>Source domain</th><th style={{ ...thS, textAlign: "right" }}>Citations</th><th style={{ ...thS, textAlign: "right" }}>Type</th></tr></thead>
+            <tbody>{live.citation_analysis.top_source_domains.map((d, i) => (
+              <tr key={i} style={{ background: i % 2 ? "#fff" : "#F7F7F7" }}><td style={cell}>{d.domain}</td><td style={{ ...cell, textAlign: "right" }}>{d.count}</td><td style={{ ...cell, textAlign: "right", color: d.type === "brand" ? "#2F7D32" : d.type === "competitor" ? "#B3261E" : "#8A8A8A" }}>{String(d.type).replace("_", " ")}</td></tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+
       <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
         <div className="px-3 pt-3"><Lbl>Per-engine results</Lbl></div>
         <table className="w-full border-collapse">
@@ -677,6 +732,18 @@ function GeoLiveSection({ domain, fallbackStatus = null }) {
               {p.answer && <div style={{ fontFamily: BODY, fontSize: "12px", color: "#5A5A5A", marginTop: 4, lineHeight: 1.5 }}>{String(p.answer).slice(0, 320)}{p.answer.length > 320 ? "…" : ""}</div>}
             </div>
           ))}</div>
+        </div>
+      )}
+
+      {live.collection_health?.errors > 0 && (
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <Lbl>Collection health</Lbl>
+          <div style={{ fontFamily: BODY, fontSize: 12, color: "#5A5A5A", marginTop: 2 }}>{live.collection_health.results_saved} answers collected · {live.collection_health.errors} failed.</div>
+          {live.collection_health.by_engine?.length > 0 && (
+            <div className="mt-2 space-y-1">{live.collection_health.by_engine.map((e, i) => (
+              <div key={i} style={{ fontFamily: BODY, fontSize: 11.5, color: "#9A6A12" }}>{e.engine}: {e.count} failed ({Object.entries(e.types || {}).map(([t, n]) => `${n} ${String(t).replace(/_/g, " ")}`).join(", ")})</div>
+            ))}</div>
+          )}
         </div>
       )}
 

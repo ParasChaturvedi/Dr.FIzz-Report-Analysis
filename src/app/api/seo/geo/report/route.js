@@ -69,24 +69,53 @@ export async function GET(req) {
     // NOT measured → planned/queued/running/session_required/failed: NO numbers (#9).
     if (!geo_status.measured) return Response.json(base);
 
-    // measured → real collected data, prompt-wise + engine-wise + overall (#9/#10).
+    // measured → FULL real collected data, in maximum detail (#9/#10).
     const overall = bundle.metrics?.overall || {};
-    const prompts_executed = (bundle.results || []).map((r) => ({
+    const results = bundle.results || [];
+    const citationDocs = bundle.citations || [];
+    const errs = bundle.errors || [];
+
+    const prompts_executed = results.map((r) => ({
       prompt_id: r.prompt_id, prompt: r.raw_prompt, engine: r.engine,
       executed_at: r.created_at, version: r.version,
+      brand_mentioned: !!r.brand_mentioned, brand_mention_count: r.brand_mention_count || 0, competitor_mention_count: r.competitor_mention_count || 0,
       citation_count: r.citation_count || 0, source_domains: r.source_domains || [],
-      answer_structure: r.answer_structure, parse_confidence: r.parse_confidence,
+      answer_structure: r.answer_structure, sentiment: r.sentiment || null, parse_confidence: r.parse_confidence,
       ...(withAnswers ? { answer: String(r.rendered_text || "").slice(0, 4000) } : {}),
     }));
+
+    // citation analysis — brand vs competitor vs third-party + the most-cited domains (#9)
+    const domainAgg = {};
+    let citeBrand = 0, citeComp = 0, citeThird = 0;
+    for (const c of citationDocs) {
+      if (c.is_brand_domain) citeBrand++; else if (c.is_competitor_domain) citeComp++; else citeThird++;
+      const d = c.cited_domain || ""; if (!d) continue;
+      domainAgg[d] = domainAgg[d] || { domain: d, count: 0, type: c.is_brand_domain ? "brand" : c.is_competitor_domain ? "competitor" : "third_party" };
+      domainAgg[d].count++;
+    }
+    const top_source_domains = Object.values(domainAgg).sort((a, b) => b.count - a.count).slice(0, 20);
+
+    // sentiment summary (only where the brand was mentioned with directional language)
+    const sentiment_summary = { positive: 0, neutral: 0, negative: 0 };
+    for (const r of results) { if (r.sentiment && sentiment_summary[r.sentiment] != null) sentiment_summary[r.sentiment]++; }
+
+    // collection health — what succeeded / what failed and why (transparency)
+    const errByEngine = {};
+    for (const e of errs) { const k = e.engine || "?"; (errByEngine[k] = errByEngine[k] || { engine: k, count: 0, types: {} }); errByEngine[k].count++; const t = e.error_type || "other"; errByEngine[k].types[t] = (errByEngine[k].types[t] || 0) + 1; }
 
     return Response.json({
       ...base,
       run: { ...base.run, completed_at: run.completed_at, engines: run.engines || run.selected_engines, prompt_count: run.prompt_count, completed_count: run.completed_count, failed_count: run.failed_count },
-      overall: { geo_score: overall.geo_score, sov: overall.sov, competitor_sov: overall.competitor_sov, mention_rate: overall.mention_rate, citation_rate: overall.citation_rate, engines_tested: overall.engines_tested },
+      overall: { geo_score: overall.geo_score, sov: overall.sov, competitor_sov: overall.competitor_sov, mention_rate: overall.mention_rate, citation_rate: overall.citation_rate, engines_tested: overall.engines_tested, citation_position_score: overall.citation_position_score, brand_mentions: overall.brand_mentions, competitor_mentions: overall.competitor_mentions, brand_citations: overall.brand_citations, competitor_citations: overall.competitor_citations },
+      score_breakdown: { signals: overall.signals || {}, cross_engine_consistency: overall.signals?.cross_engine_consistency ?? null },
+      mentions_summary: { brand_mentions: overall.brand_mentions || 0, competitor_mentions: overall.competitor_mentions || 0, prompts_with_brand: results.filter((r) => r.brand_mentioned).length, prompts_total: results.length },
+      citation_analysis: { total: citationDocs.length, brand: citeBrand, competitor: citeComp, third_party: citeThird, top_source_domains },
+      sentiment_summary,
+      collection_health: { results_saved: results.length, errors: errs.length, by_engine: Object.values(errByEngine) },
       by_engine: bundle.metrics?.by_engine || [],
       share_of_voice: overall.share_of_voice || null,
       prompts_executed,
-      citations: (bundle.citations || []).map((c) => ({ engine: c.engine, prompt_id: c.prompt_id, cited_domain: c.cited_domain, cited_url: c.cited_url, citation_order: c.citation_order, is_brand_domain: c.is_brand_domain, is_competitor_domain: c.is_competitor_domain })),
+      citations: citationDocs.map((c) => ({ engine: c.engine, prompt_id: c.prompt_id, cited_domain: c.cited_domain, cited_url: c.cited_url, citation_order: c.citation_order, is_brand_domain: c.is_brand_domain, is_competitor_domain: c.is_competitor_domain })),
     });
   } catch (e) {
     return Response.json({ ok: false, error: String(e?.message || e).slice(0, 200) }, { status: 500 });
