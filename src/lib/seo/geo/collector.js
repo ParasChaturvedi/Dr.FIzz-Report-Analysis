@@ -150,7 +150,7 @@ async function waitForStableAnswer(page, cfg) {
 // Page-level ask flow. Works with ANY Playwright context — a Browserless
 // newContext seeded with storageState OR a local persistent-profile context.
 // Owns only the PAGE; the caller owns the context lifecycle.
-async function askInContext(context, cfg, prompt) {
+async function askInContext(context, cfg, prompt, proxyCountry = "") {
   const page = await context.newPage();
   // Block heavy resources (images/media/fonts) → slashes residential-proxy
   // bandwidth (the main Browserless cost) and speeds loads. Text + links unaffected.
@@ -166,7 +166,7 @@ async function askInContext(context, cfg, prompt) {
     // ── Search-type engine (Google AI Overviews): run a Google search and grab
     //    the AI Overview block + its source links. No chat composer. ──
     if (cfg.type === "search") {
-      const country = (process.env.BROWSERLESS_PROXY_COUNTRY || "in").toLowerCase();
+      const country = String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "in").toLowerCase();
       await page.goto(`${cfg.url}?q=${encodeURIComponent(prompt)}&gl=${country}&hl=en&num=10`, { waitUntil: "domcontentloaded", timeout: 60000 });
       await page.waitForTimeout(3000);
       try { await page.getByRole("button", { name: /show more/i }).first().click({ timeout: 1500 }); await page.waitForTimeout(1000); } catch {}
@@ -264,7 +264,7 @@ async function askEngine(browser, engineKey, prompt, storageState, proxyCountry 
   });
   // No-login engine → guarantee a clean, logged-out, un-personalised session every query.
   if (!storageState) { try { await context.clearCookies(); } catch {} }
-  try { return await askInContext(context, cfg, prompt); }
+  try { return await askInContext(context, cfg, prompt, proxyCountry); }
   finally { await context.close().catch(() => {}); }
 }
 
@@ -342,7 +342,7 @@ function mockResponses({ brandSet, prompts, engineKeys }) {
 // timeout AND is fully ephemeral (incognito) — no state bleeds between queries.
 async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry }) {
   const responses = [];
-  const attempts = Number(process.env.GEO_QUERY_ATTEMPTS || 1); // frugal: no retry by default (saves units)
+  const attempts = Number(process.env.GEO_QUERY_ATTEMPTS) || 2; // one retry by default: absorbs a transient Browserless/Cloudflare blip
   for (const ek of engineKeys) {
     const cfg = ENGINES[ek];
     for (const p of prompts) {
@@ -402,7 +402,18 @@ async function _runLocal({ engineKeys, prompts }) {
       });
       await context.addInitScript(() => { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); });
       for (const p of prompts) {
-        try { responses.push({ ...(await askInContext(context, cfg, p.prompt)), brand: p.brand, theme: p.theme, promptId: p.id }); }
+        try {
+          const _r = await askInContext(context, cfg, p.prompt);
+          // §16 — capture per-run metadata, same fields as the Browserless transport.
+          responses.push({
+            ...(_r), brand: p.brand, theme: p.theme, promptId: p.id,
+            region: "in",
+            timestamp: new Date().toISOString(),
+            answer_length: String(_r?.answerText || "").length,
+            citation_count: Array.isArray(_r?.citations) ? _r.citations.length : 0,
+            attempts: 1,
+          });
+        }
         catch (err) { responses.push({ ...tagFor(p), error: String(err?.message || err) }); }
       }
     } catch (err) {
@@ -413,14 +424,25 @@ async function _runLocal({ engineKeys, prompts }) {
 }
 
 // ── Transport: API engines (Claude) — no browser ────────────────────────────
-async function _runApi({ engineKeys, prompts }) {
+async function _runApi({ engineKeys, prompts, proxyCountry }) {
   const responses = [];
   for (const ek of engineKeys) {
     const cfg = ENGINES[ek];
     for (const p of prompts) {
       const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
       try {
-        if (ek === "claude") responses.push({ ...(await askClaudeAPI(p.prompt)), ...tag });
+        if (ek === "claude") {
+          const _r = await askClaudeAPI(p.prompt);
+          // §16 — capture per-run metadata, same fields as the Browserless transport.
+          responses.push({
+            ...(_r), ...tag,
+            region: proxyCountry || "in",
+            timestamp: new Date().toISOString(),
+            answer_length: String(_r?.answerText || "").length,
+            citation_count: Array.isArray(_r?.citations) ? _r.citations.length : 0,
+            attempts: 1,
+          });
+        }
         else throw new Error(`No API adapter for engine "${ek}"`);
       } catch (err) {
         responses.push({ engine: cfg?.name || ek, prompt: p.prompt, ...tag, error: String(err?.message || err) });
@@ -438,7 +460,7 @@ async function _runPrompts({ mode, transport, engineKeys, prompts, sessions, pro
   const apiKeys = engineKeys.filter((k) => ENGINES[k]?.type === "api");
   const browserKeys = engineKeys.filter((k) => ENGINES[k] && ENGINES[k].type !== "api");
   const out = [];
-  if (apiKeys.length) out.push(...(await _runApi({ engineKeys: apiKeys, prompts })));
+  if (apiKeys.length) out.push(...(await _runApi({ engineKeys: apiKeys, prompts, proxyCountry })));
   if (browserKeys.length) {
     out.push(...(transport === "local"
       ? await _runLocal({ engineKeys: browserKeys, prompts })

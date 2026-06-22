@@ -164,7 +164,7 @@ function GeoVisibility({ geo = {}, domain, gf = {} }) {
         <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
           <div className="px-3 pt-3"><Lbl>GEO Metrics — overall + per engine</Lbl></div>
           <table className="w-full border-collapse">
-            <thead><tr style={{ background: INK }}>{["Engine", "SoV", "Comp SoV", "Mentions", "Citations", "Cit. score", "Position", "Topic", "Intent", "GEO"].map((h, i) => <th key={i} style={{ ...thS, textAlign: i ? "right" : "left" }}>{h}</th>)}</tr></thead>
+            <thead><tr style={{ background: INK }}>{["Engine", "SoV", "Comp SoV", "Mentions", "Citations", "Comp mentions", "Comp citations", "Cit. score", "Position", "Topic", "Intent", "Freshness", "GEO"].map((h, i) => <th key={i} style={{ ...thS, textAlign: i ? "right" : "left" }}>{h}</th>)}</tr></thead>
             <tbody>
               {[{ label: "Overall", mm: m.geo_metrics.overall, hl: true }, ...m.geo_metrics.engines.map((e) => ({ label: e, mm: m.geo_metrics.by_engine[e] || {}, hl: false }))].map((r, i) => (
                 <tr key={i} style={{ background: r.hl ? "#FBF1EB" : (i % 2 ? "#fff" : "#F7F7F7") }}>
@@ -173,10 +173,13 @@ function GeoVisibility({ geo = {}, domain, gf = {} }) {
                   <td style={{ ...cell, textAlign: "right" }}>{r.mm.competitor_sov}%</td>
                   <td style={{ ...cell, textAlign: "right" }}>{r.mm.brand_mentions}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{r.mm.brand_citations}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.competitor_mentions}</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.competitor_citations}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{r.mm.citation_score}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{r.mm.citation_position_score}</td>
                   <td style={{ ...cell, textAlign: "right" }}>{r.mm.topic_coverage}%</td>
                   <td style={{ ...cell, textAlign: "right" }}>{r.mm.intent_match}%</td>
+                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.freshness}</td>
                   <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: ORANGE }}>{r.mm.geo_score}</td>
                 </tr>
               ))}
@@ -232,6 +235,113 @@ function GeoVisibility({ geo = {}, domain, gf = {} }) {
             <tbody>{m.citation_analysis.most_cited_domains.map((dm, i) => (
               <tr key={i} style={{ background: dm.is_client ? "#FBF1EB" : dm.is_competitor ? "#FBE9E7" : (i % 2 ? "#fff" : "#F7F7F7") }}>
                 <td style={cell}>{dm.domain}</td><td style={{ ...cell, textAlign: "right" }}>{dm.pages_cited}</td><td style={{ ...cell, textAlign: "right" }}>{dm.responses}</td><td style={cell}>{dm.type}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+
+      {/* §23 — Citation Gap (root cause) callout */}
+      {m.citation_analysis?.citation_gap && (
+        <DarkCallout label="Citation Gap">{m.citation_analysis.citation_gap}</DarkCallout>
+      )}
+
+      {/* §23 — Citation Intelligence: every cited URL classified individually (page-level) */}
+      {(m.citation_analysis?.citations || []).length > 0 && (
+        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>Citation Intelligence — every URL AI cites, classified</Lbl></div>
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}><th style={thS}>Domain / URL</th><th style={thS}>Type</th><th style={thS}>Engines</th><th style={{ ...thS, textAlign: "right" }}>Position</th><th style={{ ...thS, textAlign: "right" }}>Times cited</th><th style={thS}>Action</th></tr></thead>
+            <tbody>{m.citation_analysis.citations.slice(0, 15).map((c, i) => (
+              <tr key={i} style={{ background: c.is_client ? "#FBF1EB" : c.is_competitor ? "#FBE9E7" : (i % 2 ? "#fff" : "#F7F7F7") }}>
+                <td style={cell}>
+                  <div style={{ fontWeight: 700, color: INK }}>{c.domain}{c.is_competitor ? <span className="ml-1.5 px-1 py-0.5 rounded text-[9px]" style={{ background: "#B3261E", color: "#fff" }}>competitor</span> : c.is_client ? <span className="ml-1.5 px-1 py-0.5 rounded text-[9px]" style={{ background: "#1E7B3E", color: "#fff" }}>you</span> : null}</div>
+                  {c.url && <div style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: "10px", color: "#A8A8A8", wordBreak: "break-all" }}>{String(c.url).replace(/^https?:\/\//, "").slice(0, 64)}</div>}
+                </td>
+                <td style={cell}>{String(c.citation_class || "").replace(/_/g, " ")}{c.source_type ? <span style={{ color: "#A8A8A8" }}> · {c.source_type}</span> : null}</td>
+                <td style={cell}>{(c.engines || []).join(", ")}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{c.first_position}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{c.times_cited}</td>
+                <td style={cell}>{String(c.action || "").replace(/_/g, " ")}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+
+      {/* §23/§24 — Backlink Opportunity Queue (domain-level) */}
+      {(m.citation_analysis?.opportunity_queue || []).length > 0 && (
+        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>Backlink Opportunity Queue — turn AI sources into links</Lbl></div>
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}><th style={thS}>Target</th><th style={thS}>Class</th><th style={thS}>Action</th><th style={{ ...thS, textAlign: "right" }}>Opportunity</th><th style={thS}>Difficulty</th></tr></thead>
+            <tbody>{m.citation_analysis.opportunity_queue.map((o, i) => (
+              <tr key={i} style={{ background: i % 2 ? "#fff" : "#F7F7F7" }}>
+                <td style={{ ...cell, fontWeight: 700, color: INK }}>{o.domain}</td>
+                <td style={cell}>{String(o.citation_class || "").replace(/_/g, " ")}</td>
+                <td style={cell}>{String(o.action || o.action_type || "").replace(/_/g, " ")}</td>
+                <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: ORANGE }}>{o.opportunity_score ?? o.link_opportunity_score}</td>
+                <td style={cell}>{o.difficulty}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+
+      {/* §23/§24 — Page-level (per-URL) backlink opportunities */}
+      {(m.citation_analysis?.page_opportunities || []).length > 0 && (
+        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>Page-Level Citation Opportunities — the exact URLs AI quotes</Lbl></div>
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}><th style={thS}>Target</th><th style={thS}>Class</th><th style={thS}>Action</th><th style={{ ...thS, textAlign: "right" }}>Opportunity</th><th style={thS}>Difficulty</th></tr></thead>
+            <tbody>{m.citation_analysis.page_opportunities.map((o, i) => (
+              <tr key={i} style={{ background: i % 2 ? "#fff" : "#F7F7F7" }}>
+                <td style={cell}><span style={{ wordBreak: "break-all" }}>{String(o.url || "").replace(/^https?:\/\//, "").slice(0, 64)}</span></td>
+                <td style={cell}>{String(o.citation_class || "").replace(/_/g, " ")}</td>
+                <td style={cell}>{String(o.action || o.action_type || "").replace(/_/g, " ")}</td>
+                <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: ORANGE }}>{o.opportunity_score ?? o.link_opportunity_score}</td>
+                <td style={cell}>{o.difficulty}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+
+      {/* §25 — Competitor Intelligence: per-competitor SoV by engine */}
+      {(m.competitor_intel?.competitors || []).length > 0 && (
+        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>Competitor Intelligence — AI share of voice by engine</Lbl></div>
+          {m.competitor_intel.summary && <div className="px-3 pb-2" style={{ fontFamily: BODY, fontSize: "12px", color: "#6B6B6B" }}>{m.competitor_intel.summary}</div>}
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}><th style={thS}>Competitor</th>{(m.share_of_voice?.engines || []).map((e, i) => <th key={i} style={{ ...thS, textAlign: "right" }}>{e}</th>)}<th style={{ ...thS, textAlign: "right" }}>Avg SoV</th></tr></thead>
+            <tbody>{m.competitor_intel.competitors.map((c, i) => {
+              const lead = m.competitor_intel.leader;
+              const isLeader = !!lead && ((c.name || c.brand) === lead);
+              return (
+                <tr key={i} style={{ background: isLeader ? "#FBE9E7" : (i % 2 ? "#fff" : "#F7F7F7") }}>
+                  <td style={{ ...cell, fontWeight: isLeader ? 700 : 400, color: INK }}>{c.name || c.brand}{isLeader ? <span className="ml-1.5 px-1 py-0.5 rounded text-[9px]" style={{ background: "#B3261E", color: "#fff" }}>leader</span> : null}</td>
+                  {(m.share_of_voice?.engines || []).map((e, j) => <td key={j} style={{ ...cell, textAlign: "right" }}>{(c.per_engine || {})[e]}%</td>)}
+                  <td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{c.sov_avg ?? c.avg}%</td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+          {m.competitor_intel.gap != null && <div className="px-3 py-2" style={{ fontFamily: BODY, fontSize: "11px", color: "#6B6B6B", borderTop: "1px solid #EEE" }}>Gap to leader: <strong style={{ color: INK }}>{m.competitor_intel.gap} pts</strong>{m.competitor_intel.leader_strongest_engine ? ` · leader strongest on ${m.competitor_intel.leader_strongest_engine}` : ""}.</div>}
+        </div>
+      )}
+
+      {/* §25 — Topic Dominance: per-competitor topics led / present / lead share */}
+      {(m.topic_dominance?.competitor_dominance || []).length > 0 && (
+        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
+          <div className="px-3 pt-3"><Lbl>Topic Dominance — competitor leadership by topic</Lbl></div>
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}><th style={thS}>Competitor</th><th style={{ ...thS, textAlign: "right" }}>Topics led</th><th style={{ ...thS, textAlign: "right" }}>Topics present</th><th style={{ ...thS, textAlign: "right" }}>Lead share</th></tr></thead>
+            <tbody>{m.topic_dominance.competitor_dominance.map((c, i) => (
+              <tr key={i} style={{ background: i % 2 ? "#fff" : "#F7F7F7" }}>
+                <td style={{ ...cell, color: INK }}>{c.competitor || c.brand}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{c.topics_led}</td>
+                <td style={{ ...cell, textAlign: "right" }}>{c.topics_present}</td>
+                <td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{c.lead_share}%</td>
               </tr>
             ))}</tbody>
           </table>

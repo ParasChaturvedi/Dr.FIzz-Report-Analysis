@@ -16,8 +16,25 @@
 // context seeded ONLY with this storageState (see collector.askEngine).
 // ─────────────────────────────────────────────────────────────────────────────
 import { getCached, putCached } from "@/lib/cache/mongo";
+import { encryptJson, decryptJson } from "@/lib/tokenStore";
 
 export const LOGIN_ENGINES = ["chatgpt", "gemini", "copilot"];
+
+// §19 — sessions are stored ENCRYPTED at rest (AES-256-GCM, TOKEN_ENCRYPTION_KEY) so
+// logged-in AI cookies never sit in plaintext in the cache collection. If the key is
+// unset we fall back to plaintext with a loud warning (so capture still works), and
+// load() transparently handles both shapes (incl. any legacy plaintext session).
+function _encState(storageState) {
+  try { return { enc: encryptJson(storageState) }; }
+  catch (e) {
+    console.warn("[geo-session] TOKEN_ENCRYPTION_KEY missing — storing session UNENCRYPTED:", e?.message);
+    return { storageState };
+  }
+}
+function _decState(payload) {
+  if (payload?.enc) { try { return decryptJson(payload.enc); } catch { return null; } }
+  return payload?.storageState || null;   // legacy plaintext fallback
+}
 
 const _key = (engine) => `geo-session:${String(engine || "").toLowerCase().trim()}`;
 const _envVar = (engine) => `GEO_SESSION_${String(engine || "").toUpperCase().trim()}`;
@@ -40,7 +57,7 @@ export async function loadGeoSession(engine) {
   if (envState) return envState;
   try {
     const payload = await getCached({ domain: _key(engine), dataType: "geo-session", ttlDays: 3650 });
-    return payload?.storageState || null;
+    return _decState(payload);
   } catch { return null; }
 }
 
@@ -67,7 +84,7 @@ export async function saveGeoSession(engine, storageState) {
   if (!storageState || typeof storageState !== "object") throw new Error("storageState must be a Playwright storageState object");
   const ok = await putCached({
     domain: _key(e), dataType: "geo-session",
-    payload: { storageState, saved_at: new Date().toISOString() }, source: "geo-session-admin",
+    payload: { ..._encState(storageState), saved_at: new Date().toISOString() }, source: "geo-session-admin",
   });
   if (!ok) throw new Error("could not persist session (is MONGODB_URI set?)");
   return true;

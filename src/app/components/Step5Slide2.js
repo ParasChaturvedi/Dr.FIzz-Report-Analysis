@@ -1041,11 +1041,16 @@ export default function Step5Slide2({
             brand: businessData?.businessName || businessData?.name || domain,
             industry: businessData?.industrySector || businessData?.industry || businessData?.category || "",
             category: businessData?.category || "",
-            location: businessData?.location || "",
             competitors: allCompetitors,            // geo-scan derives the brand label (name) for SoV
             competitorDomains: allCompetitors,      // domains → citation host-matching (kept distinct from names)
             keywords,            // real keywords → higher-quality neutral prompts (§17)
-            countryCode: "in",
+            // §16 localization — use the business's own 2-letter country when known
+            // (was hardcoded "in", which forced every scan to India). Full country/
+            // state/city/global selector lands in the location phase.
+            countryCode: (businessData?.countryCode && /^[a-z]{2}$/i.test(businessData.countryCode))
+              ? String(businessData.countryCode).toLowerCase()
+              : "in",
+            location: businessData?.location || businessData?.city || businessData?.state || businessData?.country || "",
           }),
         });
         const geoJson = geoRes.ok ? await geoRes.json() : null;
