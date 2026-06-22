@@ -268,6 +268,22 @@ export default function Step5Slide2({
   const fetchStagesRef = useRef(INITIAL_STAGES);
   useEffect(() => { fetchStagesRef.current = fetchStages; }, [fetchStages]);
 
+  // Forward-only journey display: present ONE active step at a time, advancing 1→9 in
+  // order. The underlying collectors run in parallel / mixed order, but the UI must never
+  // show a later step done before an earlier one, never spin two steps at once, and never
+  // flip a step back to loading. Derived purely from the ordered stage states.
+  const displayStages = useMemo(() => {
+    let active = fetchStages.findIndex(
+      (s) => !(s.state === "done" || s.state === "pass" || s.state === "error")
+    );
+    if (active === -1) active = fetchStages.length;            // everything finished
+    return fetchStages.map((s, i) => {
+      if (i < active)   return s.state === "error" ? s : { ...s, state: "done" };
+      if (i === active) return { ...s, state: "loading" };
+      return { ...s, state: "idle", value: null };            // not started yet — hide premature value
+    });
+  }, [fetchStages]);
+
   // Progress bar — driven by REAL stage completion (see startFakeProgressTo92 below).
   const [progressPct, setProgressPct] = useState(0);
   const fakeProgressRef = useRef(null);
@@ -855,25 +871,23 @@ export default function Step5Slide2({
         });
         if (!res.ok) throw new Error(`SEO API failed: ${res.status}`);
         seoJson = await readSseDone(res, (stage, stageState) => {
+          // content/onpageKeywords (On-Page) and dataforseo (Off-Page) are only the
+          // EARLY phase of a multi-phase journey step — it is FINALIZED later by
+          // keywordGap / competitorAudit. Marking it "done" here then re-loading is
+          // exactly what made a step flip done→loading→done, so keep it "loading".
+          const intermediate = stage === "content" || stage === "onpageKeywords" || stage === "dataforseo";
           if (stageState === "start")      updateStage(stage, { state: "loading" });
-          else if (stageState === "done")  updateStage(stage, { state: "done" });
+          else if (stageState === "done")  updateStage(stage, { state: intermediate ? "loading" : "done" });
           else if (stageState === "error") updateStage(stage, { state: "error", value: "Failed" });
         });
       } catch (e) {
         console.warn("[Step5] SEO collection failed:", e?.message);
       }
 
-      // 7) GEO & LLM readiness — assessed from the collected content (schema,
-      //    answer-style, entity clarity). Deterministic checkpoint for now; the
-      //    live multi-engine AI-visibility scan is a separate planned module.
-      updateStage("geoLlm", { state: "loading" });
-      try {
-        const c = seoJson?.content ?? seoJson?.pageContent ?? null;
-        const hasSchema = !!(c && (c.schema || c.structuredData || c.jsonLd));
-        updateStage("geoLlm", { state: "done", value: hasSchema ? "Schema present · assessed" : "AI-readiness assessed" });
-      } catch {
-        updateStage("geoLlm", { state: "done", value: "Assessed" });
-      }
+      // GEO & LLM readiness is assessed from the collected content here, but the step
+      // is NOT finalized yet — the live multi-engine AI-visibility scan below is step
+      // 6's real completion. (Marking it done here then re-scanning made it flip.)
+      updateStage("geoLlm", { state: "loading", value: "Assessing AI-readiness…" });
 
       // 8) GMB & Directory Listings — retried, soft-fail.
       // force: gmbCheck runs the ~90s inline GEO scan AFTER off-page was marked done —
@@ -895,20 +909,23 @@ export default function Step5Slide2({
           const found  = gmbJson?.gmb?.found;
           const rating = gmbJson?.gmb?.rating;
           const revs   = gmbJson?.gmb?.reviewCount;
+          // gmbCheck feeds Off-Page(5); keep it "loading" — competitorAudit finalizes
+          // the step. (Marking done here then letting competitorAudit re-load it flipped.)
           if (found && rating != null) {
-            updateStage("gmbCheck", { state: "done", value: `${rating}★ · ${revs || 0} reviews` });
+            updateStage("gmbCheck", { state: "loading", value: `${rating}★ · ${revs || 0} reviews` });
           } else {
-            updateStage("gmbCheck", { state: "done", value: found ? "GMB found" : "No GMB listing" });
+            updateStage("gmbCheck", { state: "loading", value: found ? "GMB found" : "No GMB listing" });
           }
         } else {
-          updateStage("gmbCheck", { state: "done", value: "Limited data" });
+          updateStage("gmbCheck", { state: "loading", value: "Limited data" });
         }
       }
 
-      // ── Competitor Intelligence + Keyword Gap (Phase 1, needs collected data) ──
-      // Competitor Audit must run before Keyword Gap — the gap analysis compares
-      // the client's keywords against the competitors' keywords.
-      // ── Competitor Audit ──────────────────────────────────────────────────
+      // ── Keyword Gap + Competitor Intelligence (Phase 1, needs collected data) ──
+      // Both consume the competitor LIST built just below. Keyword Gap (On-Page/4)
+      // runs first, then the Competitor Audit (Off-Page/5), so the journey finalizes
+      // in display order.
+      // ── Competitor list (shared by both) ──────────────────────────────────
       // BUSINESS competitors drive ALL deep competitor analysis (GMB audit,
       // keyword gap, GEO share-of-voice). Search competitors (SERP aggregators,
       // directories, review sites) are kept SEPARATE — their off-topic keyword
@@ -951,6 +968,36 @@ export default function Step5Slide2({
         } catch (e) { console.warn("[Step5] competitor auto-discover failed:", e?.message); }
       }
 
+      // ── Keyword Gap Analysis (On-Page / step 4) ───────────────────────────
+      // Runs BEFORE the competitor audit so the journey finalizes On-Page(4) THEN
+      // Off-Page(5) in display order. Only needs the competitor LIST (built above) —
+      // NOT the audit result — so this ordering is safe.
+      updateStage("keywordGap", { state: "loading", value: "Analyzing keyword gaps…" }, { force: true });
+      let keywordGapJson = null;
+      try {
+        const res = await fetch("/api/seo/keyword-gap", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            domain,
+            competitors: allCompetitors.slice(0, 3),
+            keywords,
+          }),
+        });
+        if (res.ok) {
+          keywordGapJson = await res.json();
+          const gaps = keywordGapJson?.summary?.totalGapKeywords ?? 0;
+          const wins = keywordGapJson?.summary?.totalEasyWins    ?? 0;
+          updateStage("keywordGap", { state: "done", value: `${gaps} gaps · ${wins} easy wins` });
+        } else {
+          updateStage("keywordGap", { state: "done", value: "Limited data" });
+        }
+      } catch (e) {
+        console.warn("[Step5] Keyword gap failed:", e?.message);
+        updateStage("keywordGap", { state: "done", value: "Limited data" });
+      }
+
+      // ── Competitor Audit (Off-Page / step 5) ──────────────────────────────
       let competitorAuditJson = null;
       if (allCompetitors.length > 0) {
         updateStage("competitorAudit", { state: "loading", value: "Auditing competitors…" }, { force: true });
@@ -977,32 +1024,6 @@ export default function Step5Slide2({
         }
       } else {
         updateStage("competitorAudit", { state: "done", value: "No competitors selected" });
-      }
-
-      // ── Keyword Gap Analysis ──────────────────────────────────────────────
-      updateStage("keywordGap", { state: "loading", value: "Analyzing keyword gaps…" }, { force: true });
-      let keywordGapJson = null;
-      try {
-        const res = await fetch("/api/seo/keyword-gap", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            domain,
-            competitors: allCompetitors.slice(0, 3),
-            keywords,
-          }),
-        });
-        if (res.ok) {
-          keywordGapJson = await res.json();
-          const gaps = keywordGapJson?.summary?.totalGapKeywords ?? 0;
-          const wins = keywordGapJson?.summary?.totalEasyWins    ?? 0;
-          updateStage("keywordGap", { state: "done", value: `${gaps} gaps · ${wins} easy wins` });
-        } else {
-          updateStage("keywordGap", { state: "done", value: "Limited data" });
-        }
-      } catch (e) {
-        console.warn("[Step5] Keyword gap failed:", e?.message);
-        updateStage("keywordGap", { state: "done", value: "Limited data" });
       }
 
       // ── GEO / AI-VISIBILITY SCAN (GEO Vision §14-25) ──────────────────────────
@@ -1514,7 +1535,7 @@ export default function Step5Slide2({
                       </span>
                     </div>
                     <div className="divide-y divide-[var(--border)]/40">
-                      {fetchStages.map((stage) => (
+                      {displayStages.map((stage) => (
                         <ChecklistRow
                           key={stage.id}
                           label={stage.label}
