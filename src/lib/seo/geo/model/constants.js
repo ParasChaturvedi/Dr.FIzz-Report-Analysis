@@ -173,6 +173,30 @@ export function normalizeRunMode(mode) {
   return DEFAULT_RUN_MODE;
 }
 
+// ── Phase 2.5 — DATA READINESS / PLAN DEPTH ───────────────────────────────────
+// GEO prompts are PLANNED from the FULL DoctorFizz dataset (Steps 1-5 + Step 5B), not
+// just the Step-1 website. These enums describe how much real data backed a plan and
+// which sources were used. CRITICAL SEPARATION: DataForSEO / Moz / SERP / audit data
+// feed PROMPT PLANNING + CONTEXT ONLY — they NEVER become a GEO result or score. The
+// GEO score is computed in Phase 3 from real LLM/browser answers. Never mix the two.
+export const DATA_READINESS_STATUSES = ["website_only", "audit_partial", "seo_data_ready", "step5b_ready", "full_ready"];
+export const DATA_SOURCES = [
+  "step1_website", "step2_business_context", "step3_keywords", "step4_competitors", "step5_audit",
+  "step5b_dataforseo", "step5b_moz", "step5b_serp", "step5b_backlinks", "step5b_authority", "step5b_competitor_data",
+];
+export const GEO_PROMPT_CONFIDENCE = ["low", "medium", "high"];
+
+// Plan DEPTH (how much data) — distinct from run mode (prompt VOLUME). Production = "full".
+//   quick → Step-1 website + basic crawl/audit only (low confidence, clearly "basic")
+//   full  → Steps 1-5 + 5B (DataForSEO/Moz/SERP/competitor) — the production default
+export const GEO_PLAN_MODES = ["quick", "full"];
+export const DEFAULT_GEO_PLAN_MODE = "full";
+export const GEO_PLAN_MODE_ALIASES = { basic: "quick", quick: "quick", website_only: "quick", fast: "quick", full: "full", production: "full", complete: "full", standard: "full" };
+export function normalizeGeoPlanMode(mode) {
+  const m = String(mode || "").trim().toLowerCase();
+  return GEO_PLAN_MODE_ALIASES[m] || DEFAULT_GEO_PLAN_MODE;
+}
+
 // Per-engine, per-query cost estimate (USD) — configurable. Browser engines cost a
 // Browserless query; Claude runs via API (cheaper). Residential proxy adds a multiplier.
 export const ENGINE_QUERY_COST_USD = { aioverviews: 0.02, perplexity: 0.02, chatgpt: 0.025, gemini: 0.025, copilot: 0.025, claude: 0.006 };

@@ -18,7 +18,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { planGeoPrompts } from "./promptPlanner.js";
 import { resolveGeoRunConfig, estimateGeoRun } from "./model/geoRunConfig.js";
-import { GEO_CLUSTERS, GEO_INTENTS, RUN_MODE_PRESETS, normalizeRunMode } from "./model/constants.js";
+import { GEO_CLUSTERS, GEO_INTENTS, RUN_MODE_PRESETS, normalizeRunMode, normalizeGeoPlanMode } from "./model/constants.js";
+import { assessGeoData, readinessFromRun, geoPlanMessage } from "./dataReadiness.js";
 import {
   createGeoProject, getGeoProject, updateGeoProject,
   saveGeoPrompts, getGeoPrompts, countGeoPrompts, clearGeoPrompts, updateGeoPrompt, setPromptsStatus,
@@ -33,20 +34,29 @@ function competitorNames(list = []) {
     .filter(Boolean);
 }
 
+const arr = (v) => (Array.isArray(v) ? v : []);
+
 /**
- * Normalize whatever the caller sends into the planner's grounding shape. Accepts a
- * full runBusinessLogic `report`, a `source` object, or flat fields — reads from
- * whichever is present so the dashboard can call it however is convenient.
+ * Normalize the FULL DoctorFizz dataset (Steps 1-5 + Step 5B) into the planner's
+ * grounding shape. Accepts a runBusinessLogic `report`, a `source` object, a `step5b`
+ * object, or flat fields — reads from whichever is present. Step 5B (DataForSEO / Moz /
+ * SERP / backlinks / authority / competitor signals) is captured for PROMPT PLANNING
+ * + CONTEXT only — it is never turned into a GEO result/score (that's Phase 3).
  */
 export function normalizeSource(input = {}) {
   const s = input.source || input || {};
   const report = input.report || s.report || null;
   const meta = report?.report_meta || {};
+  const b5 = s.step5b || input.step5b || {};
 
+  // ── Step 1-2 — identity / business context ──
   const brand = clean(s.brand || s.clientName || s.brandName || meta.client_name || "");
   const domain = stripDomain(s.domain || meta.domain || "");
   const industry = clean(s.industry || meta.industry || "");
   const category = clean(s.category || (Array.isArray(s.coreServices) && s.coreServices[0]) || (Array.isArray(report?.coreServices) && report.coreServices[0]) || "");
+  const businessType = clean(s.businessType || s.business_type || meta.business_type || "");
+  const audience = clean(s.audience || s.buyerType || s.buyer_type || s.targetMarket || s.target_market || "");
+  const businessScope = clean(s.businessScope || s.business_scope || meta.business_scope || "");
 
   const locationMode = s.locationMode || s.location_mode || report?.report_meta?.location_mode || "country";
   const location = clean(s.location || meta.location || report?.location || "");
@@ -55,21 +65,82 @@ export function normalizeSource(input = {}) {
     country: clean(s.country || ""), state: clean(s.state || ""), city: clean(s.city || ""),
     label: location || clean([s.city, s.state, s.country].filter(Boolean).join(", ")),
   };
-
-  const keywords = s.keywords || report?.keywords?.accepted || report?.keywords || s.rawKeywords || [];
-  const competitorKeywords = s.competitorKeywords || s.competitor_keywords || [];
-  const businessCompetitors = s.businessCompetitors || s.competitors || report?.competitors || [];
-  const searchCompetitors = s.searchCompetitors || report?.search_landscape || [];
-  const topicGaps = s.topicGaps || s.topic_gaps || report?.geo_and_ai_visibility?.topic_dominance?.topic_gap || [];
   const homepageTitle = clean(s.homepageTitle || s.homepage_title || "");
   const homepageContent = clean(s.homepageContent || s.homepage_content || "");
   const searchIntent = clean(s.searchIntent || s.search_intent || "");
-  const locations = s.locations || [];
+  const locations = arr(s.locations);
+
+  // ── Step 3 — keyword / SEO context ──
+  const keywords = s.keywords || report?.keywords?.accepted || report?.keywords || s.rawKeywords || [];
+  const competitorKeywords = s.competitorKeywords || s.competitor_keywords || [];
+  const keywordClusters = s.keywordClusters || s.keyword_clusters || [];
+  const keywordGaps = s.keywordGaps || s.keyword_gaps || report?.keywords?.gaps || [];
+  const semanticThemes = s.semanticThemes || s.semantic_themes || [];
+
+  // ── Step 4 — competitors ──
+  const businessCompetitors = s.businessCompetitors || s.competitors || report?.competitors || [];
+  const searchCompetitors = s.searchCompetitors || report?.search_landscape || [];
+  const topicGaps = s.topicGaps || s.topic_gaps || report?.geo_and_ai_visibility?.topic_dominance?.topic_gap || [];
+
+  // ── Step 5 — audit / report findings ──
+  const audit = s.audit || {
+    technical: s.technicalFindings || report?.technical_issues || [],
+    content: s.contentFindings || [],
+    onpage: s.onpageFindings || s.onPageFindings || [],
+    local: s.localFindings || [],
+    schema: s.schemaFindings || report?.geo_and_ai_visibility?.schema_additions || [],
+    pageIssues: s.pageIssues || [],
+    siteStructure: s.siteStructure || null,
+    internalLinking: s.internalLinking || null,
+    contentQuality: s.contentQuality || null,
+    missingPages: s.missingPages || arr(report?.content_architecture?.geography_pages),
+    recommendedPages: s.recommendedPages || [...arr(report?.content_architecture?.commercial_pages), ...arr(report?.content_architecture?.blog_and_guides)],
+    priorityActions: s.priorityActions || report?.priority_action_plan || [],
+    reportSections: s.reportSections || [],
+  };
+
+  // ── Step 5B — external enrichment (DataForSEO / Moz / SERP / backlinks / authority) ──
+  const dataforseo = s.dataforseo || s.dataForSeo || b5.dataforseo || null;
+  const moz = s.moz || b5.moz || null;
+  const serp = s.serp || b5.serp || {
+    paa: s.peopleAlsoAsk || s.people_also_ask || [],
+    relatedSearches: s.relatedSearches || s.related_searches || [],
+    topPages: s.topRankingPages || s.top_ranking_pages || [],
+    contentGaps: s.serpContentGaps || s.serp_content_gaps || [],
+    keywordResults: s.keywordSerpResults || s.keyword_serp_results || [],
+  };
+  const backlinks = s.backlinks || b5.backlinks || report?.backlinks || null;
+  const authority = s.authority || b5.authority || (report?.baseline?.domain_rating ? { domain_rating: report.baseline.domain_rating, referring_domains: report.baseline.referring_domains } : null);
+  const domainMetrics = s.domainMetrics || b5.domainMetrics || null;
+  const pageMetrics = s.pageMetrics || b5.pageMetrics || null;
+  const competitorSerp = s.competitorSerp || b5.competitorSerp || [];
+  const competitorBacklinks = s.competitorBacklinks || b5.competitorBacklinks || [];
 
   return {
-    brand, clientName: brand, domain, industry, category, location, locationMode, locationContext,
-    keywords, competitorKeywords, competitors: businessCompetitors, businessCompetitors, searchCompetitors,
-    topicGaps, homepageTitle, homepageContent, searchIntent, locations,
+    // identity / context
+    brand, clientName: brand, domain, industry, category, businessType, audience, businessScope,
+    location, locationMode, locationContext, homepageTitle, homepageContent, searchIntent, locations,
+    // keywords
+    keywords, competitorKeywords, keywordClusters, keywordGaps, semanticThemes,
+    // competitors
+    competitors: businessCompetitors, businessCompetitors, searchCompetitors, topicGaps,
+    // audit
+    audit,
+    // step 5B
+    dataforseo, moz, serp, backlinks, authority, domainMetrics, pageMetrics, competitorSerp, competitorBacklinks,
+  };
+}
+
+// Quick / "basic" plan — keep only Step-1 website + basic crawl/audit; drop the heavy
+// keyword / competitor / Step-5B data so the plan is fast and clearly lower-confidence.
+function stripToQuick(src) {
+  return {
+    ...src,
+    keywords: [], competitorKeywords: [], keywordClusters: [], keywordGaps: [], semanticThemes: [],
+    competitors: [], businessCompetitors: [], searchCompetitors: [], topicGaps: [],
+    audit: { ...src.audit, technical: [], content: [], onpage: [], priorityActions: [], recommendedPages: [], reportSections: [] },
+    dataforseo: null, moz: null, serp: {}, backlinks: null, authority: null,
+    domainMetrics: null, pageMetrics: null, competitorSerp: [], competitorBacklinks: [],
   };
 }
 
@@ -139,16 +210,37 @@ function toPreviewPrompt(p) {
   };
 }
 
-function buildPreview({ project, run, prompts, config, runMode }) {
+function buildPreview({ project, run, prompts, config, runMode, readiness, planMode }) {
   const distribution = computeDistribution(prompts);
   const estimate = buildEstimate(config, prompts.length);
+  const r = readiness || (run ? readinessFromRun(run) : null);
+  const mode = planMode || run?.geo_plan_mode || "full";
   return {
     project: project ? { project_id: project.project_id, brand_name: project.brand_name, brand_domain: project.brand_domain, industry: project.industry, location_mode: project.location_mode, status: project.status } : null,
-    run: run ? { run_id: run.run_id, status: run.status, run_mode: run.run_mode, run_name: run.run_name, prompt_count: run.prompt_count } : null,
+    run: run ? { run_id: run.run_id, status: run.status, run_mode: run.run_mode, geo_plan_mode: run.geo_plan_mode, run_name: run.run_name, prompt_count: run.prompt_count } : null,
     run_mode: runMode,
+    geo_plan_mode: mode,
     selected_engines: config.selected_engines,
     counts: { total: prompts.length, by_cluster: distribution.by_cluster, by_intent: distribution.by_intent, by_status: distribution.by_status },
     estimate,
+    // Phase 2.5 — which data backed this plan + how confident (planning context, NOT a GEO score)
+    data_context: r ? {
+      target_website: project?.brand_domain || null,
+      brand: project?.brand_name || null,
+      domain: project?.brand_domain || null,
+      run_mode: runMode,
+      plan_mode: mode,
+      data_readiness_status: r.data_readiness_status,
+      data_sources_used: r.data_sources_used,
+      geo_prompt_confidence: r.geo_prompt_confidence,
+      keywords_used: r.counts.keywords_used,
+      competitors_used: r.counts.competitors_used,
+      serp_results_used: r.counts.serp_results_used,
+      used_dataforseo: r.flags.used_dataforseo,
+      used_moz: r.flags.used_moz,
+      used_step5b: r.flags.used_step5b,
+      message: geoPlanMessage(r.data_readiness_status),
+    } : null,
     prompts: prompts.map(toPreviewPrompt),
   };
 }
@@ -177,15 +269,22 @@ export async function ensureGeoProject(input = {}) {
  * @param {object} input
  * @param {string} [input.projectId]      reuse an existing project (else one is created)
  * @param {object} [input.source|report]  real project data to ground prompts in
- * @param {string} [input.runMode]        "smoke"|"standard"|"full" (default standard)
+ * @param {string} [input.runMode]        "smoke"|"standard"|"full" — prompt VOLUME (default standard)
+ * @param {string} [input.geoPlanMode]    "quick"|"full" — data DEPTH (default full = use Steps 1-5+5B)
  * @param {string[]} [input.selectedEngines]
  * @param {boolean}[input.regenerate]     wipe existing prompts first
  * @param {boolean}[input.useClaude]      default true; false = deterministic (no API cost)
- * @returns {Promise<object>} { ok, project_id, run_id, generated, distribution, estimate, preview }
+ * @returns {Promise<object>} { ok, project_id, run_id, geo_plan_mode, data_readiness_status,
+ *   data_sources_used, geo_prompt_confidence, distribution, estimate, preview }
  */
 export async function generateGeoPromptsForProject(input = {}) {
-  const src = normalizeSource(input);
   const runMode = normalizeRunMode(input.runMode || input.run_mode);
+  const planMode = normalizeGeoPlanMode(input.geoPlanMode || input.geo_plan_mode || input.planMode);
+  let src = normalizeSource(input);
+  if (planMode === "quick") src = stripToQuick(src); // basic plan: website + crawl/audit only
+
+  // assess how much of the Steps 1-5 + 5B dataset actually backs this plan
+  const readiness = assessGeoData(src);
   const config = resolveConfig(input, src);
 
   const project = await ensureGeoProject({ ...input, _src: src });
@@ -194,18 +293,20 @@ export async function generateGeoPromptsForProject(input = {}) {
 
   if (input.regenerate) await clearGeoPrompts(projectId);
 
-  // PLAN (pure) — sized to the run mode band / prompt_limit
-  const plan = await planGeoPrompts({ source: src, runMode, targetCount: config.prompt_limit, useClaude: input.useClaude !== false });
+  // PLAN (pure) — grounded in the FULL dataset; "full" mode runs a deep-analysis pass first
+  const plan = await planGeoPrompts({ source: src, runMode, planMode, targetCount: config.prompt_limit, useClaude: input.useClaude !== false });
 
   // DRAFT planned run (status "draft" => worker will NOT claim it in Phase 3)
   const run = await createGeoRun({
     geo_project_id: projectId,
-    run_name: `${RUN_MODE_PRESETS[runMode]?.label || runMode} — ${plan.prompts.length} prompts`,
+    run_name: `${RUN_MODE_PRESETS[runMode]?.label || runMode} (${planMode}) — ${plan.prompts.length} prompts`,
     status: "draft",
     prompt_count: plan.prompts.length,
     engines: config.selected_engines,
     location_context: src.locationContext,
     config,
+    geo_plan_mode: planMode,
+    readiness, // createGeoRun persists data_readiness_status / data_sources_used / confidence / counts
   });
 
   // persist prompts with run-level defaults stamped on each
@@ -216,6 +317,9 @@ export async function generateGeoPromptsForProject(input = {}) {
     competitors: competitorNames(src.businessCompetitors).slice(0, 10),
     location_context: src.locationContext,
     geo_run_id: run?.run_id || null,
+    geo_plan_mode: planMode,
+    geo_prompt_confidence: readiness.geo_prompt_confidence,
+    data_readiness_status: readiness.data_readiness_status,
   };
   const saved = await saveGeoPrompts(projectId, plan.prompts, defaults);
   await updateGeoProject(projectId, { status: "prompts_generated", last_run_id: run?.run_id || null });
@@ -225,12 +329,18 @@ export async function generateGeoPromptsForProject(input = {}) {
     project_id: projectId,
     run_id: run?.run_id || null,
     run_mode: runMode,
+    geo_plan_mode: planMode,
     generated: saved.length,
     used_claude: plan.usedClaude,
+    analysis_used: plan.analysisUsed || false,
+    data_readiness_status: readiness.data_readiness_status,
+    data_sources_used: readiness.data_sources_used,
+    geo_prompt_confidence: readiness.geo_prompt_confidence,
+    data_counts: readiness.counts,
     distribution: plan.distribution,
     estimate: buildEstimate(config, saved.length),
     selected_engines: config.selected_engines,
-    preview: buildPreview({ project, run, prompts: saved, config, runMode }),
+    preview: buildPreview({ project, run, prompts: saved, config, runMode, readiness, planMode }),
   };
 }
 

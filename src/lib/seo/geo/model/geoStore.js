@@ -107,6 +107,9 @@ export async function saveGeoPrompts(projectId, prompts = [], defaults = {}) {
         competitors: Array.isArray(p.competitors) ? p.competitors : (Array.isArray(d.competitors) ? d.competitors : []),
         run_mode: p.run_mode || d.run_mode || "standard",
         selected_engines: Array.isArray(p.selected_engines) ? p.selected_engines : (Array.isArray(d.selected_engines) ? d.selected_engines : []),
+        geo_plan_mode: p.geo_plan_mode || d.geo_plan_mode || "full",
+        geo_prompt_confidence: p.geo_prompt_confidence || d.geo_prompt_confidence || "low",
+        data_readiness_status: p.data_readiness_status || d.data_readiness_status || "website_only",
         status: p.status || "pending",        // approval lifecycle (§ approve/edit)
         run_status: p.run_status || "pending", // execution lifecycle (Phase 3 worker)
         created_at: now(),
@@ -188,6 +191,18 @@ export async function createGeoRun(run = {}) {
       screenshot_mode: cfg.screenshot_mode || "on_error",
       budget_limit: cfg.budget_limit ?? null,
       stopped_by_user: false,
+      // §Phase 2.5 — data-readiness / plan-depth (planning context; NOT a GEO score)
+      geo_plan_mode: run.geo_plan_mode || "full",
+      data_readiness_status: run.readiness?.data_readiness_status || "website_only",
+      data_sources_used: run.readiness?.data_sources_used || [],
+      geo_prompt_confidence: run.readiness?.geo_prompt_confidence || "low",
+      keywords_used: run.readiness?.counts?.keywords_used || 0,
+      competitors_used: run.readiness?.counts?.competitors_used || 0,
+      serp_results_used: run.readiness?.counts?.serp_results_used || 0,
+      used_dataforseo: !!run.readiness?.flags?.used_dataforseo,
+      used_moz: !!run.readiness?.flags?.used_moz,
+      used_serp: !!run.readiness?.flags?.used_serp,
+      used_step5b: !!run.readiness?.flags?.used_step5b,
       started_at: null, completed_at: null,
       created_at: now(),
     };

@@ -82,6 +82,40 @@ function indFromKeywords(terms = []) {
   return pick ? pick.k : "";
 }
 
+// ── Phase 2.5 — flatten the varied Step 3-5 + 5B shapes into clean string lists ──
+function textList(v) {
+  return (Array.isArray(v) ? v : [])
+    .map((x) => clean(typeof x === "string" ? x : x?.text || x?.title || x?.question || x?.query || x?.keyword || x?.action || x?.name || x?.label || x?.term || ""))
+    .filter(Boolean);
+}
+function pageTitleList(v) {
+  return (Array.isArray(v) ? v : [])
+    .map((x) => clean(typeof x === "string" ? x : x?.page_name || x?.proposed_title || x?.title || x?.keyword_cluster || x?.geo_target || x?.url_slug || x?.name || ""))
+    .filter(Boolean);
+}
+function competitorTopicList(v) {
+  const out = [];
+  for (const c of (Array.isArray(v) ? v : [])) {
+    if (typeof c === "string") { out.push(c); continue; }
+    const name = clean(c?.name || c?.brand || c?.domain || "");
+    const topics = [...textList(c?.topics), ...textList(c?.what_they_do_well), ...textList(c?.ranking_pages), ...textList(c?.topic_coverage)].slice(0, 4);
+    if (name) out.push(topics.length ? `${name}: ${topics.join(", ")}` : name);
+  }
+  return out;
+}
+// Loose JSON-OBJECT extractor (the array one above only handles [...]).
+function extractJsonObjectLooseLocal(text) {
+  const s = String(text || "").trim();
+  if (!s) return null;
+  const tryP = (str) => { try { const v = JSON.parse(str); return v && typeof v === "object" && !Array.isArray(v) ? v : null; } catch { return null; } };
+  let v = tryP(s); if (v) return v;
+  const fenced = s.match(/```(?:json)?\s*([\s\S]*?)```/i); if (fenced?.[1]) { v = tryP(fenced[1].trim()); if (v) return v; }
+  const noThink = s.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  const a = noThink.indexOf("{"), b = noThink.lastIndexOf("}");
+  if (a >= 0 && b > a) { v = tryP(noThink.slice(a, b + 1)); if (v) return v; }
+  return null;
+}
+
 // ── location handling (§13) — ONLY real locations, never fabricated ───────────
 // Build the list of real locations to vary across, from the location context plus
 // any explicit extra locations and "in <Place>" phrases mined from the keywords.
@@ -306,6 +340,7 @@ RULES:
 4. Ground every prompt in the supplied real data (keywords, competitor keywords, topic gaps, locations, category). Spread across them — never near-duplicates.
 5. For localized clusters, write location-specific prompts using the supplied real locations only — do NOT invent places.
 6. Set "intent" to one of: ${GEO_INTENTS.join(", ")}. Set "expected_answer_type" to one of: ${ANSWER_STRUCTURES.join(", ")}.
+7. GROUND every prompt in the SUPPLIED REAL DATA for THIS specific business. Treat "serp_people_also_ask" and "serp_related_searches" as ACTUAL user questions to base prompts on; directly target the "keyword_gaps", "serp_content_gaps" and "missing_pages"; reflect what "competitor_topics" cover; and use "geo_themes" (commercial / informational / local / competitor / AI-visibility) as the backbone of the set. Prefer these real, business-specific signals over generic phrasings.
 
 Return ONLY valid JSON — an array, no prose, no markdown fences:
 [{"prompt":"...","cluster":"<exact cluster name>","intent":"<intent>","neutral":true|false,"source_keyword":"<a real keyword it maps to, or \\"\\">","expected_answer_type":"<type>"}]`;
@@ -313,9 +348,17 @@ Return ONLY valid JSON — an array, no prose, no markdown fences:
     industry, category: subject,
     locations: locations.map((l) => l.label).filter(Boolean).slice(0, 6),
     keywords: keywordThemes.slice(0, 40),
+    keyword_details: (ctx.keywordDetails || []).slice(0, 20).map((k) => ({ term: k.term, volume: k.volume })),
+    keyword_gaps: (ctx.keywordGaps || []).slice(0, 15),
     competitor_keywords: competitorThemes.slice(0, 20),
     competitor_brands: comps.slice(0, 6),
+    competitor_topics: (ctx.competitorTopics || []).slice(0, 6),
     topic_gaps: (topicGaps || []).slice(0, 20),
+    serp_people_also_ask: (ctx.serpPaa || []).slice(0, 15),
+    serp_related_searches: (ctx.serpRelated || []).slice(0, 15),
+    serp_content_gaps: (ctx.serpContentGaps || []).slice(0, 15),
+    missing_pages: (ctx.missingPages || []).slice(0, 12),
+    geo_themes: ctx.themes || null,
     homepage_title: homepageTitle || null,
     search_intent: searchIntent || null,
     clusters: batchClusters,
@@ -374,6 +417,49 @@ function normalizeClaudeItems(arr, ctx) {
     out.push({ prompt, cluster, intent, neutral, source_keyword: clean(item?.source_keyword), expected_answer_type: eat, location: null });
   }
   return out;
+}
+
+// ── deep analysis (full mode) — synthesize the FULL dataset into GEO themes ────
+// Implements the §"analyze, then generate" step: Opus distils brand/commercial/
+// informational/local/competitor topics + keyword/SERP/content/authority gaps + likely
+// AI-visibility themes from Steps 3-5 + 5B, which then seed the prompt generation.
+// Best-effort: returns null on any failure (generation proceeds with raw signals).
+async function analyzeGeoThemes(ctx, domain) {
+  try {
+    const { claudeChat } = await import("../../claude/client.js");
+    const sys = `You analyze a business's full SEO/GEO dataset and distil it into the THEMES an AI-visibility prompt set should target. Return ONLY JSON (no prose):
+{"commercial_topics":[],"informational_topics":[],"local_topics":[],"competitor_topics":[],"keyword_opportunities":[],"serp_gaps":[],"content_gaps":[],"authority_gaps":[],"ai_visibility_themes":[]}
+Each array: 4-10 short, specific phrases grounded ONLY in the supplied data (no invention). Do not put the client's own brand in neutral themes.`;
+    const data = {
+      brand: ctx.brand || null, industry: ctx.industry, category: ctx.subject,
+      locations: ctx.locations.map((l) => l.label).filter(Boolean).slice(0, 6),
+      top_keywords: (ctx.keywordDetails || []).slice(0, 25).map((k) => ({ term: k.term, volume: k.volume })),
+      keyword_gaps: ctx.keywordGaps || [], competitor_topics: ctx.competitorTopics || [],
+      serp_people_also_ask: ctx.serpPaa || [], serp_related_searches: ctx.serpRelated || [], serp_content_gaps: ctx.serpContentGaps || [],
+      missing_pages: ctx.missingPages || [], recommended_pages: ctx.recommendedPages || [], priority_actions: ctx.priorityActions || [],
+      authority: ctx.authority || null,
+    };
+    const { content } = await claudeChat({
+      messages: [{ role: "system", content: sys }, { role: "user", content: "Analyze and distil GEO themes from this dataset:\n" + JSON.stringify(data) }],
+      model: "claude-opus-4-8", max_tokens: 1500, timeoutMs: 60000,
+      meta: { domain, api: "geo-prompt-analysis", label: "geo-themes" },
+    });
+    const obj = extractJsonObjectLooseLocal(content);
+    if (!obj) return null;
+    const pick = (a) => textList(a).slice(0, 10);
+    const themes = {
+      commercial_topics: pick(obj.commercial_topics), informational_topics: pick(obj.informational_topics),
+      local_topics: pick(obj.local_topics), competitor_topics: pick(obj.competitor_topics),
+      keyword_opportunities: pick(obj.keyword_opportunities), serp_gaps: pick(obj.serp_gaps),
+      content_gaps: pick(obj.content_gaps), authority_gaps: pick(obj.authority_gaps),
+      ai_visibility_themes: pick(obj.ai_visibility_themes),
+    };
+    const total = Object.values(themes).reduce((n, a) => n + a.length, 0);
+    return total >= 4 ? themes : null;
+  } catch (e) {
+    try { console.warn("[promptPlanner] analyzeGeoThemes:", e?.message); } catch {}
+    return null;
+  }
 }
 
 async function generateWithClaude(quotas, ctx, domain) {
@@ -495,13 +581,13 @@ function balanceAndTrim(records, target, cap, clusters = GEO_CLUSTERS) {
  *   each prompt: { prompt, cluster, intent, neutral, source_keyword, expected_answer_type,
  *                  quality_score, priority_score, priority, dedup_key, location_context }
  */
-export async function planGeoPrompts({ source = {}, runMode = "standard", targetCount, useClaude = true } = {}) {
+export async function planGeoPrompts({ source = {}, runMode = "standard", planMode = "full", targetCount, useClaude = true } = {}) {
   const mode = normalizeRunMode(runMode);
   const band = RUN_MODE_PROMPT_RANGE[mode] || RUN_MODE_PROMPT_RANGE.standard;
   const target = Math.max(1, Math.min(250, Math.round(targetCount || band[1])));
   const minBand = band[0];
 
-  // ── build the grounding context from real data ──
+  // ── build the grounding context from the FULL dataset (Steps 1-5 + 5B) ──
   const keywordObjs = keywordObjects(source.keywords);
   const keywordThemes = uniq(keywordStrings(source.keywords)).slice(0, 60);
   const competitorThemes = uniq(keywordStrings(source.competitorKeywords)).slice(0, 30);
@@ -510,17 +596,39 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", target
   const subject = lc(source.category || source.industry || indFromKeywords(keywordThemes) || "services");
   const locationCtx = source.locationContext || { mode: source.locationMode || "country", country: source.location || "", label: source.location || "" };
   const locations = buildLocations(locationCtx, source.locations, keywordThemes);
+  const serp = source.serp || {};
+  const audit = source.audit || {};
   const ctx = {
     brand: clean(source.brand || source.clientName), subject, industry, locations,
     keywordThemes, competitorThemes, comps, keywordVol: keywordObjs,
     topicGaps: (source.topicGaps || []).map(clean).filter(Boolean),
     homepageTitle: clean(source.homepageTitle), searchIntent: clean(source.searchIntent),
+    // Phase 2.5 — rich grounding from Steps 3-5 + 5B (planning context only)
+    keywordDetails: keywordObjs.slice().sort((a, b) => (b.volume || 0) - (a.volume || 0)).slice(0, 30),
+    keywordGaps: uniq(keywordStrings(source.keywordGaps)).slice(0, 20),
+    serpPaa: textList(serp.paa).slice(0, 18),
+    serpRelated: textList(serp.relatedSearches).slice(0, 18),
+    serpContentGaps: textList(serp.contentGaps).slice(0, 18),
+    missingPages: pageTitleList(audit.missingPages).slice(0, 14),
+    recommendedPages: pageTitleList(audit.recommendedPages).slice(0, 14),
+    priorityActions: textList(audit.priorityActions).slice(0, 12),
+    competitorTopics: competitorTopicList(source.competitors || source.businessCompetitors).slice(0, 8),
+    authority: source.authority || null,
+    themes: null,
   };
+
+  // ── deep analysis (full mode) — distil the whole dataset into GEO themes FIRST,
+  //    then seed generation from them (§"analyze, then generate") ──
+  let analysisUsed = false;
+  if (planMode === "full" && useClaude && String(process.env.ANTHROPIC_API_KEY || "").trim()) {
+    const themes = await analyzeGeoThemes(ctx, source.domain || "");
+    if (themes) { ctx.themes = themes; analysisUsed = true; }
+  }
 
   // ── 1. quotas ──
   const quotas = allocateQuotas(target);
 
-  // ── 2. Claude batched generation (grounded) ──
+  // ── 2. Claude batched generation (grounded in the full dataset + themes) ──
   let records = [];
   let usedClaude = false;
   if (useClaude && String(process.env.ANTHROPIC_API_KEY || "").trim()) {
@@ -596,7 +704,7 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", target
   for (const it of GEO_INTENTS) distribution.by_intent[it] = 0;
   for (const p of prompts) { distribution.by_cluster[p.cluster] = (distribution.by_cluster[p.cluster] || 0) + 1; distribution.by_intent[p.intent] = (distribution.by_intent[p.intent] || 0) + 1; }
 
-  return { prompts, distribution, target, runMode: mode, usedClaude };
+  return { prompts, distribution, target, runMode: mode, planMode, usedClaude, analysisUsed };
 }
 
 export default planGeoPrompts;

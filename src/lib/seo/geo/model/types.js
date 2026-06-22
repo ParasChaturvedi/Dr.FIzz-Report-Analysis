@@ -213,4 +213,22 @@
  * @property {string} created_at
  */
 
+/**
+ * § Phase 2.5 — data readiness for a GEO plan. Captured on geo_runs + geo_prompts and
+ * surfaced in the preview. PLANNING CONTEXT ONLY — never a GEO result/score (Phase 3).
+ * @typedef {Object} GeoDataReadiness
+ * @property {"website_only"|"audit_partial"|"seo_data_ready"|"step5b_ready"|"full_ready"} data_readiness_status
+ * @property {Array<"step1_website"|"step2_business_context"|"step3_keywords"|"step4_competitors"|"step5_audit"|"step5b_dataforseo"|"step5b_moz"|"step5b_serp"|"step5b_backlinks"|"step5b_authority"|"step5b_competitor_data">} data_sources_used
+ * @property {"low"|"medium"|"high"} geo_prompt_confidence
+ * @property {{keywords_used:number,competitors_used:number,serp_results_used:number}} counts
+ * @property {{used_dataforseo:boolean,used_moz:boolean,used_serp:boolean,used_step5b:boolean}} flags
+ */
+
+/**
+ * § Phase 2.5 — plan DEPTH (how much data backs the plan), distinct from run mode
+ * (prompt VOLUME). "quick" = Step-1 website + basic crawl/audit (low confidence,
+ * "basic"); "full" = Steps 1-5 + 5B (production default, higher confidence).
+ * @typedef {"quick"|"full"} GeoPlanMode
+ */
+
 export {}; // typedef-only module
