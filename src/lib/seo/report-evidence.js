@@ -417,6 +417,25 @@ export function buildAioVisibility(serpIntel = {}, brandDomain = "", competitorD
   const top_cited_domains = Object.entries(citeFreq).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([domain, count]) => ({
     domain, count, is_brand: !!brandStem && stem(domain) === brandStem, is_competitor: compStems.some((c) => stem(domain) === c),
   }));
+
+  // Share of Voice in Google AI Overviews — your brand vs each competitor vs other sources,
+  // by share of ALL AI-Overview citations across the checked keywords. Real measured GEO SoV.
+  const totalCites = Object.values(citeFreq).reduce((a, b) => a + b, 0);
+  const sov = {};
+  for (const [domain, count] of Object.entries(citeFreq)) {
+    const s = stem(domain);
+    let key, label, kind;
+    if (brandStem && s === brandStem) { key = "__brand"; label = "Your brand"; kind = "brand"; }
+    else if (compStems.includes(s)) { key = s; label = domain; kind = "competitor"; }
+    else { key = "__other"; label = "Other sources"; kind = "other"; }
+    (sov[key] ||= { label, kind, citations: 0 }).citations += count;
+  }
+  // Always surface the brand (even at 0%) so the chart honestly shows "not cited yet".
+  if (brandStem && !sov.__brand) sov.__brand = { label: "Your brand", kind: "brand", citations: 0 };
+  const share_of_voice = Object.values(sov)
+    .map((e) => ({ ...e, share_pct: totalCites ? Math.round((e.citations / totalCites) * 100) : 0 }))
+    .sort((a, b) => (a.kind === "brand" ? -1 : b.kind === "brand" ? 1 : b.citations - a.citations));
+
   return {
     available: true,
     keywords_checked: checked,
@@ -425,6 +444,8 @@ export function buildAioVisibility(serpIntel = {}, brandDomain = "", competitorD
     featured_snippet_count: snippetCount,
     brand_cited_count: brandCited,
     brand_cited: brandCited > 0,
+    total_citations: totalCites,
+    share_of_voice,
     top_cited_domains,
     aio_keywords: aioKeywords.slice(0, 15),
   };

@@ -428,6 +428,7 @@ function AioVisibilityCard({ data, domain }) {
   const cited = (data.top_cited_domains || []).slice(0, 8);
   const trunc = (s) => { s = String(s || ""); return s.length > 18 ? s.slice(0, 17) + "…" : s; };
   const chartData = cited.map((c) => ({ label: trunc(c.domain), value: c.count, client: c.is_brand }));
+  const sovData = (data.share_of_voice || []).slice(0, 6).map((e) => ({ label: trunc(e.label), value: e.share_pct, client: e.kind === "brand" }));
   return (
     <div className="rounded-lg bg-white p-5 mb-4" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
       <div className="flex items-baseline gap-3 flex-wrap mb-2">
@@ -440,6 +441,9 @@ function AioVisibilityCard({ data, domain }) {
           ? <>{domain} is cited in <strong style={{ color: "#2E7D32" }}>{data.brand_cited_count}</strong> of them.</>
           : <>{domain} is <strong style={{ color: "#B3261E" }}>not yet cited</strong> in any — the sources below are who Google&apos;s AI trusts instead.</>}
       </p>
+      {sovData.length > 0 && (
+        <div className="mb-3"><BarChart title="Share of Voice — Google AI Overviews (you vs competitors)" data={sovData} valueFmt={(v) => `${v}%`} /></div>
+      )}
       {chartData.length > 0 && (
         <div className="mb-2"><BarChart title="Most-cited sources in Google AI Overviews" data={chartData} valueFmt={(v) => `${v}×`} /></div>
       )}
