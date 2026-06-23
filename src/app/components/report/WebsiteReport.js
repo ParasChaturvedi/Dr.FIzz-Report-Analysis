@@ -592,6 +592,64 @@ function KeywordInsights({ kwGap }) {
   );
 }
 
+// §6 — implementation-ready technical depth from the crawl we already run: crawl stats,
+// and the EXACT URLs to fix per issue (missing H1 / title / canonical, alt text, broken
+// links, orphan pages) so the audit reads as a work list, not a summary (#12).
+function TechnicalDepth({ crawl }) {
+  if (!crawl) return null;
+  const pages = Array.isArray(crawl.pages) ? crawl.pages : [];
+  const sum = crawl.summary || {};
+  const broken = Array.isArray(crawl.brokenLinks) ? crawl.brokenLinks : [];
+  const orphans = Array.isArray(crawl.orphanPages) ? crawl.orphanPages : [];
+  const dups = Array.isArray(crawl.duplicates) ? crawl.duplicates : [];
+  const u = (x) => (typeof x === "string" ? x : x?.url || x?.from || "");
+  const missingH1 = pages.filter((p) => !(p.h1s || []).length).map((p) => p.url).filter(Boolean);
+  const missingTitle = pages.filter((p) => !p.metaTitle).map((p) => p.url).filter(Boolean);
+  const noCanonical = pages.filter((p) => !p.canonical).map((p) => p.url).filter(Boolean);
+  const altPages = pages.filter((p) => (p.imgsWithoutAlt || 0) > 0).map((p) => ({ url: p.url, count: p.imgsWithoutAlt }));
+  const stats = [
+    ["Pages crawled", crawl.pageCount], ["Indexed", crawl.indexedPages], ["Avg words/page", sum.avgWordCount],
+    ["Broken links", broken.length], ["Orphan pages", orphans.length], ["Duplicate titles", dups.filter((d) => d.type === "title").length],
+  ].filter(([, v]) => v != null && v !== "");
+  const groups = [
+    { label: "Pages missing an H1", urls: missingH1 },
+    { label: "Pages missing a <title>", urls: missingTitle },
+    { label: "Pages with no canonical tag", urls: noCanonical },
+    { label: "Broken links", urls: broken.map(u).filter(Boolean) },
+    { label: "Orphan pages (no internal links in)", urls: orphans.map(u).filter(Boolean) },
+  ].filter((g) => g.urls.length);
+  if (!stats.length && !groups.length && !altPages.length) return null;
+  const Mono = ({ urls, extra }) => (
+    <div style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 11, color: "#6B6B6B", lineHeight: 1.6 }}>
+      {urls.slice(0, 6).map((x, j) => <div key={j} style={{ wordBreak: "break-all" }}>{typeof x === "string" ? x : `${x.url} `}{x.count != null && <span style={{ color: "#B3261E" }}>({x.count} imgs)</span>}</div>)}
+      {urls.length > 6 && <div style={{ color: "#9A9A9A" }}>+{urls.length - 6} more</div>}
+    </div>
+  );
+  return (
+    <div className="mt-6 space-y-5">
+      {stats.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {stats.map(([label, val], i) => (
+            <div key={i} className="bg-white rounded-lg p-4" style={_cardB}>
+              <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: 22, color: INK }}>{typeof val === "number" ? fmtNum(val) : val}</div>
+              <div style={{ fontFamily: BODY, fontSize: 10.5, color: "#8A8A8A", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {(groups.length > 0 || altPages.length > 0) && (
+        <div className="bg-white rounded-lg p-5" style={_cardB}>
+          <div style={_lblS}>Exactly which pages to fix</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+            {altPages.length > 0 && <div><div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 12.5, color: INK, marginBottom: 3 }}>Images without alt text ({altPages.length})</div><Mono urls={altPages} /></div>}
+            {groups.map((g, i) => <div key={i}><div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 12.5, color: INK, marginBottom: 3 }}>{g.label} ({g.urls.length})</div><Mono urls={g.urls} /></div>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // §14-25 GEO renderer (reference light style). Renders the FULL model (geo_score, SoV,
 // metrics, topic dominance, citation intelligence, Claude deep analysis) when a live scan
 // exists, and ALWAYS renders the readiness scorecard + tracked prompts + actions. Reads
@@ -1652,6 +1710,9 @@ export default function WebsiteReport({ data }) {
                 </tbody>
               </table>
             </div>
+
+            {/* §6 — crawl stats + the exact URLs to fix (implementation-ready, #12) */}
+            <TechnicalDepth crawl={d.websiteCrawl} />
           </AnimatedSection>
         </div>
       </section>

@@ -302,9 +302,46 @@ function buildMeasuringSuccessRows(baselineMetrics, crawlData, gmbData) {
   ];
 }
 
+// Distil ALL the collected data into concise, analysis-ready findings so Claude analyses
+// the real signals (review sentiment, exact problem pages, who owns the AI Overview /
+// snippet, the backlink gap, competitor technical gaps) instead of giving generic advice.
+function buildDeepSignals({ gmb, crawl, kwGap, competitorAudit }) {
+  const out = [];
+  const s = gmb?.sentiment;
+  if (s?.topPraises?.length) out.push(`Customers praise: ${s.topPraises.slice(0, 5).join(", ")}.`);
+  if (s?.topComplaints?.length) out.push(`Customers complain about: ${s.topComplaints.slice(0, 5).join(", ")}.`);
+  if (s?.urgentIssues?.length) out.push(`Urgent issues in reviews: ${s.urgentIssues.slice(0, 3).join(", ")}.`);
+  if (gmb?.unrepliedReviewCount) out.push(`${gmb.unrepliedReviewCount} customer reviews are unanswered.`);
+  if (gmb?.reviewVelocity != null) out.push(`Review velocity: ~${gmb.reviewVelocity}/month.`);
+  const notListed = (gmb?.directories || []).filter((d) => !d.listed).map((d) => d.name);
+  if (notListed.length) out.push(`NOT listed on these citation directories: ${notListed.slice(0, 6).join(", ")}.`);
+  const cs = crawl?.summary || {};
+  const tech = [];
+  if (cs.pagesMissingH1) tech.push(`${cs.pagesMissingH1} pages missing H1`);
+  if (cs.pagesMissingMetaDesc) tech.push(`${cs.pagesMissingMetaDesc} pages missing meta description`);
+  if ((crawl?.brokenLinks || []).length) tech.push(`${crawl.brokenLinks.length} broken links`);
+  if ((crawl?.orphanPages || []).length) tech.push(`${crawl.orphanPages.length} orphan pages`);
+  if (cs.totalImgsWithoutAlt) tech.push(`${cs.totalImgsWithoutAlt} images without alt text`);
+  if (tech.length) out.push(`Technical issues from the crawl: ${tech.join("; ")}.`);
+  const exH1 = (crawl?.pages || []).filter((p) => !(p.h1s || []).length).slice(0, 3).map((p) => p.url);
+  if (exH1.length) out.push(`Example pages missing an H1: ${exH1.join(", ")}.`);
+  const serp = kwGap?.serpIntel || {};
+  const aioKws = Object.entries(serp).filter(([, v]) => v?.features?.has_ai_overview || v?.ai_overview?.present);
+  if (aioKws.length) out.push(`Google shows an AI Overview for ${aioKws.length} priority keywords, e.g. ${aioKws.slice(0, 3).map(([kw, v]) => `"${kw}" (AI cites ${(v.ai_overview?.sources || []).slice(0, 3).join(", ") || "various"})`).join("; ")}.`);
+  const snip = Object.entries(serp).filter(([, v]) => v?.features?.featured_snippet).slice(0, 3).map(([kw, v]) => `"${kw}" owned by ${v.features.featured_snippet}`);
+  if (snip.length) out.push(`Featured snippets currently owned by: ${snip.join("; ")}.`);
+  const bl = (kwGap?.backlinkGap || []).slice(0, 5).map((g) => g.referring_domain);
+  if (bl.length) out.push(`Referring domains linking to competitors but NOT you: ${bl.join(", ")}.`);
+  const gaps = (kwGap?.gapKeywords || []).slice(0, 5).map((k) => `"${k.keyword}" (${k.volume}/mo, KD ${k.kd ?? "?"}, ${(k.foundIn || [])[0] || "a competitor"} ranks)`);
+  if (gaps.length) out.push(`Top gap keywords: ${gaps.join("; ")}.`);
+  const cmp = (competitorAudit?.comparison || []).filter((c) => c.gap === "high" || c.gap === "medium").map((c) => `${c.signal} — you: ${c.target}, competitors: ${c.competitors}`);
+  if (cmp.length) out.push(`Technical gaps vs competitors: ${cmp.slice(0, 4).join("; ")}.`);
+  return out.join("\n");
+}
+
 // ─── Website-level AI analysis ────────────────────────────────────────────────
 
-async function generateWebsiteAnalysis({ domain, keywords, competitors, businessData, seoData, crawlData, gmbData, keywordGapData, negativeExclusions }) {
+async function generateWebsiteAnalysis({ domain, keywords, competitors, businessData, seoData, crawlData, gmbData, keywordGapData, negativeExclusions, deepSignals = "" }) {
   const primaryKw = (keywords || []).slice(0, 5).join(", ") || domain;
   const competitorList = (competitors || []).slice(0, 5).join(", ") || "major industry players";
   const industry = businessData?.industrySector || businessData?.industry || "business";
@@ -330,6 +367,7 @@ Rules:
 - contentArchitecture.siteStructure must list ONLY NEW pages the site should BUILD to capture keyword gaps / uncovered services — do NOT list pages that already exist (Homepage, About, Contact, existing service pages). Each entry maps to a real keyword opportunity.
 - competitorLandscape.localCompetitors AND nationalPlatforms must BOTH be REAL businesses that DIRECTLY compete with the client (same offering, comparable tier) — draw them from the "Competitors listed" above. localCompetitors = local/regional rivals; nationalPlatforms = the same kind of direct competitor operating at national scale. NEVER list search aggregators, directories, marketplaces, review sites, or listing platforms (e.g. Justdial, Sulekha, Clutch, GoodFirms, Techreviewer, Yelp) — those are search intermediaries, NOT business competitors, and must never appear here.
 - Every keyword, competitor, and recommendation MUST be genuinely relevant to what THIS business actually offers. If a data point looks irrelevant to the business, DROP it — do not include it just to fill the list.
+- DEEP ANALYSIS (critical): the "DEEP SIGNALS" block in the data below contains REAL findings — the customer's own review sentiment (what they praise / complain about), the exact pages with technical problems, who currently owns the Google AI Overview / featured snippet for their keywords, the referring domains linking to competitors but not them, and their technical gaps vs competitors. You MUST analyse these specific signals and weave the concrete fact into the relevant section: cite the actual praise/complaint, name the exact competitor domain or AI-Overview source, reference the specific gap keyword + its difficulty, point to the exact problem page. Never give generic advice where a specific signal exists.
 - Do NOT give generic advice. Every sentence must be specific to THIS business.${exclusionRule}`;
 
   const domainCtx = seoData ? `
@@ -363,6 +401,11 @@ KEYWORD GAP (real competitor data):
   Top gaps: ${(keywordGapData.gapKeywords || []).slice(0, 6).map(k => `"${k.keyword}" (vol:${k.volume})`).join(", ")}
   People Also Ask: ${(keywordGapData.paaQuestions || []).slice(0, 4).map(q => q.question).join(" | ")}` : "";
 
+  const deepCtx = deepSignals ? `
+
+DEEP SIGNALS (analyse these specifically and reference them in the relevant sections):
+${deepSignals}` : "";
+
   const userPrompt = `Generate a deep, data-specific SEO & GEO strategy for this business. Every recommendation must reference the real numbers below.
 
 BUSINESS PROFILE:
@@ -373,7 +416,7 @@ BUSINESS PROFILE:
   Keywords:  ${primaryKw}
   Competitors listed: ${competitorList}
   Location:  ${businessData?.location || "India"}
-${domainCtx}${crawlCtx}${gmbCtx}${kwCtx}
+${domainCtx}${crawlCtx}${gmbCtx}${kwCtx}${deepCtx}
 
 NOTE: Technical SEO issues and GMB checklist are computed separately from real crawl data. You handle only the strategic and creative sections below.
 
@@ -917,6 +960,8 @@ export async function POST(request) {
         keywordGapData: kwGapRaw,
         // Pass excluded terms so Claude never surfaces them in contentBlueprint/uncontested/etc.
         negativeExclusions: Array.isArray(negativeExclusions) ? negativeExclusions : (businessData?.negativeExclusions || []),
+        // Deep signals so Claude analyses the REAL review/technical/SERP/backlink/competitor data.
+        deepSignals: buildDeepSignals({ gmb: gmbRaw, crawl: crawlRaw, kwGap: kwGapRaw, competitorAudit: prefetchedSeoData?.competitorAudit }),
       });
 
       // Override AI placeholders with real computed sections
