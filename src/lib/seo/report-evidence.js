@@ -31,20 +31,32 @@ function opportunityScore({ volume = 0, difficulty = 50, intent = "" } = {}) {
 const clean = (s) => String(s == null ? "" : s).trim().replace(/\s+/g, " ");
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return String(u || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0]; } };
 
-// #3 — real per-keyword competitor benchmark from the SERP data already collected in the
-// keyword gap (which competitor ranks, at what position + URL). No extra API call.
+// #3 — real per-keyword competitor benchmark from the SERP: the actual top-ranking
+// domains + URL, PLUS the SERP features that decide the click (AI Overview + its cited
+// sources, featured snippet owner, local pack, PAA). No fabrication — only what the SERP
+// returned. Falls back to the keyword-gap data when rich SERP intel isn't available.
 function serpBenchmark(keyword, serpByKeyword = {}, competitorNames = []) {
   const serp = serpByKeyword[lc(keyword)] || null;
-  const foundIn = (serp?.foundIn || []).filter(Boolean);
-  const who = foundIn[0] || (serp?.url ? hostOf(serp.url) : "");
-  if (who) {
-    const pos = serp?.position ? `#${serp.position}` : "in the top results";
-    const url = serp?.url ? ` (${serp.url})` : "";
-    const also = foundIn.length > 1 ? `; also ranking: ${foundIn.slice(1, 3).join(", ")}` : "";
-    return `${who} ranks ${pos} for "${clean(keyword)}"${url}${also}. You don't rank here — match the page's intent + depth to take the position.`;
-  }
-  if (competitorNames.length) return `Tracked competitors in this space: ${competitorNames.join(", ")}. No competitor holds the top results for this exact term — an open opportunity to own it first.`;
-  return "";
+  if (!serp) return competitorNames.length ? `Tracked competitors in this space: ${competitorNames.join(", ")}.` : "";
+  const top = Array.isArray(serp.top_results) ? serp.top_results : [];
+  const foundIn = (serp.foundIn || []).filter(Boolean);
+  const top1 = top[0];
+  const who = top1?.domain || foundIn[0] || (serp.url ? hostOf(serp.url) : "");
+  const pos = top1?.position ? `#${top1.position}` : (serp.position ? `#${serp.position}` : "in the top results");
+  const url = top1?.url || serp.url || "";
+  const top3 = top.slice(0, 3).map((r) => r.domain).filter(Boolean);
+  const lead = who
+    ? `${who} ranks ${pos} for "${clean(keyword)}"${url ? ` (${url})` : ""}.${top3.length > 1 ? ` Top 3: ${top3.join(", ")}.` : ""} Match the winning page's intent + depth to take the position.`
+    : "";
+  // SERP feature intelligence — what content format actually wins the click.
+  const f = serp.features || {};
+  const feats = [];
+  if (serp.ai_overview?.present || f.has_ai_overview) { const s = (serp.ai_overview?.sources || []).slice(0, 3); feats.push(`Google shows an AI Overview here${s.length ? ` (cites ${s.join(", ")})` : ""} — answer-first, well-structured content is needed to be cited.`); }
+  if (f.featured_snippet) feats.push(`Featured snippet owned by ${f.featured_snippet} — add a concise definition/list/table to win it.`);
+  if (f.has_local_pack) feats.push(`A local pack appears — GBP + local signals matter for this term.`);
+  if (f.has_paa) feats.push(`People-Also-Ask present — add an FAQ block that answers them.`);
+  const out = (lead + (feats.length ? ` SERP features — ${feats.join(" ")}` : "")).trim();
+  return out || (competitorNames.length ? `Tracked competitors in this space: ${competitorNames.join(", ")}.` : "");
 }
 function tokenSet(s) { return new Set(lc(s).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t.length >= 3)); }
 function tokenOverlap(a, b) {

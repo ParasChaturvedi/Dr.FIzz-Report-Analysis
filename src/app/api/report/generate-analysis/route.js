@@ -861,6 +861,8 @@ export async function POST(request) {
         coreServices:  businessData?.coreServices || businessData?.services || [],
         negativeExclusions: Array.isArray(negativeExclusions) ? negativeExclusions : (businessData?.negativeExclusions || []),
         rawKeywords: rawKeywordsForLogic,
+        // #3 — real SERP intelligence per priority keyword (top-10 + features + AI Overview).
+        serpIntel:   kwGapRaw?.serpIntel || {},
         crawlData:   crawlRaw,
         clientGmb:   gmbRaw,
         competitorGmbs,

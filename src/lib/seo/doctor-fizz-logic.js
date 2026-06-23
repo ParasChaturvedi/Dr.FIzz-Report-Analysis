@@ -2553,7 +2553,7 @@ export function deriveCompetitorBrands(competitors = []) {
 export function runBusinessLogic(input = {}) {
   const {
     domain, clientName, industry = "", reportType = "website", location = "India",
-    baselineRaw = {}, competitors = [], rawKeywords = [],
+    baselineRaw = {}, competitors = [], rawKeywords = [], serpIntel = {},
     businessCompetitors = [], searchCompetitors = [],
     clientGmb = null, competitorGmbs = [],
     directories = [], competitorBacklinks = [],
@@ -2576,6 +2576,12 @@ export function runBusinessLogic(input = {}) {
     if (!key || serpByKeyword[key]) continue;
     const foundIn = Array.isArray(kw?.foundIn) ? kw.foundIn.filter(Boolean) : [];
     if (kw?.url || kw?.position != null || foundIn.length) serpByKeyword[key] = { url: kw.url || null, position: kw.position ?? null, foundIn };
+  }
+  // Merge the RICH SERP intel (real top-10 + SERP features + AI Overview) onto each entry.
+  for (const [k, intel] of Object.entries(serpIntel || {})) {
+    const key = String(k).toLowerCase().trim();
+    if (!key || !intel) continue;
+    serpByKeyword[key] = { ...(serpByKeyword[key] || {}), ...intel };
   }
 
   // ── V3 COMPETITOR SEGMENTATION (Part 4) — only VALIDATED BUSINESS competitors

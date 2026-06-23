@@ -92,31 +92,68 @@ function opportunityScore(vol, diff) {
   return Math.round((v / d) * 10) / 10;
 }
 
-// ── Get PAA questions from SERP for top keywords ──────────────────────────────
-async function getPaaQuestions(keywords, auth) {
-  if (!keywords.length) return [];
-  const kws = keywords.slice(0, 3);
+// ── Rich SERP intelligence for the priority keywords. One SERP call each (AI Overview
+// enabled) yields the REAL top-10 organic results, the SERP features present (featured
+// snippet owner, PAA, local pack, video, shopping), and Google's AI Overview + its cited
+// sources — so every recommendation is backed by the actual SERP, not just gap aggregates.
+// People-Also-Ask is derived from the SAME calls (no separate SERP spend). Cost-bounded
+// to SERP_INTEL_KEYWORDS (default 15) priority keywords.
+async function getSerpIntel(keywords, auth, limit = Number(process.env.SERP_INTEL_KEYWORDS || 15)) {
+  const kws = [...new Set((keywords || []).map(k => String(k || "").trim().toLowerCase()).filter(k => k.length > 2))].slice(0, Math.max(1, limit));
+  if (!kws.length) return { serpIntel: {}, paaQuestions: [] };
   const results = await Promise.allSettled(
-    kws.map(kw =>
-      dfsPost("serp/google/organic/live/advanced", [{
-        keyword: kw, language_code: "en", location_name: "India", depth: 10, device: "desktop",
-      }], auth)
-    )
+    kws.map(kw => dfsPost("serp/google/organic/live/advanced", [{
+      keyword: kw, language_code: "en", location_name: "India", depth: 10, device: "desktop",
+      load_async_ai_overview: true, people_also_ask_click_depth: 1,
+    }], auth))
   );
-
-  const questions = [];
-  for (const r of results) {
-    if (r.status !== "fulfilled") continue;
+  const serpIntel = {};
+  const paa = [];
+  kws.forEach((kw, i) => {
+    const r = results[i];
+    if (r.status !== "fulfilled") return;
     const items = r.value?.tasks?.[0]?.result?.[0]?.items || [];
-    for (const item of items) {
-      if (item.type === "people_also_ask" && Array.isArray(item.items)) {
-        for (const q of item.items) {
-          if (q.title) questions.push({ question: q.title, keyword: q.seed_keyword || kws[0] });
-        }
-      }
+    const top_results = [];
+    const features = { featured_snippet: null, has_paa: false, has_ai_overview: false, has_local_pack: false, has_video: false, has_shopping: false };
+    let ai_overview = null;
+    for (const it of items) {
+      const t = it?.type;
+      if (t === "organic" && top_results.length < 10) {
+        top_results.push({ position: it.rank_absolute ?? it.rank_group ?? null, url: it.url || null, domain: it.domain || norm(it.url || ""), title: it.title || "" });
+      } else if (t === "featured_snippet") {
+        features.featured_snippet = it.domain || norm(it.url || "") || null;
+      } else if (t === "people_also_ask") {
+        features.has_paa = true;
+        for (const q of (it.items || [])) if (q.title) paa.push({ question: q.title, keyword: kw });
+      } else if (t === "ai_overview") {
+        features.has_ai_overview = true;
+        const refs = it.references || (Array.isArray(it.items) ? it.items.flatMap(x => x.references || []) : []) || [];
+        const sources = [...new Set(refs.map(rf => rf.domain || norm(rf.url || "")).filter(Boolean))].slice(0, 6);
+        ai_overview = { present: true, sources };
+      } else if (t === "local_pack" || t === "map") { features.has_local_pack = true; }
+      else if (t === "video") { features.has_video = true; }
+      else if (t === "shopping" || t === "popular_products") { features.has_shopping = true; }
     }
-  }
-  return questions.slice(0, 20);
+    serpIntel[kw] = { top_results, features, ai_overview };
+  });
+  const seen = new Set();
+  const paaQuestions = paa.filter(q => { const k = String(q.question).toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 20);
+  return { serpIntel, paaQuestions };
+}
+
+// ── Real Keyword Difficulty (0-100) for a batch of keywords — one cheap DataForSEO Labs
+// call (vs the ad-competition proxy we had before). Returns a keyword→KD map.
+async function getBulkKeywordDifficulty(keywords, auth) {
+  const kws = [...new Set((keywords || []).map(k => String(k || "").trim()).filter(Boolean))].slice(0, 1000);
+  if (!kws.length) return {};
+  try {
+    const data = await dfsPost("dataforseo_labs/google/bulk_keyword_difficulty/live",
+      [{ keywords: kws, language_code: "en", location_name: "India" }], auth);
+    const items = data?.tasks?.[0]?.result?.[0]?.items || [];
+    const out = {};
+    for (const it of items) { const k = String(it?.keyword || "").toLowerCase(); if (k) out[k] = it?.keyword_difficulty ?? null; }
+    return out;
+  } catch (e) { console.warn("[keyword-gap] bulk_keyword_difficulty failed:", e?.message); return {}; }
 }
 
 // ── Fetch keyword suggestions for a domain (broad) ────────────────────────────
@@ -212,16 +249,26 @@ export async function POST(request) {
     .sort((a, b) => (a.position || 999) - (b.position || 999))
     .slice(0, 30);
 
-  // PAA questions for target's top keywords
-  const topKws = keywords.length > 0 ? keywords.slice(0, 3) : targetRanked.slice(0, 3).map(k => k.keyword);
-  const paaQuestions = await getPaaQuestions(topKws, auth);
-
   // Keyword suggestions for target domain (new opportunities from DFS)
   const suggestions = await getKeywordSuggestions(target, auth, 80);
   const newOpps = suggestions
     .filter(s => !targetKws.has(s.keyword))
     .sort((a, b) => opportunityScore(b.volume, b.difficulty) - opportunityScore(a.volume, a.difficulty))
     .slice(0, 20);
+
+  // ── Rich SERP intelligence (real top-10 + SERP features + AI Overview) for the priority
+  // keywords; PAA is derived from the SAME calls. Priority = user keywords + easy wins +
+  // commercial-intent gap keywords, deduped + capped inside getSerpIntel.
+  const priorityKws = [
+    ...keywords,
+    ...easyWins.map(k => k.keyword),
+    ...gapKeywords.filter(k => ["transactional", "local", "commercial"].includes(k.intent)).map(k => k.keyword),
+  ].filter(Boolean);
+  const { serpIntel, paaQuestions } = await getSerpIntel(priorityKws, auth);
+
+  // ── Real Keyword Difficulty (0-100) attached to the gap + new-opportunity keywords.
+  const kdMap = await getBulkKeywordDifficulty([...gapKeywords, ...newOpps].map(k => k.keyword), auth);
+  for (const k of [...gapKeywords, ...newOpps]) { const kd = kdMap[String(k.keyword || "").toLowerCase()]; if (kd != null) k.kd = kd; }
 
   const out = {
     domain: target,
@@ -233,6 +280,8 @@ export async function POST(request) {
     easyWins,
     newOpportunities: newOpps,
     paaQuestions,
+    // #3 — real SERP intelligence per priority keyword (top-10 + features + AI Overview).
+    serpIntel,
     summary: {
       totalGapKeywords: gapKeywords.length,
       totalEasyWins:    easyWins.length,
@@ -243,6 +292,8 @@ export async function POST(request) {
     ...(_allMapsEmpty ? { _partial: true } : {}),
   };
   try { await putCached({ domain: target, dataType: cacheType, payload: out, source: "keyword-gap" }); } catch {}
-  await logUsage({ domain: target, api: "keyword-gap", costUSD: 0.08, cached: false });
+  // Cost: ranked_keywords (target + competitors) + keywords_for_site + ~15 SERP-advanced
+  // (AI Overview enabled, ~$0.004 ea) + 1 bulk_keyword_difficulty. ~$0.16 cache-cold.
+  await logUsage({ domain: target, api: "keyword-gap", costUSD: 0.16, cached: false });
   return NextResponse.json(out);
 }
