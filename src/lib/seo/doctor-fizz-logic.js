@@ -25,7 +25,7 @@
 
 // Track 1.2 — evidence framework (every recommendation → 10-field evidence structure,
 // existing-page checks, honest GEO status, findings-vs-projections separation).
-import { buildEvidencePlan, buildGeoStatus, separateKpis } from "./report-evidence.js";
+import { buildEvidencePlan, buildGeoStatus, separateKpis, buildAiReadiness } from "./report-evidence.js";
 
 // ── Missing data labels (Problem 7) ───────────────────────────────────────────
 export const MISSING_LABELS = {
@@ -2567,6 +2567,17 @@ export function runBusinessLogic(input = {}) {
     aiVisibility = null,
   } = input;
 
+  // ── #3 — per-keyword competitor SERP evidence (which competitor ranks, at what URL +
+  //    position). Already collected in the keyword-gap data (rawKeywords carry foundIn /
+  //    url / position) — NO extra API call. Feeds the evidence plan's Competitor Benchmark.
+  const serpByKeyword = {};
+  for (const kw of (rawKeywords || [])) {
+    const key = String(kw?.keyword || "").toLowerCase().trim();
+    if (!key || serpByKeyword[key]) continue;
+    const foundIn = Array.isArray(kw?.foundIn) ? kw.foundIn.filter(Boolean) : [];
+    if (kw?.url || kw?.position != null || foundIn.length) serpByKeyword[key] = { url: kw.url || null, position: kw.position ?? null, foundIn };
+  }
+
   // ── V3 COMPETITOR SEGMENTATION (Part 4) — only VALIDATED BUSINESS competitors
   //    may enter direct comparison, keyword gap, GBP, and overtake logic. Search
   //    competitors + platform interceptors are confined to a search-context bucket. ──
@@ -2736,7 +2747,9 @@ export function runBusinessLogic(input = {}) {
     // Track 1.2 — evidence-first execution layer (all the above recommendations, each
     // restructured into the 10-field evidence format; existing-page checks applied so we
     // never recommend a page that already exists).
-    evidence_plan: buildEvidencePlan({ technical_issues, content_architecture, priority_action_plan, gbp_comparison, backlinks, competitors: comparableCompetitors }, crawlData),
+    evidence_plan: buildEvidencePlan({ technical_issues, content_architecture, priority_action_plan, gbp_comparison, backlinks, competitors: comparableCompetitors, serpByKeyword }, crawlData),
+    // #22 / #23 — entity-level GEO audit + AI-readiness score, from real crawl + GMB signals.
+    ai_readiness: buildAiReadiness(crawlData, clientGmb),
     // #14 — current metrics vs targets vs forecasts vs assumptions, kept separate.
     kpi_breakdown: separateKpis(kpis),
     // #9 — honest GEO state (planned / methodology-ready / prompts-ready / collection-not-run).

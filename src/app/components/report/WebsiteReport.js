@@ -342,6 +342,82 @@ function GbpComparisonTable({ gbp = {} }) {
   );
 }
 
+// #21 — lightweight inline SVG horizontal bar chart (no chart lib; renders crisply in the
+// Puppeteer PDF). data = [{ label, value, client? }]; the client bar is accented orange.
+function BarChart({ title, data, valueFmt = (v) => String(v) }) {
+  const rows = (data || []).filter((d) => d && Number.isFinite(Number(d.value)));
+  if (!rows.length) return null;
+  const max = Math.max(...rows.map((d) => Number(d.value)), 1);
+  const W = 560, barH = 22, gap = 13, padL = 138, padR = 60, top = title ? 30 : 8;
+  const H = top + rows.length * (barH + gap);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: W, display: "block" }} role="img" aria-label={title || "comparison chart"}>
+      {title && <text x="0" y="15" style={{ fontFamily: BODY, fontWeight: 700, fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", fill: ORANGE }}>{title}</text>}
+      {rows.map((d, i) => {
+        const y = top + i * (barH + gap);
+        const w = Math.max(2, (Number(d.value) / max) * (W - padL - padR));
+        const client = !!d.client;
+        return (
+          <g key={i}>
+            <text x={padL - 10} y={y + barH / 2 + 4} textAnchor="end" style={{ fontFamily: BODY, fontSize: 11, fill: client ? INK : "#5A5A5A", fontWeight: client ? 700 : 400 }}>{d.label}</text>
+            <rect x={padL} y={y} width={W - padL - padR} height={barH} rx={3} fill="#F0F0F0" />
+            <rect x={padL} y={y} width={w} height={barH} rx={3} fill={client ? ORANGE : "#9A9A9A"} />
+            <text x={padL + w + 8} y={y + barH / 2 + 4} style={{ fontFamily: HEAD, fontSize: 11, fontWeight: 700, fill: client ? ORANGE : "#5A5A5A" }}>{valueFmt(d.value)}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// #21 — Google-reviews comparison chart (you vs competitors) from real gbp_comparison data.
+function GbpReviewChart({ gbp = {} }) {
+  const client = gbp?.client || null;
+  const comps = Array.isArray(gbp?.competitors) ? gbp.competitors : [];
+  if (!client || !comps.length) return null;
+  const trunc = (s) => { s = String(s || ""); return s.length > 16 ? s.slice(0, 15) + "…" : s; };
+  const data = [
+    { label: `${trunc(client.name || "You")} (you)`, value: Number(client.review_count || 0), client: true },
+    ...comps.map((c) => ({ label: trunc(c.name || c.domain || "Competitor"), value: Number(c.review_count || 0) })),
+  ].filter((d) => Number.isFinite(d.value));
+  if (data.every((d) => d.value === 0)) return null;
+  return (
+    <div className="rounded-lg bg-white p-5 mb-5" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+      <BarChart title="Google Reviews — You vs Competitors" data={data} valueFmt={(v) => fmtNum(v)} />
+    </div>
+  );
+}
+
+// #22 / #23 — AI & Entity Readiness scorecard (data.doctorFizz.ai_readiness). Deterministic
+// score + per-signal checklist of how ready the site is to be cited/recommended by AI engines.
+function AiReadinessCard({ data }) {
+  if (!data || !data.available || !Array.isArray(data.signals) || !data.signals.length) return null;
+  const c = data.score >= 75 ? ORANGE : data.score >= 45 ? "#9A6A12" : "#B3261E";
+  return (
+    <div className="rounded-lg bg-white p-5 mb-4" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+      <div className="flex items-baseline gap-3 flex-wrap mb-2">
+        <div className="uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: 10, letterSpacing: "0.18em", color: ORANGE }}>AI &amp; Entity Readiness</div>
+        <span style={{ fontFamily: HEAD, fontWeight: 700, fontSize: 26, color: c }}>{data.score}<span style={{ fontSize: 13, color: "#8A8A8A" }}>/100</span></span>
+        <span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: c, color: "#fff" }}>{data.band}</span>
+      </div>
+      <p style={{ fontFamily: BODY, fontSize: 12.5, lineHeight: 1.5, color: "#5A5A5A", marginBottom: 12, maxWidth: "46rem" }}>
+        How ready the site is to be understood, cited and recommended by AI answer engines — scored from real structured-data, entity and content signals on the site.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+        {data.signals.map((s, i) => (
+          <div key={i} className="flex items-start gap-2.5 rounded border p-3" style={{ borderColor: "#EDEDED" }}>
+            <span style={{ color: s.ok ? "#2E7D32" : "#B3261E", fontWeight: 700, flexShrink: 0, fontFamily: BODY }}>{s.ok ? "✓" : "✗"}</span>
+            <div className="min-w-0">
+              <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 12.5, color: INK }}>{s.label}</div>
+              <div style={{ fontFamily: BODY, fontSize: 11.5, lineHeight: 1.45, color: "#6B6B6B", marginTop: 2 }}>{s.detail}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // §14-25 GEO renderer (reference light style). Renders the FULL model (geo_score, SoV,
 // metrics, topic dominance, citation intelligence, Claude deep analysis) when a live scan
 // exists, and ALWAYS renders the readiness scorecard + tracked prompts + actions. Reads
@@ -1440,6 +1516,8 @@ export default function WebsiteReport({ data }) {
 
             {/* #6 — competitor benchmarking table (real client-vs-competitor GBP data) */}
             <GbpComparisonTable gbp={d.doctorFizz?.gbp_comparison} />
+            {/* #21 — Google-reviews comparison chart */}
+            <GbpReviewChart gbp={d.doctorFizz?.gbp_comparison} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* checklist white card */}
@@ -1662,6 +1740,9 @@ export default function WebsiteReport({ data }) {
                 ))}
               </ul>
             </div>
+
+            {/* #22 / #23 — AI & Entity Readiness scorecard (real crawl + GMB signals) */}
+            <AiReadinessCard data={d.doctorFizz?.ai_readiness} />
 
             {/* Full §14-25 GEO model (SoV, metrics, topic dominance, citation intelligence,
                 Claude deep analysis) when a live scan exists; readiness + tracked prompts +

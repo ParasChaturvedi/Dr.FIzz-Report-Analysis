@@ -29,6 +29,23 @@ function opportunityScore({ volume = 0, difficulty = 50, intent = "" } = {}) {
   return Math.round(Math.max(0, Math.min(100, v * 0.45 + d * 0.4 + boost)));
 }
 const clean = (s) => String(s == null ? "" : s).trim().replace(/\s+/g, " ");
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return String(u || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0]; } };
+
+// #3 — real per-keyword competitor benchmark from the SERP data already collected in the
+// keyword gap (which competitor ranks, at what position + URL). No extra API call.
+function serpBenchmark(keyword, serpByKeyword = {}, competitorNames = []) {
+  const serp = serpByKeyword[lc(keyword)] || null;
+  const foundIn = (serp?.foundIn || []).filter(Boolean);
+  const who = foundIn[0] || (serp?.url ? hostOf(serp.url) : "");
+  if (who) {
+    const pos = serp?.position ? `#${serp.position}` : "in the top results";
+    const url = serp?.url ? ` (${serp.url})` : "";
+    const also = foundIn.length > 1 ? `; also ranking: ${foundIn.slice(1, 3).join(", ")}` : "";
+    return `${who} ranks ${pos} for "${clean(keyword)}"${url}${also}. You don't rank here — match the page's intent + depth to take the position.`;
+  }
+  if (competitorNames.length) return `Tracked competitors in this space: ${competitorNames.join(", ")}. No competitor holds the top results for this exact term — an open opportunity to own it first.`;
+  return "";
+}
 function tokenSet(s) { return new Set(lc(s).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t.length >= 3)); }
 function tokenOverlap(a, b) {
   const A = tokenSet(a), B = tokenSet(b);
@@ -142,6 +159,7 @@ function backlinkRecs(bl = {}) {
 export function buildEvidencePlan(parts = {}, crawlData = null) {
   const crawlPages = Array.isArray(crawlData?.pages) ? crawlData.pages : (Array.isArray(parts.crawlPages) ? parts.crawlPages : []);
   const competitorNames = competitorNameList(parts.competitors);
+  const serpByKeyword = parts.serpByKeyword || {};
   const recs = [];
 
   // Technical SEO (#12 — implementation-ready: affected counts, validation)
@@ -191,9 +209,9 @@ export function buildEvidencePlan(parts = {}, crawlData = null) {
       action,
       expected_impact: `Capture the "${clean(p.keyword_cluster || label)}" demand → new ranking + organic traffic` + (p._kind === "commercial" ? " on a conversion page" : ""),
       validation_metric: validationFor("content", p),
-      // honest competitor context — names the tracked rivals; exact per-keyword ranking URL
-      // needs competitor SERP data (collected in the Track-2 data pipeline), not invented.
-      competitor_benchmark: competitorNames.length ? `Tracked competitors in this space: ${competitorNames.join(", ")} (per-keyword ranking URL added once competitor SERP data is collected)` : "",
+      // #3 — REAL per-keyword competitor benchmark: which competitor ranks, at what
+      // position + URL (from the keyword-gap SERP data; no fabrication, no extra call).
+      competitor_benchmark: serpBenchmark(p.keyword_cluster || label, serpByKeyword, competitorNames),
       priority: p.priority,
       confidence: ex.exists ? CONFIDENCE.HIGH : CONFIDENCE.MEDIUM,
       channel: "Content",
@@ -306,4 +324,52 @@ export function separateKpis(kpis = {}) {
   return { current, targets, forecasts, assumptions };
 }
 
-export default { buildEvidencePlan, checkExistingPage, buildGeoStatus, separateKpis };
+// ── #22 entity-level GEO + #23 AI-readiness score. Deterministic, computed from the REAL
+// crawl + GMB signals (no fabrication): structured data, entity identity (sameAs/NAP),
+// answer-first FAQ coverage, content depth, About page, author/E-E-A-T. Weights sum to 100.
+export function buildAiReadiness(crawlData = {}, gmbData = {}) {
+  const pages = Array.isArray(crawlData?.pages) ? crawlData.pages : [];
+  const summary = crawlData?.summary || {};
+  const schemaTypes = new Set((summary.pagesWithSchemaTypes || []).map((s) => lc(s)));
+  for (const p of pages) for (const s of (p.schemas || [])) if (s?.type) schemaTypes.add(lc(s.type));
+  const hasType = (...types) => types.some((t) => [...schemaTypes].some((s) => s.includes(t)));
+
+  const gmb = gmbData?.gmb || {};
+  const hasOrg = hasType("organization");
+  const hasLocalBiz = hasType("localbusiness");
+  const hasFaqSchema = hasType("faqpage", "faq");
+
+  let sameAsCount = 0;
+  for (const p of pages) for (const s of (p.schemas || [])) {
+    const sa = s?.properties?.sameAs;
+    if (Array.isArray(sa)) sameAsCount += sa.length; else if (sa) sameAsCount += 1;
+  }
+  const faqPages = pages.filter((p) => (p.schemas || []).some((s) => /faq/i.test(s?.type || "")) || /faq|frequently asked/i.test(`${p.metaTitle || ""} ${p.url || ""}`)).length;
+  const aboutPage = pages.some((p) => /\/about/i.test(p.url || "") || /about us|about-us/i.test(p.metaTitle || ""));
+  const napOnGmb = !!(gmb.found && (gmb.phone || gmb.address));
+  const napConsistent = napOnGmb && (hasLocalBiz || pages.some((p) => /\/contact/i.test(p.url || "")));
+  const avgWords = Number(summary.avgWordCount || 0);
+  const hasAuthor = pages.some((p) => p.eeat && (p.eeat.author || p.eeat.byline || p.eeat.hasAuthor));
+
+  const signals = [
+    { key: "structured_data", label: "Structured data (schema)", ok: hasOrg || hasLocalBiz, weight: 22,
+      detail: (hasOrg || hasLocalBiz) ? `Found: ${[...schemaTypes].slice(0, 6).join(", ") || "—"}` : "No Organization/LocalBusiness schema — AI engines can't reliably identify the business as an entity." },
+    { key: "faq_coverage", label: "Answer-first / FAQ coverage", ok: hasFaqSchema || faqPages > 0, weight: 18,
+      detail: (hasFaqSchema || faqPages > 0) ? `${faqPages || 1} FAQ page(s)/block(s) — answer-first content AI can lift directly.` : "No FAQ schema/sections — add Q&A blocks AI answer engines can quote." },
+    { key: "entity_identity", label: "Entity identity (sameAs)", ok: sameAsCount > 0, weight: 15,
+      detail: sameAsCount > 0 ? `${sameAsCount} sameAs link(s) tying the brand to its profiles.` : "No sameAs links — connect the site to your social/GMB profiles in Organization schema." },
+    { key: "nap", label: "NAP consistency", ok: napConsistent, weight: 15,
+      detail: napConsistent ? "Name/Address/Phone present across GMB + site." : "NAP not consistently present across GMB + site — a core local-entity signal." },
+    { key: "about", label: "About / entity page", ok: aboutPage, weight: 10,
+      detail: aboutPage ? "About page present — grounds the entity for AI." : "No clear About page — add one describing who the business is." },
+    { key: "depth", label: "Content depth (citation-worthy)", ok: avgWords >= 600, weight: 12,
+      detail: avgWords >= 600 ? `Avg ${Math.round(avgWords)} words/page — enough depth to be citation-worthy.` : `Avg ${Math.round(avgWords)} words/page — thin content is rarely cited by AI engines.` },
+    { key: "author", label: "Author / E-E-A-T", ok: hasAuthor, weight: 8,
+      detail: hasAuthor ? "Author/byline signals present." : "No author/byline signals — add named authors for E-E-A-T." },
+  ];
+  const score = Math.round(signals.reduce((a, s) => a + (s.ok ? s.weight : 0), 0));
+  const band = score >= 75 ? "Strong" : score >= 45 ? "Developing" : "Weak";
+  return { score, band, signals, schema_types: [...schemaTypes], available: pages.length > 0 };
+}
+
+export default { buildEvidencePlan, checkExistingPage, buildGeoStatus, separateKpis, buildAiReadiness };
