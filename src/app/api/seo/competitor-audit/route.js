@@ -105,7 +105,7 @@ function compareAudit(target, competitors) {
   const targetTotal       = target.crawl?.pageCount || 1;
   const targetDescPct     = Math.round((targetMissingDesc / targetTotal) * 100);
   const compDescPct       = avgCompetitorPct(competitors, (c) =>
-    Math.round(((c.summary?.pagesMissingMetaDesc || 0) / (c.pageCount || 1)) * 100));
+    Math.round(((c.crawl?.summary?.pagesMissingMetaDesc || 0) / (c.crawl?.pageCount || 1)) * 100));
   signals.push({
     signal:  "Pages Missing Meta Description",
     target:  `${targetMissingDesc}/${targetTotal} pages (${targetDescPct}%)`,
@@ -117,7 +117,7 @@ function compareAudit(target, competitors) {
   const targetMissingH1 = target.crawl?.summary?.pagesMissingH1 || 0;
   const targetH1Pct     = Math.round((targetMissingH1 / targetTotal) * 100);
   const compH1Pct       = avgCompetitorPct(competitors, (c) =>
-    Math.round(((c.summary?.pagesMissingH1 || 0) / (c.pageCount || 1)) * 100));
+    Math.round(((c.crawl?.summary?.pagesMissingH1 || 0) / (c.crawl?.pageCount || 1)) * 100));
   signals.push({
     signal:  "Pages Missing H1",
     target:  `${targetMissingH1}/${targetTotal} pages (${targetH1Pct}%)`,

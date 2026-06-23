@@ -248,7 +248,7 @@ function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions, brands = []
     .filter(k => isCommercial(k.intent) && okPage(k))
     .filter(k => fresh(k.keyword))
     .slice(0, 8)
-    .map(k => ({ keyword: k.keyword, volume: fmtVol(k.volume), targetPageType: "Service/Landing Page" }));
+    .map(k => ({ keyword: k.keyword, volume: fmtVol(k.volume), targetPageType: "Service/Landing Page", kd: k.kd ?? null }));
 
   const localKws = (keywordGapData.gapKeywords || [])
     .filter(k => (k.intent === "local" || k.intent === "transactional") && okPage(k))

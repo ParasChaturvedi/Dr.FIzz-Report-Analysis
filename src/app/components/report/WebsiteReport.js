@@ -456,6 +456,142 @@ function AioVisibilityCard({ data, domain }) {
   );
 }
 
+// §8 — GMB deep dive from the rich GMB data we already collect (review sentiment themes,
+// rating distribution, review health, directory-citation presence, completeness breakdown).
+const _cardB = { border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" };
+const _lblS = { fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", textTransform: "uppercase", color: ORANGE, marginBottom: 10 };
+const _thS = { fontFamily: BODY, fontWeight: 700, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", padding: "10px 12px", textAlign: "left", color: "#fff", whiteSpace: "nowrap" };
+const _tdS = { fontFamily: BODY, fontSize: "12.5px", padding: "8px 12px", color: "#3A3A3A" };
+function GmbDeepDive({ gmb }) {
+  if (!gmb) return null;
+  const s = gmb.sentiment || null;
+  const dist = gmb.ratingDistribution || null;
+  const velocity = gmb.reviewVelocity;
+  const unreplied = gmb.unrepliedReviewCount;
+  const dirs = Array.isArray(gmb.directories) ? gmb.directories : [];
+  const breakdown = Array.isArray(gmb.completeness?.breakdown) ? gmb.completeness.breakdown : [];
+  const praises = s?.topPraises || [], complaints = s?.topComplaints || [], urgent = s?.urgentIssues || [];
+  const distData = dist ? [5, 4, 3, 2, 1].map((star) => ({ label: `${star}★`, value: Number(dist[star] ?? dist[String(star)] ?? 0), client: star >= 4 })) : [];
+  const hasDist = distData.some((d) => d.value > 0);
+  const hasHealth = velocity != null || unreplied != null;
+  if (!s && !hasDist && !dirs.length && !breakdown.length && !hasHealth) return null;
+  const Chip = ({ children, bg, color }) => <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 5, fontSize: 11, background: bg, color, fontFamily: BODY, marginRight: 6, marginBottom: 6 }}>{children}</span>;
+  return (
+    <div className="space-y-4 mb-5">
+      {(hasDist || hasHealth) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          {hasDist && <div className="bg-white rounded-lg p-5" style={_cardB}><BarChart title="Rating distribution" data={distData} valueFmt={(v) => String(v)} /></div>}
+          {hasHealth && (
+            <div className="bg-white rounded-lg p-5" style={_cardB}>
+              <div style={_lblS}>Review health</div>
+              <div className="grid grid-cols-2 gap-3">
+                {velocity != null && <div><div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: 24, color: INK }}>{velocity}<span style={{ fontSize: 12, color: "#8A8A8A" }}>/mo</span></div><div style={{ fontFamily: BODY, fontSize: 11.5, color: "#6B6B6B" }}>New reviews per month</div></div>}
+                {unreplied != null && <div><div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: 24, color: unreplied > 0 ? "#B3261E" : "#2E7D32" }}>{unreplied}</div><div style={{ fontFamily: BODY, fontSize: 11.5, color: "#6B6B6B" }}>Unanswered reviews</div></div>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {s && (praises.length || complaints.length || urgent.length) > 0 && (
+        <div className="bg-white rounded-lg p-5" style={_cardB}>
+          <div style={_lblS}>What customers say (from your reviews)</div>
+          {praises.length > 0 && <div className="mb-2"><span style={{ fontFamily: BODY, fontWeight: 700, fontSize: 10, textTransform: "uppercase", color: "#2E7D32", marginRight: 6 }}>Praised</span>{praises.slice(0, 6).map((p, i) => <Chip key={i} bg="#E8F5E9" color="#2E7D32">{p}</Chip>)}</div>}
+          {complaints.length > 0 && <div className="mb-2"><span style={{ fontFamily: BODY, fontWeight: 700, fontSize: 10, textTransform: "uppercase", color: "#B3261E", marginRight: 6 }}>Complaints</span>{complaints.slice(0, 6).map((p, i) => <Chip key={i} bg="#FDECEA" color="#B3261E">{p}</Chip>)}</div>}
+          {urgent.length > 0 && <div><span style={{ fontFamily: BODY, fontWeight: 700, fontSize: 10, textTransform: "uppercase", color: ORANGE, marginRight: 6 }}>Urgent</span>{urgent.slice(0, 4).map((p, i) => <Chip key={i} bg="#FBF0E8" color={ORANGE}>{p}</Chip>)}</div>}
+        </div>
+      )}
+      {dirs.length > 0 && (
+        <div className="bg-white rounded-lg p-5" style={_cardB}>
+          <div style={_lblS}>Directory presence (local citations)</div>
+          <div className="flex flex-wrap gap-2">
+            {dirs.map((dd, i) => <span key={i} style={{ fontFamily: BODY, fontSize: 12, padding: "4px 9px", borderRadius: 5, background: dd.listed ? "#E8F5E9" : "#FDECEA", color: dd.listed ? "#2E7D32" : "#B3261E" }}>{dd.listed ? "✓" : "✗"} {dd.name}</span>)}
+          </div>
+        </div>
+      )}
+      {breakdown.length > 0 && (
+        <div className="bg-white rounded-lg p-5" style={_cardB}>
+          <div style={_lblS}>GBP completeness — what&apos;s filled vs missing</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+            {breakdown.map((b, i) => <div key={i} className="flex items-center gap-2" style={{ fontFamily: BODY, fontSize: 12.5, color: "#5A5A5A" }}><span style={{ color: b.pass ? "#2E7D32" : "#B3261E", fontWeight: 700, flexShrink: 0 }}>{b.pass ? "✓" : "✗"}</span>{b.label}</div>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// §5 — target-vs-competitor technical gap table (real, from the competitor audit).
+function CompetitorAuditTable({ audit }) {
+  const rows = Array.isArray(audit?.comparison) ? audit.comparison : [];
+  if (!rows.length) return null;
+  const gapColor = { high: "#B3261E", medium: "#9A6A12", none: "#2E7D32" };
+  return (
+    <div className="mt-6">
+      <div className="uppercase mb-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", letterSpacing: "0.2em", color: "#7A7A7A" }}>Technical Gap vs Competitors</div>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #E5E5E5" }}>
+        <table className="w-full border-collapse">
+          <thead><tr style={{ background: INK }}>{["Signal", "You", "Competitors", "Gap"].map((h, i) => <th key={i} style={_thS}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} style={{ background: i % 2 ? "#F7F7F7" : "#fff" }}>
+                <td style={{ ..._tdS, fontWeight: 600, color: INK }}>{r.signal}</td>
+                <td style={_tdS}>{r.target}</td>
+                <td style={_tdS}>{r.competitors}</td>
+                <td style={{ ..._tdS, fontWeight: 700, color: gapColor[r.gap] || "#5A5A5A", textTransform: "capitalize" }}>{r.gap}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// §3 — keyword insights from data we already collect: the real gap keywords with their
+// difficulty + who ranks, and the actual People-Also-Ask questions (not just a count).
+function KeywordInsights({ kwGap }) {
+  const paa = Array.isArray(kwGap?.paaQuestions) ? kwGap.paaQuestions : [];
+  const gaps = Array.isArray(kwGap?.gapKeywords) ? kwGap.gapKeywords.slice(0, 10) : [];
+  if (!paa.length && !gaps.length) return null;
+  return (
+    <div className="mt-6 space-y-5">
+      {gaps.length > 0 && (
+        <div>
+          <div className="uppercase mb-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", letterSpacing: "0.2em", color: "#7A7A7A" }}>Top Gap Keywords — Real Difficulty &amp; Who Ranks</div>
+          <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #E5E5E5" }}>
+            <table className="w-full border-collapse">
+              <thead><tr style={{ background: INK }}>{["Keyword", "Volume", "Difficulty", "Intent", "Ranking now"].map((h, i) => <th key={i} style={_thS}>{h}</th>)}</tr></thead>
+              <tbody>
+                {gaps.map((k, i) => (
+                  <tr key={i} style={{ background: i % 2 ? "#F7F7F7" : "#fff" }}>
+                    <td style={{ ..._tdS, fontWeight: 600, color: INK }}>{k.keyword}</td>
+                    <td style={_tdS}>{fmtNum(k.volume)}/mo</td>
+                    <td style={_tdS}>{k.kd != null ? `${k.kd}/100` : "—"}</td>
+                    <td style={{ ..._tdS, textTransform: "capitalize" }}>{k.intent || "—"}</td>
+                    <td style={{ ..._tdS, color: "#8A8A8A" }}>{(k.foundIn || [])[0] || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {paa.length > 0 && (
+        <div className="bg-white rounded-lg p-5" style={_cardB}>
+          <div style={_lblS}>Questions Your Content Should Answer (People Also Ask)</div>
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+            {paa.slice(0, 12).map((q, i) => (
+              <li key={i} className="flex items-start gap-2.5" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.5 }}>
+                <span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>?</span>{typeof q === "string" ? q : q.question}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // §14-25 GEO renderer (reference light style). Renders the FULL model (geo_score, SoV,
 // metrics, topic dominance, citation intelligence, Claude deep analysis) when a live scan
 // exists, and ALWAYS renders the readiness scorecard + tracked prompts + actions. Reads
@@ -1355,6 +1491,7 @@ export default function WebsiteReport({ data }) {
                   <tr className="bg-gray-900 text-white">
                     <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Keyword</th>
                     <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Est. Monthly Volume</th>
+                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Difficulty (KD)</th>
                     <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Target Page Type</th>
                   </tr>
                 </thead>
@@ -1363,6 +1500,7 @@ export default function WebsiteReport({ data }) {
                     <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <td className="px-4 py-3 font-semibold text-gray-900 text-sm">{row.keyword}</td>
                       <td className="px-4 py-3 text-gray-600 text-sm">{row.volume || "—"}</td>
+                      <td className="px-4 py-3 text-gray-600 text-sm">{row.kd != null ? `${row.kd}/100` : "—"}</td>
                       <td className="px-4 py-3 text-gray-600 text-sm">{row.targetPageType}</td>
                     </tr>
                   ))}
@@ -1394,6 +1532,9 @@ export default function WebsiteReport({ data }) {
               </div>
             ))}
           </div>
+
+          {/* §3 — real gap keywords (difficulty + who ranks) + actual PAA questions */}
+          <KeywordInsights kwGap={kwGap} />
         </AnimatedSection>
       </section>
 
@@ -1467,6 +1608,9 @@ export default function WebsiteReport({ data }) {
               <p style={{ fontFamily: BODY, fontSize: "11.5px", color: "#8A8A8A", marginTop: 8, lineHeight: 1.5 }}>These are the pages sending competitors the most organic traffic — the content templates to study and out-build.</p>
             </div>
           )}
+
+          {/* §5 — real target-vs-competitor technical gap table (schema/meta/H1/alt) */}
+          <CompetitorAuditTable audit={d.competitorAudit} />
         </AnimatedSection>
       </section>
 
@@ -1579,6 +1723,8 @@ export default function WebsiteReport({ data }) {
             <GbpComparisonTable gbp={d.doctorFizz?.gbp_comparison} />
             {/* #21 — Google-reviews comparison chart */}
             <GbpReviewChart gbp={d.doctorFizz?.gbp_comparison} />
+            {/* §8 deep dive — review sentiment, rating distribution, review health, directories */}
+            <GmbDeepDive gmb={d.gmbCheck} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* checklist white card */}
