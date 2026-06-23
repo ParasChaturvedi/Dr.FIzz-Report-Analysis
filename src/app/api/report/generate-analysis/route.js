@@ -961,6 +961,15 @@ export async function POST(request) {
           checklist: aiSections.contentArchitecture?.checklist || [],
         };
       }
+
+      // §7 — replace the generic competitor link-gap with REAL referring domains that link
+      // to competitors but not to you (DataForSEO Backlinks API), when collected.
+      const _blGap = Array.isArray(kwGapRaw?.backlinkGap) ? kwGapRaw.backlinkGap : [];
+      if (_blGap.length) {
+        aiSections.linkBuilding = aiSections.linkBuilding || {};
+        aiSections.linkBuilding.competitorLinkGap = _blGap.slice(0, 8).map((g) =>
+          `${g.referring_domain}${g.rank != null ? ` (rank ${g.rank})` : ""} links to ${(g.links_to || []).join(", ") || "a competitor"} — pitch them the same value (data, quote, resource) to earn the link.`);
+      }
     } else {
       // Find the REAL crawled content for THIS page so Claude uses the actual
       // current title/meta/H1/word-count instead of inventing them. Match on the

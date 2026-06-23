@@ -156,6 +156,53 @@ async function getBulkKeywordDifficulty(keywords, auth) {
   } catch (e) { console.warn("[keyword-gap] bulk_keyword_difficulty failed:", e?.message); return {}; }
 }
 
+// ── Competitor top pages (content gap) — derived from the competitor ranked-keyword maps
+// we ALREADY fetched (zero extra cost): group each rival's ranking keywords by URL to find
+// the pages driving their organic traffic, so we can reverse-engineer what content to build.
+function buildCompetitorTopPages(compDomains, compKwMaps) {
+  const out = [];
+  for (let i = 0; i < compDomains.length; i++) {
+    const pageMap = new Map();
+    for (const [kw, d] of (compKwMaps[i] || new Map())) {
+      const u = d?.url; if (!u) continue;
+      if (!pageMap.has(u)) pageMap.set(u, { url: u, keywords: 0, volume: 0, top_keyword: "", _topVol: 0 });
+      const p = pageMap.get(u);
+      p.keywords++; p.volume += Number(d.volume || 0);
+      if (Number(d.volume || 0) > p._topVol) { p._topVol = Number(d.volume || 0); p.top_keyword = kw; }
+    }
+    const pages = [...pageMap.values()].sort((a, b) => b.volume - a.volume).slice(0, 5).map(({ _topVol, ...p }) => p);
+    if (pages.length) out.push({ competitor: compDomains[i], pages });
+  }
+  return out;
+}
+
+// ── Real backlink gap (#3 / §7) — referring domains that link to competitors but NOT to
+// you, with the referring domain's authority rank. One DataForSEO Backlinks API call
+// (domain_intersection, ~$0.02). Real, actionable link prospects — not generic advice.
+// Requires the Backlinks API on the account; degrades to [] gracefully otherwise.
+async function getBacklinkGap(target, compDomains, auth, limit = 25) {
+  if (!compDomains.length) return [];
+  try {
+    const targets = {};
+    compDomains.slice(0, 10).forEach((d, i) => { targets[String(i + 1)] = d; });
+    const data = await dfsPost("backlinks/domain_intersection/live",
+      [{ targets, exclude_targets: [target], limit, order_by: ["1.rank,desc"], exclude_internal_backlinks: true, include_subdomains: true }], auth);
+    const items = data?.tasks?.[0]?.result?.[0]?.items || [];
+    const out = [];
+    for (const it of items) {
+      const di = it?.domain_intersection || {};
+      const keys = Object.keys(di);
+      if (!keys.length) continue;
+      const first = di[keys[0]] || {};
+      const referring = norm(first.target || it.target || it.domain || "");
+      if (!referring || referring === target) continue;
+      const linksTo = keys.map(k => compDomains[Number(k) - 1]).filter(Boolean).slice(0, 3);
+      out.push({ referring_domain: referring, rank: first.rank ?? null, links_to: linksTo });
+    }
+    return out.filter(o => o.referring_domain).slice(0, 20);
+  } catch (e) { console.warn("[keyword-gap] backlink gap failed:", e?.message); return []; }
+}
+
 // ── Fetch keyword suggestions for a domain (broad) ────────────────────────────
 async function getKeywordSuggestions(domain, auth, limit = 100) {
   try {
@@ -270,6 +317,10 @@ export async function POST(request) {
   const kdMap = await getBulkKeywordDifficulty([...gapKeywords, ...newOpps].map(k => k.keyword), auth);
   for (const k of [...gapKeywords, ...newOpps]) { const kd = kdMap[String(k.keyword || "").toLowerCase()]; if (kd != null) k.kd = kd; }
 
+  // ── Competitor top pages (content gap, zero extra cost) + real backlink gap (1 call).
+  const competitorTopPages = buildCompetitorTopPages(compDomains, compKwMaps);
+  const backlinkGap = await getBacklinkGap(target, compDomains, auth);
+
   const out = {
     domain: target,
     competitors: compDomains,
@@ -282,6 +333,10 @@ export async function POST(request) {
     paaQuestions,
     // #3 — real SERP intelligence per priority keyword (top-10 + features + AI Overview).
     serpIntel,
+    // §5 content gap — competitor pages driving their traffic (derived, zero extra cost).
+    competitorTopPages,
+    // §7 — real referring-domain backlink gap (links to competitors but not you).
+    backlinkGap,
     summary: {
       totalGapKeywords: gapKeywords.length,
       totalEasyWins:    easyWins.length,
@@ -293,7 +348,8 @@ export async function POST(request) {
   };
   try { await putCached({ domain: target, dataType: cacheType, payload: out, source: "keyword-gap" }); } catch {}
   // Cost: ranked_keywords (target + competitors) + keywords_for_site + ~15 SERP-advanced
-  // (AI Overview enabled, ~$0.004 ea) + 1 bulk_keyword_difficulty. ~$0.16 cache-cold.
-  await logUsage({ domain: target, api: "keyword-gap", costUSD: 0.16, cached: false });
+  // (AI Overview, ~$0.004 ea) + bulk_keyword_difficulty + 1 backlink domain_intersection.
+  // ~$0.18 cache-cold. Competitor top pages are derived from data already fetched (free).
+  await logUsage({ domain: target, api: "keyword-gap", costUSD: 0.18, cached: false });
   return NextResponse.json(out);
 }

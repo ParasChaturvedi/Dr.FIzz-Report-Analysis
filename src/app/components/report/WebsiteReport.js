@@ -1406,6 +1406,29 @@ export default function WebsiteReport({ data }) {
               </div>
             ))}
           </div>
+
+          {/* §5 content gap — REAL competitor top pages (what drives their organic traffic) */}
+          {Array.isArray(kwGap?.competitorTopPages) && kwGap.competitorTopPages.length > 0 && (
+            <div className="mt-6">
+              <div className="uppercase mb-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", letterSpacing: "0.2em", color: "#7A7A7A" }}>What Drives Their Traffic — Content Gap</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {kwGap.competitorTopPages.slice(0, 4).map((c, i) => (
+                  <div key={i} className="bg-white rounded-lg p-5" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+                    <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "13.5px", color: INK, marginBottom: 8 }}>{c.competitor}</div>
+                    <ul className="space-y-2">
+                      {(c.pages || []).slice(0, 4).map((p, j) => (
+                        <li key={j} style={{ fontFamily: BODY, fontSize: "12px", color: "#5A5A5A", lineHeight: 1.4 }}>
+                          <span style={{ fontWeight: 600, color: INK }}>{p.top_keyword || p.url}</span>
+                          <span style={{ color: "#9A9A9A" }}> — {p.keywords} kw · {fmtNum(p.volume)}/mo</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontFamily: BODY, fontSize: "11.5px", color: "#8A8A8A", marginTop: 8, lineHeight: 1.5 }}>These are the pages sending competitors the most organic traffic — the content templates to study and out-build.</p>
+            </div>
+          )}
         </AnimatedSection>
       </section>
 
