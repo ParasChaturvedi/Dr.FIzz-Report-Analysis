@@ -16,9 +16,11 @@ import {
 } from "@/lib/seo/dataforseo";
 import { fetchPsiForStrategy } from "@/lib/seo/psi";
 import { fetchMozMetrics } from "@/lib/seo/moz/client";
-import { runBusinessLogic } from "@/lib/seo/doctor-fizz-logic";
+import { runBusinessLogic, deriveCompetitorBrands } from "@/lib/seo/doctor-fizz-logic";
 import { runQaGate } from "@/lib/seo/doctor-fizz-qa";
 import { getSiteProfile } from "@/lib/claude/pipeline";
+import { fmtNum, fmtInt } from "@/lib/seo/report-format";
+import { checkExistingPage } from "@/lib/seo/report-evidence";
 
 export const runtime     = "nodejs";
 export const maxDuration = 300; // PSI alone can take 90-120 s; Claude adds another 30-60 s
@@ -217,30 +219,52 @@ function _kwRelevant(keyword, vocab, exclusions) {
   return words.some((w) => vocab.has(w));                       // share ≥1 meaningful token
 }
 
-function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions) {
+// Tier 1 = PRIMARY COMMERCIAL keywords only (real Service/Landing-Page intent). Every
+// tier is relevance-filtered, competitor-brand-filtered (#4 — no "social beat" etc.),
+// demand-gated, and de-duped across tiers (so Tier 2 never just repeats Tier 1).
+function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions, brands = []) {
   if (!keywordGapData) return null;
-  const fmtVol = (v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K/mo` : v > 0 ? `${v}/mo` : "<100/mo";
-  const rel = (k) => _kwRelevant(k?.keyword ?? k?.question ?? k, vocab, exclusions);
-  // Commercial/transactional/local intent = a real PAGE to build; only true info → blog.
-  const pageType = (intent) =>
-    ["transactional", "commercial", "local", "navigational"].includes(String(intent || "").toLowerCase())
-      ? "Service/Landing Page" : "Blog/Guide";
+  const fmtVol = (v) => v >= 1000 ? `${(v / 1000).toFixed(1).replace(/\.0$/, "")}K/mo` : v > 0 ? `${v}/mo` : "<100/mo";
+  const brandList = (brands || []).map(b => String(b || "").toLowerCase().trim()).filter(b => b.length >= 3);
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const GENERIC = new Set("social media web digital marketing seo online india agency agencies services service company companies tech technologies technology solutions solution group studio studios labs lab design designs creative consulting consultancy global world best top hub pro new".split(/\s+/));
+  // a keyword that contains a competitor brand is dropped — the FULL brand as a word, or
+  // a single-word brand's distinctive token; never a generic word like "social"/"media".
+  const isBrand = (kw) => {
+    const k = ` ${String(kw || "").toLowerCase()} `;
+    return brandList.some(b => {
+      if (new RegExp(`\\b${esc(b)}\\b`).test(k)) return true;
+      const toks = b.split(/[\s.\-/]+/).filter(Boolean);
+      return toks.length === 1 && toks[0].length >= 5 && !GENERIC.has(toks[0]) && new RegExp(`\\b${esc(toks[0])}\\b`).test(k);
+    });
+  };
+  const isCommercial = (intent) => ["transactional", "commercial", "local", "navigational"].includes(String(intent || "").toLowerCase());
+  const seen = new Set();
+  const fresh = (s) => { const n = String(s || "").toLowerCase().trim(); if (!n || seen.has(n)) return false; seen.add(n); return true; };
+  // relevant + non-brand + (demand>0 for page tiers).
+  const okPage = (k) => _kwRelevant(k?.keyword, vocab, exclusions) && !isBrand(k?.keyword) && Number(k?.volume ?? 0) > 0;
 
-  const tier1 = (keywordGapData.easyWins || []).filter(rel).slice(0, 8).map(k => ({
-    keyword:        k.keyword,
-    volume:         fmtVol(k.volume),
-    targetPageType: pageType(k.intent),
-  }));
+  const tier1 = (keywordGapData.easyWins || [])
+    .filter(k => isCommercial(k.intent) && okPage(k))
+    .filter(k => fresh(k.keyword))
+    .slice(0, 8)
+    .map(k => ({ keyword: k.keyword, volume: fmtVol(k.volume), targetPageType: "Service/Landing Page" }));
 
   const localKws = (keywordGapData.gapKeywords || [])
-    .filter(k => k.intent === "local" || k.intent === "transactional")
-    .filter(rel)
+    .filter(k => (k.intent === "local" || k.intent === "transactional") && okPage(k))
+    .filter(k => fresh(k.keyword))
     .slice(0, 6)
     .map(k => k.keyword);
 
-  const infoKws = (keywordGapData.paaQuestions || []).filter(rel).slice(0, 6).map(q => q.question);
+  // Tier 3 = informational blog questions (relevant, non-brand). PAA carries no volume,
+  // so it is not demand-gated — these are topic ideas, not pages to build.
+  const infoKws = (keywordGapData.paaQuestions || [])
+    .map(q => q?.question ?? q)
+    .filter(q => _kwRelevant(q, vocab, exclusions) && !isBrand(q))
+    .filter(q => fresh(q))
+    .slice(0, 6);
 
-  if (!tier1.length && !localKws.length) return null;
+  if (!tier1.length && !localKws.length && !infoKws.length) return null;
   return { tier1, tier2Neighborhood: localKws, tier3Informational: infoKws };
 }
 
@@ -262,12 +286,18 @@ function buildMeasuringSuccessRows(baselineMetrics, crawlData, gmbData) {
   const kN  = toNum(bm.organicKeywords);
   const rN  = toNum(bm.referringDomains);
 
+  // #17 — the CURRENT column is formatted (no raw "1248.774014055729"): compact for
+  // traffic, thousands-separated integers for counts. Site Health 6-month target is
+  // clamped to never read below the current score (a target must be an improvement).
+  const healthNow = crawlData?.healthScore;
+  const health6 = healthNow != null ? Math.max(Number(healthNow), 75) : 75;
+  const health12 = healthNow != null ? Math.max(Number(healthNow) + 3, 90) : 90;
   return [
-    { metric: "Domain Rating",     now: bm.domainRating    || "—", s6: drN != null ? String(Math.min(100, drN + 5))      : "Growing", s12: drN != null ? String(Math.min(100, drN + 15)) : "20+" },
-    { metric: "Organic Keywords",  now: bm.organicKeywords || "—", s6: kN  != null ? fmtN(Math.round(kN * 1.6))          : "+60%",    s12: kN  != null ? fmtN(kN * 3)                   : "+200%" },
-    { metric: "Organic Traffic",   now: bm.organicTraffic  || "—", s6: tN  != null ? `${fmtN(Math.round(tN * 1.8))}/mo`  : "+80%",    s12: tN  != null ? `${fmtN(tN * 4)}/mo`           : "+300%" },
-    { metric: "Referring Domains", now: bm.referringDomains|| "—", s6: rN  != null ? String(rN + 15)                     : "+15",     s12: rN  != null ? String(rN + 40)                : "+40" },
-    { metric: "Site Health Score", now: crawlData?.healthScore  != null ? `${crawlData.healthScore}/100`        : "—", s6: "75/100",  s12: "90/100" },
+    { metric: "Domain Rating",     now: drN != null ? fmtInt(drN) : (bm.domainRating || "—"), s6: drN != null ? String(Math.min(100, drN + 5))      : "Growing", s12: drN != null ? String(Math.min(100, drN + 15)) : "20+" },
+    { metric: "Organic Keywords",  now: kN  != null ? fmtInt(kN)  : "—",                      s6: kN  != null ? fmtN(Math.round(kN * 1.6))          : "+60%",    s12: kN  != null ? fmtN(kN * 3)                   : "+200%" },
+    { metric: "Organic Traffic",   now: tN  != null ? `${fmtNum(tN)}/mo` : "—",               s6: tN  != null ? `${fmtN(Math.round(tN * 1.8))}/mo`  : "+80%",    s12: tN  != null ? `${fmtN(tN * 4)}/mo`           : "+300%" },
+    { metric: "Referring Domains", now: rN  != null ? fmtInt(rN)  : "—",                      s6: rN  != null ? String(rN + 15)                     : "+15",     s12: rN  != null ? String(rN + 40)                : "+40" },
+    { metric: "Site Health Score", now: healthNow != null ? `${healthNow}/100` : "—",         s6: `${health6}/100`,  s12: `${health12}/100` },
     { metric: "GMB Completeness",  now: gmbData?.completeness?.score != null ? `${gmbData.completeness.score}/100` : "—", s6: "80/100", s12: "95/100" },
   ];
 }
@@ -764,7 +794,15 @@ export async function POST(request) {
     const realTechnical     = buildTechnicalPrioritiesFromCrawl(crawlRaw);
     const realLocalSearch   = buildLocalSearchFromGmb(gmbRaw);
     const _nicheVocab       = buildNicheVocab({ businessData, userKeywords: keywords, crawlRaw });
-    const realKwTiers       = buildKeywordTiersFromGap(kwGapRaw, _nicheVocab, negativeExclusions);
+    // Competitor brand names (business + search rivals + user-listed) → keep them out of
+    // the keyword tiers so no rival's brand ("social beat", "webchutney"…) is ever shown
+    // as a keyword target. (#4)
+    const _competitorBrands = deriveCompetitorBrands([
+      ...(Array.isArray(businessCompetitors) ? businessCompetitors : []),
+      ...(Array.isArray(searchCompetitorsList) ? searchCompetitorsList : []),
+      ...(Array.isArray(competitors) ? competitors : []),
+    ]);
+    const realKwTiers       = buildKeywordTiersFromGap(kwGapRaw, _nicheVocab, negativeExclusions, _competitorBrands);
     const measuringSuccessRows = buildMeasuringSuccessRows(baselineMetrics, crawlRaw, gmbRaw);
 
     // ── STAGE 3: Doctor Fizz business logic layer ─────────────────────────────
@@ -888,6 +926,37 @@ export async function POST(request) {
           tier1:             realKwTiers.tier1.length     ? realKwTiers.tier1             : (aiSections.keywordStrategy?.tier1 || []),
           tier2Neighborhood: realKwTiers.tier2Neighborhood.length ? realKwTiers.tier2Neighborhood : (aiSections.keywordStrategy?.tier2Neighborhood || []),
           tier3Informational: realKwTiers.tier3Informational.length ? realKwTiers.tier3Informational : (aiSections.keywordStrategy?.tier3Informational || []),
+        };
+      }
+
+      // ── #2 / #5 — "What Pages To Build" from the REAL classified architecture, with an
+      // existing-page guard (never recommend a page that already exists) and a pages-vs-
+      // blogs split. Service/commercial + geography → pages to build; informational → blogs.
+      const _ca = structuredPayload?.content_architecture || null;
+      const _crawlPages = Array.isArray(crawlRaw?.pages) ? crawlRaw.pages : [];
+      if (_ca) {
+        const trim1 = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+        const fmtVol = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K/mo` : `${n}/mo`) : ""; };
+        const toBuild = (p, kind) => ({
+          page:    trim1(p.page_name || p.proposed_title || p.keyword_cluster || ""),
+          url:     p.url_slug || "",
+          purpose: trim1(p.commercial_reason || p.why_separate_page || p.search_intent || p.funnel_connection || ""),
+          volume:  fmtVol(p.primary_volume),
+          intent:  p.intent_class || (kind === "blog" ? "informational" : "commercial"),
+        });
+        const newOnly = (arr) => (Array.isArray(arr) ? arr : []).filter((p) => !checkExistingPage(p, _crawlPages).exists);
+        const pagesToBuild = [
+          ...newOnly(_ca.commercial_pages).map((p) => toBuild(p, "page")),
+          ...newOnly(_ca.geography_pages || _ca.city_pages).map((p) => toBuild(p, "geo")),
+        ].slice(0, 8);
+        const blogsToBuild = newOnly(_ca.blog_and_guides).map((p) => toBuild(p, "blog")).slice(0, 8);
+        aiSections.contentArchitecture = {
+          ...(aiSections.contentArchitecture || {}),
+          pagesToBuild,
+          blogsToBuild,
+          pagesExistingFlagged: structuredPayload?.evidence_plan?.counts?.pages_existing_flagged ?? 0,
+          // keep the AI "Every Page Must Include" checklist (the on-page requirements card)
+          checklist: aiSections.contentArchitecture?.checklist || [],
         };
       }
     } else {

@@ -197,6 +197,151 @@ function EvidencePlanSection({ plan }) {
   );
 }
 
+// ── #2 / #5 — "What Pages To Build" with the existing-page guard already applied
+//    upstream, split into a Service-Pages container and a Blogs container (both NEW-only),
+//    plus the "Every Page Must Include" checklist. Falls back to the legacy single
+//    site-structure list when the structured pages/blogs split is unavailable.
+function BuildListCard({ title, items, emptyNote }) {
+  return (
+    <div className="rounded-lg overflow-hidden flex" style={{ background: INK }}>
+      <div style={{ width: 4, background: ORANGE, flexShrink: 0 }} />
+      <div className="p-5 w-full">
+        <div className="uppercase mb-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: ORANGE }}>{title}</div>
+        <div className="space-y-2.5">
+          {(items || []).map((page, i) => (
+            <div key={i}>
+              <div className="flex items-baseline justify-between gap-3">
+                <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: "13px", color: "#fff" }}>{page.page}</div>
+                {page.volume && <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "12px", color: ORANGE, whiteSpace: "nowrap" }}>{page.volume}</div>}
+              </div>
+              {page.url && <div style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: "11px", color: "#9A9A9A" }}>{page.url}</div>}
+              {page.purpose && <div style={{ fontFamily: BODY, fontSize: "11.5px", color: "#8A8A8A", lineHeight: 1.5 }}>{page.purpose}</div>}
+            </div>
+          ))}
+          {!(items || []).length && <div style={{ color: "#8A8A8A", fontSize: 12.5, lineHeight: 1.5 }}>{emptyNote}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+function ChecklistCard({ items }) {
+  return (
+    <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+      <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "15px", color: INK, marginBottom: 14 }}>Every Page Must Include</div>
+      <ul className="space-y-3">
+        {(items || []).map((item, i) => (
+          <li key={i} className="flex items-start gap-2.5" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.5 }}>
+            <span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>✓</span>{item}
+          </li>
+        ))}
+        {!(items || []).length && <li className="text-sm text-gray-400">Not enough data to assess this yet.</li>}
+      </ul>
+    </div>
+  );
+}
+function PagesToBuild({ ca = {} }) {
+  const pages = Array.isArray(ca.pagesToBuild) ? ca.pagesToBuild : null;
+  const blogs = Array.isArray(ca.blogsToBuild) ? ca.blogsToBuild : null;
+  const hasSplit = (pages && pages.length) || (blogs && blogs.length);
+
+  if (hasSplit) {
+    return (
+      <>
+        {ca.pagesExistingFlagged > 0 && (
+          <p style={{ fontFamily: BODY, fontSize: "13px", lineHeight: 1.6, color: "#5A5A5A", marginTop: -10, marginBottom: 16, maxWidth: "46rem" }}>
+            Only <strong style={{ color: INK }}>new</strong> pages with real search demand are listed below. {ca.pagesExistingFlagged} page(s) that already exist on the site are excluded here and flagged to <strong style={{ color: ORANGE }}>optimise</strong> (not rebuild) in The Implementation Plan.
+          </p>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <BuildListCard title="Service / Landing Pages To Build" items={pages || []} emptyNote="No new service pages needed — the commercial pages already exist; optimise them in The Implementation Plan." />
+          <BuildListCard title="Blogs To Build" items={blogs || []} emptyNote="No new blog topics with measurable demand right now." />
+        </div>
+        <div className="mt-5"><ChecklistCard items={ca.checklist} /></div>
+      </>
+    );
+  }
+
+  // Fallback — legacy single site-structure list + checklist (structured split absent).
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="rounded-lg overflow-hidden flex" style={{ background: INK }}>
+        <div style={{ width: 4, background: ORANGE, flexShrink: 0 }} />
+        <div className="p-5 w-full">
+          <div className="uppercase mb-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: ORANGE }}>Recommended Site Structure</div>
+          <div className="space-y-2.5">
+            {(ca.siteStructure || []).map((page, i) => (
+              <div key={i}>
+                <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: "13px", color: "#fff" }}>{page.page}</div>
+                {page.url && <div style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: "11px", color: "#9A9A9A" }}>{page.url}</div>}
+                {page.purpose && <div style={{ fontFamily: BODY, fontSize: "11.5px", color: "#8A8A8A", lineHeight: 1.5 }}>{page.purpose}</div>}
+              </div>
+            ))}
+            {!(ca.siteStructure || []).length && <div style={{ color: "#8A8A8A", fontSize: 13 }}>Not enough data to assess this yet.</div>}
+          </div>
+        </div>
+      </div>
+      <ChecklistCard items={ca.checklist} />
+    </div>
+  );
+}
+
+// #6 — Google Business Profile competitor benchmarking table. Renders the REAL client-vs-
+// competitor rows from data.doctorFizz.gbp_comparison (rating, reviews, verified, photos,
+// categories, completeness). Shows an honest note when competitor GBP data wasn't collected
+// — never fabricates competitor numbers.
+function GbpComparisonTable({ gbp = {} }) {
+  const client = gbp?.client || null;
+  const competitors = Array.isArray(gbp?.competitors) ? gbp.competitors : [];
+  if (!client && !competitors.length) return null;
+  const rows = [client, ...competitors].filter(Boolean);
+  const yesno = (v) => (v ? "Yes" : "—");
+  const num = (v) => (v == null || v === "" ? "—" : typeof v === "number" ? fmtNum(v) : String(v));
+  const cols = [
+    { key: "name",            label: "Business",     get: (r) => r.name },
+    { key: "rating",          label: "Rating",       get: (r) => (r.rating != null ? `${r.rating}★` : "—") },
+    { key: "review_count",    label: "Reviews",      get: (r) => num(r.review_count) },
+    { key: "verified",        label: "Verified",     get: (r) => yesno(r.verified) },
+    { key: "photos",          label: "Photos",       get: (r) => num(r.photos) },
+    { key: "primary_category",label: "Primary Cat.", get: (r) => r.primary_category || "—" },
+    { key: "completeness",    label: "Complete",     get: (r) => (r.completeness != null ? `${r.completeness}/100` : "—") },
+  ];
+  const thS = { fontFamily: BODY, fontWeight: 700, fontSize: "9px", letterSpacing: "0.1em", textTransform: "uppercase", padding: "10px 12px", textAlign: "left", color: "#fff", whiteSpace: "nowrap" };
+  const tdS = { fontFamily: BODY, fontSize: "12.5px", padding: "9px 12px", color: "#3A3A3A", whiteSpace: "nowrap" };
+
+  return (
+    <div className="rounded-lg overflow-hidden mb-5" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+      <div className="px-4 pt-4 pb-1">
+        <div className="uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: ORANGE }}>Profile vs Competitors</div>
+      </div>
+      {competitors.length === 0 ? (
+        <p style={{ fontFamily: BODY, fontSize: "12.5px", color: "#8A8A8A", padding: "4px 16px 16px", lineHeight: 1.5 }}>
+          Competitor Google Business Profile data was not collected for this run, so a head-to-head table is not shown. Your own profile is audited above; enable the competitor GBP scan to benchmark rating, reviews and completeness against rivals.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}>{cols.map((c, i) => <th key={c.key} style={{ ...thS, textAlign: i ? "left" : "left" }}>{c.label}</th>)}</tr></thead>
+            <tbody>
+              {rows.map((r, i) => {
+                const isClient = i === 0;
+                return (
+                  <tr key={i} style={{ background: isClient ? "#FBF2EC" : i % 2 ? "#F7F7F7" : "#fff" }}>
+                    {cols.map((c) => (
+                      <td key={c.key} style={{ ...tdS, fontWeight: c.key === "name" || isClient ? 700 : 400, color: isClient ? INK : "#3A3A3A" }}>
+                        {c.key === "name" ? (isClient ? `${r.name || "Your Business"} (you)` : r.name) : c.get(r)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // §14-25 GEO renderer (reference light style). Renders the FULL model (geo_score, SoV,
 // metrics, topic dominance, citation intelligence, Claude deep analysis) when a live scan
 // exists, and ALWAYS renders the readiness scorecard + tracked prompts + actions. Reads
@@ -1147,39 +1292,9 @@ export default function WebsiteReport({ data }) {
             <SNum n={4} total={N} />
             <OBar />
             <SHead>CONTENT ARCHITECTURE</SHead>
-            <SSub>What Pages To Build</SSub>
+            <SSub>What To Build — Pages &amp; Blogs</SSub>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* dark site-structure box (reference p7) */}
-              <div className="rounded-lg overflow-hidden flex" style={{ background: INK }}>
-                <div style={{ width: 4, background: ORANGE, flexShrink: 0 }} />
-                <div className="p-5 w-full">
-                  <div className="uppercase mb-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: ORANGE }}>Recommended Site Structure</div>
-                  <div className="space-y-2.5">
-                    {(ca.siteStructure || []).map((page, i) => (
-                      <div key={i}>
-                        <div style={{ fontFamily: BODY, fontWeight: 600, fontSize: "13px", color: "#fff" }}>{page.page}</div>
-                        {page.url && <div style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: "11px", color: "#9A9A9A" }}>{page.url}</div>}
-                        {page.purpose && <div style={{ fontFamily: BODY, fontSize: "11.5px", color: "#8A8A8A", lineHeight: 1.5 }}>{page.purpose}</div>}
-                      </div>
-                    ))}
-                    {!(ca.siteStructure || []).length && <div style={{ color: "#8A8A8A", fontSize: 13 }}>Not enough data to assess this yet.</div>}
-                  </div>
-                </div>
-              </div>
-              {/* white checklist card */}
-              <div className="bg-white rounded-lg p-6" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-                <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "15px", color: INK, marginBottom: 14 }}>Every Page Must Include</div>
-                <ul className="space-y-3">
-                  {(ca.checklist || []).map((item, i) => (
-                    <li key={i} className="flex items-start gap-2.5" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.5 }}>
-                      <span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>✓</span>{item}
-                    </li>
-                  ))}
-                  {!(ca.checklist || []).length && <li className="text-sm text-gray-400">Not enough data to assess this yet.</li>}
-                </ul>
-              </div>
-            </div>
+            <PagesToBuild ca={ca} />
           </AnimatedSection>
         </div>
       </section>
@@ -1322,6 +1437,9 @@ export default function WebsiteReport({ data }) {
                 ))}
               </div>
             )}
+
+            {/* #6 — competitor benchmarking table (real client-vs-competitor GBP data) */}
+            <GbpComparisonTable gbp={d.doctorFizz?.gbp_comparison} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {/* checklist white card */}
@@ -1484,7 +1602,7 @@ export default function WebsiteReport({ data }) {
       {/* ══════════════════════════════════════════════════════
           12 · UNCONTESTED TERRITORY
       ══════════════════════════════════════════════════════ */}
-      <section className="bg-white py-16">
+      <section className="bg-white py-16" data-pdf-keep="1">
         <div className="max-w-6xl mx-auto px-8 md:px-14">
           <AnimatedSection>
             <SNum n={12} total={N} />

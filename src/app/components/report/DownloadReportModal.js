@@ -128,9 +128,35 @@ export default function DownloadReportModal({ domain, data, onClose }) {
     hiddenEls.forEach   ((el) => { el._bak = el.style.opacity;    el.style.opacity    = "1";    });
     transformEls.forEach((el) => { el._bak = el.style.transform;  el.style.transform  = "none"; });
 
+    // ── Inline every <img> as a data URI BEFORE serialising. The server-side PDF
+    //    renderer (Chromium via page.setContent) has NO base URL, so relative image
+    //    paths like "/brand/doctorfizz-white.png" and "/clientele/*.png" can't resolve
+    //    and the logos/partner images come out blank. Same-origin fetch → base64 makes
+    //    the HTML fully self-contained so every image renders. ──
+    const imgEls = Array.from(reportEl.querySelectorAll("img"));
+    await Promise.all(imgEls.map(async (im) => {
+      const src = im.getAttribute("src");
+      if (!src || src.startsWith("data:")) return;
+      try {
+        const absUrl = new URL(src, window.location.href).href;
+        const r = await fetch(absUrl, { credentials: "same-origin" });
+        if (!r.ok) return;
+        const blob = await r.blob();
+        const dataUrl = await new Promise((res, rej) => {
+          const fr = new FileReader();
+          fr.onload = () => res(fr.result);
+          fr.onerror = rej;
+          fr.readAsDataURL(blob);
+        });
+        im._bakSrc = src;
+        im.setAttribute("src", dataUrl);
+      } catch { /* keep original src on failure */ }
+    }));
+
     const reportHtml = reportEl.outerHTML;
 
-    // Restore
+    // Restore original image srcs + visibility
+    imgEls.forEach     ((im) => { if (im._bakSrc) { im.setAttribute("src", im._bakSrc); delete im._bakSrc; } });
     hiddenEls.forEach   ((el) => { el.style.opacity    = el._bak || ""; delete el._bak; });
     transformEls.forEach((el) => { el.style.transform  = el._bak || ""; delete el._bak; });
 
@@ -178,6 +204,11 @@ export default function DownloadReportModal({ domain, data, onClose }) {
       /* 10 – Section headings stay with the next element */
       "h1, h2 { page-break-after: avoid !important; break-after: avoid !important; }",
 
+      /* 10b – Keep flagged short sections (e.g. UNCONTESTED TERRITORY) whole so a heading
+              is never stranded at the bottom of a page with its cards pushed to the next —
+              the cause of the large uneven blank band between sections 12 and 13. */
+      "#report-content section[data-pdf-keep] { page-break-inside: avoid !important; break-inside: avoid !important; }",
+
       /* 11 – AI Citations (Section 13): .hyphens-auto is uniquely used on the
              large value text inside citation boxes. Long competitor text at
              text-4xl makes boxes very tall — reduce to readable size. */
@@ -202,6 +233,9 @@ export default function DownloadReportModal({ domain, data, onClose }) {
       "<head>",
       '<meta charset="UTF-8" />',
       '<meta name="viewport" content="width=1280, initial-scale=1.0" />',
+      // Base URL backstop so any remaining relative asset/CSS url() resolves on the
+      // server-side renderer (images are already inlined as data URIs above).
+      `<base href="${window.location.origin}/" />`,
       "<title>DoctorFizz Intelligence Report</title>",
       `<style>${cssChunks.join("\n")}</style>`,
       `<style>${inlineStyles}</style>`,

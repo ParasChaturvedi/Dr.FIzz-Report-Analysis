@@ -111,20 +111,29 @@ const KNOWN_COUNTRIES = [
   "singapore", "germany", "france", "saudi arabia", "south africa",
 ];
 
+// Generic words that appear INSIDE competitor brand names but must NEVER, on their own,
+// flag a keyword as competitor-branded. Without this, a competitor called "Social Beat"
+// would wrongly suppress every legitimate "social media …" keyword.
+const GENERIC_BRAND_TOKENS = new Set(
+  "social media web digital marketing seo online india agency agencies services service company companies tech technologies technology solutions solution group studio studios labs lab design designs creative consulting consultancy global world best top the and for new pro hub".split(/\s+/)
+);
+
 /**
  * Step 1 of the decision tree: does the keyword contain a competitor brand name?
+ * Matches the FULL brand as a word (so "social beat reviews" is caught) and, for a
+ * single-word brand, its lone distinctive token — but never a generic word like
+ * "social"/"media" that merely happens to be part of a multi-word brand.
  */
 function matchesCompetitorBrand(keyword, competitorBrands) {
-  const k = String(keyword).toLowerCase();
+  const k = ` ${String(keyword).toLowerCase()} `;
   for (const brand of competitorBrands) {
     const b = String(brand).toLowerCase().trim();
-    if (!b || b.length < 2) continue;
-    // Match whole brand or significant brand tokens (length ≥ 4 to avoid noise)
-    if (k.includes(b)) return brand;
-    const tokens = b.split(/[\s.\-/]+/).filter(t => t.length >= 4);
-    for (const t of tokens) {
-      if (new RegExp(`\\b${escapeRegex(t)}\\b`).test(k)) return brand;
-    }
+    if (!b || b.length < 3) continue;
+    // exact full brand phrase, word-bounded ("social beat", "webchutney", "echovme")
+    if (new RegExp(`\\b${escapeRegex(b)}\\b`).test(k)) return brand;
+    // single-word brand → also match its distinctive token (never a generic word)
+    const tokens = b.split(/[\s.\-/]+/).filter(Boolean);
+    if (tokens.length === 1 && tokens[0].length >= 5 && !GENERIC_BRAND_TOKENS.has(tokens[0]) && new RegExp(`\\b${escapeRegex(tokens[0])}\\b`).test(k)) return brand;
   }
   return null;
 }
@@ -185,6 +194,20 @@ function hasTransactionalIntent(keyword) {
 function hasInformationalIntent(keyword) {
   const k = String(keyword).toLowerCase();
   return INFORMATIONAL_SIGNALS.some(sig => k.includes(sig));
+}
+
+/**
+ * Is the keyword unambiguously a QUESTION / research phrase? Detected BEFORE the
+ * transactional check so a query like "what is a full service digital marketing
+ * agency?" is never mislabeled transactional just because it contains a generic
+ * commercial word ("agency", "service"). Maps to a blog/guide, never a conversion page.
+ */
+function isQuestionForm(keyword) {
+  const k = String(keyword).toLowerCase().trim();
+  if (/\?$/.test(k)) return true;                                                   // ends with "?"
+  if (/^(what|why|how|which|who|whose|when|where|is|are|can|do|does|should)\b/.test(k)) return true; // question opener
+  if (/\b(types of|type of|benefits of|difference between|meaning of|definition of|examples of|list of|rule in|rule of|vs|versus|explained)\b/.test(k)) return true; // research phrase
+  return false;
 }
 
 /**
@@ -311,6 +334,20 @@ export function classifyKeyword(kw, ctx = {}) {
     };
   }
 
+  // ── Step 3.5: Clear question / research phrasing? → informational ──
+  // Runs BEFORE the transactional check so "what is a full service digital marketing
+  // agency?" maps to a blog/guide (Awareness) instead of a conversion page just because
+  // it contains a generic commercial word. (#4 keyword intent mapping; #11 impact.)
+  if (isQuestionForm(keyword)) {
+    return {
+      ...base,
+      intent_class:          "informational",
+      recommended_asset_type: assetTypeForIntent("informational", keyword, base.global_volume),
+      funnel_role:           "Awareness",
+      reason:                "Question / research phrasing. Maps to a blog post or guide that answers the query and feeds the commercial funnel — never a conversion page.",
+    };
+  }
+
   // ── Step 4: Transactional intent? → transactional ──
   if (hasTransactionalIntent(keyword)) {
     return {
@@ -363,6 +400,17 @@ export function classifyKeywords(rawKeywords, ctx = {}) {
     seen.add(keyword);
 
     const classified = classifyKeyword(kw, ctx);
+
+    // ── #5 — never generate a "build a page" target for a keyword with no measurable
+    // demand. A content/local target with 0 (or unknown) monthly volume AND no existing
+    // ranking is dropped so the report only recommends pages backed by real search data.
+    // (Branded / competitor / already-excluded keywords keep their own routing.)
+    const _vol = Number(classified.global_volume);
+    const _hasRank = classified.position != null && Number(classified.position) > 0;
+    if (["transactional", "informational", "local-commercial"].includes(classified.intent_class) && !(_vol > 0) && !_hasRank) {
+      excluded.push({ keyword: classified.keyword, reason: "No measurable monthly search demand (0 volume) and no current ranking — not a justified page to build." });
+      continue;
+    }
 
     switch (classified.intent_class) {
       case "competitor-branded":
@@ -2715,15 +2763,19 @@ export function buildStoryNarrative(input = {}) {
   } = input;
 
   const val = (k) => (baseline?.[k]?.value ?? null);
-  // Robust formatter: accepts raw numbers OR formatted strings ("1,289"), never emits
-  // "NaN"/"null". Returns null when the value can't be parsed → callers fall back.
+  // Robust COMPACT formatter (#17): accepts raw numbers OR formatted strings ("1,289"),
+  // rounds away stray precision and uses K/M suffixes so the story never prints
+  // "1,248.774 organic traffic" — it reads "1.25K". Returns null when unparseable.
   const n = (x) => {
     if (x == null) return null;
-    if (typeof x === "number") return Number.isFinite(x) ? x.toLocaleString("en-US") : null;
-    const s = String(x).replace(/[^0-9.\-]/g, "");
-    if (!s || s === "-" || s === ".") return null;
-    const num = Number(s);
-    return Number.isFinite(num) ? num.toLocaleString("en-US") : null;
+    const num = typeof x === "number" ? x : Number(String(x).replace(/[^0-9.\-]/g, ""));
+    if (!Number.isFinite(num)) return null;
+    const sign = num < 0 ? "-" : "";
+    const abs = Math.abs(num);
+    const trim = (s) => s.replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
+    if (abs >= 1e6) return sign + trim((abs / 1e6).toFixed(2)) + "M";
+    if (abs >= 1e3) return sign + trim((abs / 1e3).toFixed(2)) + "K";
+    return sign + Math.round(abs).toLocaleString("en-US");
   };
   const has = (x) => x != null;
 
