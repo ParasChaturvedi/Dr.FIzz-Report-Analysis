@@ -30,19 +30,21 @@ function ItzFizzLogo({ white = false, size = "md" }) {
 function AnimatedSection({ children, className = "" }) {
   const ref = useRef(null);
   useEffect(() => {
-    if (!ref.current) return;
-    const obs = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) {
-          ref.current.classList.add("opacity-100", "translate-y-0");
-          ref.current.classList.remove("opacity-0", "translate-y-5");
-          obs.unobserve(ref.current);
-        }
-      },
-      { threshold: 0.06 }
-    );
-    obs.observe(ref.current);
-    return () => obs.disconnect();
+    const el = ref.current;
+    if (!el) return;
+    const reveal = () => { el.classList.add("opacity-100", "translate-y-0"); el.classList.remove("opacity-0", "translate-y-5"); };
+    let obs;
+    try {
+      obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { reveal(); obs && obs.disconnect(); } }, { threshold: 0.06 });
+      obs.observe(el);
+    } catch { reveal(); }
+    // Safety net: a section must NEVER stay invisible. The IntersectionObserver only fires
+    // on scroll, so during a full-page screenshot / browser print (or if the observer is
+    // unavailable) off-screen sections would stay opacity-0 and render as huge blank gaps
+    // (e.g. the Implementation Plan between §12 and §13). This timer reveals every section
+    // shortly after mount regardless, so the page is always fully visible when captured.
+    const t = setTimeout(reveal, 900);
+    return () => { try { obs && obs.disconnect(); } catch {} clearTimeout(t); };
   }, []);
   return (
     <div ref={ref} className={`opacity-0 translate-y-5 transition-all duration-700 ease-out ${className}`}>

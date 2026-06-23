@@ -476,4 +476,8 @@ html.dark .fixthis-title {
   }
   /* Avoid breaking section cards across pages where possible. */
   #report-content section { break-inside: avoid; }
+  /* A section must never print invisible — the on-scroll fade-in can leave off-screen
+     sections at opacity-0 during browser print; force every section fully visible. */
+  .opacity-0 { opacity: 1 !important; }
+  .translate-y-5, .translate-y-8 { transform: none !important; }
 }
