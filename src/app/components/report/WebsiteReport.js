@@ -447,7 +447,19 @@ function AioVisibilityCard({ data, domain }) {
       {chartData.length > 0 && (
         <div className="mb-2"><BarChart title="Most-cited sources in Google AI Overviews" data={chartData} valueFmt={(v) => `${v}×`} /></div>
       )}
-      {(data.aio_keywords || []).length > 0 && (
+      {(data.per_keyword || []).length > 0 ? (
+        <div className="mt-1">
+          <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "#6B6B6B", marginBottom: 6 }}>Per-keyword AI Overview — who Google cites</div>
+          <ul className="space-y-1.5">
+            {data.per_keyword.slice(0, 10).map((p, i) => (
+              <li key={i} style={{ fontFamily: BODY, fontSize: 12, color: "#5A5A5A", lineHeight: 1.5 }}>
+                <span style={{ fontWeight: 600, color: INK }}>{p.keyword}</span>
+                <span style={{ color: "#9A9A9A" }}> → {(p.sources || []).slice(0, 4).join(", ") || "no sources captured"}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (data.aio_keywords || []).length > 0 && (
         <div style={{ fontFamily: BODY, fontSize: 11.5, lineHeight: 1.6, color: "#8A8A8A" }}>
           <span style={{ fontWeight: 700, color: "#6B6B6B" }}>Keywords with an AI Overview to target: </span>{data.aio_keywords.slice(0, 10).join(" · ")}
         </div>
@@ -588,6 +600,33 @@ function KeywordInsights({ kwGap }) {
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+// §7 — real referring-domains table (your existing backlink profile) with per-domain DA +
+// spam score (Moz). Complements the backlink GAP (prospects) — real data, not advice.
+function ReferringDomainsTable({ moz }) {
+  const list = Array.isArray(moz?.referringDomains) ? moz.referringDomains : [];
+  if (!list.length) return null;
+  return (
+    <div className="mt-6">
+      <div className="uppercase mb-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", letterSpacing: "0.2em", color: "#7A7A7A" }}>Your Strongest Referring Domains (Moz)</div>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #E5E5E5" }}>
+        <table className="w-full border-collapse">
+          <thead><tr style={{ background: INK }}>{["Referring domain", "Domain Authority", "Spam score", "Backlinks"].map((h, i) => <th key={i} style={_thS}>{h}</th>)}</tr></thead>
+          <tbody>
+            {list.slice(0, 12).map((dd, i) => (
+              <tr key={i} style={{ background: i % 2 ? "#F7F7F7" : "#fff" }}>
+                <td style={{ ..._tdS, fontWeight: 600, color: INK, wordBreak: "break-all" }}>{dd.domain}</td>
+                <td style={_tdS}>{dd.da != null ? dd.da : "—"}</td>
+                <td style={{ ..._tdS, color: dd.spam != null && dd.spam >= 30 ? "#B3261E" : "#5A5A5A" }}>{dd.spam != null ? `${dd.spam}%` : "—"}</td>
+                <td style={_tdS}>{dd.backlinks != null ? fmtNum(dd.backlinks) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -1441,6 +1480,9 @@ export default function WebsiteReport({ data }) {
             <MetricCard value={fmt(bm.errors404)} label="404 Errors" sub={`${plainFor("404 Errors", fbMap, "Broken pages")} · Doctor Fizz crawler`} accent={Number(bm.errors404) > 0 ? "orange" : "ink"} />
             <MetricCard value={crawlHealth != null ? `${crawlHealth}/100` : "—"} label="Site Health" sub={`${plainFor("Site Health", fbMap, "Crawl health score")} · Doctor Fizz crawler`} />
             <MetricCard value={gmbScore != null ? `${gmbScore}/100` : "—"} label="GMB Completeness" sub={`${plainFor("GMB Completeness", fbMap, "Google Business Profile")} · GBP API`} />
+            <MetricCard value={d.psiData?.coreWebVitals?.inp != null ? `${Math.round(d.psiData.coreWebVitals.inp)}ms` : "—"} label="INP" sub="Interaction to Next Paint — page responsiveness · Lighthouse" accent={Number(d.psiData?.coreWebVitals?.inp) > 200 ? "orange" : "ink"} />
+            <MetricCard value={d.mozIntel?.spamScore != null ? `${d.mozIntel.spamScore}%` : "—"} label="Spam Score" sub="share of low-quality backlink signals · Moz" accent={Number(d.mozIntel?.spamScore) >= 30 ? "orange" : "ink"} />
+            <MetricCard value={d.websiteCrawl?.indexedPages != null ? fmt(d.websiteCrawl.indexedPages) : "—"} label="Indexed Pages" sub={`pages Google can index${d.websiteCrawl?.pageCount ? ` of ${d.websiteCrawl.pageCount} crawled` : ""} · Doctor Fizz crawler`} />
           </div>
 
           {/* Plain-language narration of the baseline (data.doctorFizz.story.the_situation) */}
@@ -1749,6 +1791,9 @@ export default function WebsiteReport({ data }) {
               </div>
             ))}
           </div>
+
+          {/* §7 — real referring-domains table (DA + spam) from Moz */}
+          <ReferringDomainsTable moz={d.mozIntel} />
         </AnimatedSection>
       </section>
 

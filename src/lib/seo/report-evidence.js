@@ -398,6 +398,7 @@ export function buildAioVisibility(serpIntel = {}, brandDomain = "", competitorD
   let aioCount = 0, snippetCount = 0, brandCited = 0;
   const citeFreq = {};
   const aioKeywords = [];
+  const perKeyword = [];
   for (const [kw, intel] of entries) {
     const f = intel?.features || {};
     if (f.featured_snippet) snippetCount++;
@@ -405,6 +406,7 @@ export function buildAioVisibility(serpIntel = {}, brandDomain = "", competitorD
     if (f.has_ai_overview || aio?.present) {
       aioCount++;
       aioKeywords.push(kw);
+      perKeyword.push({ keyword: kw, sources: (aio?.sources || []).slice(0, 5) });
       for (const src of (aio?.sources || [])) {
         const d = String(src).toLowerCase().replace(/^www\./, "");
         if (!d) continue;
@@ -448,6 +450,7 @@ export function buildAioVisibility(serpIntel = {}, brandDomain = "", competitorD
     share_of_voice,
     top_cited_domains,
     aio_keywords: aioKeywords.slice(0, 15),
+    per_keyword: perKeyword.slice(0, 12),
   };
 }
 

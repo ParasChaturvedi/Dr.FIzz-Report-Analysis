@@ -780,13 +780,23 @@ export async function POST(request) {
     // domain overview does NOT carry them, which is why the report was showing them as
     // "unavailable". Same accurate source the Info panel uses (e.g. itzfizz DA 52).
     let backlinks = null;
-    const moz = await safeCall(() => fetchMozMetrics(domain, { withList: false }));
+    let mozIntel = null;
+    // withList:true also returns the referring-domains list (+ per-domain DA & spam score)
+    // and the site-wide spam score — surfaced in §1 (spam) and §7 (referring-domains table).
+    const moz = await safeCall(() => fetchMozMetrics(domain, { withList: true }));
     if (moz) {
       if (Number.isFinite(moz.domainAuthority)) dr = moz.domainAuthority;       // 0-100 DA
       const rd = moz.backlinksSummary?.referring_domains;
       if (Number.isFinite(rd) && rd > 0) referringDomains = rd;
       const bl = moz.backlinksSummary?.backlinks;
       if (Number.isFinite(bl) && bl > 0) backlinks = bl;
+      mozIntel = {
+        spamScore: moz.backlinksSummary?.backlinks_spam_score ?? null,
+        nofollowPages: moz.backlinksSummary?.referring_pages_nofollow ?? null,
+        referringDomains: Array.isArray(moz.backlinkDomains)
+          ? moz.backlinkDomains.slice(0, 15).map((dd) => ({ domain: dd.domain, da: dd.rank ?? dd.domain_rank ?? null, spam: dd.backlinks_spam_score ?? null, backlinks: dd.backlinks ?? null }))
+          : [],
+      };
     }
 
     console.log("[generate-analysis] baseline:", { dr, organicTraffic, organicKeywords, referringDomains, backlinks, mobileScore, desktopScore });
@@ -1068,6 +1078,8 @@ export async function POST(request) {
       gmbCheck:        gmbRaw,
       competitorAudit: prefetchedSeoData?.competitorAudit ?? null,
       keywordGap:      kwGapRaw,
+      // §7 referring-domains table + §1 spam score (Moz, withList:true)
+      mozIntel,
       strategicPlan:   prefetchedSeoData?.strategicPlan   ?? null,
     };
 
