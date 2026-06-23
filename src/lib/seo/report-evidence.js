@@ -384,4 +384,50 @@ export function buildAiReadiness(crawlData = {}, gmbData = {}) {
   return { score, band, signals, schema_types: [...schemaTypes], available: pages.length > 0 };
 }
 
-export default { buildEvidencePlan, checkExistingPage, buildGeoStatus, separateKpis, buildAiReadiness };
+// GEO — SERP-measured Google AI Overview visibility. Aggregates the AI Overview data
+// ALREADY collected in serpIntel (Phase 1): how many priority keywords trigger a Google
+// AI Overview, which domains the AI cites most (the real GEO winners), and whether the
+// brand is ever cited. REAL measured data from the SERP — complements the Playwright
+// chat-engine scan (ChatGPT/Gemini/Perplexity), never fabricates. Zero extra API cost.
+export function buildAioVisibility(serpIntel = {}, brandDomain = "", competitorDomains = []) {
+  const entries = Object.entries(serpIntel || {});
+  if (!entries.length) return { available: false };
+  const stem = (d) => String(d || "").toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].split(".")[0];
+  const brandStem = stem(brandDomain);
+  const compStems = (competitorDomains || []).map(stem).filter(Boolean);
+  let aioCount = 0, snippetCount = 0, brandCited = 0;
+  const citeFreq = {};
+  const aioKeywords = [];
+  for (const [kw, intel] of entries) {
+    const f = intel?.features || {};
+    if (f.featured_snippet) snippetCount++;
+    const aio = intel?.ai_overview;
+    if (f.has_ai_overview || aio?.present) {
+      aioCount++;
+      aioKeywords.push(kw);
+      for (const src of (aio?.sources || [])) {
+        const d = String(src).toLowerCase().replace(/^www\./, "");
+        if (!d) continue;
+        citeFreq[d] = (citeFreq[d] || 0) + 1;
+        if (brandStem && stem(d) === brandStem) brandCited++;
+      }
+    }
+  }
+  const checked = entries.length;
+  const top_cited_domains = Object.entries(citeFreq).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([domain, count]) => ({
+    domain, count, is_brand: !!brandStem && stem(domain) === brandStem, is_competitor: compStems.some((c) => stem(domain) === c),
+  }));
+  return {
+    available: true,
+    keywords_checked: checked,
+    aio_present: aioCount,
+    aio_coverage_pct: checked ? Math.round((aioCount / checked) * 100) : 0,
+    featured_snippet_count: snippetCount,
+    brand_cited_count: brandCited,
+    brand_cited: brandCited > 0,
+    top_cited_domains,
+    aio_keywords: aioKeywords.slice(0, 15),
+  };
+}
+
+export default { buildEvidencePlan, checkExistingPage, buildGeoStatus, separateKpis, buildAiReadiness, buildAioVisibility };

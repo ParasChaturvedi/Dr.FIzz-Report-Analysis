@@ -418,6 +418,38 @@ function AiReadinessCard({ data }) {
   );
 }
 
+// GEO — SERP-measured Google AI Overview visibility (data.doctorFizz.geo_aio_visibility).
+// Real measured data: how many priority keywords trigger a Google AI Overview, who the AI
+// cites most (bar chart), and whether the brand is cited. Complements the Playwright scan.
+function AioVisibilityCard({ data, domain }) {
+  if (!data || !data.available || !data.keywords_checked) return null;
+  const cited = (data.top_cited_domains || []).slice(0, 8);
+  const trunc = (s) => { s = String(s || ""); return s.length > 18 ? s.slice(0, 17) + "…" : s; };
+  const chartData = cited.map((c) => ({ label: trunc(c.domain), value: c.count, client: c.is_brand }));
+  return (
+    <div className="rounded-lg bg-white p-5 mb-4" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
+      <div className="flex items-baseline gap-3 flex-wrap mb-2">
+        <div className="uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: 10, letterSpacing: "0.18em", color: ORANGE }}>Google AI Overview Visibility</div>
+        <span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: INK, color: "#fff" }}>SERP-measured</span>
+      </div>
+      <p style={{ fontFamily: BODY, fontSize: 12.5, lineHeight: 1.55, color: "#5A5A5A", marginBottom: 12, maxWidth: "46rem" }}>
+        Of <strong style={{ color: INK }}>{data.keywords_checked}</strong> priority keywords checked on Google, <strong style={{ color: ORANGE }}>{data.aio_present}</strong> ({data.aio_coverage_pct}%) trigger an <strong>AI Overview</strong>.{" "}
+        {data.brand_cited
+          ? <>{domain} is cited in <strong style={{ color: "#2E7D32" }}>{data.brand_cited_count}</strong> of them.</>
+          : <>{domain} is <strong style={{ color: "#B3261E" }}>not yet cited</strong> in any — the sources below are who Google&apos;s AI trusts instead.</>}
+      </p>
+      {chartData.length > 0 && (
+        <div className="mb-2"><BarChart title="Most-cited sources in Google AI Overviews" data={chartData} valueFmt={(v) => `${v}×`} /></div>
+      )}
+      {(data.aio_keywords || []).length > 0 && (
+        <div style={{ fontFamily: BODY, fontSize: 11.5, lineHeight: 1.6, color: "#8A8A8A" }}>
+          <span style={{ fontWeight: 700, color: "#6B6B6B" }}>Keywords with an AI Overview to target: </span>{data.aio_keywords.slice(0, 10).join(" · ")}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // §14-25 GEO renderer (reference light style). Renders the FULL model (geo_score, SoV,
 // metrics, topic dominance, citation intelligence, Claude deep analysis) when a live scan
 // exists, and ALWAYS renders the readiness scorecard + tracked prompts + actions. Reads
@@ -1766,6 +1798,8 @@ export default function WebsiteReport({ data }) {
 
             {/* #22 / #23 — AI & Entity Readiness scorecard (real crawl + GMB signals) */}
             <AiReadinessCard data={d.doctorFizz?.ai_readiness} />
+            {/* GEO — SERP-measured Google AI Overview visibility (zero extra cost) */}
+            <AioVisibilityCard data={d.doctorFizz?.geo_aio_visibility} domain={domain} />
 
             {/* Full §14-25 GEO model (SoV, metrics, topic dominance, citation intelligence,
                 Claude deep analysis) when a live scan exists; readiness + tracked prompts +

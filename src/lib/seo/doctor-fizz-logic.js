@@ -25,7 +25,7 @@
 
 // Track 1.2 — evidence framework (every recommendation → 10-field evidence structure,
 // existing-page checks, honest GEO status, findings-vs-projections separation).
-import { buildEvidencePlan, buildGeoStatus, separateKpis, buildAiReadiness } from "./report-evidence.js";
+import { buildEvidencePlan, buildGeoStatus, separateKpis, buildAiReadiness, buildAioVisibility } from "./report-evidence.js";
 
 // ── Missing data labels (Problem 7) ───────────────────────────────────────────
 export const MISSING_LABELS = {
@@ -2756,6 +2756,8 @@ export function runBusinessLogic(input = {}) {
     evidence_plan: buildEvidencePlan({ technical_issues, content_architecture, priority_action_plan, gbp_comparison, backlinks, competitors: comparableCompetitors, serpByKeyword }, crawlData),
     // #22 / #23 — entity-level GEO audit + AI-readiness score, from real crawl + GMB signals.
     ai_readiness: buildAiReadiness(crawlData, clientGmb),
+    // GEO — SERP-measured Google AI Overview visibility (from serpIntel; zero extra cost).
+    geo_aio_visibility: buildAioVisibility(serpIntel, domain, (comparableCompetitors || []).map((c) => c?.domain || c?.name || "").filter(Boolean)),
     // #14 — current metrics vs targets vs forecasts vs assumptions, kept separate.
     kpi_breakdown: separateKpis(kpis),
     // #9 — honest GEO state (planned / methodology-ready / prompts-ready / collection-not-run).
