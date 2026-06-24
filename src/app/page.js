@@ -279,7 +279,10 @@ export default function Home() {
     setWebsiteData(payload);
 
     try {
-      localStorage.setItem("websiteData", JSON.stringify({ site: cleanWebsite }));
+      // Merge — never clobber fields Step 1 already wrote (reportMode/reportModes).
+      let existing = {};
+      try { existing = JSON.parse(localStorage.getItem("websiteData") || "{}") || {}; } catch {}
+      localStorage.setItem("websiteData", JSON.stringify({ ...existing, site: cleanWebsite }));
     } catch {}
 
     clearBootstrapCache();
@@ -321,11 +324,14 @@ export default function Home() {
     } catch {}
   }, []);
 
-  const handleCompetitorSubmit = useCallback(
-    (data) =>
-      setCompetitorData(data || { businessCompetitors: [], searchCompetitors: [], totalCompetitors: [] }),
-    []
-  );
+  const handleCompetitorSubmit = useCallback((data) => {
+    const payload = data || { businessCompetitors: [], searchCompetitors: [], totalCompetitors: [] };
+    setCompetitorData(payload);
+    // Persist like every other step so a refresh on the report screen can rehydrate it.
+    try {
+      localStorage.setItem("competitorData", JSON.stringify(payload));
+    } catch {}
+  }, []);
 
   const renderCurrentStep = () => {
     switch (currentStep) {

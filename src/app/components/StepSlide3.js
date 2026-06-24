@@ -2,14 +2,20 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { ArrowRight, ArrowLeft, ChevronDown, Check } from "lucide-react";
+import { ArrowRight, ArrowLeft, ChevronDown, Check, Plus } from "lucide-react";
+import { GEO, LANGUAGES } from "./data/geo";
+import { DIRECTORY_GROUPS } from "./data/directories";
 
 export default function StepSlide3({ onNext, onBack, onLanguageLocationSubmit }) {
-  const [selectedLanguage, setSelectedLanguage] = useState("");
-  // V3 Part 3.3 — country is MULTI-SELECT and mandatory; city is OPTIONAL.
+  // V4 — every selector here is MULTI-SELECT. Language + at least one country are
+  // mandatory; state, city and directories are optional. Singular `language`/
+  // `country`/`state`/`city` are still emitted (primary = first) for back-compat.
+  const [selectedLanguages, setSelectedLanguages] = useState([]);
   const [selectedCountries, setSelectedCountries] = useState([]);
-  const [selectedState, setSelectedState] = useState("");
-  const [selectedCity, setSelectedCity] = useState("");
+  const [selectedStates, setSelectedStates] = useState([]);
+  const [selectedCities, setSelectedCities] = useState([]);
+  const [selectedDirectories, setSelectedDirectories] = useState([]);
+  const [customDirectory, setCustomDirectory] = useState("");
 
   const [openDropdown, setOpenDropdown] = useState(null);
   const [isBootstrapping, setIsBootstrapping] = useState(false);
@@ -47,45 +53,29 @@ export default function StepSlide3({ onNext, onBack, onLanguageLocationSubmit })
 
   const lastSubmittedData = useRef(null);
 
-  const languages = [
-    "English","Spanish","French","German","Italian","Portuguese",
-    "Chinese (Mandarin)","Japanese","Korean","Hindi","Bengali","Russian",
-    "Arabic","Turkish","Vietnamese","Polish","Persian","Dutch","Thai"
-  ];
-
-  const geo = {
-    India: {
-      Karnataka: ["Bengaluru", "Mysuru"],
-      Maharashtra: ["Mumbai", "Pune"],
-      Delhi: ["New Delhi"],
-    },
-    "United States": {
-      California: ["San Francisco", "Los Angeles"],
-      "New York": ["New York City", "Buffalo"],
-    },
-    "United Kingdom": {
-      England: ["London", "Manchester"],
-      Scotland: ["Edinburgh", "Glasgow"],
-    },
-    "United Arab Emirates": { Dubai: ["Dubai"], "Abu Dhabi": ["Abu Dhabi"] },
-    Canada: { Ontario: ["Toronto", "Ottawa"], "British Columbia": ["Vancouver"] },
-    Australia: { "New South Wales": ["Sydney"], Victoria: ["Melbourne"] },
-    Singapore: { Singapore: ["Singapore"] },
-  };
+  const languages = LANGUAGES;
+  const geo = GEO;
 
   const countries = Object.keys(geo);
-  // State/city only make sense when EXACTLY ONE country is selected.
+  // State/city only make sense when EXACTLY ONE country is selected (multi-country
+  // scope stays at the country grain). States are multi; cities are the union of
+  // the cities that belong to the selected states.
   const singleCountry = selectedCountries.length === 1 ? selectedCountries[0] : "";
   const states = singleCountry ? Object.keys(geo[singleCountry] || {}) : [];
-  const cities = singleCountry && selectedState ? geo[singleCountry]?.[selectedState] || [] : [];
+  const cities = useMemo(() => {
+    if (!singleCountry || !selectedStates.length) return [];
+    const seen = new Set();
+    selectedStates.forEach((s) => (geo[singleCountry]?.[s] || []).forEach((c) => seen.add(c)));
+    return Array.from(seen);
+  }, [geo, singleCountry, selectedStates]);
 
-  // V3 Part 3.3 — service-area type, derived from the actual selections.
+  // Service-area type, derived from the actual selections.
   const serviceAreaType = useMemo(() => {
     if (selectedCountries.length > 1) return "multi-country";
-    if (selectedCity) return "city-specific";
-    if (selectedState) return "region-specific";
+    if (selectedCities.length) return "city-specific";
+    if (selectedStates.length) return "region-specific";
     return "countrywide";
-  }, [selectedCountries, selectedState, selectedCity]);
+  }, [selectedCountries, selectedStates, selectedCities]);
 
   const serviceAreaLabel = {
     "multi-country": "Multi-country",
@@ -123,10 +113,10 @@ export default function StepSlide3({ onNext, onBack, onLanguageLocationSubmit })
 
   useEffect(() => {
     recomputePanelHeight();
-  }, [selectedLanguage, selectedCountries, selectedState, selectedCity]);
+  }, [selectedLanguages, selectedCountries, selectedStates, selectedCities, selectedDirectories]);
 
-  // V3 Part 3.3 — mandatory: a language + at least one country. City is OPTIONAL.
-  const selectionsComplete = !!(selectedLanguage && selectedCountries.length >= 1);
+  // Mandatory: at least one language + at least one country. Everything else optional.
+  const selectionsComplete = !!(selectedLanguages.length >= 1 && selectedCountries.length >= 1);
 
   const normalizeHost = useCallback((input) => {
     if (!input || typeof input !== "string") return null;
@@ -157,19 +147,23 @@ export default function StepSlide3({ onNext, onBack, onLanguageLocationSubmit })
 
   useEffect(() => {
     const payload = {
-      language: selectedLanguage || "",
-      countries: selectedCountries,                       // V3 — multi-country
+      languages: selectedLanguages,                       // V4 — multi-language
+      language: selectedLanguages[0] || "",               // backward-compat (primary)
+      countries: selectedCountries,                       // multi-country
       country: selectedCountries[0] || "",                // backward-compat (primary)
-      state: selectedState || "",
-      city: selectedCity || "",
-      serviceAreaType,                                    // V3 — countrywide | region-specific | city-specific | multi-country
+      states: selectedStates,                             // V4 — multi-state
+      state: selectedStates[0] || "",                     // backward-compat (primary)
+      cities: selectedCities,                             // V4 — multi-city
+      city: selectedCities[0] || "",                      // backward-compat (primary)
+      directories: selectedDirectories,                   // V4 — existing citation listings
+      serviceAreaType,                                    // countrywide | region-specific | city-specific | multi-country
     };
     const now = JSON.stringify(payload);
     if (now !== JSON.stringify(lastSubmittedData.current)) {
       lastSubmittedData.current = payload;
       onLanguageLocationSubmit?.(payload);
     }
-  }, [selectedLanguage, selectedCountries, selectedState, selectedCity, serviceAreaType, onLanguageLocationSubmit]);
+  }, [selectedLanguages, selectedCountries, selectedStates, selectedCities, selectedDirectories, serviceAreaType, onLanguageLocationSubmit]);
 
   useEffect(() => {
     if (tailRef.current) {
@@ -177,7 +171,7 @@ export default function StepSlide3({ onNext, onBack, onLanguageLocationSubmit })
         tailRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
       });
     }
-  }, [selectedLanguage, selectedCountries, selectedState, selectedCity, openDropdown, selectionsComplete]);
+  }, [selectedLanguages, selectedCountries, selectedStates, selectedCities, selectedDirectories, openDropdown, selectionsComplete]);
 
 
   const bootstrapWithRetry = async (payload) => {
@@ -224,12 +218,12 @@ export default function StepSlide3({ onNext, onBack, onLanguageLocationSubmit })
         businessData?.industry || businessData?.businessIndustry || businessData?.category || businessData?.businessCategory || ""
       ).trim();
 
-      // Location string: a single-country scope reads "City, State, Country";
-      // a multi-country scope reads "Country A, Country B" (no city logic forced).
+      // Location string: a single-country scope reads "City, State, Country" (primary
+      // city/state); a multi-country scope reads "Country A, Country B".
       const location = selectedCountries.length > 1
         ? selectedCountries.join(", ")
-        : [selectedCity, selectedState, singleCountry].filter(Boolean).join(", ");
-      const language = String(selectedLanguage || "").trim();
+        : [selectedCities[0], selectedStates[0], singleCountry].filter(Boolean).join(", ");
+      const language = String(selectedLanguages[0] || "").trim();
 
       const res = await bootstrapWithRetry({ domain, industry, location, language });
       const data = await res.json();
@@ -261,26 +255,40 @@ try {
     setOpenDropdown((prev) => (prev === name ? null : name));
   };
 
-  const onSelectLanguage = (l) => { setSelectedLanguage(l); setOpenDropdown(null); };
-  // Multi-select toggle. Selecting/removing a country clears sub-region selections
-  // because state/city are only valid for a single-country scope.
+  // All toggles keep their dropdown OPEN so the user can pick more than one.
+  const toggleIn = (setter) => (val) =>
+    setter((prev) => (prev.includes(val) ? prev.filter((x) => x !== val) : [...prev, val]));
+
+  const onToggleLanguage = toggleIn(setSelectedLanguages);
+  // Selecting/removing a country clears sub-region selections because state/city
+  // are only valid for a single-country scope.
   const onToggleCountry = (c) => {
-    setSelectedCountries((prev) => {
-      const next = prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c];
-      return next;
-    });
-    setSelectedState("");
-    setSelectedCity("");
-    // keep the dropdown open so the user can pick more than one
+    setSelectedCountries((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+    setSelectedStates([]);
+    setSelectedCities([]);
   };
-  const onSelectState = (s) => { setSelectedState(s); setSelectedCity(""); setOpenDropdown(null); };
-  const onSelectCity = (ct) => { setSelectedCity(ct); setOpenDropdown(null); };
+  // Changing the set of states invalidates the city set (cities depend on states).
+  const onToggleState = (s) => {
+    setSelectedStates((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+    setSelectedCities([]);
+  };
+  const onToggleCity = toggleIn(setSelectedCities);
+  const onToggleDirectory = toggleIn(setSelectedDirectories);
+
+  const addCustomDirectory = () => {
+    const v = customDirectory.trim();
+    if (!v) return;
+    setSelectedDirectories((prev) => (prev.some((x) => x.toLowerCase() === v.toLowerCase()) ? prev : [...prev, v]));
+    setCustomDirectory("");
+  };
 
   const handleReset = () => {
-    setSelectedLanguage("");
+    setSelectedLanguages([]);
     setSelectedCountries([]);
-    setSelectedState("");
-    setSelectedCity("");
+    setSelectedStates([]);
+    setSelectedCities([]);
+    setSelectedDirectories([]);
+    setCustomDirectory("");
     lastSubmittedData.current = null;
   };
 
@@ -298,11 +306,15 @@ try {
   const ddListCls =
     "absolute top-full left-0 right-0 bg-[var(--input)] border border-[var(--border)] rounded-lg mt-1 shadow-2xl max-h-56 overflow-y-auto z-20";
 
-  const countryButtonLabel = selectedCountries.length === 0
-    ? "Select Countries"
-    : selectedCountries.length === 1
-      ? selectedCountries[0]
-      : `${selectedCountries.length} countries selected`;
+  // Shared multi-select button label: "Select X" → the single value → "N selected".
+  const multiLabel = (arr, placeholder, noun) =>
+    arr.length === 0 ? placeholder : arr.length === 1 ? arr[0] : `${arr.length} ${noun} selected`;
+
+  const languageButtonLabel = multiLabel(selectedLanguages, "Select Languages", "languages");
+  const countryButtonLabel = multiLabel(selectedCountries, "Select Countries", "countries");
+  const stateButtonLabel = multiLabel(selectedStates, "State / region (optional)", "regions");
+  const cityButtonLabel = multiLabel(selectedCities, "City (optional)", "cities");
+  const directoryButtonLabel = multiLabel(selectedDirectories, "Select directories (optional)", "selected");
 
   const singleCountryNeedsRegion = selectedCountries.length === 1;
 
@@ -354,7 +366,7 @@ try {
                   Select the languages and locations relevant to your business
                 </h1>
                 <p className="text-[13px] sm:text-[14px] md:text-[15px] text-[var(--muted)] leading-relaxed">
-                  Choose your language and the countries you serve. You can select more than one country. City is optional — leave it blank for nationwide or multi-country coverage.
+                  Every field here is multi-select — add as many languages and countries as you serve. Pick a single country to drill into states and cities. Directories are optional but help us spot citation gaps.
                 </p>
 
                 {bootstrapError && (
@@ -365,27 +377,31 @@ try {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 w-full max-w-[880px] relative pb-6">
-                {/* Language */}
+                {/* Language — MULTI-SELECT */}
                 <div className="relative dropdown-container overflow-visible" style={{ zIndex: openDropdown === "lang" ? 1000 : 1 }}>
                   <button onClick={() => handleDropdownToggle("lang", false)} type="button" className={btnBase}>
-                    <span className={`${selectedLanguage ? "text-[var(--text)]" : "text-[var(--muted)]"} ${labelCls}`}>
-                      {selectedLanguage || "Select Language"}
+                    <span className={`${selectedLanguages.length ? "text-[var(--text)]" : "text-[var(--muted)]"} ${labelCls}`}>
+                      {languageButtonLabel}
                     </span>
                     <ChevronDown size={20} className={`transition-transform ${openDropdown === "lang" ? "rotate-180" : ""}`} />
                   </button>
                   {openDropdown === "lang" && (
                     <div className={ddListCls}>
-                      {languages.map((l) => (
-                        <button key={l} onClick={() => onSelectLanguage(l)} type="button"
-                          className="w-full text-left px-4 py-2.5 sm:py-3 hover:bg-[var(--menuHover)] focus:bg-[var(--menuFocus)] text-[var(--text)] text-[12px] sm:text-[13px] md:text-[14px] border-b border-[var(--border)] last:border-b-0">
-                          {l}
+                      {languages.map((l) => {
+                        const checked = selectedLanguages.includes(l);
+                        return (
+                        <button key={l} onClick={() => onToggleLanguage(l)} type="button"
+                          className="w-full text-left px-4 py-2.5 sm:py-3 hover:bg-[var(--menuHover)] focus:bg-[var(--menuFocus)] text-[var(--text)] text-[12px] sm:text-[13px] md:text-[14px] border-b border-[var(--border)] last:border-b-0 flex items-center justify-between gap-2">
+                          <span>{l}</span>
+                          {checked && <Check size={16} className="text-[#d45427] shrink-0" />}
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
-                {/* Country — MULTI-SELECT (V3 Part 3.3) */}
+                {/* Country — MULTI-SELECT */}
                 <div className="relative dropdown-container overflow-visible" style={{ zIndex: openDropdown === "country" ? 1000 : 1 }}>
                   <button onClick={() => handleDropdownToggle("country", false)} type="button" className={btnBase}>
                     <span className={`${selectedCountries.length ? "text-[var(--text)]" : "text-[var(--muted)]"} ${labelCls}`}>
@@ -409,56 +425,76 @@ try {
                   )}
                 </div>
 
-                {/* State — conditional (only for a single-country scope) */}
+                {/* State — MULTI-SELECT, only for a single-country scope */}
                 <div className="relative dropdown-container overflow-visible" style={{ zIndex: openDropdown === "state" ? 1000 : 1 }}>
                   <button onClick={() => handleDropdownToggle("state", !singleCountryNeedsRegion)} type="button"
                     className={`${btnBase} ${!singleCountryNeedsRegion ? "opacity-60 cursor-not-allowed" : ""}`}>
-                    <span className={`${selectedState ? "text-[var(--text)]" : "text-[var(--muted)]"} ${labelCls}`}>
-                      {selectedState || (singleCountryNeedsRegion ? "State / region (optional)" : "State (single country only)")}
+                    <span className={`${selectedStates.length ? "text-[var(--text)]" : "text-[var(--muted)]"} ${labelCls}`}>
+                      {singleCountryNeedsRegion ? stateButtonLabel : "State (single country only)"}
                     </span>
                     <ChevronDown size={20} className={`transition-transform ${openDropdown === "state" ? "rotate-180" : ""}`} />
                   </button>
                   {openDropdown === "state" && singleCountryNeedsRegion && (
                     <div className={ddListCls}>
-                      {states.map((s) => (
-                        <button key={s} onClick={() => onSelectState(s)} type="button"
-                          className="w-full text-left px-4 py-2.5 sm:py-3 hover:bg-[var(--menuHover)] focus:bg-[var(--menuFocus)] text-[var(--text)] text-[12px] sm:text-[13px] md:text-[14px] border-b border-[var(--border)] last:border-b-0">
-                          {s}
+                      {states.map((s) => {
+                        const checked = selectedStates.includes(s);
+                        return (
+                        <button key={s} onClick={() => onToggleState(s)} type="button"
+                          className="w-full text-left px-4 py-2.5 sm:py-3 hover:bg-[var(--menuHover)] focus:bg-[var(--menuFocus)] text-[var(--text)] text-[12px] sm:text-[13px] md:text-[14px] border-b border-[var(--border)] last:border-b-0 flex items-center justify-between gap-2">
+                          <span>{s}</span>
+                          {checked && <Check size={16} className="text-[#d45427] shrink-0" />}
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
 
-                {/* City — OPTIONAL (V3 Part 3.3) */}
+                {/* City — MULTI-SELECT, optional (depends on selected states) */}
                 <div className="relative dropdown-container overflow-visible" style={{ zIndex: openDropdown === "city" ? 1000 : 1 }}>
-                  <button onClick={() => handleDropdownToggle("city", !selectedState)} type="button"
-                    className={`${btnBase} ${!selectedState ? "opacity-60 cursor-not-allowed" : ""}`}>
-                    <span className={`${selectedCity ? "text-[var(--text)]" : "text-[var(--muted)]"} ${labelCls}`}>
-                      {selectedCity || "City (optional)"}
+                  <button onClick={() => handleDropdownToggle("city", !selectedStates.length)} type="button"
+                    className={`${btnBase} ${!selectedStates.length ? "opacity-60 cursor-not-allowed" : ""}`}>
+                    <span className={`${selectedCities.length ? "text-[var(--text)]" : "text-[var(--muted)]"} ${labelCls}`}>
+                      {cityButtonLabel}
                     </span>
                     <ChevronDown size={20} className={`transition-transform ${openDropdown === "city" ? "rotate-180" : ""}`} />
                   </button>
-                  {openDropdown === "city" && selectedState && (
+                  {openDropdown === "city" && selectedStates.length > 0 && (
                     <div className={ddListCls}>
-                      {cities.map((ct) => (
-                        <button key={ct} onClick={() => onSelectCity(ct)} type="button"
-                          className="w-full text-left px-4 py-2.5 sm:py-3 hover:bg-[var(--menuHover)] focus:bg-[var(--menuFocus)] text-[var(--text)] text-[12px] sm:text-[13px] md:text-[14px] border-b border-[var(--border)] last:border-b-0">
-                          {ct}
+                      {cities.map((ct) => {
+                        const checked = selectedCities.includes(ct);
+                        return (
+                        <button key={ct} onClick={() => onToggleCity(ct)} type="button"
+                          className="w-full text-left px-4 py-2.5 sm:py-3 hover:bg-[var(--menuHover)] focus:bg-[var(--menuFocus)] text-[var(--text)] text-[12px] sm:text-[13px] md:text-[14px] border-b border-[var(--border)] last:border-b-0 flex items-center justify-between gap-2">
+                          <span>{ct}</span>
+                          {checked && <Check size={16} className="text-[#d45427] shrink-0" />}
                         </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Selected-country chips + detected service-area scope */}
+              {/* Selected-location chips (countries + states + cities) + detected scope */}
               {selectedCountries.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 -mt-2 max-w-[880px]">
                   {selectedCountries.map((c) => (
-                    <span key={c} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--input)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--text)]">
+                    <span key={`country-${c}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--input)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--text)]">
                       {c}
                       <button type="button" onClick={() => onToggleCountry(c)} className="text-[var(--muted)] hover:text-[#d45427] font-bold leading-none">×</button>
+                    </span>
+                  ))}
+                  {selectedStates.map((s) => (
+                    <span key={`state-${s}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--input)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--muted)]">
+                      {s}
+                      <button type="button" onClick={() => onToggleState(s)} className="hover:text-[#d45427] font-bold leading-none">×</button>
+                    </span>
+                  ))}
+                  {selectedCities.map((ct) => (
+                    <span key={`city-${ct}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--input)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--muted)]">
+                      {ct}
+                      <button type="button" onClick={() => onToggleCity(ct)} className="hover:text-[#d45427] font-bold leading-none">×</button>
                     </span>
                   ))}
                   <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold" style={{ background: "#FDF1EB", color: "#d45427" }}>
@@ -466,6 +502,69 @@ try {
                   </span>
                 </div>
               )}
+
+              {/* Business directories / citations — MULTI-SELECT (optional) */}
+              <div className="w-full max-w-[880px]">
+                <label className="block text-[12px] sm:text-[13px] font-semibold text-[var(--text)] mb-2">
+                  Where is your business already listed?{" "}
+                  <span className="text-[var(--muted)] font-normal">(directories &amp; citations — optional)</span>
+                </label>
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-start">
+                  <div className="relative dropdown-container overflow-visible w-full sm:max-w-[320px]" style={{ zIndex: openDropdown === "directories" ? 1000 : 1 }}>
+                    <button onClick={() => handleDropdownToggle("directories", false)} type="button" className={btnBase}>
+                      <span className={`${selectedDirectories.length ? "text-[var(--text)]" : "text-[var(--muted)]"} ${labelCls}`}>
+                        {directoryButtonLabel}
+                      </span>
+                      <ChevronDown size={20} className={`transition-transform ${openDropdown === "directories" ? "rotate-180" : ""}`} />
+                    </button>
+                    {openDropdown === "directories" && (
+                      <div className={ddListCls}>
+                        {DIRECTORY_GROUPS.map((group) => (
+                          <div key={group.label}>
+                            <div className="px-4 pt-2.5 pb-1 text-[10px] uppercase tracking-wide font-semibold text-[var(--muted)] bg-[var(--input)] sticky top-0">
+                              {group.label}
+                            </div>
+                            {group.items.map((d) => {
+                              const checked = selectedDirectories.includes(d);
+                              return (
+                                <button key={d} onClick={() => onToggleDirectory(d)} type="button"
+                                  className="w-full text-left px-4 py-2.5 hover:bg-[var(--menuHover)] focus:bg-[var(--menuFocus)] text-[var(--text)] text-[12px] sm:text-[13px] border-b border-[var(--border)] last:border-b-0 flex items-center justify-between gap-2">
+                                  <span>{d}</span>
+                                  {checked && <Check size={16} className="text-[#d45427] shrink-0" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:max-w-[320px]">
+                    <input
+                      type="text"
+                      value={customDirectory}
+                      onChange={(e) => setCustomDirectory(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomDirectory(); } }}
+                      placeholder="Add another directory…"
+                      className="flex-1 bg-[var(--input)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-[12px] sm:text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[#d45427]"
+                    />
+                    <button type="button" onClick={addCustomDirectory}
+                      className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#d45427] text-[#d45427] px-3 py-2.5 text-[12px] font-semibold hover:bg-[#FDF1EB]">
+                      <Plus size={14} /> Add
+                    </button>
+                  </div>
+                </div>
+                {selectedDirectories.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    {selectedDirectories.map((d) => (
+                      <span key={`dir-${d}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--input)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--text)]">
+                        {d}
+                        <button type="button" onClick={() => onToggleDirectory(d)} className="text-[var(--muted)] hover:text-[#d45427] font-bold leading-none">×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               {selectionsComplete && (
                 <div className="max-w-[640px] text-left self-start mt-1">

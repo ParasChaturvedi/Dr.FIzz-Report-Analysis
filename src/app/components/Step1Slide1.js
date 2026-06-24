@@ -5,7 +5,9 @@ import { ArrowRight } from "lucide-react";
 
 export default function Step1Slide1({ onNext, onWebsiteSubmit }) {
   const [site, setSite] = useState("");
-  const [reportMode, setReportMode] = useState("Full Website"); // V3 Part 3.1
+  // V4 — report mode is MULTI-SELECT. The singular `reportMode` (primary, or "Hybrid"
+  // when several are chosen) is still written for back-compat with the report logic.
+  const [reportModes, setReportModes] = useState(["Full Website"]);
   const [messages, setMessages] = useState([]);
   const [currentState, setCurrentState] = useState("initial"); // initial | submitted | confirmed
   const [error, setError] = useState("");
@@ -91,10 +93,15 @@ export default function Step1Slide1({ onNext, onWebsiteSubmit }) {
     setTimeout(() => setCurrentState("submitted"), 300);
 
     onWebsiteSubmit?.(site.trim());
+    // Primary mode = the single pick, or "Hybrid" when several are selected.
+    const primaryMode = reportModes.length === 1 ? reportModes[0] : (reportModes.length ? "Hybrid" : "Full Website");
     try {
+      // Merge so a parent writer that only sets { site } can't wipe the report mode.
+      let existing = {};
+      try { existing = JSON.parse(localStorage.getItem("websiteData") || "{}") || {}; } catch {}
       localStorage.setItem(
         "websiteData",
-        JSON.stringify({ site: site.trim(), reportMode })
+        JSON.stringify({ ...existing, site: site.trim(), reportMode: primaryMode, reportModes })
       );
     } catch {}
     setSite("");
@@ -258,16 +265,20 @@ export default function Step1Slide1({ onNext, onWebsiteSubmit }) {
                     {error}
                   </p>
                 )}
-                {/* V3 Part 3.1 — Report Mode (defines crawl + report scope) */}
+                {/* V4 — Report Mode (defines crawl + report scope) — multi-select */}
                 <div className="mt-4">
-                  <p className="text-[11px] sm:text-[12px] text-gray-500 mb-1.5 text-center">Report mode</p>
+                  <p className="text-[11px] sm:text-[12px] text-gray-500 mb-1.5 text-center">Report mode <span className="text-gray-400">(select all that apply)</span></p>
                   <div className="flex flex-wrap justify-center gap-2">
-                    {["Full Website", "Local SEO", "Service Page", "GEO Report", "Hybrid"].map((m) => (
-                      <button key={m} type="button" onClick={() => setReportMode(m)}
-                        className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors ${reportMode === m ? "bg-[#d45427] text-white border-[#d45427]" : "bg-white text-gray-600 border-gray-300 hover:border-[#d45427]"}`}>
+                    {["Full Website", "Local SEO", "Service Page", "GEO Report", "Hybrid"].map((m) => {
+                      const active = reportModes.includes(m);
+                      return (
+                      <button key={m} type="button"
+                        onClick={() => setReportModes((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]))}
+                        className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors ${active ? "bg-[#d45427] text-white border-[#d45427]" : "bg-white text-gray-600 border-gray-300 hover:border-[#d45427]"}`}>
                         {m}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>

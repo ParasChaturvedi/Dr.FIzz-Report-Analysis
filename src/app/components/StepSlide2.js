@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { ArrowRight, ArrowLeft, ChevronDown, Loader2, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowLeft, ChevronDown, Loader2, Sparkles, Check } from "lucide-react";
 import { prefetchOpportunitiesAndContent } from "@/lib/prefetch-opportunities";
 
 // Built-in fallback lists — used only if the Claude website-analysis is unavailable,
@@ -44,9 +44,11 @@ const withOther = (arr, fallback = []) => {
 export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
   // selections
   const [businessName, setBusinessName]         = useState("");
-  const [selectedIndustry, setSelectedIndustry] = useState("");
-  const [selectedOffering, setSelectedOffering] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
+  // V4 — Industry stays single (it anchors the AI cascade + website detection);
+  // Offering, Category and Business-Model Scope are MULTI-SELECT.
+  const [selectedIndustry, setSelectedIndustry]     = useState("");
+  const [selectedOfferings, setSelectedOfferings]   = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [customIndustry, setCustomIndustry]     = useState("");
   const [customOffering, setCustomOffering]     = useState("");
   const [customCategory, setCustomCategory]     = useState("");
@@ -54,7 +56,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
   const [coreServices, setCoreServices]   = useState("");   // comma-separated
   const [revenueOffers, setRevenueOffers] = useState("");
   const [buyerType, setBuyerType]         = useState("");
-  const [businessScope, setBusinessScope] = useState("");   // Local | Regional | National | International
+  const [businessScopes, setBusinessScopes] = useState([]); // Local | Regional | National | International (multi)
 
   // ── Claude-powered dynamic dropdown options (analyzed from the Step-1 website) ──
   const [industryOptions, setIndustryOptions] = useState(() => withOther(FALLBACK_INDUSTRIES));
@@ -107,7 +109,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
 
   useEffect(() => {
     recomputePanelHeight();
-  }, [showSummary, selectedIndustry, selectedOffering, selectedCategory]);
+  }, [showSummary, selectedIndustry, selectedOfferings, selectedCategories]);
 
   /* ---------------- Helpers ---------------- */
   const getDomainFromStorage = () => {
@@ -140,7 +142,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
       taxoContextRef.current = [data.detected?.primary_offering, (data.core_services || []).join(", ")].filter(Boolean).join(" — ");
       // pre-fill optional fields ONLY if the user hasn't typed anything
       if (Array.isArray(data.core_services) && data.core_services.length) setCoreServices((prev) => prev || data.core_services.join(", "));
-      if (data.detected?.business_scope) setBusinessScope((prev) => prev || data.detected.business_scope);
+      if (data.detected?.business_scope) setBusinessScopes((prev) => (prev.length ? prev : [data.detected.business_scope]));
       // auto-select a confident detection so the Offering list (already loaded) is ready —
       // fully changeable by the user.
       if (data.detected?.industry && (data.detected.confidence ?? 0) >= 0.6) {
@@ -196,10 +198,15 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
       .finally(() => setTaxoLoading((s) => ({ ...s, offering: false })));
   };
 
-  // Fetch specific Category options for the chosen industry + offering.
+  // Fetch specific Category options for the chosen industry + offering. Because
+  // Offering is multi-select, categories from each picked offering are MERGED
+  // (union) into the list rather than replacing it, so the user can compose a
+  // category set that spans every offering they selected.
   const fetchCategories = (industry, offering) => {
     const domain = getDomainFromStorage();
     if (!domain || !industry || !offering || offering === "Others") return;
+    const mergeOptions = (incoming) =>
+      setCategoryOptions((prev) => withOther([...prev.filter((o) => o !== "Others"), ...incoming], FALLBACK_CATEGORIES));
     setTaxoLoading((s) => ({ ...s, category: true }));
     fetch("/api/seo/business-taxonomy", {
       method: "POST",
@@ -208,31 +215,42 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
     })
       .then((r) => r.json())
       .then((d) => {
-        if (d?.ok && Array.isArray(d.categories) && d.categories.length) setCategoryOptions(withOther(d.categories, FALLBACK_CATEGORIES));
-        else setCategoryOptions(withOther(FALLBACK_CATEGORIES));
+        if (d?.ok && Array.isArray(d.categories) && d.categories.length) mergeOptions(d.categories);
       })
-      .catch(() => setCategoryOptions(withOther(FALLBACK_CATEGORIES)))
+      .catch(() => {})
       .finally(() => setTaxoLoading((s) => ({ ...s, category: false })));
   };
 
   /* ---------------- Submission / summary toggle ---------------- */
   useEffect(() => {
     const industryValue = selectedIndustry === "Others" ? customIndustry : selectedIndustry;
-    const offeringValue = selectedOffering === "Others" ? customOffering : selectedOffering;
-    const categoryValue = selectedCategory === "Others" ? customCategory : selectedCategory;
+    // "Others" inside a multi-select array is substituted with the typed custom value.
+    const offeringValues = selectedOfferings.map((o) => (o === "Others" ? customOffering : o)).filter(Boolean);
+    const categoryValues = selectedCategories.map((c) => (c === "Others" ? customCategory : c)).filter(Boolean);
 
-    if (industryValue && offeringValue && categoryValue) {
+    if (industryValue && offeringValues.length && categoryValues.length) {
       setShowSummary(true);
+      const offeringStr = offeringValues.join(", ");
+      const categoryStr = categoryValues.join(", ");
+      const scopeStr = businessScopes.join(", ");
       const newData = {
         businessName: businessName.trim() || null,
+        // singular keys (joined) = backward-compat; plural arrays = the real selections.
         industry: industryValue,
-        offering: offeringValue,
-        category: categoryValue,
+        offering: offeringStr,
+        offerings: offeringValues,
+        category: categoryStr,
+        categories: categoryValues,
+        // aliases the report's final step reads first (industrySector/offeringType/specificService).
+        industrySector: industryValue,
+        offeringType: offeringStr,
+        specificService: categoryStr,
         // V3 Part 3.2 — optional deeper definition
         coreServices:  coreServices.split(/[,;|]/).map((s) => s.trim()).filter(Boolean),
         revenueOffers: revenueOffers.trim() || null,
         buyerType:     buyerType.trim() || null,
-        businessScope: businessScope || null,
+        businessScope: scopeStr || null,
+        businessScopes: businessScopes,
         // Step-2 analysis metadata (used by the final accuracy check) — what Claude
         // detected vs what the user ultimately chose.
         detected: detectedRef.current || null,
@@ -249,15 +267,15 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
   }, [
     businessName,
     selectedIndustry,
-    selectedOffering,
-    selectedCategory,
+    selectedOfferings,
+    selectedCategories,
     customIndustry,
     customOffering,
     customCategory,
     coreServices,
     revenueOffers,
     buyerType,
-    businessScope,
+    businessScopes,
     onBusinessDataSubmit,
   ]);
 
@@ -270,8 +288,8 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
     }
   }, [
     selectedIndustry,
-    selectedOffering,
-    selectedCategory,
+    selectedOfferings,
+    selectedCategories,
     customIndustry,
     customOffering,
     customCategory,
@@ -301,12 +319,14 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
   const handleDropdownToggle = (name) =>
     setOpenDropdown((prev) => (prev === name ? null : name));
 
+  // Industry is single-select and resets the dependent multi-selects below it.
   const handleIndustrySelect = (industry) => {
     setSelectedIndustry(industry);
-    setSelectedOffering("");
-    setSelectedCategory("");
+    setSelectedOfferings([]);
+    setSelectedCategories([]);
     setCustomOffering("");
     setCustomCategory("");
+    setCategoryOptions(withOther(FALLBACK_CATEGORIES));
     if (industry !== "Others") setCustomIndustry("");
     setOpenDropdown(null);
     if (industry === "Others") { setOfferingOptions(withOther(FALLBACK_OFFERINGS)); return; }
@@ -314,28 +334,26 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
     if (detectedRef.current && industry === detectedRef.current.industry) return;
     fetchOfferings(industry);
   };
-  const handleOfferingSelect = (offering) => {
-    setSelectedOffering(offering);
-    setSelectedCategory("");
-    setCustomCategory("");
-    if (offering !== "Others") setCustomOffering("");
-    setOpenDropdown(null);
-    if (offering === "Others") { setCategoryOptions(withOther(FALLBACK_CATEGORIES)); return; }
+  // Offering is MULTI-SELECT. Toggling one ON pulls in that offering's categories
+  // (merged); the dropdown stays open so several can be picked.
+  const handleOfferingToggle = (offering) => {
+    const wasSelected = selectedOfferings.includes(offering);
+    setSelectedOfferings((prev) => (wasSelected ? prev.filter((x) => x !== offering) : [...prev, offering]));
+    if (wasSelected || offering === "Others") return;
     const industry = selectedIndustry === "Others" ? customIndustry : selectedIndustry;
-    // detected path categories were preloaded; otherwise fetch for this exact pair
-    if (detectedRef.current && industry === detectedRef.current.industry && offering === detectedRef.current.offering && categoryOptions.length > 1) return;
     fetchCategories(industry, offering);
   };
-  const handleCategorySelect = (category) => {
-    setSelectedCategory(category);
-    if (category !== "Others") setCustomCategory("");
-    setOpenDropdown(null);
+  // Category is MULTI-SELECT; the dropdown stays open.
+  const handleCategoryToggle = (category) => {
+    setSelectedCategories((prev) => (prev.includes(category) ? prev.filter((x) => x !== category) : [...prev, category]));
   };
+  const toggleBusinessScope = (s) =>
+    setBusinessScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
 
   const handleResetSelections = () => {
     setSelectedIndustry("");
-    setSelectedOffering("");
-    setSelectedCategory("");
+    setSelectedOfferings([]);
+    setSelectedCategories([]);
     setCustomIndustry("");
     setCustomOffering("");
     setCustomCategory("");
@@ -374,6 +392,34 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
           {opt}
         </button>
       ))}
+    </div>
+  );
+
+  // shared MULTI-select menu — checkmarks the chosen options and stays open on click
+  const renderMultiMenu = (options, selected, onToggle, loading) => (
+    <div
+      className="absolute top-full left-0 right-0 bg-[var(--input)] border border-[var(--border)] rounded-lg mt-1 shadow-2xl max-h-56 overflow-y-auto"
+      style={{ zIndex: 1001 }}
+    >
+      {loading && (
+        <div className="w-full text-left px-4 py-2.5 sm:py-3 text-[var(--muted)] text-[12px] sm:text-[13px] md:text-[14px] inline-flex items-center gap-2 border-b border-[var(--border)]">
+          <Loader2 size={14} className="animate-spin" /> Loading suggestions…
+        </div>
+      )}
+      {options.map((opt) => {
+        const checked = selected.includes(opt);
+        return (
+          <button
+            key={opt}
+            onClick={() => onToggle(opt)}
+            type="button"
+            className="w-full text-left px-4 py-2.5 sm:py-3 hover:bg-[var(--menuHover)] focus:bg-[var(--menuFocus)] text-[var(--text)] text-[12px] sm:text-[13px] md:text-[14px] border-b border-[var(--border)] last:border-b-0 focus:outline-none transition-colors flex items-center justify-between gap-2"
+          >
+            <span>{opt}</span>
+            {checked && <Check size={16} className="text-[#d45427] shrink-0" />}
+          </button>
+        );
+      })}
     </div>
   );
 
@@ -459,14 +505,17 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                     className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Business-Model Scope</label>
+                  <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Business-Model Scope <span className="text-[var(--muted)] normal-case">(select all that apply)</span></label>
                   <div className="flex flex-wrap gap-2">
-                    {["Local", "Regional", "National", "International"].map((s) => (
-                      <button key={s} type="button" onClick={() => setBusinessScope(businessScope === s ? "" : s)}
-                        className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors ${businessScope === s ? "bg-[#d45427] text-white border-[#d45427]" : "bg-[var(--input)] text-[var(--text)] border-[var(--border)] hover:border-[#d45427]"}`}>
+                    {["Local", "Regional", "National", "International"].map((s) => {
+                      const active = businessScopes.includes(s);
+                      return (
+                      <button key={s} type="button" onClick={() => toggleBusinessScope(s)}
+                        className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors ${active ? "bg-[#d45427] text-white border-[#d45427]" : "bg-[var(--input)] text-[var(--text)] border-[var(--border)] hover:border-[#d45427]"}`}>
                         {s}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                   <p className="text-[11px] text-[var(--muted)] mt-1">Drives whether geography pages target country, region, or city scope.</p>
                 </div>
@@ -488,11 +537,11 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                     </div>
                     <div className="text-[var(--text)]">
                       <span className="font-semibold">Offering Type:</span>{" "}
-                      {selectedOffering === "Others" ? customOffering : selectedOffering}
+                      {selectedOfferings.map((o) => (o === "Others" ? customOffering : o)).filter(Boolean).join(", ")}
                     </div>
                     <div className="text-[var(--text)]">
                       <span className="font-semibold">Category:</span>{" "}
-                      {selectedCategory === "Others" ? customCategory : selectedCategory}
+                      {selectedCategories.map((c) => (c === "Others" ? customCategory : c)).filter(Boolean).join(", ")}
                     </div>
                   </div>
                 </div>
@@ -578,12 +627,14 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                     >
                       <span
                         className={`${
-                          selectedOffering ? "text-[var(--text)]" : "text-[var(--muted)]"
+                          selectedOfferings.length ? "text-[var(--text)]" : "text-[var(--muted)]"
                         } text-[12px] sm:text-[13px] md:text-[14px]`}
                       >
-                        {selectedOffering || "Offering Type"}
+                        {selectedOfferings.length
+                          ? (selectedOfferings.length === 1 ? selectedOfferings[0] : `${selectedOfferings.length} selected`)
+                          : "Offering Type"}
                       </span>
-                      {taxoLoading.offering && !selectedOffering ? (
+                      {taxoLoading.offering && !selectedOfferings.length ? (
                         <Loader2 size={18} className="animate-spin text-[var(--muted)]" />
                       ) : (
                         <ChevronDown
@@ -593,9 +644,9 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                       )}
                     </button>
 
-                    {openDropdown === "offering" && selectedIndustry && renderMenu(offeringOptions, handleOfferingSelect, taxoLoading.offering)}
+                    {openDropdown === "offering" && selectedIndustry && renderMultiMenu(offeringOptions, selectedOfferings, handleOfferingToggle, taxoLoading.offering)}
 
-                    {selectedOffering === "Others" && (
+                    {selectedOfferings.includes("Others") && (
                       <input
                         type="text"
                         placeholder="Describe your offering type"
@@ -612,23 +663,25 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                     style={{ zIndex: openDropdown === "category" ? 1000 : 1 }}
                   >
                     <button
-                      onClick={() => (selectedOffering ? handleDropdownToggle("category") : null)}
-                      disabled={!selectedOffering}
+                      onClick={() => (selectedOfferings.length ? handleDropdownToggle("category") : null)}
+                      disabled={!selectedOfferings.length}
                       type="button"
                       className={`w-full bg-[var(--input)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-left flex items-center justify-between focus:outline-none transition-colors ${
-                        selectedOffering
+                        selectedOfferings.length
                           ? "hover:border-[var(--border)] cursor-pointer focus:border-[var(--border)]"
                           : "opacity-50 cursor-not-allowed"
                       }`}
                     >
                       <span
                         className={`${
-                          selectedCategory ? "text-[var(--text)]" : "text-[var(--muted)]"
+                          selectedCategories.length ? "text-[var(--text)]" : "text-[var(--muted)]"
                         } text-[12px] sm:text-[13px] md:text-[14px]`}
                       >
-                        {selectedCategory || `Specific Category for ${selectedOffering?.toLowerCase() || "service"}`}
+                        {selectedCategories.length
+                          ? (selectedCategories.length === 1 ? selectedCategories[0] : `${selectedCategories.length} selected`)
+                          : "Specific Categories"}
                       </span>
-                      {taxoLoading.category && !selectedCategory ? (
+                      {taxoLoading.category && !selectedCategories.length ? (
                         <Loader2 size={18} className="animate-spin text-[var(--muted)]" />
                       ) : (
                         <ChevronDown
@@ -638,9 +691,9 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                       )}
                     </button>
 
-                    {openDropdown === "category" && selectedOffering && renderMenu(categoryOptions, handleCategorySelect, taxoLoading.category)}
+                    {openDropdown === "category" && selectedOfferings.length > 0 && renderMultiMenu(categoryOptions, selectedCategories, handleCategoryToggle, taxoLoading.category)}
 
-                    {selectedCategory === "Others" && (
+                    {selectedCategories.includes("Others") && (
                       <input
                         type="text"
                         placeholder="Describe your service"

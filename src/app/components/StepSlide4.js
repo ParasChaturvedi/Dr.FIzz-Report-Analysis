@@ -85,10 +85,13 @@ export default function StepSlide4({
   }, [normalizeHost, getStoredSite]);
 
   const buildLocationString = useCallback((ll) => {
-    const city = (ll?.city || "").trim();
-    const state = (ll?.state || "").trim();
-    const country = (ll?.country || "").trim();
-    return [city, state, country].filter(Boolean).join(", ");
+    const pick = (arr, single) => (Array.isArray(arr) && arr.length ? arr : [single]).map((x) => String(x || "").trim()).filter(Boolean);
+    const countries = pick(ll?.countries, ll?.country);
+    // Multi-country → just list countries; single country → City, State, Country.
+    if (countries.length > 1) return countries.join(", ");
+    const cities = pick(ll?.cities, ll?.city);
+    const states = pick(ll?.states, ll?.state);
+    return [...cities, ...states, ...countries].filter(Boolean).join(", ");
   }, []);
 
   const getContext = useCallback(() => {
@@ -442,8 +445,8 @@ export default function StepSlide4({
               </div>
 
               {showSummary && (
-                <div className="max-w=[640px] text-left self-start mt-5 sm:mt-6">
-                  <h3 className="text-[15px] sm:text-[16px] md:text-[18px] font-bold text=[var(--text)] mb-2.5 sm:mb-3">
+                <div className="max-w-[640px] text-left self-start mt-5 sm:mt-6">
+                  <h3 className="text-[15px] sm:text-[16px] md:text-[18px] font-bold text-[var(--text)] mb-2.5 sm:mb-3">
                     Here’s your site report — take a quick look on
                     <br />
                     the Info Tab.

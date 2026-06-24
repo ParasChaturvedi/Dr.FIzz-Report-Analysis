@@ -133,10 +133,13 @@ export default function StepSlide5({
   }, [normalizeHost, getStoredSite]);
 
   const buildLocationString = useCallback((ll) => {
-    const city = (ll?.city || "").trim();
-    const state = (ll?.state || "").trim();
-    const country = (ll?.country || "").trim();
-    return [city, state, country].filter(Boolean).join(", ");
+    const pick = (arr, single) => (Array.isArray(arr) && arr.length ? arr : [single]).map((x) => String(x || "").trim()).filter(Boolean);
+    const countries = pick(ll?.countries, ll?.country);
+    // Multi-country → just list countries; single country → City, State, Country.
+    if (countries.length > 1) return countries.join(", ");
+    const cities = pick(ll?.cities, ll?.city);
+    const states = pick(ll?.states, ll?.state);
+    return [...cities, ...states, ...countries].filter(Boolean).join(", ");
   }, []);
 
   const getContext = useCallback(() => {

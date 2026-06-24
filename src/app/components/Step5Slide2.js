@@ -1222,8 +1222,11 @@ export default function Step5Slide2({
           businessData,
           keywordData: keywords,
           competitorData,
-          // V3 Part 3.1 / 3.4 — report mode + negative exclusions persisted by Steps 1 & 4
+          // V4 — language/location now carries multi-language, multi-region and the
+          // user's existing directory listings (for citation-gap analysis).
+          languageLocationData,
           reportMode: (() => { try { return JSON.parse(localStorage.getItem("websiteData") || "{}")?.reportMode || ""; } catch { return ""; } })(),
+          reportModes: (() => { try { return JSON.parse(localStorage.getItem("websiteData") || "{}")?.reportModes || []; } catch { return []; } })(),
           negativeExclusions: (() => { try { return JSON.parse(localStorage.getItem("drfizz.keywordExclusions") || "[]"); } catch { return []; } })(),
           seoData: enrichedSeoJson, // pre-fetched — includes crawl, GMB, competitor audit + strategic plan
         });
