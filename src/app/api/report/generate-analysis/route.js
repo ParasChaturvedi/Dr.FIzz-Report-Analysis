@@ -1011,7 +1011,15 @@ export async function POST(request) {
           ...(aiSections.contentArchitecture || {}),
           pagesToBuild,
           blogsToBuild,
-          pagesExistingFlagged: structuredPayload?.evidence_plan?.counts?.pages_existing_flagged ?? 0,
+          // Count recommended pages that already exist on the site (so the report can say
+          // "N pages already exist — optimise, don't rebuild"). Rederived locally from the
+          // same classified arrays + existing-page guard (was sourced from evidence_plan,
+          // now removed). Mirrors buildEvidencePlan's old pages_existing_flagged count.
+          pagesExistingFlagged: [
+            ...(Array.isArray(_ca.commercial_pages) ? _ca.commercial_pages : []),
+            ...(Array.isArray(_ca.geography_pages || _ca.city_pages) ? (_ca.geography_pages || _ca.city_pages) : []),
+            ...(Array.isArray(_ca.blog_and_guides) ? _ca.blog_and_guides : []),
+          ].filter((p) => checkExistingPage(p, _crawlPages).exists).length,
           // keep the AI "Every Page Must Include" checklist (the on-page requirements card)
           checklist: aiSections.contentArchitecture?.checklist || [],
         };

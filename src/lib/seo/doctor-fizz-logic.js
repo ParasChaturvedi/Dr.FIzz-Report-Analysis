@@ -25,7 +25,7 @@
 
 // Track 1.2 — evidence framework (every recommendation → 10-field evidence structure,
 // existing-page checks, honest GEO status, findings-vs-projections separation).
-import { buildEvidencePlan, buildGeoStatus, separateKpis, buildAiReadiness, buildAioVisibility } from "./report-evidence.js";
+import { buildGeoStatus, separateKpis, buildAiReadiness, buildAioVisibility } from "./report-evidence.js";
 
 // ── Missing data labels (Problem 7) ───────────────────────────────────────────
 export const MISSING_LABELS = {
@@ -2730,7 +2730,7 @@ export function runBusinessLogic(input = {}) {
     opportunity_summary: v2_additions.opportunity_summary, technical_issues,
     keywords, content_architecture, competitive_analysis,
     competitors: normalizeCompetitorObjects(comparableCompetitors, comparableGmbs),
-    geo_and_ai_visibility, kpis,
+    geo_and_ai_visibility, kpis, verifiedData,
   });
 
   return {
@@ -2766,10 +2766,6 @@ export function runBusinessLogic(input = {}) {
     kpis,
     scores,
     priority_action_plan,
-    // Track 1.2 — evidence-first execution layer (all the above recommendations, each
-    // restructured into the 10-field evidence format; existing-page checks applied so we
-    // never recommend a page that already exists).
-    evidence_plan: buildEvidencePlan({ technical_issues, content_architecture, priority_action_plan, gbp_comparison, backlinks, competitors: comparableCompetitors, serpByKeyword }, crawlData),
     // #22 / #23 — entity-level GEO audit + AI-readiness score, from real crawl + GMB signals.
     ai_readiness: buildAiReadiness(crawlData, clientGmb),
     // GEO — SERP-measured Google AI Overview visibility (from serpIntel; zero extra cost).
@@ -2797,6 +2793,7 @@ export function buildStoryNarrative(input = {}) {
     clientName = "the business", baseline = {}, scores = {}, gbp_comparison = {},
     opportunity_summary = {}, technical_issues = [], keywords = {},
     content_architecture = {}, competitive_analysis = {}, competitors = [], geo_and_ai_visibility = {},
+    verifiedData = {},
   } = input;
 
   const val = (k) => (baseline?.[k]?.value ?? null);
@@ -2842,7 +2839,11 @@ export function buildStoryNarrative(input = {}) {
   const blogPages = (content_architecture?.blog_and_guides || []).length;
   const uplift6 = opportunity_summary?.estimated_traffic_uplift_6m;
   const uplift12 = opportunity_summary?.estimated_traffic_uplift_12m;
-  const enquiries12 = has(uplift12) ? Math.round(uplift12 * 0.02) : null;
+  // Enquiries projection uses the site's REAL conversion rate when we have it (GA4).
+  // We do NOT assume a blanket 2% — if there's no measured rate, we omit the enquiries
+  // number entirely rather than invent one (keeps "directional, not guarantees" honest).
+  const cvr = Number(verifiedData?.ga4?.conversionRate) || null;
+  const enquiries12 = (has(uplift12) && cvr) ? Math.round(uplift12 * cvr) : null;
   const acceptedKw = (keywords?.accepted || []).length;
   const aiCites = geo_and_ai_visibility?.current_ai_citation_count;
   const techCount = technical_issues.length;
@@ -2924,7 +2925,6 @@ export function buildStoryNarrative(input = {}) {
 
   // 07 — WHAT MUST BE FIXED FIRST  ·  OnIt "Fix Before You Build".
   story.what_to_fix_first = [
-    `Fix before you build — search engines read technical signals before a single word of content.`,
     `${hasBroken ? "First, audit the broken URLs (301-redirect or remove) and clean redirect chains to single hops" : (topTech ? `First, fix ${topTech.issue}` : "Start with the most critical issues")}${hasBlocked ? ", then audit robots.txt for blocked pages" : ""}; then fix on-page SEO — titles, H1s and meta descriptions.`,
     `On-page checklist for every new page: exact-intent H1, 800–1,500 unique words, JSON-LD + FAQ schema, internal links, image alt text${speedBad ? `, and a sub-2.5s load (yours is ${lcpSec}s)` : `, and a sub-2.5s load`}.`,
   ];

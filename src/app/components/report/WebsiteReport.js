@@ -41,7 +41,7 @@ function AnimatedSection({ children, className = "" }) {
     // Safety net: a section must NEVER stay invisible. The IntersectionObserver only fires
     // on scroll, so during a full-page screenshot / browser print (or if the observer is
     // unavailable) off-screen sections would stay opacity-0 and render as huge blank gaps
-    // (e.g. the Implementation Plan between §12 and §13). This timer reveals every section
+    // (e.g. a long off-screen section such as the GEO frontier). This timer reveals every section
     // shortly after mount regardless, so the page is always fully visible when captured.
     const t = setTimeout(reveal, 900);
     return () => { try { obs && obs.disconnect(); } catch {} clearTimeout(t); };
@@ -129,75 +129,10 @@ function DarkCallout({ label, children }) {
   );
 }
 
-// ── EVIDENCE-FIRST recommendation card (Track 1.2). Renders the 10-field structure so
-//    every recommendation is implementation-ready: Finding · Evidence · Competitor
-//    Benchmark · Action · Expected Impact · Validation Metric + confidence/owner/effort/
-//    impact badges. Reads data.doctorFizz.evidence_plan.
-function EvBadge({ children, bg = "#4A4A4A", color = "#fff" }) {
-  return <span className="inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider" style={{ background: bg, color }}>{children}</span>;
-}
-const EV_IMPACT_BG = { High: "#C35328", Medium: "#8A6A52", Low: "#BDBDBD" };
-const EV_OWNER_BG = { SEO: "#2F5D62", Development: "#3A3A6A", Content: "#5A4A2E", Client: "#6A2E4A" };
-function EvidenceRow({ label, children }) {
-  if (!children) return null;
-  return (
-    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-      <div style={{ flex: "0 0 132px", fontFamily: BODY, fontSize: "9px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#9A9A9A", paddingTop: 2 }}>{label}</div>
-      <div style={{ fontFamily: BODY, fontSize: "12.5px", lineHeight: 1.55, color: "#3A3A3A", minWidth: 0 }}>{children}</div>
-    </div>
-  );
-}
-function EvidenceCard({ r }) {
-  return (
-    <div className="rounded-lg bg-white p-4" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "14px", color: INK, lineHeight: 1.3, flex: "1 1 60%", minWidth: 0 }}>{r.finding}</div>
-        <div className="flex gap-1.5 flex-wrap">
-          <EvBadge bg={EV_IMPACT_BG[r.impact] || "#8A8A8A"}>{r.impact} impact</EvBadge>
-          <EvBadge bg={EV_OWNER_BG[r.owner] || "#4A4A4A"}>{r.owner}</EvBadge>
-        </div>
-      </div>
-      <EvidenceRow label="Evidence / data">{r.evidence}</EvidenceRow>
-      <EvidenceRow label="Competitor benchmark">{r.competitor_benchmark || <span style={{ color: "#B8B8B8" }}>Competitor ranking evidence added in Track 2</span>}</EvidenceRow>
-      <EvidenceRow label="Recommended action">{r.action}</EvidenceRow>
-      <EvidenceRow label="Expected impact">{r.expected_impact}</EvidenceRow>
-      <EvidenceRow label="Validation metric">{r.validation_metric}</EvidenceRow>
-      <div className="flex gap-1.5 flex-wrap mt-3 pt-2" style={{ borderTop: "1px solid #F0F0F0" }}>
-        <EvBadge bg="#EDEDED" color="#4A4A4A">{r.confidence}</EvBadge>
-        <EvBadge bg="#EDEDED" color="#4A4A4A">Effort: {r.effort_band}{r.effort ? ` · ${r.effort}` : ""}</EvBadge>
-        {r.priority && <EvBadge bg="#EDEDED" color="#4A4A4A">{r.priority}</EvBadge>}
-        {(r.sources || []).length > 0 && <EvBadge bg="#EDEDED" color="#7A7A7A">Source: {r.sources.join(", ")}</EvBadge>}
-      </div>
-    </div>
-  );
-}
-function EvidencePlanSection({ plan }) {
-  if (!plan || !plan.by_category || !Object.keys(plan.by_category).length) return null;
-  const cats = Object.keys(plan.by_category);
-  const c = plan.counts || {};
-  return (
-    <section className="max-w-6xl mx-auto px-8 md:px-14 py-16">
-      <AnimatedSection>
-        <OBar />
-        <SHead>THE IMPLEMENTATION PLAN</SHead>
-        <SSub>Every recommendation, evidence → action → validation</SSub>
-        <p style={{ fontFamily: BODY, fontSize: "14px", lineHeight: 1.65, color: "#5A5A5A", marginTop: -10, marginBottom: 18, maxWidth: "46rem" }}>
-          {c.total} prioritised recommendations. Each one states the finding, the evidence behind it, the exact action, who owns it, the effort, and the metric that proves it worked — so this reads as an execution plan, not a presentation.{c.pages_existing_flagged > 0 ? ` ${c.pages_existing_flagged} page(s) already exist and are flagged to optimise — not rebuild.` : ""}
-        </p>
-        <div className="space-y-8">
-          {cats.map((cat) => (
-            <div key={cat}>
-              <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "16px", color: ORANGE, marginBottom: 10 }}>{cat} <span style={{ color: "#B0B0B0", fontSize: 13 }}>({plan.by_category[cat].length})</span></div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-                {plan.by_category[cat].map((r, i) => <EvidenceCard key={i} r={r} />)}
-              </div>
-            </div>
-          ))}
-        </div>
-      </AnimatedSection>
-    </section>
-  );
-}
+// (Removed — the standalone "THE IMPLEMENTATION PLAN" section and its EvBadge / EvidenceRow /
+//  EvidenceCard / EvidencePlanSection helpers. Every recommendation now lives inside its own
+//  section (technical, content, authority, local, roadmap) as one connected story rather than a
+//  separate evidence-card dump. The evidence_plan payload field was removed alongside this.)
 
 // ── #2 / #5 — "What Pages To Build" with the existing-page guard already applied
 //    upstream, split into a Service-Pages container and a Blogs container (both NEW-only),
@@ -251,11 +186,11 @@ function PagesToBuild({ ca = {} }) {
       <>
         {ca.pagesExistingFlagged > 0 && (
           <p style={{ fontFamily: BODY, fontSize: "13px", lineHeight: 1.6, color: "#5A5A5A", marginTop: -10, marginBottom: 16, maxWidth: "46rem" }}>
-            Only <strong style={{ color: INK }}>new</strong> pages with real search demand are listed below. {ca.pagesExistingFlagged} page(s) that already exist on the site are excluded here and flagged to <strong style={{ color: ORANGE }}>optimise</strong> (not rebuild) in The Implementation Plan.
+            Only <strong style={{ color: INK }}>new</strong> pages with real search demand are listed below. {ca.pagesExistingFlagged} page(s) that already exist on the site are excluded here and flagged to <strong style={{ color: ORANGE }}>optimise</strong> (not rebuild) rather than listed as new builds.
           </p>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <BuildListCard title="Service / Landing Pages To Build" items={pages || []} emptyNote="No new service pages needed — the commercial pages already exist; optimise them in The Implementation Plan." />
+          <BuildListCard title="Service / Landing Pages To Build" items={pages || []} emptyNote="No new service pages needed — the commercial pages already exist and should be optimised, not rebuilt." />
           <BuildListCard title="Blogs To Build" items={blogs || []} emptyNote="No new blog topics with measurable demand right now." />
         </div>
         <div className="mt-5"><ChecklistCard items={ca.checklist} /></div>
@@ -1300,6 +1235,24 @@ function StoryNote({ label, points, big = false }) {
   );
 }
 
+// ── SECTION LEAD — the connecting opener that sits directly under a section's SSub and
+//    ties that section to the report's spine (and the section before it), so the report
+//    reads as ONE argument, not 18 modules. It prefers the data-backed story narration
+//    (data.doctorFizz.story.*, written with this business's real numbers) and falls back
+//    to a static spine line when that key is absent. Renders nothing if both are empty. ──
+function SectionLead({ points, text }) {
+  const list = (Array.isArray(points) ? points : points ? [points] : []).filter(Boolean);
+  const lines = list.length ? list : (text ? [text] : []);
+  if (!lines.length) return null;
+  return (
+    <div style={{ marginTop: -6, marginBottom: 22, maxWidth: "46rem" }}>
+      {lines.map((p, i) => (
+        <p key={i} style={{ fontFamily: BODY, fontSize: "14.5px", lineHeight: 1.7, color: "#4A4A4A", margin: 0, marginBottom: i === lines.length - 1 ? 0 : 10 }}>{p}</p>
+      ))}
+    </div>
+  );
+}
+
 // ── EXECUTIVE STORY — the plain-language spine near the top of the report. Renders
 //    data.doctorFizz.story as one flowing read for a non-technical owner: where they
 //    stand → what's holding them back → the biggest opportunity → the plan. Guarded by
@@ -1328,7 +1281,7 @@ function ExecutiveStory({ story, domain }) {
             What This Report Says, In Plain English
           </h2>
           <p style={{ fontFamily: BODY, fontSize: "15px", lineHeight: 1.65, color: "#5A5A5A", marginTop: 10, marginBottom: 24, maxWidth: "44rem" }}>
-            The full report below has all the numbers and the detail. This is the short version — what&apos;s happening with {domain}, what to do, and why — written for a busy owner, not an SEO expert.
+            Your competitors dominate the broad, generic terms — but that scale is exactly why they leave the high-intent, local and AI-answer corners of your market undefended. This report is the plan to take them. The full version below has every number; this is the short read — what&apos;s happening with {domain}, what to do, and why — for a busy owner, not an SEO expert.
           </p>
           {panels.map((p, i) => (
             <StoryNote key={i} label={p.label} points={p.points} big />
@@ -1484,10 +1437,11 @@ export default function WebsiteReport({ data }) {
             <MetricCard value={gmbScore != null ? `${gmbScore}/100` : "—"} label="GMB Completeness" sub={`${plainFor("GMB Completeness", fbMap, "Google Business Profile")} · GBP API`} />
           </div>
 
-          {/* KEY TAKEAWAY — grounded in the numbers above (single connective line, Onit-style) */}
+          {/* KEY TAKEAWAY — insight, not a second read-out of the numbers above. Carries the
+              spine + the sequencing logic (Onit's "Key Takeaway" voice). */}
           <div className="mt-6">
             <DarkCallout label="Key Takeaway">
-              {domain} sits at Domain Rating {bm.domainRating ?? "—"} (Moz) with {fmt(bm.organicTraffic)} organic visits a month across {fmt(bm.organicKeywords)} ranking keywords{bm.performanceMobile != null ? `, on a ${bm.performanceMobile}/100 mobile performance score` : ""}. {bm.errors404 ? `${fmt(bm.errors404)} broken pages and the technical base must be fixed first` : "The technical base must be solid first"} — then content and authority gains compound on top.
+              The numbers above say one thing: {domain} is near-invisible where high-intent buyers actually search, while broader competitors hold the generic terms. But with no penalty history and an open commercial field, this is a sequencing problem, not a heroics one — fix the technical base first, and content and authority compound on top of it.
             </DarkCallout>
           </div>
         </AnimatedSection>
@@ -1503,6 +1457,8 @@ export default function WebsiteReport({ data }) {
             <OBar />
             <SHead>COMPETITOR LANDSCAPE</SHead>
             <SSub>Local Competitors</SSub>
+
+            <SectionLead points={dfStory?.who_competes} text={`This plan reverse-engineers the competitors already ranking for ${domain}'s terms — here is who they are, and the local and long-tail ground their broad, template-driven approach forces them to leave open.`} />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
               {(cl.localCompetitors || []).map((c, i) => {
@@ -1555,6 +1511,8 @@ export default function WebsiteReport({ data }) {
           <OBar />
           <SHead>KEYWORD STRATEGY</SHead>
           <SSub>Tier 1 — Primary Commercial Keywords</SSub>
+
+          <SectionLead points={dfStory?.where_demand_sits} text="The demand splits into three tiers, each needing its own kind of page: Tier 1 — primary commercial terms (a landing page each); Tier 2 — hyper-local neighbourhood terms; Tier 3 — informational blog content that builds long-term authority." />
 
           {/* Keyword gap summary banner */}
           {kwGap && (kwGap.summary?.totalGapKeywords || 0) > 0 && (
@@ -1637,6 +1595,8 @@ export default function WebsiteReport({ data }) {
             <SHead>CONTENT ARCHITECTURE</SHead>
             <SSub>What To Build — Pages &amp; Blogs</SSub>
 
+            <SectionLead points={dfStory?.what_pages_needed} text="To capture those tiers you need a system, not scattered pages — commercial pages that convert, location pages where generalists only have templates, and blogs that build authority." />
+
             <PagesToBuild ca={ca} />
           </AnimatedSection>
         </div>
@@ -1651,6 +1611,8 @@ export default function WebsiteReport({ data }) {
           <OBar />
           <SHead>COMPETITIVE INTELLIGENCE</SHead>
           <SSub>Reverse-Engineering the Market Leader</SSub>
+
+          <SectionLead text="Reverse-engineering the leaders shows their constraint plainly: they win on trust signals and category authority, but they are weakest exactly where you can be strongest — niche specificity and local depth. Their scale is the reason they can't specialise." />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {[
@@ -1713,6 +1675,8 @@ export default function WebsiteReport({ data }) {
             <SHead>TECHNICAL FOUNDATION</SHead>
             <SSub>Fix Before You Build</SSub>
 
+            <SectionLead points={dfStory?.what_to_fix_first} text="This is the prerequisite, not the edge — search engines read technical signals before a single word of content, so a clean base is what lets the niche pages above actually rank." />
+
             <div className="rounded-xl overflow-hidden border border-gray-200">
               <table className="w-full text-sm border-collapse">
                 <thead>
@@ -1757,6 +1721,8 @@ export default function WebsiteReport({ data }) {
           <SHead>AUTHORITY</SHead>
           <SSub>Link Building to Raise Domain Rating</SSub>
 
+          <SectionLead points={dfStory?.how_authority_built} text="With the base clean, the site needs credibility — not a generic backlink race you can't win, but strategic citations and links in the exact niches you're targeting." />
+
           <div className="space-y-4">
             {[
               { title: "Citation Building", items: lb.citationBuilding || [] },
@@ -1795,6 +1761,8 @@ export default function WebsiteReport({ data }) {
             <OBar />
             <SHead>LOCAL SEARCH</SHead>
             <SSub>Google Business Profile: The Fastest Win</SSub>
+
+            <SectionLead points={dfStory?.local_visibility} text="Now the map pack — where most local service calls are won, and where the leaders' review counts dominate. Close that gap fast with review recency and niche-specific answers their scale can't replicate." />
 
             {/* Real GMB status strip — white cards */}
             {gmbInfo && (
@@ -1864,6 +1832,8 @@ export default function WebsiteReport({ data }) {
           <SHead>EXECUTION</SHead>
           <SSub>30-Day Execution Plan</SSub>
 
+          <SectionLead text="You have the gaps mapped, the pages designed and the base diagnosed — here's the order to attack them. The phases overlap on purpose, because speed is the one advantage broad competitors can't match." />
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {rm.map((phase, i) => {
               const hdr = ["#C35328", "#A8431E", "#4A4A4A", "#8A8A8A"][i % 4];
@@ -1901,6 +1871,8 @@ export default function WebsiteReport({ data }) {
             <OBar />
             <SHead>MEASURING SUCCESS</SHead>
             <SSub>Visibility KPIs We Report Monthly</SSub>
+
+            <SectionLead text="You'll run that plan — here's how we'll know it's working. We track these every month and report them straight." />
 
             {/* #14 — separate CURRENT (measured) from TARGETS (projections). */}
             <p style={{ fontFamily: BODY, fontSize: "13px", lineHeight: 1.6, color: "#5A5A5A", marginTop: -10, marginBottom: 16, maxWidth: "46rem" }}>
@@ -1949,6 +1921,8 @@ export default function WebsiteReport({ data }) {
           <SHead>CONTENT BLUEPRINT</SHead>
           <SSub>What the Leader Ranks For</SSub>
 
+          <SectionLead text="So what should you actually write? Look at what the leader itself ranks for — almost all low-difficulty informational content, with the commercial space still wide open. That white-space is your roadmap." />
+
           {cb.length > 0 ? (
             <div className="rounded-xl overflow-hidden border border-gray-200">
               <table className="w-full text-sm border-collapse">
@@ -1989,6 +1963,8 @@ export default function WebsiteReport({ data }) {
             <SHead>UNCONTESTED TERRITORY</SHead>
             <SSub>Service Pages {domain} Should Own</SSub>
 
+            <SectionLead text="This is what the whole plan has been building toward — specific, high-value service and location terms the leaders never even tried to own. Real demand, low competition, no defender: this is where you outrun them." />
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {uc.map((item, i) => (
                 <div key={i} className="bg-white border border-gray-100 rounded-xl p-5 hover:border-[#C35328]/20 hover:shadow-sm transition-all duration-200">
@@ -2019,7 +1995,7 @@ export default function WebsiteReport({ data }) {
 
             {/* Plain-language narration of the GEO opportunity (data.doctorFizz.story.geo_ai_visibility) */}
             {dfStory?.geo_ai_visibility && (
-              <StoryNote label="Why This Section Matters" points={dfStory.geo_ai_visibility} />
+              <StoryNote label="The Window You Have" points={dfStory.geo_ai_visibility} />
             )}
 
             {/* Plain one-line definitions so the jargon below reads as English */}
@@ -2072,6 +2048,8 @@ export default function WebsiteReport({ data }) {
           <SHead>QUICK WINS</SHead>
           <SSub>180-Day Action Plan</SSub>
 
+          <SectionLead text="That's the full strategy — here's what actually moves in the first 180 days. Foundations first, then content and authority sweep in behind them; do them in this order and the early proof points compound." />
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {qw.map((block, i) => (
               <div key={i} className="border-l-4 border-[#C35328] bg-white rounded-r-xl p-5">
@@ -2103,6 +2081,8 @@ export default function WebsiteReport({ data }) {
             <OBar />
             <SHead>STRATEGIC PRIORITY STACK</SHead>
             <SSub>The Honest Assessment</SSub>
+
+            <SectionLead text="If you do nothing else, do these — in this order. Starting from a low base is the advantage: no bad habits to undo, no penalties, and an open commercial field nobody is defending yet." />
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {sp.map((p, i) => (
