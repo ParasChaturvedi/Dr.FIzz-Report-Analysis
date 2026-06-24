@@ -55,7 +55,7 @@ export async function POST(req) {
     const planMode = (Array.isArray(source.keywords) && source.keywords.length) || (Array.isArray(source.competitors) && source.competitors.length) ? "full" : "quick";
     const gen = await generateGeoPromptsForProject({
       projectId: project?.project_id, source,
-      runMode: body.runMode || "standard",
+      runMode: body.runMode || process.env.GEO_RUN_MODE || "standard",   // GEO_RUN_MODE=full → 150-250 prompts
       geoPlanMode: planMode,
       useClaude: false,          // token-free template generation
       regenerate: true,          // fresh prompt set for this collection

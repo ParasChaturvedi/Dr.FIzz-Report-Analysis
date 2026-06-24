@@ -332,6 +332,10 @@ async function askEngine(browser, engineKey, prompt, storageState, proxyCountry 
   const cfg = ENGINES[engineKey];
   if (!cfg) throw new Error(`Unknown engine: ${engineKey}`);
   if (cfg.needsSession && !storageState) throw new Error(`${cfg.name}: no logged-in session provided (needs storageState).`);
+  // #throttle — optional JITTERED delay before each browser query to space requests out
+  // and avoid rate-limit / bot blocks on big runs (GEO_QUERY_DELAY_MS, e.g. 4000 → ~2-6s).
+  const _delay = Number(process.env.GEO_QUERY_DELAY_MS) || 0;
+  if (_delay > 0) await new Promise((r) => setTimeout(r, Math.round(_delay * (0.5 + Math.random()))));
   // GLOBAL scan → no country locale: keep the default en-US/UTC-ish neutral context
   // (UTC timezone) instead of pinning a market tz. Country scan → unchanged.
   const global = _isGlobal(proxyCountry);
@@ -369,8 +373,10 @@ async function askClaudeAPI(prompt, regionLabel = "") {
     model,
     max_tokens: 1024,
     messages: [{ role: "user", content: askText }],
-    // Server-side web search → real, current, citable answers.
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
+    // Server-side web search → real, current, citable answers. max_uses is the #1 GEO
+    // cost driver (web_search is billed ~$0.01/search, separate from tokens), so it's
+    // capped via GEO_WEB_SEARCH_MAX (default lowered to 3; set 1-2 for cheap full runs).
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: Math.max(1, Number(process.env.GEO_WEB_SEARCH_MAX) || 3) }],
   });
 
   let answerText = "";
@@ -557,7 +563,12 @@ async function _runApi({ engineKeys, prompts, proxyCountry, regionLabel = "" }) 
   const _regionMeta = String(regionLabel || "").trim() || (_isGlobal(proxyCountry) ? "global" : (proxyCountry || "in"));
   for (const ek of engineKeys) {
     const cfg = ENGINES[ek];
-    for (const p of prompts) {
+    // #cost — the Claude engine runs paid web_search PER prompt. On big/full runs cap it
+    // to a representative sample (GEO_CLAUDE_SAMPLE, e.g. 20) so it doesn't web-search 200×
+    // — the browser engines still cover all prompts at ₹0. 0/unset = run every prompt.
+    const sample = Number(process.env.GEO_CLAUDE_SAMPLE) || 0;
+    const enginePrompts = (ek === "claude" && sample > 0) ? prompts.slice(0, sample) : prompts;
+    for (const p of enginePrompts) {
       const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
       try {
         if (ek === "claude") {
