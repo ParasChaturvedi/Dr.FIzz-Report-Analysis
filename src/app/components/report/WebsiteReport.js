@@ -534,7 +534,9 @@ function GmbDeepDive({ gmb }) {
 
 // §5 — target-vs-competitor technical gap table (real, from the competitor audit).
 function CompetitorAuditTable({ audit }) {
-  const rows = Array.isArray(audit?.comparison) ? audit.comparison : [];
+  // Only TECHNICAL signals here — GMB rating/reviews live in §8 (and the audit's GMB row
+  // can disagree with the live GMB check), so keep this table to schema/meta/H1/alt only.
+  const rows = (Array.isArray(audit?.comparison) ? audit.comparison : []).filter((r) => !/gmb|rating|review/i.test(r.signal || ""));
   if (!rows.length) return null;
   const gapColor = { high: "#B3261E", medium: "#9A6A12", none: "#2E7D32" };
   return (
@@ -647,7 +649,7 @@ function TechnicalDepth({ crawl }) {
   const noCanonical = pages.filter((p) => !p.canonical).map((p) => p.url).filter(Boolean);
   const altPages = pages.filter((p) => (p.imgsWithoutAlt || 0) > 0).map((p) => ({ url: p.url, count: p.imgsWithoutAlt }));
   const stats = [
-    ["Pages crawled", crawl.pageCount], ["Indexed", crawl.indexedPages], ["Avg words/page", sum.avgWordCount],
+    ["Pages crawled", crawl.pageCount], ["Avg words/page", sum.avgWordCount],
     ["Broken links", broken.length], ["Orphan pages", orphans.length], ["Duplicate titles", dups.filter((d) => d.type === "title").length],
   ].filter(([, v]) => v != null && v !== "");
   const groups = [
@@ -1480,19 +1482,9 @@ export default function WebsiteReport({ data }) {
             <MetricCard value={fmt(bm.errors404)} label="404 Errors" sub={`${plainFor("404 Errors", fbMap, "Broken pages")} · Doctor Fizz crawler`} accent={Number(bm.errors404) > 0 ? "orange" : "ink"} />
             <MetricCard value={crawlHealth != null ? `${crawlHealth}/100` : "—"} label="Site Health" sub={`${plainFor("Site Health", fbMap, "Crawl health score")} · Doctor Fizz crawler`} />
             <MetricCard value={gmbScore != null ? `${gmbScore}/100` : "—"} label="GMB Completeness" sub={`${plainFor("GMB Completeness", fbMap, "Google Business Profile")} · GBP API`} />
-            <MetricCard value={d.psiData?.coreWebVitals?.inp != null ? `${Math.round(d.psiData.coreWebVitals.inp)}ms` : "—"} label="INP" sub="Interaction to Next Paint — page responsiveness · Lighthouse" accent={Number(d.psiData?.coreWebVitals?.inp) > 200 ? "orange" : "ink"} />
-            <MetricCard value={d.mozIntel?.spamScore != null ? `${d.mozIntel.spamScore}%` : "—"} label="Spam Score" sub="share of low-quality backlink signals · Moz" accent={Number(d.mozIntel?.spamScore) >= 30 ? "orange" : "ink"} />
-            <MetricCard value={d.websiteCrawl?.indexedPages != null ? fmt(d.websiteCrawl.indexedPages) : "—"} label="Indexed Pages" sub={`pages Google can index${d.websiteCrawl?.pageCount ? ` of ${d.websiteCrawl.pageCount} crawled` : ""} · Doctor Fizz crawler`} />
           </div>
 
-          {/* Plain-language narration of the baseline (data.doctorFizz.story.the_situation) */}
-          {dfStory?.the_situation && (
-            <div className="mt-6">
-              <StoryNote label="What This Means For You" points={dfStory.the_situation} />
-            </div>
-          )}
-
-          {/* KEY TAKEAWAY — grounded in the numbers above */}
+          {/* KEY TAKEAWAY — grounded in the numbers above (single connective line, Onit-style) */}
           <div className="mt-6">
             <DarkCallout label="Key Takeaway">
               {domain} sits at Domain Rating {bm.domainRating ?? "—"} (Moz) with {fmt(bm.organicTraffic)} organic visits a month across {fmt(bm.organicKeywords)} ranking keywords{bm.performanceMobile != null ? `, on a ${bm.performanceMobile}/100 mobile performance score` : ""}. {bm.errors404 ? `${fmt(bm.errors404)} broken pages and the technical base must be fixed first` : "The technical base must be solid first"} — then content and authority gains compound on top.
@@ -1591,7 +1583,6 @@ export default function WebsiteReport({ data }) {
                   <tr className="bg-gray-900 text-white">
                     <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Keyword</th>
                     <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Est. Monthly Volume</th>
-                    <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Difficulty (KD)</th>
                     <th className="px-4 py-3 text-left text-[9px] font-bold uppercase tracking-widest">Target Page Type</th>
                   </tr>
                 </thead>
@@ -1600,7 +1591,6 @@ export default function WebsiteReport({ data }) {
                     <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <td className="px-4 py-3 font-semibold text-gray-900 text-sm">{row.keyword}</td>
                       <td className="px-4 py-3 text-gray-600 text-sm">{row.volume || "—"}</td>
-                      <td className="px-4 py-3 text-gray-600 text-sm">{row.kd != null ? `${row.kd}/100` : "—"}</td>
                       <td className="px-4 py-3 text-gray-600 text-sm">{row.targetPageType}</td>
                     </tr>
                   ))}
@@ -1633,8 +1623,6 @@ export default function WebsiteReport({ data }) {
             ))}
           </div>
 
-          {/* §3 — real gap keywords (difficulty + who ranks) + actual PAA questions */}
-          <KeywordInsights kwGap={kwGap} />
         </AnimatedSection>
       </section>
 
@@ -2017,12 +2005,6 @@ export default function WebsiteReport({ data }) {
           </AnimatedSection>
         </div>
       </section>
-
-      {/* ══════════════════════════════════════════════════════
-          THE IMPLEMENTATION PLAN — every recommendation in the 10-field evidence
-          structure (Track 1.2). Reads data.doctorFizz.evidence_plan.
-      ══════════════════════════════════════════════════════ */}
-      <EvidencePlanSection plan={d.doctorFizz?.evidence_plan} />
 
       {/* ══════════════════════════════════════════════════════
           13 · THE NEXT FRONTIER — GEO & AI

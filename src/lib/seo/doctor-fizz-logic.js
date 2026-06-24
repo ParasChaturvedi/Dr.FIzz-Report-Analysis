@@ -489,7 +489,23 @@ export function buildContentArchitecture(accepted = []) {
   const slugify = (s) => String(s).toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60);
 
-  for (const k of accepted) {
+  // De-duplicate near-identical keywords (singular/plural/word-order variants) so we never
+  // recommend 3 separate pages for "small business seo package", "...packages", "seo
+  // packages for small businesses". Cluster by ≥70% token overlap, keep the highest volume.
+  const _STOP = new Set("for the a an and or with your you our in on to of at by".split(" "));
+  const _sing = (w) => /(s|x|z|ch|sh)es$/.test(w) ? w.slice(0, -2) : /ies$/.test(w) ? w.slice(0, -3) + "y" : /ss$/.test(w) ? w : /s$/.test(w) ? w.slice(0, -1) : w;
+  const _toks = (s) => new Set(String(s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 3 && !_STOP.has(w)).map(_sing));
+  const _jaccard = (a, b) => { let h = 0; for (const t of a) if (b.has(t)) h++; return h / Math.max(1, a.size + b.size - h); };
+  const _deduped = [];
+  for (const k of (accepted || [])) {
+    const t = _toks(k.keyword);
+    if (!t.size) { _deduped.push({ k, t }); continue; }
+    const i = _deduped.findIndex((x) => x.t.size && _jaccard(x.t, t) >= 0.8);   // only near-identical merge
+    if (i === -1) _deduped.push({ k, t });
+    else if ((k.global_volume || 0) > (_deduped[i].k.global_volume || 0)) _deduped[i] = { k, t };
+  }
+
+  for (const { k } of _deduped) {
     // V3 Part 10.1 — geography relevance where applicable (the geo scope for local
     // demand; "Not geo-specific" for commercial/informational pages).
     const geoRel = k.intent_class === "local-commercial"
