@@ -327,9 +327,19 @@ function GbpReviewChart({ gbp = {} }) {
 
 // #22 / #23 — AI & Entity Readiness scorecard (data.doctorFizz.ai_readiness). Deterministic
 // score + per-signal checklist of how ready the site is to be cited/recommended by AI engines.
-function AiReadinessCard({ data }) {
+function AiReadinessCard({ data, schemas = [] }) {
   if (!data || !data.available || !Array.isArray(data.signals) || !data.signals.length) return null;
   const c = data.score >= 75 ? ORANGE : data.score >= 45 ? "#9A6A12" : "#B3261E";
+  // Map the ready-to-paste JSON-LD (built upstream from the real domain/name/industry) to
+  // the readiness signal it fixes, so a failing schema/FAQ signal ships with the exact code.
+  const schemaByKey = {};
+  for (const sa of (schemas || [])) {
+    if (!sa?.jsonld) continue;
+    const t = String(sa.type || "").toLowerCase();
+    const code = `<script type="application/ld+json">\n${JSON.stringify(sa.jsonld, null, 2)}\n</script>`;
+    if (/organization|localbusiness/.test(t)) schemaByKey.structured_data = code;
+    if (/faq/.test(t)) schemaByKey.faq_coverage = code;
+  }
   return (
     <div className="rounded-lg bg-white p-5 mb-4" style={{ border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
       <div className="flex items-baseline gap-3 flex-wrap mb-2">
@@ -347,6 +357,12 @@ function AiReadinessCard({ data }) {
             <div className="min-w-0">
               <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 12.5, color: INK }}>{s.label}</div>
               <div style={{ fontFamily: BODY, fontSize: 11.5, lineHeight: 1.45, color: "#6B6B6B", marginTop: 2 }}>{s.detail}</div>
+              {!s.ok && schemaByKey[s.key] && (
+                <details style={{ marginTop: 6 }}>
+                  <summary style={{ fontFamily: BODY, fontSize: 11, fontWeight: 700, color: ORANGE, cursor: "pointer" }}>Show ready-to-paste JSON-LD</summary>
+                  <pre style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: 10, lineHeight: 1.45, color: "#3A3A3A", background: "#F7F7F7", border: "1px solid #ECECEC", borderRadius: 6, padding: 10, marginTop: 6, overflowX: "auto", whiteSpace: "pre-wrap" }}>{schemaByKey[s.key]}</pre>
+                </details>
+              )}
             </div>
           </div>
         ))}
@@ -375,9 +391,10 @@ function AioVisibilityCard({ data, domain }) {
         {data.brand_cited
           ? <>{domain} is cited in <strong style={{ color: "#2E7D32" }}>{data.brand_cited_count}</strong> of them.</>
           : <>{domain} is <strong style={{ color: "#B3261E" }}>not yet cited</strong> in any — the sources below are who Google&apos;s AI trusts instead.</>}
+        {data.featured_snippet_count > 0 && <>{" "}<strong style={{ color: INK }}>{data.featured_snippet_count}</strong> of these keywords also hold a featured snippet — often the most direct on-ramp into an AI Overview.</>}
       </p>
       {sovData.length > 0 && (
-        <div className="mb-3"><BarChart title="Share of Voice — Google AI Overviews (you vs competitors)" data={sovData} valueFmt={(v) => `${v}%`} /></div>
+        <div className="mb-3"><BarChart title={`Citation share in Google AI Overviews — among your ${data.keywords_checked} checked keywords`} data={sovData} valueFmt={(v) => `${v}%`} /></div>
       )}
       {chartData.length > 0 && (
         <div className="mb-2"><BarChart title="Most-cited sources in Google AI Overviews" data={chartData} valueFmt={(v) => `${v}×`} /></div>
@@ -389,7 +406,7 @@ function AioVisibilityCard({ data, domain }) {
             {data.per_keyword.slice(0, 10).map((p, i) => (
               <li key={i} style={{ fontFamily: BODY, fontSize: 12, color: "#5A5A5A", lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 600, color: INK }}>{p.keyword}</span>
-                <span style={{ color: "#9A9A9A" }}> → {(p.sources || []).slice(0, 4).join(", ") || "no sources captured"}</span>
+                <span style={{ color: "#9A9A9A" }}> → {(p.sources || []).slice(0, 4).join(", ") || "AI Overview cited no sources for this keyword"}</span>
               </li>
             ))}
           </ul>
@@ -1126,9 +1143,29 @@ function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
           <span>Share of Voice: <strong style={{ color: INK }}>{pf(o.sov)}</strong></span>
           <span>Brand mention rate: <strong style={{ color: INK }}>{pf(o.mention_rate)}</strong></span>
           <span>Citation rate: <strong style={{ color: INK }}>{pf(o.citation_rate)}</strong></span>
+          {o.topic_coverage != null && <span>Topic coverage: <strong style={{ color: INK }}>{pf(o.topic_coverage)}</strong></span>}
+          {o.cross_engine_consistency != null && <span>Cross-engine consistency: <strong style={{ color: INK }}>{pf(o.cross_engine_consistency)}</strong></span>}
           <span>Engines measured: <strong style={{ color: INK }}>{o.engines_tested}</strong></span>
         </div>
-        <p style={{ fontFamily: BODY, fontSize: "11px", color: "#8A8A8A", marginTop: 8 }}>Measured from real AI-engine answers collected via Playwright/Browserless. DataForSEO/Moz are not used in this score.</p>
+        {(() => {
+          const total = enginesStatus.length;
+          const pending = enginesStatus.filter((e) => e.status !== "ready").map((e) => e.name).filter(Boolean);
+          return total > 0 && pending.length > 0 ? (
+            <p style={{ fontFamily: BODY, fontSize: "11.5px", color: "#8A6A52", marginTop: 8 }}>
+              Measured across {o.engines_tested} of {total} AI engines. {pending.join(", ")} still need login sessions — your visibility may rise once they&apos;re added.
+            </p>
+          ) : null;
+        })()}
+        <p style={{ fontFamily: BODY, fontSize: "12px", lineHeight: 1.55, color: "#5A5A5A", marginTop: 6 }}>
+          {band === "Strong"
+            ? "Strong AI visibility — reinforce the topics and citations you already win."
+            : band === "Building"
+              ? "Building AI visibility — the lost topics and citation gaps below are where to push next."
+              : "Below-average AI visibility — start with the lost topics and citation gaps below to begin getting cited."}
+        </p>
+        <p style={{ fontFamily: BODY, fontSize: "11px", color: "#8A8A8A", marginTop: 6 }}>
+          Measured from real AI-engine answers collected via Playwright/Browserless — DataForSEO/Moz are not used in this score.{o.prompts_answered != null && o.prompts_total != null ? ` Rates are computed over ${o.prompts_answered} answered responses of ${o.prompts_total} prompt×engine attempts (engines that returned no answer are excluded, not counted as misses).` : ""}
+        </p>
       </div>
 
       {sov.by_brand?.length > 0 && (
@@ -1144,6 +1181,47 @@ function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
               </tr>
             ))}</tbody>
           </table>
+        </div>
+      )}
+
+      {/* Topic dominance — which brand the AI engines lead with per topic (rescued real intel) */}
+      {live.topic_dominance && ((live.topic_dominance.lost_topics || []).length > 0 || (live.topic_dominance.competitor_dominance || []).length > 0) && (
+        <div className="rounded-lg bg-white p-5" style={cardB}>
+          <Lbl>Topic dominance — who AI engines lead with</Lbl>
+          <p style={{ fontFamily: BODY, fontSize: 11.5, color: "#6B6B6B", marginBottom: 10, maxWidth: "46rem" }}>
+            Across {live.topic_dominance.total_topics} topics, you lead {live.topic_dominance.client_topics_led} ({pf(live.topic_dominance.client_lead_share)}). “Lost” = a competitor leads a topic you&apos;re absent from; “contested” = you appear but a rival leads.
+          </p>
+          {(live.topic_dominance.competitor_dominance || []).length > 0 && (
+            <div className="overflow-x-auto mb-3">
+              <table className="w-full border-collapse">
+                <thead><tr style={{ background: INK }}><th style={thS}>Competitor</th><th style={{ ...thS, textAlign: "right" }}>Topics led</th><th style={{ ...thS, textAlign: "right" }}>Present</th><th style={{ ...thS, textAlign: "right" }}>Lead share</th></tr></thead>
+                <tbody>{live.topic_dominance.competitor_dominance.slice(0, 6).map((c, i) => (
+                  <tr key={i} style={{ background: i % 2 ? "#fff" : "#F7F7F7" }}>
+                    <td style={{ ...cell, fontWeight: 600 }}>{c.brand}</td>
+                    <td style={{ ...cell, textAlign: "right" }}>{c.topics_led}</td>
+                    <td style={{ ...cell, textAlign: "right" }}>{c.topics_present}</td>
+                    <td style={{ ...cell, textAlign: "right" }}>{pf(c.lead_share)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+          {(live.topic_dominance.lost_topics || []).length > 0 && (
+            <div>
+              <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "#B3261E", marginBottom: 6 }}>Lost topics — win these first</div>
+              <ul className="space-y-1">{live.topic_dominance.lost_topics.slice(0, 8).map((t, i) => (
+                <li key={i} style={{ fontFamily: BODY, fontSize: 12, color: "#5A5A5A" }}><span style={{ color: INK }}>{t.topic}</span> <span style={{ color: "#9A9A9A" }}>— {t.lead} leads</span></li>
+              ))}</ul>
+            </div>
+          )}
+          {(live.topic_dominance.contested_topics || []).length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 10.5, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9A6A12", marginBottom: 6 }}>Contested — you appear but a rival leads</div>
+              <ul className="space-y-1">{live.topic_dominance.contested_topics.slice(0, 6).map((t, i) => (
+                <li key={i} style={{ fontFamily: BODY, fontSize: 12, color: "#5A5A5A" }}><span style={{ color: INK }}>{t.topic}</span> <span style={{ color: "#9A9A9A" }}>— {t.lead} leads</span></li>
+              ))}</ul>
+            </div>
+          )}
         </div>
       )}
 
@@ -2043,7 +2121,7 @@ export default function WebsiteReport({ data }) {
             </div>
 
             {/* #22 / #23 — AI & Entity Readiness scorecard (real crawl + GMB signals) */}
-            <AiReadinessCard data={d.doctorFizz?.ai_readiness} />
+            <AiReadinessCard data={d.doctorFizz?.ai_readiness} schemas={d.doctorFizz?.geo_and_ai_visibility?.schema_additions} />
             {/* GEO — SERP-measured Google AI Overview visibility (zero extra cost) */}
             <AioVisibilityCard data={d.doctorFizz?.geo_aio_visibility} domain={domain} />
 

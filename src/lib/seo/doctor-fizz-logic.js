@@ -3174,6 +3174,16 @@ function buildV2Additions(input) {
   const uplift6  = Math.max(Math.round(capturable * 0.4), kpi6);
   const uplift12 = Math.max(Math.round(capturable * 0.95), kpi12, uplift6 * 2);
 
+  // Reconcile the §10 "Measuring Success" KPI table with the storytelling projection: the
+  // organic-traffic target now uses the SAME CTR×volume uplift the story reports. Before,
+  // the KPI used a flat multiplier while the story used this model — producing two different
+  // headline numbers (e.g. 5K vs 11.24K/12mo) in different sections. One reality-grounded source.
+  if (trafficKpi) {
+    trafficKpi.target_6_months = uplift6;
+    trafficKpi.target_12_months = uplift12;
+    trafficKpi.estimation_note = "Projected from real keyword volume × achievable-position CTR (same model as the opportunity summary).";
+  }
+
   const opportunity_summary = {
     total_monthly_search_volume:        sumVol(accepted),
     commercial_keyword_count:           commercial.length,

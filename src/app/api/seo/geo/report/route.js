@@ -12,6 +12,7 @@ import { getGeoReportBundle, getGeoProjectByDomain } from "@/lib/seo/geo/model/g
 import { buildGeoStatus } from "@/lib/seo/report-evidence";
 import { getEngineAdapters } from "@/lib/seo/geo/engineAdapters";
 import { resolveExecutionProvider } from "@/lib/seo/geo/executionProvider";
+import { buildTopicDominance } from "@/lib/seo/doctor-fizz-logic";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -103,10 +104,27 @@ export async function GET(req) {
     const errByEngine = {};
     for (const e of errs) { const k = e.engine || "?"; (errByEngine[k] = errByEngine[k] || { engine: k, count: 0, types: {} }); errByEngine[k].count++; const t = e.error_type || "other"; errByEngine[k].types[t] = (errByEngine[k].types[t] || 0) + 1; }
 
+    // Per-topic competitive dominance — which brand each AI engine leads on, and the topics
+    // you're absent from (lost) or present-but-losing (contested). Deterministic topic model
+    // over the REAL collected answers; brandSet derived from the already-scored SoV.
+    let topic_dominance = null;
+    try {
+      const byBrand = overall.share_of_voice?.by_brand || [];
+      const brandSet = byBrand.map((b) => b.brand).filter(Boolean);
+      if (brandSet.length >= 2) {
+        const client = (byBrand.find((b) => b.is_client) || {}).brand || brandSet[0];
+        const tdResponses = results.map((r) => ({ prompt: r.raw_prompt, answerText: r.rendered_text || "", brandsMentioned: r.brands_mentioned, leadBrand: r.lead_brand }));
+        topic_dominance = buildTopicDominance({ brandSet, client, responses: tdResponses });
+      }
+    } catch {}
+
     return Response.json({
       ...base,
       run: { ...base.run, completed_at: run.completed_at, engines: run.engines || run.selected_engines, prompt_count: run.prompt_count, completed_count: run.completed_count, failed_count: run.failed_count },
-      overall: { geo_score: overall.geo_score, sov: overall.sov, competitor_sov: overall.competitor_sov, mention_rate: overall.mention_rate, citation_rate: overall.citation_rate, engines_tested: overall.engines_tested, citation_position_score: overall.citation_position_score, brand_mentions: overall.brand_mentions, competitor_mentions: overall.competitor_mentions, brand_citations: overall.brand_citations, competitor_citations: overall.competitor_citations },
+      overall: { geo_score: overall.geo_score, sov: overall.sov, competitor_sov: overall.competitor_sov, mention_rate: overall.mention_rate, citation_rate: overall.citation_rate, engines_tested: overall.engines_tested, citation_position_score: overall.citation_position_score, brand_mentions: overall.brand_mentions, competitor_mentions: overall.competitor_mentions, brand_citations: overall.brand_citations, competitor_citations: overall.competitor_citations,
+        // real measured signals previously dropped by the whitelist — surfaced in the render
+        topic_coverage: overall.signals?.topic_coverage ?? null, cross_engine_consistency: overall.signals?.cross_engine_consistency ?? null,
+        prompts_answered: overall.prompts_answered ?? null, prompts_total: overall.prompts_total ?? results.length },
       score_breakdown: { signals: overall.signals || {}, cross_engine_consistency: overall.signals?.cross_engine_consistency ?? null },
       mentions_summary: { brand_mentions: overall.brand_mentions || 0, competitor_mentions: overall.competitor_mentions || 0, prompts_with_brand: results.filter((r) => r.brand_mentioned).length, prompts_total: results.length },
       citation_analysis: { total: citationDocs.length, brand: citeBrand, competitor: citeComp, third_party: citeThird, top_source_domains },
@@ -116,6 +134,7 @@ export async function GET(req) {
       storytelling: (bundle.storytelling || []).map((s) => ({ section_key: s.section_key, title: s.title, body: s.body, order: s.order })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
       by_engine: bundle.metrics?.by_engine || [],
       share_of_voice: overall.share_of_voice || null,
+      topic_dominance,
       prompts_executed,
       citations: citationDocs.map((c) => ({ engine: c.engine, prompt_id: c.prompt_id, cited_domain: c.cited_domain, cited_url: c.cited_url, citation_order: c.citation_order, is_brand_domain: c.is_brand_domain, is_competitor_domain: c.is_competitor_domain })),
     });
