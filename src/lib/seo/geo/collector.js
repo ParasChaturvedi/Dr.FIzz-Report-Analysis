@@ -520,18 +520,37 @@ async function _runLocal({ engineKeys, prompts, proxyCountry = "", regionLabel =
     const cfg = ENGINES[ek];
     if (!cfg) continue;
     const profileDir = path.join(".geo-sessions", `profile-${ek}`);
+    const stateFile = path.join(".geo-sessions", `${ek}.json`);
     const tagFor = (p) => ({ engine: cfg.name, prompt: p.prompt, brand: p.brand, theme: p.theme, promptId: p.id });
-    if (cfg.needsSession && !fs.existsSync(profileDir)) {
-      for (const p of prompts) responses.push({ ...tagFor(p), error: `no local profile (.geo-sessions/profile-${ek}) — run: node scripts/geo-capture.mjs ${ek}` });
-      continue;
+
+    // Session resolution for login-gated engines, best → fallback:
+    //   1. a local persistent Chrome profile (Cloudflare-cleared) captured on THIS machine
+    //   2. a PORTABLE storageState — a local <engine>.json, else from Mongo/env (loadGeoSession)
+    // (2) lets a session captured on another machine (e.g. a Mac) run on this headless worker.
+    const haveProfile = fs.existsSync(profileDir);
+    let storageState = null;
+    if (cfg.needsSession && !haveProfile) {
+      if (fs.existsSync(stateFile)) storageState = stateFile;
+      else { try { const { loadGeoSession } = await import("./sessions.js"); const s = await loadGeoSession(ek); if (s) storageState = s; } catch {} }
+      if (!storageState) {
+        for (const p of prompts) responses.push({ ...tagFor(p), error: `no session for ${ek} — capture (node scripts/geo-capture.mjs ${ek}) or store one (env GEO_SESSION_${ek.toUpperCase()} / Mongo).` });
+        continue;
+      }
     }
-    fs.mkdirSync(profileDir, { recursive: true });
-    let context;
+
+    let context, browser;
     try {
-      context = await chromium.launchPersistentContext(profileDir, {
-        headless: false, channel: "chrome", viewport: null, locale: "en-US",
-        args: ["--disable-blink-features=AutomationControlled", "--start-maximized"],
-      });
+      if (haveProfile || !cfg.needsSession) {
+        fs.mkdirSync(profileDir, { recursive: true });
+        context = await chromium.launchPersistentContext(profileDir, {
+          headless: false, channel: "chrome", viewport: null, locale: "en-US",
+          args: ["--disable-blink-features=AutomationControlled", "--start-maximized"],
+        });
+      } else {
+        // Portable storageState path — fresh context seeded with the captured cookies.
+        browser = await chromium.launch({ headless: false, channel: "chrome", args: ["--disable-blink-features=AutomationControlled", "--start-maximized"] });
+        context = await browser.newContext({ storageState, locale: "en-US", viewport: null });
+      }
       await context.addInitScript(() => { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); });
       for (const p of prompts) {
         try {
@@ -551,7 +570,7 @@ async function _runLocal({ engineKeys, prompts, proxyCountry = "", regionLabel =
       }
     } catch (err) {
       for (const p of prompts) responses.push({ ...tagFor(p), error: String(err?.message || err) });
-    } finally { try { await context?.close(); } catch {} }
+    } finally { try { await context?.close(); } catch {} try { await browser?.close(); } catch {} }
   }
   return responses;
 }
