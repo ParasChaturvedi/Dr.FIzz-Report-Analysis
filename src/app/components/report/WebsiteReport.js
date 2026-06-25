@@ -451,8 +451,19 @@ function GmbDeepDive({ gmb }) {
         <div className="bg-white rounded-lg p-5" style={_cardB}>
           <div style={_lblS}>Directory presence (local citations)</div>
           <div className="flex flex-wrap gap-2">
-            {dirs.map((dd, i) => <span key={i} style={{ fontFamily: BODY, fontSize: 12, padding: "4px 9px", borderRadius: 5, background: dd.listed ? "#E8F5E9" : "#FDECEA", color: dd.listed ? "#2E7D32" : "#B3261E" }}>{dd.listed ? "✓" : "✗"} {dd.name}</span>)}
+            {dirs.map((dd, i) => {
+              // Tri-state + honest: ✓ found (cross-LLM/URL-verified), ✗ not found, ? not
+              // checked. Previously `listed:null` (uncheckable) rendered as a red ✗ — a
+              // false "not listed". null is now a neutral "not checked".
+              const st = dd.listed === true
+                ? { sym: "✓", bg: "#E8F5E9", color: "#2E7D32" }
+                : dd.listed === false
+                  ? { sym: "✗", bg: "#F2F2F2", color: "#8A8A8A" }
+                  : { sym: "?", bg: "#F2F2F2", color: "#9A9A9A" };
+              return <span key={i} style={{ fontFamily: BODY, fontSize: 12, padding: "4px 9px", borderRadius: 5, background: st.bg, color: st.color }}>{st.sym} {dd.name}</span>;
+            })}
           </div>
+          <div style={{ fontFamily: BODY, fontSize: 11, color: "#9A9A9A", marginTop: 8 }}>✓ found · ✗ not found · ? not checked — detected via cross-AI-engine consensus + URL verification.</div>
         </div>
       )}
       {breakdown.length > 0 && (
@@ -543,27 +554,42 @@ function KeywordInsights({ kwGap }) {
 
 // §7 — real referring-domains table (your existing backlink profile) with per-domain DA +
 // spam score (Moz). Complements the backlink GAP (prospects) — real data, not advice.
-function ReferringDomainsTable({ moz }) {
-  const list = Array.isArray(moz?.referringDomains) ? moz.referringDomains : [];
-  if (!list.length) return null;
+function ReferringDomainsTable({ moz, domain }) {
+  const raw = Array.isArray(moz?.referringDomains) ? moz.referringDomains : [];
+  if (!raw.length) return null;
+  // Strip junk: the site's OWN domain + search engines / Google's own properties
+  // (plus.google.com, maps.google.com, google.es, bing, yandex…). These are not real
+  // editorial backlinks — listing them as "your strongest links" is misleading. Also
+  // clamp the spam score to ≥0 (Moz can return small negatives that read as "-1%").
+  const self = String(domain || "").replace(/^https?:\/\//, "").replace(/^www\./, "").toLowerCase();
+  const JUNK = /(^|\.)(google|googleusercontent|gstatic|bing|yahoo|duckduckgo|yandex|baidu|ask|aol|webcache|translate)\.[a-z.]+$/i;
+  const list = raw
+    .map((dd) => ({ ...dd, domain: String(dd.domain || "").toLowerCase().replace(/^www\./, ""), spam: dd.spam != null ? Math.max(0, Number(dd.spam)) : null }))
+    .filter((dd) => dd.domain && !JUNK.test(dd.domain) && dd.domain !== self && !dd.domain.endsWith(`.${self}`));
   return (
     <div className="mt-6">
       <div className="uppercase mb-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", letterSpacing: "0.2em", color: "#7A7A7A" }}>Your Strongest Referring Domains (Moz)</div>
-      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #E5E5E5" }}>
-        <table className="w-full border-collapse">
-          <thead><tr style={{ background: INK }}>{["Referring domain", "Domain Authority", "Spam score", "Backlinks"].map((h, i) => <th key={i} style={_thS}>{h}</th>)}</tr></thead>
-          <tbody>
-            {list.slice(0, 12).map((dd, i) => (
-              <tr key={i} style={{ background: i % 2 ? "#F7F7F7" : "#fff" }}>
-                <td style={{ ..._tdS, fontWeight: 600, color: INK, wordBreak: "break-all" }}>{dd.domain}</td>
-                <td style={_tdS}>{dd.da != null ? dd.da : "—"}</td>
-                <td style={{ ..._tdS, color: dd.spam != null && dd.spam >= 30 ? "#B3261E" : "#5A5A5A" }}>{dd.spam != null ? `${dd.spam}%` : "—"}</td>
-                <td style={_tdS}>{dd.backlinks != null ? fmtNum(dd.backlinks) : "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {list.length ? (
+        <div className="rounded-lg overflow-hidden" style={{ border: "1px solid #E5E5E5" }}>
+          <table className="w-full border-collapse">
+            <thead><tr style={{ background: INK }}>{["Referring domain", "Domain Authority", "Spam score", "Backlinks"].map((h, i) => <th key={i} style={_thS}>{h}</th>)}</tr></thead>
+            <tbody>
+              {list.slice(0, 12).map((dd, i) => (
+                <tr key={i} style={{ background: i % 2 ? "#F7F7F7" : "#fff" }}>
+                  <td style={{ ..._tdS, fontWeight: 600, color: INK, wordBreak: "break-all" }}>{dd.domain}</td>
+                  <td style={_tdS}>{dd.da != null ? dd.da : "—"}</td>
+                  <td style={{ ..._tdS, color: dd.spam != null && dd.spam >= 30 ? "#B3261E" : "#5A5A5A" }}>{dd.spam != null ? `${dd.spam}%` : "—"}</td>
+                  <td style={_tdS}>{dd.backlinks != null ? fmtNum(dd.backlinks) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.6, maxWidth: "46rem" }}>
+          No strong <em>editorial</em> referring domains yet — the current inbound links are mostly search-engine and directory noise, not real endorsements. That is exactly the gap the link-building plan above is built to close.
+        </p>
+      )}
     </div>
   );
 }
@@ -1429,7 +1455,7 @@ export default function WebsiteReport({ data }) {
             <MetricCard value={bm.performanceMobile != null ? `${bm.performanceMobile}/100` : "—"} label="Mobile Performance" sub={`${plainFor("Mobile Speed", fbMap, "Google PageSpeed")} · Lighthouse`} accent={bm.performanceMobile != null && bm.performanceMobile < 50 ? "orange" : "ink"} />
             <MetricCard value={bm.performanceDesktop != null ? `${bm.performanceDesktop}/100` : "—"} label="Desktop Performance" sub={`${plainFor("Desktop Speed", fbMap, "Google PageSpeed")} · Lighthouse`} />
             <MetricCard value={bm.lcp != null ? `${(Number(bm.lcp) / 1000).toFixed(1)}s` : "—"} label="LCP" sub={`${plainFor("LCP", fbMap, "how long the main content takes to load")} · Lighthouse`} />
-            <MetricCard value={bm.cls != null ? Number(bm.cls).toFixed(3) : "—"} label="CLS" sub={`${plainFor("CLS", fbMap, "how much the page jumps around while loading")} · Lighthouse`} />
+            <MetricCard value={Number(bm.cls) > 0 ? Number(bm.cls).toFixed(3) : "—"} label="CLS" sub={`${plainFor("CLS", fbMap, "how much the page jumps around while loading")} · Lighthouse`} />
             <MetricCard value={fmt(bm.backlinks)} label="Total Backlinks" sub={`${plainFor("Total Backlinks", fbMap, "Total inbound links")} · DataForSEO`} />
             <MetricCard value={fmt(bm.referringDomains)} label="Referring Domains" sub={`${plainFor("Referring Domains", fbMap, "Unique linking domains")} · DataForSEO`} />
             <MetricCard value={fmt(bm.errors404)} label="404 Errors" sub={`${plainFor("404 Errors", fbMap, "Broken pages")} · Doctor Fizz crawler`} accent={Number(bm.errors404) > 0 ? "orange" : "ink"} />
@@ -1747,7 +1773,7 @@ export default function WebsiteReport({ data }) {
           </div>
 
           {/* §7 — real referring-domains table (DA + spam) from Moz */}
-          <ReferringDomainsTable moz={d.mozIntel} />
+          <ReferringDomainsTable moz={d.mozIntel} domain={domain} />
         </AnimatedSection>
       </section>
 

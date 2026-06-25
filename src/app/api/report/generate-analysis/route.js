@@ -480,7 +480,7 @@ Return ONLY this JSON (no markdown, no commentary):
     {"blogPost": "...", "topKeyword": "...", "vol": "...", "pos": "..."}
   ],
   "uncontested": [
-    {"page": "specific page name for ${domain}", "keyword": "exact target keyword", "volume": "est monthly volume"},
+    {"page": "specific page name for ${domain}", "keyword": "a LOW-COMPETITION niche or service+location long-tail the leaders do NOT already rank for — NEVER a broad head term", "volume": "realistic est monthly volume (uncontested niches are typically 100–2,000/mo, not high-volume head terms)"},
     {"page": "...", "keyword": "...", "volume": "..."},
     {"page": "...", "keyword": "...", "volume": "..."},
     {"page": "...", "keyword": "...", "volume": "..."}
@@ -506,7 +506,7 @@ Return ONLY this JSON (no markdown, no commentary):
   ]
 }`;
 
-  return generateWithAI(systemPrompt, userPrompt, {
+  const analysis = await generateWithAI(systemPrompt, userPrompt, {
     competitorLandscape: { localCompetitors: [], nationalPlatforms: [], localOpening: "" },
     contentArchitecture: { siteStructure: [], checklist: [] },
     competitiveIntelligence: { whatWorksForThem: [], gapsYouCanExploit: [] },
@@ -518,6 +518,16 @@ Return ONLY this JSON (no markdown, no commentary):
     quickWins180: [],
     strategicPriorities: [],
   }, { domain, api: "claude", label: "website-analysis" });
+
+  // Guard: "uncontested territory" must be genuinely low-competition. The model sometimes
+  // mislabels a broad head term (e.g. "internet marketing services", 9,000/mo) as
+  // uncontested — by definition impossible. Drop entries whose volume is clearly head-term
+  // scale; keep unknowns (volume 0/unparseable) and genuine niches.
+  if (analysis && Array.isArray(analysis.uncontested)) {
+    const volNum = (v) => { const n = Number(String(v ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? n : 0; };
+    analysis.uncontested = analysis.uncontested.filter((u) => volNum(u?.volume) <= 5000);
+  }
+  return analysis;
 }
 
 // ─── Page-level AI analysis ───────────────────────────────────────────────────

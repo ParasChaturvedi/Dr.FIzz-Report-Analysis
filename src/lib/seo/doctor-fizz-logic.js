@@ -757,9 +757,20 @@ export function buildGbpComparison(clientGmb, competitorGmbs = []) {
   };
 
   const client = toRow("Your Business", clientGmb);
-  const competitors = (competitorGmbs || [])
+  let competitors = (competitorGmbs || [])
     .filter(c => c?.gmbCheck)
     .map(c => toRow(c.name || c.domain || "Competitor", c.gmbCheck));
+
+  // Drop competitors whose GMB matched a clearly different, consumer-venue business
+  // (e.g. a Restaurant wrongly matched to a digital-agency domain via a name collision).
+  // Such a mismatch otherwise poisons the review/competitor benchmark (a restaurant's
+  // 207 reviews are meaningless next to a marketing agency). Only applied when the CLIENT
+  // itself is not that kind of venue.
+  const VENUE = /restaurant|cafe|coffee|\bbar\b|\bpub\b|bakery|\bfood\b|hotel|resort|motel|salon|\bspa\b|barber|\bgym\b|fitness|grocery|supermarket|pharmacy|hospital|clinic|dental|dentist|plumber|electrician|mechanic|car repair|auto repair|real estate/i;
+  const clientCat = String(client.primary_category || "");
+  if (clientCat && !VENUE.test(clientCat)) {
+    competitors = competitors.filter(c => !(c.primary_category && VENUE.test(c.primary_category)));
+  }
 
   const analysis = computeGbpGaps(client, competitors);
   // Detailed per-competitor breakdown (the dedicated "Competitor Analysis").
