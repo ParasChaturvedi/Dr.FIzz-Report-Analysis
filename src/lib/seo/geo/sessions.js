@@ -57,8 +57,20 @@ export async function loadGeoSession(engine) {
   if (envState) return envState;
   try {
     const payload = await getCached({ domain: _key(engine), dataType: "geo-session", ttlDays: 3650 });
-    return _decState(payload);
-  } catch { return null; }
+    const fromDb = _decState(payload);
+    if (fromDb) return fromDb;
+  } catch {}
+  // Local-file fallback: the dedicated worker host keeps captured sessions as
+  // .geo-sessions/<engine>.json (written by geo-capture / kept fresh by geo-session-refresh).
+  // This makes the WORKER's login-engine collection reliable even if Mongo is unreachable or
+  // a cached doc is momentarily missing — it no longer depends on the DB at all. On serverless
+  // (no such file) this is a no-op and env/Mongo remain authoritative.
+  try {
+    const fs = await import("fs");
+    const p = `.geo-sessions/${String(engine || "").toLowerCase().trim()}.json`;
+    if (fs.existsSync(p)) { const s = JSON.parse(fs.readFileSync(p, "utf8")); if (s && typeof s === "object" && Array.isArray(s.cookies)) return s; }
+  } catch {}
+  return null;
 }
 
 // Build a { engine: storageState } map for the requested login engines — only those that
