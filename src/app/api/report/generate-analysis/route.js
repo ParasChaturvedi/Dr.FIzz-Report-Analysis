@@ -1041,7 +1041,7 @@ export async function POST(request) {
       if (_blGap.length) {
         aiSections.linkBuilding = aiSections.linkBuilding || {};
         aiSections.linkBuilding.competitorLinkGap = _blGap.slice(0, 8).map((g) =>
-          `${g.referring_domain}${g.rank != null ? ` (rank ${g.rank})` : ""} links to ${(g.links_to || []).join(", ") || "a competitor"} — pitch them the same value (data, quote, resource) to earn the link.`);
+          `${g.referring_domain}${g.rank ? ` (SERP rank ${g.rank})` : ""} links to ${(g.links_to || []).join(", ") || "a competitor"} — pitch them the same value (data, quote, resource) to earn the link.`);
       }
     } else {
       // Find the REAL crawled content for THIS page so Claude uses the actual

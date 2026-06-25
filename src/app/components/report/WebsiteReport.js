@@ -563,9 +563,13 @@ function ReferringDomainsTable({ moz, domain }) {
   // clamp the spam score to ≥0 (Moz can return small negatives that read as "-1%").
   const self = String(domain || "").replace(/^https?:\/\//, "").replace(/^www\./, "").toLowerCase();
   const JUNK = /(^|\.)(google|googleusercontent|gstatic|bing|yahoo|duckduckgo|yandex|baidu|ask|aol|webcache|translate)\.[a-z.]+$/i;
+  // Generic hosting / profile platforms carry no editorial authority — a link from a
+  // pages.dev / about.me / wordpress.com page is not a real endorsement, so don't present
+  // them as "strongest referring domains" either.
+  const GENERIC_HOST = /(^|\.)(pages\.dev|about\.me|wixsite\.com|squarespace\.com|blogspot\.com|wordpress\.com|github\.io|netlify\.app|vercel\.app|medium\.com|gravatar\.com|t\.co|lnkd\.in)$/i;
   const list = raw
     .map((dd) => ({ ...dd, domain: String(dd.domain || "").toLowerCase().replace(/^www\./, ""), spam: dd.spam != null ? Math.max(0, Number(dd.spam)) : null }))
-    .filter((dd) => dd.domain && !JUNK.test(dd.domain) && dd.domain !== self && !dd.domain.endsWith(`.${self}`));
+    .filter((dd) => dd.domain && !JUNK.test(dd.domain) && !GENERIC_HOST.test(dd.domain) && dd.domain !== self && !dd.domain.endsWith(`.${self}`));
   return (
     <div className="mt-6">
       <div className="uppercase mb-3" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", letterSpacing: "0.2em", color: "#7A7A7A" }}>Your Strongest Referring Domains (Moz)</div>

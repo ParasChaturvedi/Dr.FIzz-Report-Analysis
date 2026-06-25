@@ -377,7 +377,7 @@ function computeCompletenessScore(info, reviews, qa, directories) {
     { label: "Address",                  score: 8,  pass: !!info.address },
     { label: "Business Hours",           score: 8,  pass: info.hoursAvailable },
     { label: "Photos/Images",            score: 8,  pass: info.hasPhotos },
-    { label: "Has Reviews",              score: 5,  pass: (reviews.length > 0) },
+    { label: "Has Reviews",              score: 5,  pass: (reviews.length > 0 || (info.reviewCount || 0) > 0) },
     { label: "Rating ≥ 4.0",             score: 8,  pass: (info.rating||0) >= 4.0 },
     { label: "10+ Reviews",              score: 5,  pass: (info.reviewCount||0) >= 10 },
     { label: "Replies to Reviews",       score: 5,  pass: reviews.some(r => r.ownerReply) },
