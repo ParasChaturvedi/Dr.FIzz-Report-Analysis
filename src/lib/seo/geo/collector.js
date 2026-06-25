@@ -507,6 +507,15 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry, re
 // ── Transport: LOCAL persistent profiles (.geo-sessions/profile-<engine>) ────
 // Reuses the real Chrome profiles captured by scripts/geo-capture.mjs — already
 // logged in and Cloudflare-cleared. One window per engine, reused across prompts.
+// Hard wall around any awaited browser step: races it against a deadline so a wedged Chrome
+// page (a hung evaluate/navigation whose internal timeout never fires) can NEVER stall the
+// whole scan. The losing branch keeps running in the background but its result is ignored.
+const _withTimeout = (promise, ms, label = "operation") =>
+  Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`${label} timed out after ${ms}ms`)), ms)),
+  ]);
+
 async function _runLocal({ engineKeys, prompts, proxyCountry = "", regionLabel = "" }) {
   let chromium;
   try { ({ chromium } = await import("playwright")); }
@@ -514,6 +523,11 @@ async function _runLocal({ engineKeys, prompts, proxyCountry = "", regionLabel =
   const path = await import("path");
   const fs = await import("fs");
   const responses = [];
+  // Hard caps so one wedged engine/page can't hang the whole run (the cause of the
+  // never-completing local run). A legit answer needs ≤~90s (composer 35s + answer 30s +
+  // overhead), so 120s kills only true hangs; launch should be near-instant.
+  const PROMPT_HARD_MS = Number(process.env.GEO_PROMPT_HARD_MS || 120000);
+  const LAUNCH_HARD_MS = Number(process.env.GEO_LAUNCH_HARD_MS || 60000);
   // §16 region label for the metadata, mirroring the Browserless transport.
   const _regionMeta = String(regionLabel || "").trim() || (_isGlobal(proxyCountry) ? "global" : (proxyCountry || "in"));
   for (const ek of engineKeys) {
@@ -538,23 +552,36 @@ async function _runLocal({ engineKeys, prompts, proxyCountry = "", regionLabel =
       }
     }
 
-    let context, browser;
-    try {
+    // Open this engine's context — persistent profile (Cloudflare-cleared) or a fresh context
+    // seeded with the portable storageState. Wrapped in a closure so it can be RECYCLED if a
+    // prompt wedges the page (see the per-prompt hard timeout below).
+    const _open = async () => {
       if (haveProfile || !cfg.needsSession) {
         fs.mkdirSync(profileDir, { recursive: true });
-        context = await chromium.launchPersistentContext(profileDir, {
+        const context = await chromium.launchPersistentContext(profileDir, {
           headless: false, channel: "chrome", viewport: null, locale: "en-US",
           args: ["--disable-blink-features=AutomationControlled", "--start-maximized"],
         });
-      } else {
-        // Portable storageState path — fresh context seeded with the captured cookies.
-        browser = await chromium.launch({ headless: false, channel: "chrome", args: ["--disable-blink-features=AutomationControlled", "--start-maximized"] });
-        context = await browser.newContext({ storageState, locale: "en-US", viewport: null });
+        return { context, browser: null };
       }
-      await context.addInitScript(() => { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); });
+      // Portable storageState path — fresh context seeded with the captured cookies.
+      const browser = await chromium.launch({ headless: false, channel: "chrome", args: ["--disable-blink-features=AutomationControlled", "--start-maximized"] });
+      const context = await browser.newContext({ storageState, locale: "en-US", viewport: null });
+      return { context, browser };
+    };
+    const _seed = async (context) => { try { await context.addInitScript(() => { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); }); } catch {} };
+    const _shut = async (c, b) => { try { await _withTimeout(Promise.resolve(c?.close?.()), 12000, "ctx close"); } catch {} try { await _withTimeout(Promise.resolve(b?.close?.()), 12000, "browser close"); } catch {} };
+
+    let context = null, browser = null;
+    try {
+      ({ context, browser } = await _withTimeout(_open(), LAUNCH_HARD_MS, `${ek} launch`));
+      await _seed(context);
       for (const p of prompts) {
         try {
-          const _r = await askInContext(context, cfg, p.prompt, proxyCountry, regionLabel);
+          // HARD WALL: a wedged Chrome page must never stall the whole scan. If one prompt
+          // exceeds the cap we record it as an error and move on — one slow engine can't hang
+          // the worker (the root cause of the never-completing run).
+          const _r = await _withTimeout(askInContext(context, cfg, p.prompt, proxyCountry, regionLabel), PROMPT_HARD_MS, `${cfg.name} ask`);
           // §16 — capture per-run metadata, same fields as the Browserless transport.
           // raw_html / parse_confidence / screenshot ride along from `_r` via the spread.
           responses.push({
@@ -566,11 +593,20 @@ async function _runLocal({ engineKeys, prompts, proxyCountry = "", regionLabel =
             attempts: 1,
           });
         }
-        catch (err) { responses.push({ ...tagFor(p), error: String(err?.message || err) }); }
+        catch (err) {
+          responses.push({ ...tagFor(p), error: String(err?.message || err) });
+          // A hard timeout usually means the page/context wedged — recycle it so the rest of
+          // this engine's prompts aren't poisoned by one stuck answer.
+          if (/timed out/i.test(String(err?.message || ""))) {
+            await _shut(context, browser); context = null; browser = null;
+            try { ({ context, browser } = await _withTimeout(_open(), LAUNCH_HARD_MS, `${ek} relaunch`)); await _seed(context); }
+            catch { break; }   // cannot reopen → stop this engine; the others still run
+          }
+        }
       }
     } catch (err) {
       for (const p of prompts) responses.push({ ...tagFor(p), error: String(err?.message || err) });
-    } finally { try { await context?.close(); } catch {} try { await browser?.close(); } catch {} }
+    } finally { await _shut(context, browser); }
   }
   return responses;
 }

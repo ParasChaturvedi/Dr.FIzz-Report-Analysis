@@ -673,320 +673,6 @@ function TechnicalDepth({ crawl }) {
   );
 }
 
-// §14-25 GEO renderer (reference light style). Renders the FULL model (geo_score, SoV,
-// metrics, topic dominance, citation intelligence, Claude deep analysis) when a live scan
-// exists, and ALWAYS renders the readiness scorecard + tracked prompts + actions. Reads
-// data.doctorFizz.geo_and_ai_visibility so NO GEO data is lost on the reference layout.
-function GeoVisibility({ geo = {}, domain, gf = {}, status = null }) {
-  const m = geo;
-  const cardB = { border: "1px solid #E5E5E5", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" };
-  const cell = { fontFamily: BODY, fontSize: "12px", padding: "8px 12px" };
-  const thS = { fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.1em", textTransform: "uppercase", padding: "9px 12px", textAlign: "left", color: "#fff" };
-  const Lbl = ({ children }) => <div className="uppercase" style={{ fontFamily: BODY, fontWeight: 700, fontSize: "10px", letterSpacing: "0.18em", color: ORANGE, marginBottom: 8 }}>{children}</div>;
-
-  // ── #9 HONEST GEO STATE — until real Phase-3 browser collection runs, GEO is PLANNED.
-  //    NO Share-of-Voice / citation / mention / LLM-answer numbers are shown (none exist
-  //    yet). This early-return guarantees nothing fabricated reaches the report. ──
-  if (!status?.collection_run) {
-    const prompts = m.tracked_prompts || m.prompts_used || m.prompts || [];
-    const promptCount = status?.prompt_count || (Array.isArray(prompts) ? prompts.length : 0);
-    const st = status?.state || "planned";
-    const STATE_BADGE = {
-      planned: { label: "PLANNED", bg: "#8A6A52" }, queued: { label: "QUEUED", bg: "#5A6A8A" },
-      running: { label: "RUNNING", bg: ORANGE }, partially_complete: { label: "PARTIAL", bg: "#8A6A52" },
-      failed: { label: "FAILED", bg: "#B3261E" }, session_required: { label: "SESSION REQUIRED", bg: "#9A6A12" },
-    };
-    const badge = STATE_BADGE[st] || STATE_BADGE.planned;
-    const collectionLabel = { planned: "Not run yet", queued: "Queued", running: "Running…", session_required: "Sessions required", failed: "Failed" }[st] || "Not run yet";
-    const blocked = Array.isArray(status?.blocked_engines) ? status.blocked_engines : [];
-    const steps = [
-      ["Methodology", status?.methodology_ready ? "Ready" : "Pending"],
-      ["Prompts (neutral)", status?.prompts_ready ? `Ready · ${promptCount}` : "Not generated yet"],
-      ["Collection (Playwright / Browserless)", collectionLabel],
-    ];
-    return (
-      <div className="space-y-4">
-        <div className="rounded-lg bg-white p-5" style={cardB}>
-          <div className="flex items-center gap-2 flex-wrap mb-2">
-            <Lbl>GEO Collection</Lbl>
-            <span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: badge.bg, color: "#fff" }}>{badge.label}</span>
-          </div>
-          <p style={{ fontFamily: BODY, fontSize: "13px", lineHeight: 1.6, color: "#4A4A4A", maxWidth: "46rem" }}>
-            {status?.message || `GEO visibility for ${domain} has not been measured yet. No Share-of-Voice, citation or mention numbers are shown until they come from real AI-engine answers.`}
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-4">
-            {steps.map(([k, v], i) => (
-              <div key={i} className="rounded border p-3" style={{ borderColor: "#E5E5E5" }}>
-                <div style={{ fontFamily: BODY, fontSize: "9px", letterSpacing: "0.14em", textTransform: "uppercase", color: "#8A8A8A" }}>{k}</div>
-                <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "14px", color: INK, marginTop: 4 }}>{v}</div>
-              </div>
-            ))}
-          </div>
-          {blocked.length > 0 && (
-            <div className="mt-3" style={{ fontFamily: BODY, fontSize: "12px", color: "#9A6A12" }}>
-              Engines awaiting setup: {blocked.map((b) => `${b.engine || b.name}${b.status ? ` (${String(b.status).replace(/_/g, " ")})` : ""}`).join(", ")}
-            </div>
-          )}
-          {status?.note && <p style={{ fontFamily: BODY, fontSize: "11px", color: "#8A8A8A", marginTop: 10 }}>{status.note}</p>}
-        </div>
-        {/* #8 — transparency: show the neutral prompts queued for collection, if generated */}
-        {Array.isArray(prompts) && prompts.length > 0 && (
-          <div className="rounded-lg bg-white p-5" style={cardB}>
-            <Lbl>Prompts ready for AI-engine collection ({prompts.length})</Lbl>
-            <ul className="mt-2 space-y-1">
-              {prompts.slice(0, 24).map((p, i) => (
-                <li key={i} style={{ fontFamily: BODY, fontSize: "12px", color: "#4A4A4A" }}>• {typeof p === "string" ? p : (p.prompt || p.prompt_text || "")}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {(m.engines_unavailable || []).length > 0 && (
-        <div style={{ fontFamily: BODY, fontSize: "11px", color: "#8A6A52", background: "#F7F0EA", border: "1px solid #ECD9CC", borderRadius: 8, padding: "8px 12px" }}>
-          Engines unavailable this scan (excluded from the figures below): <strong style={{ color: INK }}>{m.engines_unavailable.join(", ")}</strong>
-        </div>
-      )}
-      {m.current_ai_citation_count && (
-        <DarkCallout label="AI Citation Status">{domain}&apos;s current AI-citation footprint: <strong style={{ color: "#fff" }}>{m.current_ai_citation_count}</strong>. The actions below make the site liftable by ChatGPT, Google AI Overviews, and Perplexity.</DarkCallout>
-      )}
-
-      {m.geo_score && (
-        <div className="rounded-lg bg-white p-5" style={cardB}>
-          <div className="flex items-baseline gap-3 flex-wrap mb-2">
-            <Lbl>GEO Score</Lbl>
-            <span style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "26px", color: INK }}>{m.geo_score.score}<span style={{ fontSize: "13px", color: "#8A8A8A" }}>/100</span></span>
-            <span className="px-2 py-0.5 rounded text-[11px] font-bold" style={{ background: ORANGE, color: "#fff" }}>{m.geo_score.band}</span>
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1" style={{ fontFamily: BODY, fontSize: "11px", color: "#6B6B6B" }}>
-            {Object.entries(m.geo_score.breakdown || {}).map(([k, v]) => <span key={k}>{k.replace(/_/g, " ")}: <strong style={{ color: INK }}>{v}</strong></span>)}
-          </div>
-        </div>
-      )}
-
-      {m.geo_metrics && (
-        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
-          <div className="px-3 pt-3"><Lbl>GEO Metrics — overall + per engine</Lbl></div>
-          <table className="w-full border-collapse">
-            <thead><tr style={{ background: INK }}>{["Engine", "SoV", "Comp SoV", "Mentions", "Citations", "Comp mentions", "Comp citations", "Cit. score", "Position", "Topic", "Intent", "Freshness", "GEO"].map((h, i) => <th key={i} style={{ ...thS, textAlign: i ? "right" : "left" }}>{h}</th>)}</tr></thead>
-            <tbody>
-              {[{ label: "Overall", mm: m.geo_metrics.overall, hl: true }, ...m.geo_metrics.engines.map((e) => ({ label: e, mm: m.geo_metrics.by_engine[e] || {}, hl: false }))].map((r, i) => (
-                <tr key={i} style={{ background: r.hl ? "#FBF1EB" : (i % 2 ? "#fff" : "#F7F7F7") }}>
-                  <td style={{ ...cell, fontWeight: r.hl ? 700 : 400 }}>{r.label}</td>
-                  <td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{r.mm.sov}%</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.competitor_sov}%</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.brand_mentions}</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.brand_citations}</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.competitor_mentions}</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.competitor_citations}</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.citation_score}</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.citation_position_score}</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.topic_coverage}%</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.intent_match}%</td>
-                  <td style={{ ...cell, textAlign: "right" }}>{r.mm.freshness}</td>
-                  <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: ORANGE }}>{r.mm.geo_score}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {m.share_of_voice && (
-        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
-          <div className="px-3 pt-3"><Lbl>AI Share of Voice — by engine (estimate)</Lbl></div>
-          <table className="w-full border-collapse">
-            <thead><tr style={{ background: INK }}><th style={thS}>Brand</th>{m.share_of_voice.engines.map((e, i) => <th key={i} style={{ ...thS, textAlign: "right" }}>{e}</th>)}<th style={{ ...thS, textAlign: "right" }}>Avg</th></tr></thead>
-            <tbody>
-              {m.share_of_voice.by_brand.map((b, i) => (
-                <tr key={i} style={{ background: b.is_client ? "#FBF1EB" : (i % 2 ? "#fff" : "#F7F7F7") }}>
-                  <td style={{ ...cell, fontWeight: b.is_client ? 700 : 400, color: b.is_client ? ORANGE : INK }}>{b.brand}{b.is_client ? " (you)" : ""}</td>
-                  {m.share_of_voice.engines.map((e, j) => <td key={j} style={{ ...cell, textAlign: "right" }}>{b.per_engine[e]}%</td>)}
-                  <td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{b.avg}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {m.topic_dominance && m.topic_dominance.total_topics > 0 && (
-        <div className="rounded-lg overflow-hidden bg-white" style={cardB}>
-          <div className="px-3 pt-3"><Lbl>Topic Dominance — who leads each AI query</Lbl></div>
-          <div className="px-3 pb-2" style={{ fontFamily: BODY, fontSize: "12px", color: "#6B6B6B" }}>You lead <strong style={{ color: INK }}>{m.topic_dominance.client_topics_led}</strong> of {m.topic_dominance.total_topics} topics ({m.topic_dominance.client_lead_share}%).</div>
-          {(m.topic_dominance.lost_topics || []).length > 0 && (
-            <div className="px-3 py-2" style={{ borderTop: "1px solid #EEE" }}>
-              <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: "11px", color: "#B3261E", marginBottom: 4 }}>Lost topics — a competitor leads where you&apos;re absent</div>
-              <div className="flex flex-wrap gap-1.5">{m.topic_dominance.lost_topics.map((t, i) => <span key={i} className="px-2 py-0.5 rounded-full" style={{ fontFamily: BODY, fontSize: "11px", background: "#FBE9E7", color: "#B3261E" }}>&ldquo;{t.topic}&rdquo; → {t.lead}</span>)}</div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {m.geo_insights && (
-        <div className="rounded-lg bg-white p-5" style={cardB}>
-          <Lbl>AI Visibility — Deep Analysis</Lbl>
-          {m.geo_insights.summary && <p style={{ fontFamily: BODY, fontSize: "13px", color: INK, lineHeight: 1.6, marginBottom: 8 }}>{m.geo_insights.summary}</p>}
-          {(m.geo_insights.actions || []).map((a, i) => <div key={i} className="flex gap-2" style={{ fontFamily: BODY, fontSize: "12.5px", color: "#5A5A5A", marginBottom: 3 }}><span style={{ color: ORANGE }}>✓</span>{a}</div>)}
-        </div>
-      )}
-
-      {m.citation_analysis && (m.citation_analysis.most_cited_domains || []).length > 0 && (
-        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
-          <div className="px-3 pt-3"><Lbl>Most-Cited Sources — what AI quotes instead of you</Lbl></div>
-          <table className="w-full border-collapse">
-            <thead><tr style={{ background: INK }}><th style={thS}>Source</th><th style={{ ...thS, textAlign: "right" }}>Pages</th><th style={{ ...thS, textAlign: "right" }}>Responses</th><th style={thS}>Type</th></tr></thead>
-            <tbody>{m.citation_analysis.most_cited_domains.map((dm, i) => (
-              <tr key={i} style={{ background: dm.is_client ? "#FBF1EB" : dm.is_competitor ? "#FBE9E7" : (i % 2 ? "#fff" : "#F7F7F7") }}>
-                <td style={cell}>{dm.domain}</td><td style={{ ...cell, textAlign: "right" }}>{dm.pages_cited}</td><td style={{ ...cell, textAlign: "right" }}>{dm.responses}</td><td style={cell}>{dm.type}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-
-      {/* §23 — Citation Gap (root cause) callout */}
-      {m.citation_analysis?.citation_gap && (
-        <DarkCallout label="Citation Gap">{m.citation_analysis.citation_gap}</DarkCallout>
-      )}
-
-      {/* §23 — Citation Intelligence: every cited URL classified individually (page-level) */}
-      {(m.citation_analysis?.citations || []).length > 0 && (
-        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
-          <div className="px-3 pt-3"><Lbl>Citation Intelligence — every URL AI cites, classified</Lbl></div>
-          <table className="w-full border-collapse">
-            <thead><tr style={{ background: INK }}><th style={thS}>Domain / URL</th><th style={thS}>Type</th><th style={thS}>Engines</th><th style={{ ...thS, textAlign: "right" }}>Position</th><th style={{ ...thS, textAlign: "right" }}>Times cited</th><th style={thS}>Action</th></tr></thead>
-            <tbody>{m.citation_analysis.citations.slice(0, 15).map((c, i) => (
-              <tr key={i} style={{ background: c.is_client ? "#FBF1EB" : c.is_competitor ? "#FBE9E7" : (i % 2 ? "#fff" : "#F7F7F7") }}>
-                <td style={cell}>
-                  <div style={{ fontWeight: 700, color: INK }}>{c.domain}{c.is_competitor ? <span className="ml-1.5 px-1 py-0.5 rounded text-[9px]" style={{ background: "#B3261E", color: "#fff" }}>competitor</span> : c.is_client ? <span className="ml-1.5 px-1 py-0.5 rounded text-[9px]" style={{ background: "#1E7B3E", color: "#fff" }}>you</span> : null}</div>
-                  {c.url && <div style={{ fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: "10px", color: "#A8A8A8", wordBreak: "break-all" }}>{String(c.url).replace(/^https?:\/\//, "").slice(0, 64)}</div>}
-                </td>
-                <td style={cell}>{String(c.citation_class || "").replace(/_/g, " ")}{c.source_type ? <span style={{ color: "#A8A8A8" }}> · {c.source_type}</span> : null}</td>
-                <td style={cell}>{(c.engines || []).join(", ")}</td>
-                <td style={{ ...cell, textAlign: "right" }}>{c.first_position}</td>
-                <td style={{ ...cell, textAlign: "right" }}>{c.times_cited}</td>
-                <td style={cell}>{String(c.action || "").replace(/_/g, " ")}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-
-      {/* §23/§24 — Backlink Opportunity Queue (domain-level) */}
-      {(m.citation_analysis?.opportunity_queue || []).length > 0 && (
-        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
-          <div className="px-3 pt-3"><Lbl>Backlink Opportunity Queue — turn AI sources into links</Lbl></div>
-          <table className="w-full border-collapse">
-            <thead><tr style={{ background: INK }}><th style={thS}>Target</th><th style={thS}>Class</th><th style={thS}>Action</th><th style={{ ...thS, textAlign: "right" }}>Opportunity</th><th style={thS}>Difficulty</th></tr></thead>
-            <tbody>{m.citation_analysis.opportunity_queue.map((o, i) => (
-              <tr key={i} style={{ background: i % 2 ? "#fff" : "#F7F7F7" }}>
-                <td style={{ ...cell, fontWeight: 700, color: INK }}>{o.domain}</td>
-                <td style={cell}>{String(o.citation_class || "").replace(/_/g, " ")}</td>
-                <td style={cell}>{String(o.action || o.action_type || "").replace(/_/g, " ")}</td>
-                <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: ORANGE }}>{o.opportunity_score ?? o.link_opportunity_score}</td>
-                <td style={cell}>{o.difficulty}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-
-      {/* §23/§24 — Page-level (per-URL) backlink opportunities */}
-      {(m.citation_analysis?.page_opportunities || []).length > 0 && (
-        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
-          <div className="px-3 pt-3"><Lbl>Page-Level Citation Opportunities — the exact URLs AI quotes</Lbl></div>
-          <table className="w-full border-collapse">
-            <thead><tr style={{ background: INK }}><th style={thS}>Target</th><th style={thS}>Class</th><th style={thS}>Action</th><th style={{ ...thS, textAlign: "right" }}>Opportunity</th><th style={thS}>Difficulty</th></tr></thead>
-            <tbody>{m.citation_analysis.page_opportunities.map((o, i) => (
-              <tr key={i} style={{ background: i % 2 ? "#fff" : "#F7F7F7" }}>
-                <td style={cell}><span style={{ wordBreak: "break-all" }}>{String(o.url || "").replace(/^https?:\/\//, "").slice(0, 64)}</span></td>
-                <td style={cell}>{String(o.citation_class || "").replace(/_/g, " ")}</td>
-                <td style={cell}>{String(o.action || o.action_type || "").replace(/_/g, " ")}</td>
-                <td style={{ ...cell, textAlign: "right", fontWeight: 700, color: ORANGE }}>{o.opportunity_score ?? o.link_opportunity_score}</td>
-                <td style={cell}>{o.difficulty}</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-
-      {/* §25 — Competitor Intelligence: per-competitor SoV by engine */}
-      {(m.competitor_intel?.competitors || []).length > 0 && (
-        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
-          <div className="px-3 pt-3"><Lbl>Competitor Intelligence — AI share of voice by engine</Lbl></div>
-          {m.competitor_intel.summary && <div className="px-3 pb-2" style={{ fontFamily: BODY, fontSize: "12px", color: "#6B6B6B" }}>{m.competitor_intel.summary}</div>}
-          <table className="w-full border-collapse">
-            <thead><tr style={{ background: INK }}><th style={thS}>Competitor</th>{(m.share_of_voice?.engines || []).map((e, i) => <th key={i} style={{ ...thS, textAlign: "right" }}>{e}</th>)}<th style={{ ...thS, textAlign: "right" }}>Avg SoV</th></tr></thead>
-            <tbody>{m.competitor_intel.competitors.map((c, i) => {
-              const lead = m.competitor_intel.leader;
-              const isLeader = !!lead && ((c.name || c.brand) === lead);
-              return (
-                <tr key={i} style={{ background: isLeader ? "#FBE9E7" : (i % 2 ? "#fff" : "#F7F7F7") }}>
-                  <td style={{ ...cell, fontWeight: isLeader ? 700 : 400, color: INK }}>{c.name || c.brand}{isLeader ? <span className="ml-1.5 px-1 py-0.5 rounded text-[9px]" style={{ background: "#B3261E", color: "#fff" }}>leader</span> : null}</td>
-                  {(m.share_of_voice?.engines || []).map((e, j) => <td key={j} style={{ ...cell, textAlign: "right" }}>{(c.per_engine || {})[e]}%</td>)}
-                  <td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{c.sov_avg ?? c.avg}%</td>
-                </tr>
-              );
-            })}</tbody>
-          </table>
-          {m.competitor_intel.gap != null && <div className="px-3 py-2" style={{ fontFamily: BODY, fontSize: "11px", color: "#6B6B6B", borderTop: "1px solid #EEE" }}>Gap to leader: <strong style={{ color: INK }}>{m.competitor_intel.gap} pts</strong>{m.competitor_intel.leader_strongest_engine ? ` · leader strongest on ${m.competitor_intel.leader_strongest_engine}` : ""}.</div>}
-        </div>
-      )}
-
-      {/* §25 — Topic Dominance: per-competitor topics led / present / lead share */}
-      {(m.topic_dominance?.competitor_dominance || []).length > 0 && (
-        <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
-          <div className="px-3 pt-3"><Lbl>Topic Dominance — competitor leadership by topic</Lbl></div>
-          <table className="w-full border-collapse">
-            <thead><tr style={{ background: INK }}><th style={thS}>Competitor</th><th style={{ ...thS, textAlign: "right" }}>Topics led</th><th style={{ ...thS, textAlign: "right" }}>Topics present</th><th style={{ ...thS, textAlign: "right" }}>Lead share</th></tr></thead>
-            <tbody>{m.topic_dominance.competitor_dominance.map((c, i) => (
-              <tr key={i} style={{ background: i % 2 ? "#fff" : "#F7F7F7" }}>
-                <td style={{ ...cell, color: INK }}>{c.competitor || c.brand}</td>
-                <td style={{ ...cell, textAlign: "right" }}>{c.topics_led}</td>
-                <td style={{ ...cell, textAlign: "right" }}>{c.topics_present}</td>
-                <td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{c.lead_share}%</td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
-
-      {(m.geo_readiness || []).length > 0 && (
-        <div className="rounded-lg bg-white p-5" style={cardB}>
-          <Lbl>AI / LLM Readiness</Lbl>
-          {m.geo_readiness.map((f, i) => { const ok = /present|strong|moderate/i.test(f.status); return (
-            <div key={i} className="flex items-start gap-2.5 py-1.5" style={{ borderBottom: i < m.geo_readiness.length - 1 ? "1px solid #EEE" : "none" }}>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 text-center" style={{ background: ok ? "#E3F0E6" : "#FBE9E7", color: ok ? "#1E7B3E" : "#B3261E", minWidth: 74 }}>{f.status}</span>
-              <div><div style={{ fontFamily: BODY, fontWeight: 700, fontSize: "12.5px", color: INK }}>{f.factor}</div><div style={{ fontFamily: BODY, fontSize: "11.5px", color: "#6B6B6B" }}>{f.detail}</div></div>
-            </div>
-          ); })}
-        </div>
-      )}
-
-      {(m.tracked_prompts || []).length > 0 && (
-        <div className="rounded-lg bg-white p-5" style={cardB}>
-          <Lbl>Prompts We Track — AI Search Visibility</Lbl>
-          <div className="flex flex-wrap gap-1.5 mb-2">{m.tracked_prompts.map((p, i) => <span key={i} className="px-2 py-0.5 rounded-full" style={{ fontFamily: BODY, fontSize: "11px", border: "1px solid #E5E5E5", color: INK }}>&ldquo;{p}&rdquo;</span>)}</div>
-          {(m.ai_platforms || []).length > 0 && <div className="flex flex-wrap gap-1.5">{m.ai_platforms.map((pl, i) => <span key={i} className="px-2 py-0.5 rounded" style={{ fontFamily: BODY, fontSize: "10px", background: "#F2EEE9", color: "#6B6B6B" }}>{pl.platform}: {pl.visibility}</span>)}</div>}
-        </div>
-      )}
-
-      {((m.recommended_actions || gf.howToEarnCitations || []).length > 0) && (
-        <div className="rounded-lg bg-white p-6" style={cardB}>
-          <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "16px", color: INK, marginBottom: 14 }}>How To Earn AI Citations</div>
-          <ul className="space-y-3">{(m.recommended_actions || gf.howToEarnCitations).map((step, i) => (
-            <li key={i} className="flex items-start gap-3" style={{ fontFamily: BODY, fontSize: "13px", color: "#5A5A5A", lineHeight: 1.55 }}><span style={{ color: ORANGE, fontWeight: 700, flexShrink: 0 }}>{i + 1}.</span>{step}</li>
-          ))}</ul>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // PLAIN-LANGUAGE LAYER
@@ -1031,6 +717,19 @@ const GEO_GLOSS = {
   "Share of Voice": "how often AI assistants mention you versus your competitors",
   "Citation":       "when an AI answer links to a source or website as its evidence",
   "GEO Score":      "how ready your site is to be quoted by AI answer engines (0–100)",
+};
+
+// Accurate display names for the §21 GEO signals — the raw keys read as jargon, and two
+// are proxies we must not present as independently measured (see the breakdown footnote):
+// "intent_match" mirrors mention rate, "freshness" is inferred from cited-source recency.
+const GEO_SIGNAL_LABELS = {
+  citation_presence:        "Citation presence",
+  brand_presence:           "Brand presence",
+  citation_position:        "Citation position",
+  intent_match:             "Intent match (proxy)",
+  cross_engine_consistency: "Presence consistency",
+  freshness:                "Source freshness",
+  topic_coverage:           "Topic coverage",
 };
 
 // Resolve the plain-language definition for a metric card: prefer the live payload's
@@ -1144,7 +843,7 @@ function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
           <span>Brand mention rate: <strong style={{ color: INK }}>{pf(o.mention_rate)}</strong></span>
           <span>Citation rate: <strong style={{ color: INK }}>{pf(o.citation_rate)}</strong></span>
           {o.topic_coverage != null && <span>Topic coverage: <strong style={{ color: INK }}>{pf(o.topic_coverage)}</strong></span>}
-          {o.cross_engine_consistency != null && <span>Cross-engine consistency: <strong style={{ color: INK }}>{pf(o.cross_engine_consistency)}</strong></span>}
+          {o.cross_engine_consistency != null && <span>Presence consistency: <strong style={{ color: INK }}>{pf(o.cross_engine_consistency)}</strong></span>}
           <span>Engines measured: <strong style={{ color: INK }}>{o.engines_tested}</strong></span>
         </div>
         {(() => {
@@ -1239,6 +938,7 @@ function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
             <Lbl>Citations</Lbl>
             <div style={{ fontFamily: HEAD, fontWeight: 700, fontSize: "22px", color: INK }}>{live.citation_analysis.total}</div>
             <div style={{ fontFamily: BODY, fontSize: 11, color: "#5A5A5A", marginTop: 2 }}>{live.citation_analysis.brand} brand · {live.citation_analysis.competitor} competitor · {live.citation_analysis.third_party} third-party</div>
+            {o.citation_rate != null && <div style={{ fontFamily: BODY, fontSize: 11, color: "#8A6A52", marginTop: 2 }}>Your domain cited in {pf(o.citation_rate)} of answers</div>}
           </div>
         )}
         {live.sentiment_summary && (
@@ -1256,14 +956,17 @@ function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
         <div className="rounded-lg bg-white p-5" style={cardB}>
           <Lbl>GEO score breakdown (§21 weighted signals, 0–100)</Lbl>
           <div className="space-y-1.5 mt-2">
-            {Object.entries(live.score_breakdown.signals).map(([k, v]) => (
+            {Object.entries(live.score_breakdown.signals).filter(([, v]) => v != null).map(([k, v]) => (
               <div key={k} className="flex items-center gap-2">
-                <div style={{ flex: "0 0 184px", fontFamily: BODY, fontSize: 11.5, color: "#5A5A5A", textTransform: "capitalize" }}>{k.replace(/_/g, " ")}</div>
+                <div style={{ flex: "0 0 184px", fontFamily: BODY, fontSize: 11.5, color: "#5A5A5A" }}>{GEO_SIGNAL_LABELS[k] || k.replace(/_/g, " ")}</div>
                 <div style={{ flex: 1, height: 8, background: "#F0F0F0", borderRadius: 4, overflow: "hidden" }}><div style={{ width: `${Math.max(0, Math.min(100, Number(v) || 0))}%`, height: "100%", background: ORANGE }} /></div>
                 <div style={{ flex: "0 0 34px", textAlign: "right", fontFamily: BODY, fontSize: 11.5, fontWeight: 700, color: INK }}>{v}</div>
               </div>
             ))}
           </div>
+          <p style={{ fontFamily: BODY, fontSize: 10.5, color: "#9A9A9A", marginTop: 8, lineHeight: 1.5 }}>
+            Signal <em>values</em> are measured from the real AI answers; the <em>weights</em> are a fixed §21 model. “Intent match” currently mirrors your brand-mention rate until per-prompt intent scoring ships; “source freshness” is inferred from the recency of the sources the engines cited.
+          </p>
         </div>
       )}
 
@@ -1283,10 +986,10 @@ function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
       <div className="rounded-lg overflow-x-auto bg-white" style={cardB}>
         <div className="px-3 pt-3"><Lbl>Per-engine results</Lbl></div>
         <table className="w-full border-collapse">
-          <thead><tr style={{ background: INK }}>{["Engine", "Answers", "SoV", "Mention rate", "Brand mentions", "Brand citations", "GEO"].map((h, i) => <th key={i} style={{ ...thS, textAlign: i ? "right" : "left" }}>{h}</th>)}</tr></thead>
+          <thead><tr style={{ background: INK }}>{["Engine", "Answers", "SoV", "Mention rate", "Brand mentions", "Brand citations", "Cit. rate", "GEO"].map((h, i) => <th key={i} style={{ ...thS, textAlign: i ? "right" : "left" }}>{h}</th>)}</tr></thead>
           <tbody>{(live.by_engine || []).map((e, i) => (
             <tr key={i} style={{ background: i % 2 ? "#fff" : "#F7F7F7" }}>
-              <td style={cell}>{e.engine}</td><td style={{ ...cell, textAlign: "right" }}>{e.prompts_answered}</td><td style={{ ...cell, textAlign: "right" }}>{pf(e.sov)}</td><td style={{ ...cell, textAlign: "right" }}>{pf(e.mention_rate)}</td><td style={{ ...cell, textAlign: "right" }}>{e.brand_mentions}</td><td style={{ ...cell, textAlign: "right" }}>{e.brand_citations}</td><td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{e.geo_score}</td>
+              <td style={cell}>{e.engine}</td><td style={{ ...cell, textAlign: "right" }}>{e.prompts_answered}</td><td style={{ ...cell, textAlign: "right" }}>{pf(e.sov)}</td><td style={{ ...cell, textAlign: "right" }}>{pf(e.mention_rate)}</td><td style={{ ...cell, textAlign: "right" }}>{e.brand_mentions}</td><td style={{ ...cell, textAlign: "right" }}>{e.brand_citations}</td><td style={{ ...cell, textAlign: "right" }}>{pf(e.citation_rate)}</td><td style={{ ...cell, textAlign: "right", fontWeight: 700 }}>{e.geo_score}</td>
             </tr>
           ))}</tbody>
         </table>

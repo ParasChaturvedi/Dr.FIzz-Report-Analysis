@@ -13,12 +13,43 @@ import { GEO_SCORE_WEIGHTS, citationPositionScore } from "./model/constants.js";
 
 const pct = (n, d) => (d > 0 ? Math.round((n / d) * 1000) / 10 : 0);
 const r0 = (n) => Math.round(n);
+const _nowYear = () => { try { return new Date().getFullYear(); } catch { return 2026; } };
 
-// §21 — weighted GEO score from the 7 signal scores (each 0-100).
+// §21 freshness — REAL, derived from the recency of the sources the AI engines actually
+// cited (a 4-digit year parsed from each cited URL). When ≥1 source is dated it scores the
+// share that are current/last-year; otherwise it falls back to whether the answer text
+// itself references the current/last year. NEVER a hardcoded constant — always measured
+// from the collected answer. Returns 0-100, or null only when there are no results.
+const _citationYear = (url) => {
+  const cur = _nowYear();
+  const m = String(url || "").match(/(?:^|[^0-9])(20[1-9][0-9])(?:[^0-9]|$)/);
+  const y = m ? Number(m[1]) : 0;
+  return y >= 2010 && y <= cur + 1 ? y : 0;
+};
+function _computeFreshness(results = []) {
+  if (!results.length) return null;
+  const cur = _nowYear();
+  let dated = 0, recent = 0;
+  for (const r of results) for (const c of (r.citations || [])) {
+    const y = _citationYear(c.cited_url || c.url); if (y) { dated++; if (y >= cur - 1) recent++; }
+  }
+  if (dated >= 2) return Math.round((recent / dated) * 100);
+  if (dated === 1) return recent ? 70 : 40;
+  const txt = results.map((r) => String(r.visibleAnswerText || r.renderedText || "")).join(" ");
+  return new RegExp(`(?:^|[^0-9])(${cur}|${cur - 1})(?:[^0-9]|$)`).test(txt) ? 60 : 45;
+}
+
+// §21 — weighted GEO score over the signals actually measured. A null signal (not
+// measurable for this dataset) is EXCLUDED and the remaining weights are renormalized, so
+// the score never bakes in a placeholder for a dimension we could not measure.
 function weightedScore(signals) {
-  let s = 0;
-  for (const [k, w] of Object.entries(GEO_SCORE_WEIGHTS)) s += (Number(signals[k]) || 0) * w;
-  return Math.max(0, Math.min(100, r0(s)));
+  let s = 0, wsum = 0;
+  for (const [k, w] of Object.entries(GEO_SCORE_WEIGHTS)) {
+    const v = signals[k];
+    if (v == null) continue;
+    s += (Number(v) || 0) * w; wsum += w;
+  }
+  return wsum > 0 ? Math.max(0, Math.min(100, r0(s / wsum))) : 0;
 }
 
 // Metrics for ONE set of results (an engine, or all results for "overall").
@@ -54,7 +85,7 @@ function metricsFor(results = []) {
     citation_position: posCount ? r0(posScoreSum / posCount) : 0,
     intent_match: mention_rate,        // proxy until per-prompt intent match is collected
     cross_engine_consistency: 0,       // filled at the overall level
-    freshness: n > 0 ? 50 : 0,         // neutral when measured; ZERO with no data (never a leaked score)
+    freshness: _computeFreshness(results),   // §21 REAL — recency of the cited sources / answer text (null with no data)
     topic_coverage: pct(topicCoveredDocs, n),
   };
   return {
