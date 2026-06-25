@@ -74,12 +74,23 @@ export async function getGeoProject(projectId) {
 // Find the most recent geo_project for a website domain (so the report — which only
 // knows the domain — can locate its collected GEO data). Matches normalized brand_domain.
 export async function getGeoProjectByDomain(domain) {
-  try {
-    const c = await col(C.projects); if (!c) return null;
-    const d = String(domain || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
-    if (!d) return null;
-    return await c.find({ brand_domain: { $in: [d, `www.${d}`, `https://${d}`] } }).sort({ created_at: -1 }).limit(1).next();
-  } catch { return null; }
+  const d = String(domain || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "").replace(/\/.*$/, "");
+  if (!d) return null;
+  // Broad exact set + a regex fallback tolerate the brand_domain formats different callers
+  // have stored over time (bare / www / http(s) / trailing slash). Retry on transient errors
+  // so a flaky read NEVER returns null spuriously — a spurious null makes callers create a
+  // DUPLICATE project and fragment the collected data.
+  const exact = [d, `www.${d}`, `https://${d}`, `https://www.${d}`, `http://${d}`, `http://www.${d}`, `${d}/`];
+  const esc = d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const c = await col(C.projects); if (!c) return null;
+      let r = await c.find({ brand_domain: { $in: exact } }).sort({ created_at: -1 }).limit(1).next();
+      if (!r) r = await c.find({ brand_domain: { $regex: `(^|//|\\.)${esc}/?$`, $options: "i" } }).sort({ created_at: -1 }).limit(1).next();
+      return r || null;
+    } catch { if (attempt < 2) { await new Promise((res) => setTimeout(res, 150)); continue; } return null; }
+  }
+  return null;
 }
 export async function updateGeoProject(projectId, patch = {}) {
   try { const c = await col(C.projects); if (!c) return false; await c.updateOne({ project_id: projectId }, { $set: { ...patch, updated_at: now() } }); return true; }

@@ -21,7 +21,7 @@ import { resolveGeoRunConfig, estimateGeoRun } from "./model/geoRunConfig.js";
 import { GEO_CLUSTERS, GEO_INTENTS, RUN_MODE_PRESETS, normalizeRunMode, normalizeGeoPlanMode } from "./model/constants.js";
 import { assessGeoData, readinessFromRun, geoPlanMessage } from "./dataReadiness.js";
 import {
-  createGeoProject, getGeoProject, updateGeoProject,
+  createGeoProject, getGeoProject, getGeoProjectByDomain, updateGeoProject,
   saveGeoPrompts, getGeoPrompts, countGeoPrompts, clearGeoPrompts, updateGeoPrompt, setPromptsStatus,
   createGeoRun, getLatestRun,
 } from "./model/geoStore.js";
@@ -252,6 +252,11 @@ function buildPreview({ project, run, prompts, config, runMode, readiness, planM
 export async function ensureGeoProject(input = {}) {
   const src = input._src || normalizeSource(input);
   if (input.projectId) { const ex = await getGeoProject(input.projectId); if (ex) return ex; }
+  // Dedup by DOMAIN — reuse the existing project for this site. Without this, a flaky/absent
+  // projectId (or a transient null lookup in the caller) would create a DUPLICATE project,
+  // fragmenting the collected GEO data across projects so the report reads an empty/partial
+  // one. One domain → one project.
+  if (src.domain) { const byDom = await getGeoProjectByDomain(src.domain); if (byDom) return byDom; }
   return await createGeoProject({
     project_id: input.projectId,
     audit_id: input.auditId || input.audit_id || null,
