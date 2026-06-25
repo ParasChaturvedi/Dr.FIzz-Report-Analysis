@@ -1297,7 +1297,16 @@ function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
           <Lbl>Prompts executed ({live.prompts_executed.length}) — real AI-engine answers</Lbl>
           <div className="space-y-3 mt-2">{live.prompts_executed.slice(0, 12).map((p, i) => (
             <div key={i} style={{ borderTop: i ? "1px solid #F0F0F0" : "none", paddingTop: i ? 10 : 0 }}>
-              <div style={{ fontFamily: BODY, fontSize: "12.5px", fontWeight: 700, color: INK }}>{p.prompt} <span style={{ color: "#8A8A8A", fontWeight: 400 }}>· {p.engine} · {p.citation_count} citations</span></div>
+              <div style={{ fontFamily: BODY, fontSize: "12.5px", fontWeight: 700, color: INK }}>{p.prompt} <span style={{ color: "#8A8A8A", fontWeight: 400 }}>· {p.engine}</span></div>
+              {/* Per-prompt evidence (all real, parsed from THIS answer): were you named, how many
+                  competitors, citations, the answer's tone + shape. Turns a flat dump into proof. */}
+              <div style={{ fontFamily: BODY, fontSize: "11px", marginTop: 3, display: "flex", flexWrap: "wrap", gap: 9 }}>
+                <span style={{ color: p.brand_mentioned ? "#2E7D32" : "#B3261E", fontWeight: 600 }}>{p.brand_mentioned ? `✓ you named${p.brand_mention_count > 1 ? ` ×${p.brand_mention_count}` : ""}` : "✗ not named"}</span>
+                {p.competitor_mention_count > 0 && <span style={{ color: "#8A6A52" }}>{p.competitor_mention_count} competitor mention{p.competitor_mention_count === 1 ? "" : "s"}</span>}
+                <span style={{ color: "#6B6B6B" }}>{p.citation_count || 0} citation{(p.citation_count || 0) === 1 ? "" : "s"}</span>
+                {p.sentiment && <span style={{ color: p.sentiment === "positive" ? "#2E7D32" : p.sentiment === "negative" ? "#B3261E" : "#8A8A8A" }}>{p.sentiment === "positive" ? "▲" : p.sentiment === "negative" ? "▼" : "•"} {p.sentiment}</span>}
+                {p.answer_structure && <span style={{ color: "#9A9A9A" }}>{String(p.answer_structure).replace(/_/g, " ")}</span>}
+              </div>
               {p.answer && <div style={{ fontFamily: BODY, fontSize: "12px", color: "#5A5A5A", marginTop: 4, lineHeight: 1.5 }}>{String(p.answer).slice(0, 320)}{p.answer.length > 320 ? "…" : ""}</div>}
             </div>
           ))}</div>
