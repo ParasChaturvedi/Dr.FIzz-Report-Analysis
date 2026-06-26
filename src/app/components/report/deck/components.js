@@ -14,8 +14,8 @@ const clampPct = (v) => Math.max(0, Math.min(100, Number(v) || 0));
 export const Row = ({ cols = 3, gap, children, className = "", style }) => (
   <div className={`row r${cols} ${className}`} style={{ ...(gap ? { gap } : {}), ...style }}>{children}</div>
 );
-export const Split = ({ bias = false, children, gap }) => (
-  <div className={bias ? "split-bias" : "split"} style={gap ? { gap } : undefined}>{children}</div>
+export const Split = ({ bias = false, children, gap, className = "", style }) => (
+  <div className={`${bias ? "split-bias" : "split"} ${className}`.trim()} style={{ ...(gap ? { gap } : {}), ...style }}>{children}</div>
 );
 
 /* ---- stat tiles ---- */
@@ -203,6 +203,33 @@ export const DataTable = ({ head = [], rows = [], compact = false }) => (
     </tbody>
   </table>
 );
+
+/* ---- pillar discipline badge (matches .pillar + .p-* in deck CSS) ---- */
+export const Pillar = ({ kind = "onpage", label }) => <span className={`pillar p-${kind}`}><i />{label}</span>;
+
+/* ---- topic association grid + legend ---- */
+export const TopicGrid = ({ topics = [] }) => (
+  <div className="topicgrid">{topics.map((t, i) => (<span key={i} className="topicchip"><span className={`dot ${t.state || "none"}`} />{t.topic}</span>))}</div>
+);
+const _ldot = (bg) => ({ width: 9, height: 9, borderRadius: "50%", background: bg, display: "inline-block" });
+export const TopicLegend = () => (
+  <div className="legend" style={{ marginTop: 14 }}>
+    <div className="chip"><i style={_ldot("#3C7D5A")} />Recognised</div>
+    <div className="chip"><i style={_ldot("#C95322")} />Weak / unstable</div>
+    <div className="chip"><i style={_ldot("#CBC1B2")} />No association</div>
+  </div>
+);
+
+/* ---- so-what triad (evidence / cost / action) — data-bound only ---- */
+export const Triad = ({ children, className = "" }) => <div className={`triad ${className}`}>{children}</div>;
+export const Tc = ({ kind = "evidence", label, children }) => (
+  <div className={`tc ${kind}`}><div className="tl">{label}</div><div className="tv">{children}</div></div>
+);
+
+/* ---- illustrative/hypothesis badge + brand wall + GEO result cell ---- */
+export const Hypo = ({ children }) => <span className="hypo">{children}</span>;
+export const CLGrid = ({ names = [] }) => <div className="cl-grid">{names.map((n, i) => <div key={i} className="cl-tile">{n}</div>)}</div>;
+export const ResCell = ({ kind = "absent", children }) => <span className={`res-${kind}`}>{children}</span>;
 
 /* ---- honest "not yet measured" panel (GEO slides when live.measured is false) ---- */
 export const GapPanel = ({ title, children, engines }) => (
