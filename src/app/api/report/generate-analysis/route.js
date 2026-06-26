@@ -18,6 +18,7 @@ import { fetchPsiForStrategy } from "@/lib/seo/psi";
 import { fetchMozMetrics } from "@/lib/seo/moz/client";
 import { runBusinessLogic, deriveCompetitorBrands } from "@/lib/seo/doctor-fizz-logic";
 import { runQaGate } from "@/lib/seo/doctor-fizz-qa";
+import { locationNameForCountry } from "@/lib/seo/market";
 import { getSiteProfile } from "@/lib/claude/pipeline";
 import { fmtNum, fmtInt } from "@/lib/seo/report-format";
 import { checkExistingPage } from "@/lib/seo/report-evidence";
@@ -165,7 +166,7 @@ function buildLocalSearchFromGmb(gmbData) {
     checklist.push("Upload 10+ photos: exterior, interior, team, products, before/after");
     checklist.push("Write 750-character business description — put primary keywords in first 250 chars");
     checklist.push("Set accurate hours including special/holiday hours");
-    checklist.push("Submit NAP to JustDial, Sulekha, IndiaMART, Trustpilot for citation consistency");
+    checklist.push("Submit consistent NAP to the top local and industry directories for your market (Google Business, Trustpilot, and your sector's trade listings)");
   } else {
     if (!gmb.isVerified)     checklist.push("URGENT: Verify your GMB listing — unverified profiles rank far below verified ones");
     if (!gmb.phone)          checklist.push("Add local phone number — missing contact info reduces conversions by ~30%");
@@ -175,7 +176,7 @@ function buildLocalSearchFromGmb(gmbData) {
     const reviews = gmb.reviewCount || 0;
     if (reviews < 25)        checklist.push(`Get to 25 reviews: WhatsApp each recent customer with a direct review link (need ${25 - reviews} more)`);
     if ((gmbData.unrepliedReviewCount || 0) > 0) checklist.push(`Reply to all ${gmbData.unrepliedReviewCount} unanswered reviews within 24h — Google tracks owner response rate`);
-    if ((gmbData.listedDirectoryCount || 0) < 3)  checklist.push("Build 5+ directory citations (JustDial, Sulekha, IndiaMART, Trustpilot, Facebook) for NAP consistency");
+    if ((gmbData.listedDirectoryCount || 0) < 3)  checklist.push("Build 5+ directory citations on the directories that matter in your market (Google Business, Trustpilot, Facebook, and your industry's listings) for NAP consistency");
     checklist.push("Post 1–2 Google Business updates per week (offers, news, new services, team highlights)");
     const unansweredQA = (gmbData.qa || []).filter(q => !q.hasAnswer).length;
     if (unansweredQA > 0)    checklist.push(`Answer ${unansweredQA} unanswered Q&As — each answered question adds free long-tail content`);
@@ -904,7 +905,7 @@ export async function POST(request) {
         clientName: businessData?.businessName || businessData?.name || domain,
         industry:   businessData?.industrySector || businessData?.industry || businessData?.category || "",
         reportType,
-        location:   businessData?.location || (countryCode === "in" ? "India" : "India"),
+        location:   businessData?.location || locationNameForCountry(countryCode),
         baselineRaw: {
           ...baselineMetrics,
           crawlHealthScore:     crawlRaw?.healthScore ?? null,

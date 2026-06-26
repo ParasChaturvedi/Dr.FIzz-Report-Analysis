@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { getCached, putCached } from "@/lib/cache/mongo";
 import { logUsage } from "@/lib/cache/usage";
+import { locationNameForCountry } from "@/lib/seo/market";
 
 export const runtime    = "nodejs";
 export const maxDuration = 60;
@@ -43,11 +44,11 @@ function norm(d) {
 }
 
 // ── Fetch all keywords a domain ranks for ─────────────────────────────────────
-async function getKeywordsForDomain(domain, auth, limit = 100) {
+async function getKeywordsForDomain(domain, auth, limit = 100, location = "India") {
   try {
     const data = await dfsPost(
       "dataforseo_labs/google/ranked_keywords/live",
-      [{ target: domain, language_code: "en", location_name: "India", limit }],
+      [{ target: domain, language_code: "en", location_name: location, limit }],
       auth
     );
     const items = data?.tasks?.[0]?.result?.[0]?.items || [];
@@ -98,12 +99,12 @@ function opportunityScore(vol, diff) {
 // sources — so every recommendation is backed by the actual SERP, not just gap aggregates.
 // People-Also-Ask is derived from the SAME calls (no separate SERP spend). Cost-bounded
 // to SERP_INTEL_KEYWORDS (default 15) priority keywords.
-async function getSerpIntel(keywords, auth, limit = Number(process.env.SERP_INTEL_KEYWORDS || 15)) {
+async function getSerpIntel(keywords, auth, limit = Number(process.env.SERP_INTEL_KEYWORDS || 15), location = "India") {
   const kws = [...new Set((keywords || []).map(k => String(k || "").trim().toLowerCase()).filter(k => k.length > 2))].slice(0, Math.max(1, limit));
   if (!kws.length) return { serpIntel: {}, paaQuestions: [] };
   const results = await Promise.allSettled(
     kws.map(kw => dfsPost("serp/google/organic/live/advanced", [{
-      keyword: kw, language_code: "en", location_name: "India", depth: 10, device: "desktop",
+      keyword: kw, language_code: "en", location_name: location, depth: 10, device: "desktop",
       load_async_ai_overview: true, people_also_ask_click_depth: 1,
     }], auth))
   );
@@ -143,12 +144,12 @@ async function getSerpIntel(keywords, auth, limit = Number(process.env.SERP_INTE
 
 // ── Real Keyword Difficulty (0-100) for a batch of keywords — one cheap DataForSEO Labs
 // call (vs the ad-competition proxy we had before). Returns a keyword→KD map.
-async function getBulkKeywordDifficulty(keywords, auth) {
+async function getBulkKeywordDifficulty(keywords, auth, location = "India") {
   const kws = [...new Set((keywords || []).map(k => String(k || "").trim()).filter(Boolean))].slice(0, 1000);
   if (!kws.length) return {};
   try {
     const data = await dfsPost("dataforseo_labs/google/bulk_keyword_difficulty/live",
-      [{ keywords: kws, language_code: "en", location_name: "India" }], auth);
+      [{ keywords: kws, language_code: "en", location_name: location }], auth);
     const items = data?.tasks?.[0]?.result?.[0]?.items || [];
     const out = {};
     for (const it of items) { const k = String(it?.keyword || "").toLowerCase(); if (k) out[k] = it?.keyword_difficulty ?? null; }
@@ -204,11 +205,11 @@ async function getBacklinkGap(target, compDomains, auth, limit = 25) {
 }
 
 // ── Fetch keyword suggestions for a domain (broad) ────────────────────────────
-async function getKeywordSuggestions(domain, auth, limit = 100) {
+async function getKeywordSuggestions(domain, auth, limit = 100, location = "India") {
   try {
     const data = await dfsPost(
       "dataforseo_labs/google/keywords_for_site/live",
-      [{ target: domain, language_code: "en", location_name: "India", limit }],
+      [{ target: domain, language_code: "en", location_name: location, limit }],
       auth
     );
     const items = data?.tasks?.[0]?.result?.[0]?.items || [];
@@ -240,15 +241,16 @@ export async function POST(request) {
   const target = norm(domain);
   const compDomains = competitors.map(norm).filter(Boolean).slice(0, 4);
 
-  // 30-day persistent cache, keyed by domain + the competitor set. No-op without Mongo.
-  const cacheType = `keyword-gap:${[...compDomains].sort().join("|")}`;
+  // 30-day persistent cache, keyed by domain + MARKET + the competitor set (market is in
+  // the key so a UK fetch is never served stale India data and vice-versa). No-op without Mongo.
+  const cacheType = `keyword-gap:${locationName}:${[...compDomains].sort().join("|")}`;
   const cachedGap = await getCached({ domain: target, dataType: cacheType, ttlDays: 30 });
   if (cachedGap) { await logUsage({ domain: target, api: "keyword-gap", costUSD: 0, cached: true }); return NextResponse.json(cachedGap); }
 
   // Fetch target keywords + all competitor keywords in parallel
   const [targetKwMap, ...compKwMaps] = await Promise.all([
-    getKeywordsForDomain(target, auth, 150),
-    ...compDomains.map(c => getKeywordsForDomain(c, auth, 100)),
+    getKeywordsForDomain(target, auth, 150, locationName),
+    ...compDomains.map(c => getKeywordsForDomain(c, auth, 100, locationName)),
   ]);
 
   // When the target AND every competitor keyword map come back empty, the most likely
@@ -297,7 +299,7 @@ export async function POST(request) {
     .slice(0, 30);
 
   // Keyword suggestions for target domain (new opportunities from DFS)
-  const suggestions = await getKeywordSuggestions(target, auth, 80);
+  const suggestions = await getKeywordSuggestions(target, auth, 80, locationName);
   const newOpps = suggestions
     .filter(s => !targetKws.has(s.keyword))
     .sort((a, b) => opportunityScore(b.volume, b.difficulty) - opportunityScore(a.volume, a.difficulty))
@@ -311,10 +313,10 @@ export async function POST(request) {
     ...easyWins.map(k => k.keyword),
     ...gapKeywords.filter(k => ["transactional", "local", "commercial"].includes(k.intent)).map(k => k.keyword),
   ].filter(Boolean);
-  const { serpIntel, paaQuestions } = await getSerpIntel(priorityKws, auth);
+  const { serpIntel, paaQuestions } = await getSerpIntel(priorityKws, auth, undefined, locationName);
 
   // ── Real Keyword Difficulty (0-100) attached to the gap + new-opportunity keywords.
-  const kdMap = await getBulkKeywordDifficulty([...gapKeywords, ...newOpps].map(k => k.keyword), auth);
+  const kdMap = await getBulkKeywordDifficulty([...gapKeywords, ...newOpps].map(k => k.keyword), auth, locationName);
   for (const k of [...gapKeywords, ...newOpps]) { const kd = kdMap[String(k.keyword || "").toLowerCase()]; if (kd != null) k.kd = kd; }
 
   // ── Competitor top pages (content gap, zero extra cost) + real backlink gap (1 call).

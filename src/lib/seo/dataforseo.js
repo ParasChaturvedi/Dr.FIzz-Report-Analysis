@@ -290,8 +290,7 @@ export async function fetchDataForSeo(targetInput, options = {}) {
     includeSubtopics = true, // set false if you want fastest possible
   } = options || {};
 
-  const location_name =
-    countryCode.toLowerCase() === "in" ? "India" : "United States";
+  const location_name = locationNameForCountry(countryCode);
 
   // cache key includes important params + mode flags
   const cacheKey = JSON.stringify({

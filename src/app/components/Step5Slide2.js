@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { prefetchOpportunitiesAndContent, getPlagiarismPages } from "@/lib/prefetch-opportunities";
+import { resolveCountryCode } from "@/lib/seo/market";
 
 // ─── Module status state machine ──────────────────────────────────────────────
 const STATUS = {
@@ -465,6 +466,11 @@ export default function Step5Slide2({
     return { language, location };
   }, [languageLocationData, buildLocation]);
 
+  // Resolve the client's MARKET (ISO-2) from the onboarding location so DataForSEO /
+  // keyword-gap / GMB fetch market-correct data instead of the old hardcoded "India".
+  // Safe fallback is "in" — a confidently-detected market (e.g. UK from "Brighton") wins.
+  const marketCC = useMemo(() => resolveCountryCode({ location: langSel.location }), [langSel.location]);
+
   const keywords = useMemo(() => {
     if (!keywordData) return [];
     return (Array.isArray(keywordData) ? keywordData : [])
@@ -791,7 +797,7 @@ export default function Step5Slide2({
         const cachedRes = await fetch("/api/report/cached", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, businessData, competitorData, reportMode: _reportMode, keyword, countryCode: "in" }),
+          body: JSON.stringify({ url, businessData, competitorData, reportMode: _reportMode, keyword, countryCode: marketCC }),
           signal: AbortSignal.timeout(15000),
         });
         const cachedReport = cachedRes.ok ? await cachedRes.json() : null;
@@ -889,7 +895,7 @@ export default function Step5Slide2({
           method: "POST",
           headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
           body: JSON.stringify({
-            url, keyword, countryCode: "in", languageCode: "en", depth: 10,
+            url, keyword, countryCode: marketCC, languageCode: "en", depth: 10,
             // Providers to run. Execution/SSE order is enforced server-side in
             // /api/seo (psi → content → onpageKeywords → dataforseo) so the scan
             // journey lights up Technical(4) → On-Page(5) → Off-Page(6) in order.
@@ -1010,6 +1016,7 @@ export default function Step5Slide2({
             domain,
             competitors: allCompetitors.slice(0, 3),
             keywords,
+            countryCode: marketCC,
           }),
         });
         if (res.ok) {
@@ -1137,7 +1144,7 @@ export default function Step5Slide2({
         const res = await prefetchOpportunitiesAndContent(domain, {
           concurrency: 2,
           timeoutMs: 5 * 60 * 1000,
-          countryCode: "in",
+          countryCode: marketCC,
           languageCode: "en",
         });
         // Keep stage 9 LOADING — the strategic-plan step (next, a slow Opus call) also
@@ -1217,7 +1224,7 @@ export default function Step5Slide2({
         const _reportBody = JSON.stringify({
           url,
           keyword,
-          countryCode: "in",
+          countryCode: marketCC,
           languageCode: "en",
           businessData,
           keywordData: keywords,
