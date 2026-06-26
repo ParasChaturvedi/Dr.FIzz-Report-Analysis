@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import DownloadReportModal from "@/app/components/report/DownloadReportModal";
 
-const WebsiteReport     = dynamic(() => import("@/app/components/report/WebsiteReport"), { ssr: false });
+const WebsiteReport     = dynamic(() => import("@/app/components/report/deck/DeckReportLive"), { ssr: false });
 const PageReport        = dynamic(() => import("@/app/components/report/PageReport"),    { ssr: false });
 
 export default function ReportClient({ id }) {
