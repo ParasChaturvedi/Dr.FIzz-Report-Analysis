@@ -671,6 +671,84 @@ Return JSON with exactly these keys:
   }, { domain, api: "claude", label: "page-analysis" });
 }
 
+// ─── Deck storytelling: the reference-deck NARRATIVE voice, from real data ────
+// Produces every storytelling slot (titles, framing subs, the spine paragraphs,
+// the so-what callouts, the priority cards) in the EXACT tone / style / logic of
+// the approved premium deck — woven from REAL numbers only (no invented facts).
+// Cached per site (30 days) like the rest of the Claude analysis.
+const DECK_VOICE_SYSTEM = `You are the lead strategist + copywriter for DOCTOR FIZZ, writing the NARRATIVE for a premium SEO & GEO strategy deck. Your only job is the STORYTELLING — the voice that carries a busy business OWNER (not an SEO) through the plan. Match this voice exactly.
+
+VOICE
+- Calm, confident, declarative. Short sentences. Second person ("you", "your").
+- Owner-friendly: zero SEO jargon-dumps; explain in plain English a smart non-expert follows on the first read.
+- Specific: weave the REAL numbers from the DATA into the sentences. Never a vague claim where a number exists.
+- ONE connected spine across the deck: the leaders won by being broad at national scale — and that scale is exactly why they leave the high-intent, LOCAL, and AI-ANSWER corners undefended. The client takes that undefended ground, in order, fastest.
+- Rhetorical pivots welcome ("That sounds like a problem. It is a blank canvas."). Confident verbs: take, own, win, capture. The rhythm of each "so what": evidence → what it costs → what to do first.
+
+STYLE EXEMPLARS (the exact register — match it; adapt to THIS business's data, never copy literally):
+- story_title_a/b: "<Name> is invisible today." / "That is the opportunity."
+- story_paragraphs: "Search Google for a partner, and <Name> does not appear. Ask an AI for a recommendation, and it is not named." / "That sounds like a problem. It is a blank canvas. The firms that rank won by owning broad, generic terms at national scale. That scale is also their blind spot." / "Their template pages have no answer for a local search, and no edge inside AI answers. That undefended ground is what this plan takes."
+- story_thesis: "The thesis: the broad terms are taken. The high-intent, local, and AI-answer corners are not. <Name> can own them, and this deck is the order to do it."
+- diagnosis_cost: "What this costs you today: with <traffic> organic visits, the roughly <volume> monthly searches in your market all go to competitors. Fixing these turns the site from invisible into found, and unlocks every later move in this plan."
+- opening_move: "The move: don't fight the leaders head-on. Take the things they won't defend — the easy commercial terms, the local angle, and the specific AI answers — before they notice."
+- priorities[i]: { title: "Switch the lights on", body: "Fix the load time and the missing H1. This alone explains the zero traffic.", result: "the site becomes indexable." }
+- closing: "The whole story: <Name> starts invisible but unpenalised, in a market where the leaders are too big to defend the corners that convert. Fix the foundation, take the wins, build the trust, and the ground is yours."
+
+HARD RULES
+- REALITY ONLY. Use ONLY the facts/numbers in the DATA block. Never invent a metric, competitor, keyword, or claim. Where a number is "—" (unknown), write around it — do not guess.
+- If the business is NOT invisible (has real traffic/keywords), adapt the framing honestly (e.g. "winning the easy terms but losing the ones that convert") — never force the "invisible" story onto a site that isn't.
+- GEO/AI: describe the opportunity + how we measure it. NEVER state a share-of-voice / mention / citation NUMBER (those are measured live elsewhere).
+- Tight slots: titles ≤ 9 words; subs ≤ 28 words; each paragraph ≤ 42 words; callouts ≤ 45 words; priority body ≤ 28 words; result ≤ 10 words.
+
+Return ONLY this JSON (no markdown, no commentary):
+{
+  "cover_lede": "one sentence: a data-led plan to make <Name> visible where buyers search — across Google and the new AI answer engines",
+  "story_title_a": "", "story_title_b": "",
+  "story_paragraphs": ["", "", ""],
+  "story_thesis": "",
+  "outcome_sub": "",
+  "outcome_cards": [{"title":"Search visibility","body":""},{"title":"Local dominance","body":""},{"title":"AI presence","body":""}],
+  "audit_sub": "",
+  "diagnosis_sub": "", "diagnosis_cost": "",
+  "technical_sub": "",
+  "opening_title": "", "opening_sub": "", "opening_move": "",
+  "keywords_title": "", "keywords_sub": "",
+  "gap_sub": "",
+  "build_sub": "",
+  "contentmap_sub": "",
+  "gbp_sub": "", "gbp_goal": "",
+  "backlinks_sub": "",
+  "actions_sub": "",
+  "plan_sub": "",
+  "prove_sub": "",
+  "geo_intro": "",
+  "honest_title": "", "honest_sub": "",
+  "priorities": [{"title":"","body":"","result":""},{"title":"","body":"","result":""},{"title":"","body":"","result":""}],
+  "closing": ""
+}`;
+
+async function generateDeckNarrative({ name, domain, industry, location, bm = {}, story = {}, competitors = [], opp = {}, topIssues = [], topCommercial = null, geoMeasured = false }) {
+  const n = (v) => (v == null || v === "" || Number.isNaN(Number(v)) ? null : v);
+  const fmtK = (v) => (v == null ? "—" : (Math.abs(v) >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + "K" : String(Math.round(v))));
+  const spine = [story.the_situation, story.whats_blocking_growth, story.the_opportunity, story.what_good_looks_like]
+    .filter(Boolean).map((a) => "- " + (Array.isArray(a) ? a.join(" ") : a)).join("\n");
+  const DATA = `DATA — weave ONLY these facts (in the deck voice):
+BUSINESS: ${name} (${domain})${industry ? ` — ${industry}` : ""}${location ? ` · market: ${location}` : ""}
+MEASURED METRICS ("—" = unknown, write around it):
+- Organic visits/month: ${n(bm.traffic) ?? "—"} | Ranking keywords: ${n(bm.keywords) ?? "—"}
+- Domain Rating: ${n(bm.dr) ?? "—"} | Referring domains: ${n(bm.rd) ?? "—"}
+- Load (LCP): ${bm.lcp != null ? (bm.lcp / 1000).toFixed(1) + "s" : "—"} | Mobile speed: ${n(bm.mob) ?? "—"}/100 | Site health: ${n(bm.health) ?? "—"}/100
+- Google rating: ${bm.rating ? bm.rating + "★" : "—"} (${n(bm.reviews) ?? 0} reviews) | GBP completeness: ${n(bm.gbp) ?? "—"}/100
+OPPORTUNITY: ~${fmtK(opp.totalVol)} monthly searches in play · ${opp.commCount ?? "—"} commercial terms mapped · est. uplift ~${fmtK(opp.up6)} (6mo) / ~${fmtK(opp.up12)} (12mo)
+TOP COMMERCIAL KEYWORD: ${topCommercial ? `"${topCommercial.kw}" (${fmtK(topCommercial.vol)}/mo${topCommercial.kd != null ? `, difficulty ${topCommercial.kd}` : ""})` : "—"}
+TOP TECHNICAL ISSUES: ${(topIssues || []).map((t) => t.issue || t).slice(0, 3).join(" · ") || "—"}
+COMPETITORS: ${(competitors || []).slice(0, 4).map((c) => (c.name || c.domain) + (c.strength ? ` (${c.strength})` : "")).join(", ") || "—"}
+GEO/AI STATE: ${geoMeasured ? "live scan complete (numbers shown elsewhere)" : "AI-visibility scan pending — describe the opportunity + method only, NO share-of-voice/mention/citation number"}
+GROUNDING (the data spine — paraphrase in the deck voice, keep the facts):
+${spine || "- (none captured; build from the metrics above)"}`;
+  return generateWithAI(DECK_VOICE_SYSTEM, DATA, {}, { domain, api: "claude", label: "deck-narrative" });
+}
+
 // ─── Main POST handler ─────────────────────────────────────────────────────────
 
 export async function POST(request) {
@@ -1069,12 +1147,46 @@ export async function POST(request) {
       });
     }
 
+    // ── Deck storytelling (the reference-deck voice, from the real data above) ──
+    let deckStory = null;
+    if (reportType === "website") {
+      try {
+        const bmv = (k1, k2) => { const o = baselineMetrics?.[k1]; const v = o && typeof o === "object" ? o.value : o; return v != null ? v : (baselineMetrics?.[k2] ?? null); };
+        const sp = structuredPayload || {};
+        const oppS = sp.v2_additions?.opportunity_summary || {};
+        const cp = (sp.content_architecture?.commercial_pages || aiSections.contentArchitecture?.commercial_pages || [])[0] || null;
+        const comps = [...(aiSections.competitorLandscape?.localCompetitors || []), ...(aiSections.competitorLandscape?.nationalPlatforms || [])];
+        deckStory = await generateDeckNarrative({
+          name: businessData?.businessName || businessData?.name || domain,
+          domain,
+          industry: businessData?.industrySector || businessData?.industry || businessData?.category || "",
+          location: businessData?.location || locationNameForCountry(countryCode),
+          bm: {
+            traffic: bmv("organic_traffic", "organicTraffic"), keywords: bmv("organic_keywords", "organicKeywords"),
+            dr: bmv("domain_rating", "domainRating"), rd: bmv("referring_domains", "referringDomains"),
+            lcp: bmv("lcp", "lcp"), mob: bmv("mobile_performance_score", "performanceMobile"),
+            health: crawlRaw?.healthScore ?? bmv("site_health_score", "crawlHealthScore"),
+            rating: gmbRaw?.gmb?.rating ?? bmv("gbp_rating"), reviews: gmbRaw?.gmb?.reviewCount ?? bmv("gbp_review_count"),
+            gbp: gmbRaw?.completeness?.score ?? bmv("gbp_completeness", "gmbCompletenessScore"),
+          },
+          story: sp.story || {},
+          competitors: comps,
+          opp: { totalVol: oppS.total_monthly_search_volume, commCount: oppS.commercial_keyword_count, up6: oppS.estimated_traffic_uplift_6m, up12: oppS.estimated_traffic_uplift_12m },
+          topIssues: Array.isArray(aiSections.technicalPriorities) ? aiSections.technicalPriorities : [],
+          topCommercial: cp ? { kw: cp.keyword_cluster || cp.page_name, vol: cp.primary_volume, kd: cp.difficulty } : null,
+          geoMeasured: false,
+        });
+        if (deckStory && Object.keys(deckStory).length) console.log(`[generate-analysis] deck narrative: ${Object.keys(deckStory).length} storytelling slots generated`);
+      } catch (e) { console.error("[generate-analysis] deck narrative failed:", e?.message); }
+    }
+
     // ── Assemble final report data ────────────────────────────────────────────
     const reportData = {
       domain,
       url: safeUrl,
       reportType,
       generatedAt: new Date().toISOString(),
+      deckStory,
       baselineMetrics: {
         ...baselineMetrics,
         // Add crawl health and GMB scores to baseline for display

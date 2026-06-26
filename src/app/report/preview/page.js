@@ -6,6 +6,35 @@
 import DeckReport from "@/app/components/report/deck/DeckReport";
 
 const FIX = {
+  deckStory: {
+    cover_lede: "A data-led plan to make Acenteus visible where buyers search — across Google and the new AI answer engines.",
+    story_title_a: "Acenteus is invisible today.", story_title_b: "That is the opportunity.",
+    story_paragraphs: [
+      "Search Google for an outsourcing partner, and Acenteus does not appear. Ask an AI for a recommendation, and it is not named.",
+      "That sounds like a problem. It is a blank canvas. The firms that rank won by owning broad, generic terms at national scale — and that scale is their blind spot.",
+      "Their template pages have no answer for a local search, and no edge inside AI answers. That undefended ground is what this plan takes.",
+    ],
+    story_thesis: "The thesis: the broad terms are taken. The high-intent, local, and AI-answer corners are not. Acenteus can own them, and this deck is the order to do it.",
+    outcome_sub: "Rounded estimates, modelled from the keyword opportunity and competitor benchmarks. They assume the plan is implemented.",
+    audit_sub: "A complete audit covers five disciplines. Here is where Acenteus stands on each today, and which gets fixed first.",
+    diagnosis_sub: "The site is not underperforming. It is not yet in the game. Each fix below has a clear, measurable payoff.",
+    diagnosis_cost: "What this costs you today: with 0 organic visits, the roughly 4,000 monthly searches in your market all go to competitors. Fixing these turns the site from invisible into found.",
+    opening_title: "The leaders are absent where it is winnable",
+    opening_sub: "Each rival is strong on crowded, generic terms, and exposed on the high-value corners they never built for.",
+    opening_move: "The move: don't fight the leaders head-on. Take the easy tax terms, the local angle, and the specific AI answers, before they notice.",
+    keywords_title: "Three kinds of searcher. One of them buys.",
+    keywords_sub: "We chase the commercial tier first. That is the one that turns a ranking into a client.",
+    build_sub: "Only pages with real, measured demand. Three commercial, one local. Each has a job and a target.",
+    gbp_sub: "The map pack drives most local enquiries. Your reviews already lead; the profile just needs completing.",
+    prove_sub: "Current is measured today. Targets are rounded estimates that assume the plan is implemented.",
+    honest_title: "If you do nothing else, do these three", honest_sub: "In this order. Each one is the highest-leverage move at its stage.",
+    priorities: [
+      { title: "Switch the lights on", body: "Fix the load time and the missing H1. This alone explains the zero traffic.", result: "the site becomes indexable." },
+      { title: "Grab the free win", body: "One page for 'outsourcing tax'. 2.9K/mo, zero difficulty, owned only by QX.", result: "ranking in 4 to 6 weeks." },
+      { title: "Own what rivals ignore", body: "Brighton and the AI answers. Local pages plus answer-first FAQ content.", result: "into the map pack by day 90." },
+    ],
+    closing: "The whole story: Acenteus starts invisible but unpenalised, in a market where the leaders are too big to defend the corners that convert. Fix the foundation, take the wins, build the trust, and the ground is yours.",
+  },
   domain: "acenteus-cca.com",
   generatedAt: "2026-06-25T10:00:00Z",
   businessData: { name: "Acenteus Accounting", city: "Brighton" },

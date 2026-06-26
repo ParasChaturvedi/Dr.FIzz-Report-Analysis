@@ -33,6 +33,8 @@ const prettyName = (d, domain) => d?.businessData?.name || titleCase(String(doma
 const lcpSeconds = (ms) => (ms == null ? null : `${(Number(ms) / 1000).toFixed(1)}s`);
 const lc = (s) => String(s || "").toLowerCase();
 const verdict = (good, warn) => (good ? { v: "Strong", t: "good" } : warn ? { v: "Needs work", t: "warn" } : { v: "Critical", t: "bad" });
+// Render a deck-voice callout, bolding a leading "Label:" lead-in (e.g. "The move:") like the reference.
+const leadBold = (s) => { const t = String(s || ""); const m = t.match(/^([^:]{2,40}:)\s*([\s\S]*)$/); return m ? <><b>{m[1]}</b> {m[2]}</> : t; };
 const refOf = (name) => `DF-${String(name || "CLIENT").replace(/[^A-Za-z0-9]/g, "").slice(0, 5).toUpperCase()}-SEOGEO-01`;
 // work-type colour for plan dots
 const workColor = (s) => { const k = lc(s); if (/load|speed|h1|meta|schema|title|alt|crawl|redirect|link\b/.test(k)) return "#3C7D5A"; if (/publish|content|blog|page|faq/.test(k)) return C.rust; if (/form|lead|cta|calculator/.test(k)) return "#3B6FB2"; if (/citation|directory|backlink|press|gbp|review/.test(k)) return "#1A8A8A"; return C.rust; };
@@ -57,6 +59,7 @@ export default function DeckReport({ data, live }) {
   const df = d.doctorFizz || {};
   const bm = d.baselineMetrics || {};
   const story = df.story || {};
+  const ds = d.deckStory || {}; // Claude-written narrative in the reference-deck voice (real data)
   const v2 = df.v2_additions || {};
   const cl = d.competitorLandscape || {};
   const ca = d.contentArchitecture || {};
@@ -99,7 +102,7 @@ export default function DeckReport({ data, live }) {
   slides.push(
     <Cover key="cover" eyebrow="SEO & GEO Growth Strategy"
       title={name.includes(" ") ? <>{name.split(" ")[0]}<br />{name.split(" ").slice(1).join(" ")}</> : name}
-      lede={`A data-led plan to make ${name} visible where buyers search. Across Google, and across the new AI answer engines.`}
+      lede={ds.cover_lede || `A data-led plan to make ${name} visible where buyers search. Across Google, and across the new AI answer engines.`}
       meta={[
         { k: "PREPARED FOR", v: domain }, { k: "DATE", v: dateGB(d.generatedAt) },
         { k: "PREPARED BY", v: "DOCTOR FIZZ" }, { k: "REF", v: refOf(name) },
@@ -142,13 +145,16 @@ export default function DeckReport({ data, live }) {
   const invisible = !traffic0 || Number(traffic0) < 50;
   slides.push(
     <Slide key="story" variant="cream" n="01" kicker="The Story"
-      title={<>{name} is {invisible ? "invisible" : "underperforming"} today.<br /><span className="hl">That is the opportunity.</span></>}
+      title={ds.story_title_a
+        ? <>{ds.story_title_a}<br /><span className="hl">{ds.story_title_b}</span></>
+        : <>{name} is {invisible ? "invisible" : "underperforming"} today.<br /><span className="hl">That is the opportunity.</span></>}
       foot={foot("THE STORY")}>
       <Split bias>
         <div className="body-copy">
-          {(paras(story.the_situation, 1).concat(paras(story.whats_blocking_growth, 1), paras(story.the_opportunity, 1)))
-            .filter(Boolean).slice(0, 3).map((p, i) => <p key={i}>{clamp(p, 300)}</p>)}
-          {!story.the_situation && <p>Search Google for a provider and {name} barely appears; ask an AI for a recommendation and it is rarely named. The firms that rank won by owning broad, generic terms — <span className="hl">that scale is also their blind spot.</span></p>}
+          {(Array.isArray(ds.story_paragraphs) && ds.story_paragraphs.filter(Boolean).length
+            ? ds.story_paragraphs.filter(Boolean).slice(0, 3)
+            : paras(story.the_situation, 1).concat(paras(story.whats_blocking_growth, 1), paras(story.the_opportunity, 1)).filter(Boolean).slice(0, 3)
+          ).map((p, i) => <p key={i}>{clamp(p, 320)}</p>)}
         </div>
         <Tiles cols={2}>
           <Tile flag n={fmtNum(traffic0 ?? 0)} label="Organic visits / month" />
@@ -157,14 +163,14 @@ export default function DeckReport({ data, live }) {
           <Tile n={rating ? `${rating}★` : "—"} label="Rating, beats most rivals" />
         </Tiles>
       </Split>
-      <Callout className="mt2"><b>The thesis:</b> the broad terms are taken. The high-intent, local, and AI-answer corners are not. {name} can own them, and this deck is the order to do it.</Callout>
+      <Callout className="mt2">{ds.story_thesis ? leadBold(ds.story_thesis) : <><b>The thesis:</b> the broad terms are taken. The high-intent, local, and AI-answer corners are not. {name} can own them, and this deck is the order to do it.</>}</Callout>
     </Slide>
   );
 
   /* 4 · THE OUTCOME */
   slides.push(
     <Slide key="outcome" n="02" kicker="The Outcome" title="Where this plan takes you"
-      sub="Rounded estimates, modelled from the keyword opportunity and competitor benchmarks. They assume the plan is implemented."
+      sub={ds.outcome_sub || "Rounded estimates, modelled from the keyword opportunity and competitor benchmarks. They assume the plan is implemented."}
       foot={foot("THE OUTCOME")}>
       <Journey stages={[
         { when: "Today", big: fmtNum(proj.t0), cap: `visits / mo${proj.dr0 != null ? ` · DR ${proj.dr0}` : ""}`, now: true },
@@ -190,7 +196,7 @@ export default function DeckReport({ data, live }) {
   ];
   slides.push(
     <Slide key="map" variant="cream" n="03" kicker="The Audit Map" title="Five pillars. One verdict on each."
-      sub={`A complete audit covers five disciplines. Here is where ${name} stands on each today, and which gets fixed first. Every later slide proves these findings with data.`} foot={foot("THE AUDIT MAP")}>
+      sub={ds.audit_sub || `A complete audit covers five disciplines. Here is where ${name} stands on each today, and which gets fixed first. Every later slide proves these findings with data.`} foot={foot("THE AUDIT MAP")}>
       <Row cols={3} style={{ gap: 18 }}>
         {pillars.map((p, i) => (
           <Card key={i} accent>
@@ -210,7 +216,7 @@ export default function DeckReport({ data, live }) {
   const topFix = tp.slice(0, 3);
   slides.push(
     <Slide key="diagnosis" n="04" kicker="The Diagnosis" title="Three fixable things keep you out"
-      sub="The site is not underperforming — it is not yet in the game. Each fix has a clear, measurable payoff." foot={foot("THE DIAGNOSIS")}>
+      sub={ds.diagnosis_sub || "The site is not underperforming — it is not yet in the game. Each fix has a clear, measurable payoff."} foot={foot("THE DIAGNOSIS")}>
       <Split bias>
         <div>
           {(topFix.length ? topFix : [{ issue: "Technical foundation", why_it_matters: "Crawl and speed issues keep the site hard to index.", expected_unlock: "Indexable", estimated_effort: "" }]).map((f, i) => (
@@ -226,7 +232,7 @@ export default function DeckReport({ data, live }) {
           ]} />
         </Card>
       </Split>
-      <Callout className="mt2"><b>What this costs you today:</b> with {fmtNum(traffic0 ?? 0)} organic visits, the {opp.total_monthly_search_volume ? `roughly ${fmtNum(opp.total_monthly_search_volume)}` : ""} monthly searches in your market go to competitors. Fixing these three things is what turns the site from invisible into found, and unlocks every later move in this plan.</Callout>
+      <Callout className="mt2">{ds.diagnosis_cost ? leadBold(ds.diagnosis_cost) : <><b>What this costs you today:</b> with {fmtNum(traffic0 ?? 0)} organic visits, the {opp.total_monthly_search_volume ? `roughly ${fmtNum(opp.total_monthly_search_volume)}` : ""} monthly searches in your market go to competitors. Fixing these three things is what turns the site from invisible into found, and unlocks every later move in this plan.</>}</Callout>
     </Slide>
   );
 
@@ -239,7 +245,7 @@ export default function DeckReport({ data, live }) {
   ];
   slides.push(
     <Slide key="technical" variant="cream" n="05" kicker="Technical SEO" title="Fix the foundation before building on it"
-      sub={<>Search engines judge these signals before they read a word of content. Each one below has a fix and a clear target. <Pillar kind="tech" label="Technical SEO" /></>} foot={foot("TECHNICAL SEO")}>
+      sub={<>{ds.technical_sub || "Search engines judge these signals before they read a word of content. Each one below has a fix and a clear target."} <Pillar kind="tech" label="Technical SEO" /></>} foot={foot("TECHNICAL SEO")}>
       <Split bias>
         <DataTable head={[{ label: "Issue found" }, { label: "Count", align: "right" }, { label: "Priority", align: "right" }]}
           rows={tp.slice(0, 8).map((t) => ({ cells: [t.issue, { v: dash(t.affected_count), num: true, align: "right" }, { align: "right", tag: { kind: /high|crit/i.test(t.priority) ? "high" : /med/i.test(t.priority) ? "med" : "low", label: t.priority } }] }))} />
@@ -260,20 +266,20 @@ export default function DeckReport({ data, live }) {
   /* 8 · THE OPENING (competitors) — 4 rows + door-they-leave-open column */
   const comps = [...(cl.localCompetitors || []), ...(cl.nationalPlatforms || [])];
   slides.push(
-    <Slide key="opening" variant="cream" n="06" kicker="The Opening" title="The leaders are absent where it is winnable"
-      sub="Each rival is strong on crowded, generic terms — and exposed on the high-value corners they never built for." foot={foot("THE OPENING")}>
+    <Slide key="opening" variant="cream" n="06" kicker="The Opening" title={ds.opening_title || "The leaders are absent where it is winnable"}
+      sub={ds.opening_sub || "Each rival is strong on crowded, generic terms — and exposed on the high-value corners they never built for."} foot={foot("THE OPENING")}>
       {comps.length > 0 ? (
         <DataTable head={[{ label: "Competitor" }, { label: "What they own" }, { label: "The door they leave open" }, { label: "Threat", align: "right" }]}
           rows={comps.slice(0, 4).map((c) => ({ cells: [c.name || c.domain, clamp(c.description, 90), c.door_open || c.opening || "—", { align: "right", tag: { kind: /high|alert/i.test(c.strength || c.threat || "") ? "high" : "med", label: (c.strength || (c.threat ? "High" : "Med")).toString().replace("THREAT ALERT", "High") } }] }))} />
       ) : <GapPanel title="Competitor set pending">Competitor landscape populates once the competitor analysis completes.</GapPanel>}
-      {cl.localOpening && <Callout className="mt2"><b>The move:</b> {clamp(cl.localOpening, 220)}</Callout>}
+      {(ds.opening_move || cl.localOpening) && <Callout className="mt2">{ds.opening_move ? leadBold(ds.opening_move) : <><b>The move:</b> {clamp(cl.localOpening, 220)}</>}</Callout>}
     </Slide>
   );
 
   /* 9 · THE GAP IN NUMBERS */
   slides.push(
     <Slide key="gap" variant="cream" n="07" kicker="The Gap In Numbers" title="How far ahead the competition really is"
-      sub="Your real baseline against the market. Competitor metrics populate as the benchmark module runs." foot={foot("COMPETITOR BENCHMARK")}>
+      sub={ds.gap_sub || "Your real baseline against the market. Competitor metrics populate as the benchmark module runs."} foot={foot("COMPETITOR BENCHMARK")}>
       <DataTable compact head={[{ label: "" }, { label: "Domain Rating", align: "right" }, { label: "Traffic / mo", align: "right" }, { label: "Keywords", align: "right" }, { label: "Ref. domains", align: "right" }]}
         rows={[
           { you: true, cells: [`${name} (you)`, { v: dash(dr), num: true, align: "right" }, { v: fmtNum(traffic0), num: true, align: "right" }, { v: dash(mv(bm, "organic_keywords", "organicKeywords")), num: true, align: "right" }, { v: dash(rd), num: true, align: "right" }] },
@@ -294,8 +300,8 @@ export default function DeckReport({ data, live }) {
     </Card>
   );
   slides.push(
-    <Slide key="keywords" n="08" kicker="Keyword Strategy" title="Three kinds of searcher. One of them buys."
-      sub={<>We chase the commercial tier first — the one that turns a ranking into a client. <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("KEYWORD STRATEGY")}>
+    <Slide key="keywords" n="08" kicker="Keyword Strategy" title={ds.keywords_title || "Three kinds of searcher. One of them buys."}
+      sub={<>{ds.keywords_sub || "We chase the commercial tier first — the one that turns a ranking into a client."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("KEYWORD STRATEGY")}>
       <Row cols={3} style={{ gap: 18 }}>
         {tierCard("Tier 1 · Ready to buy", "Commercial intent · a page each", ca.commercial_pages)}
         {tierCard("Tier 2 · Local", "Place-based intent", ca.geography_pages || ca.city_pages)}
@@ -313,7 +319,7 @@ export default function DeckReport({ data, live }) {
   /* 11 · GEO & AI VISIBILITY (verdict) */
   slides.push(
     <Slide key="geo-verdict" variant="dark" n="09" kicker="GEO & AI Visibility" title="Are you visible when buyers ask AI?"
-      sub="A growing share of buyers ask AI for a recommendation, then act on the names returned." foot={foot("GEO · AI VISIBILITY")}>
+      sub={ds.geo_intro || "A growing share of buyers ask AI for a recommendation, then act on the names returned."} foot={foot("GEO · AI VISIBILITY")}>
       {measured ? (
         <>
           <Verdict num={pctStr(live.overall?.sov)}>
@@ -467,7 +473,7 @@ export default function DeckReport({ data, live }) {
   const shipWith = ["Exact-intent H1 and meta", "800 to 1,500 unique words", "5 to 8 FAQs plus schema", "Strong CTA above the fold", "Internal links and alt text", "Sub-2.5s load time"];
   slides.push(
     <Slide key="build" variant="cream" n="15" kicker="What To Build" title="Four pages do most of the work"
-      sub={<>Only pages with real, measured demand. Three commercial, one local. Each has a job and a target. <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("WHAT TO BUILD")}>
+      sub={<>{ds.build_sub || "Only pages with real, measured demand. Three commercial, one local. Each has a job and a target."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("WHAT TO BUILD")}>
       <Row cols={buildCards.length >= 4 ? 4 : 3} style={{ gap: 16 }}>
         {buildCards.map((p, i) => (
           <Card key={i} accent title={p.page_name || titleCase(p.keyword_cluster)}>
@@ -490,7 +496,7 @@ export default function DeckReport({ data, live }) {
   const PbHead = ({ count, label }) => (<div className="pbhead"><span className="ct2">{count}</span><span className="cl2">{label}</span></div>);
   slides.push(
     <Slide key="contentmap" variant="cream" n="16" kicker="The Content Map" title="What to optimise, and what to create"
-      sub={<>We audited every existing page and post. Some are rank-ready and need polish; the rest are gaps to fill. <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("THE CONTENT MAP")}>
+      sub={<>{ds.contentmap_sub || "We audited every existing page and post. Some are rank-ready and need polish; the rest are gaps to fill."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("THE CONTENT MAP")}>
       <Split>
         <div>
           <Card soft><PbHead count={ca.pagesExistingFlagged ?? 0} label="pages you have · optimise" />
@@ -513,7 +519,7 @@ export default function DeckReport({ data, live }) {
   const maxRev = Math.max(reviews || 0, ...reviewCompetitors.map((c) => c.review_count || 0), 1);
   slides.push(
     <Slide key="gbp" n="17" kicker="Google Business Profile" title="Your fastest path into local results"
-      sub={<>The map pack drives most local enquiries. Your reviews already lead; the profile needs completing. <Pillar kind="local" label="Local SEO" /></>} foot={foot("GOOGLE BUSINESS PROFILE")}>
+      sub={<>{ds.gbp_sub || "The map pack drives most local enquiries. Your reviews already lead; the profile needs completing."} <Pillar kind="local" label="Local SEO" /></>} foot={foot("GOOGLE BUSINESS PROFILE")}>
       <div className="gbp-split">
         <Ring value={gbpScore ?? 0} />
         <div className="gbp-checks">
@@ -541,7 +547,7 @@ export default function DeckReport({ data, live }) {
   const citeDirs = dirs.length ? dirs : (lb.citation_links || []).slice(0, 12).map((x) => ({ name: x.platform, state: x.client_listed ? "have" : "miss" }));
   slides.push(
     <Slide key="backlinks" variant="cream" n="18" kicker="Citations & Backlinks" title={`Raising Domain Rating from ${dash(dr)} toward ${proj.dr12 ?? 25}`}
-      sub={<>Trust is built in three waves: citations for consistency, then earned links, then closing the leader&apos;s gap. <Pillar kind="offpage" label="Off-Page SEO" /></>} foot={foot("CITATIONS & BACKLINKS")}>
+      sub={<>{ds.backlinks_sub || "Trust is built in three waves: citations for consistency, then earned links, then closing the leader's gap."} <Pillar kind="offpage" label="Off-Page SEO" /></>} foot={foot("CITATIONS & BACKLINKS")}>
       <Split>
         <div>
           <h3 className="mini">Directories to claim or fix</h3>
@@ -561,7 +567,7 @@ export default function DeckReport({ data, live }) {
   const actionRows = (rm.flatMap((p) => (p.actions || []).map((a) => ({ ...a, phase: p.timeframe })))).slice(0, 6);
   slides.push(
     <Slide key="actions" variant="cream" n="19" kicker="The Action Board" title="Every move, sorted by the work it takes"
-      sub="Each recommendation is tagged by type, so it lands on the right desk." foot={foot("THE ACTION BOARD")}>
+      sub={ds.actions_sub || "Each recommendation is tagged by type, so it lands on the right desk."} foot={foot("THE ACTION BOARD")}>
       <Legend items={[
         { color: "#C95322", label: "Content" }, { color: "#3C7D5A", label: "On-Page" }, { color: "#3B6FB2", label: "Lead-Gen" },
         { color: "#8A4FB2", label: "Listicle" }, { color: "#A07414", label: "PR & Authority" }, { color: "#1A8A8A", label: "Citations" },
@@ -596,7 +602,7 @@ export default function DeckReport({ data, live }) {
   const seoBoard = [["Domain Rating", kpiRow("domain_rating")], ["Organic traffic / mo", kpiRow("organic_traffic")], ["Keywords ranking", kpiRow("organic_keywords")], ["Referring domains", kpiRow("referring_domains")]];
   slides.push(
     <Slide key="prove" variant="cream" n="21" kicker="Measuring Success" title="Two scoreboards, reported every month"
-      sub="Current is measured today. Targets are estimates that assume the plan is implemented." foot={foot("MEASURING SUCCESS")}>
+      sub={ds.prove_sub || "Current is measured today. Targets are estimates that assume the plan is implemented."} foot={foot("MEASURING SUCCESS")}>
       <Split>
         <div className="metric-col">
           <h3 className="mini">Search (SEO)</h3>
@@ -616,10 +622,12 @@ export default function DeckReport({ data, live }) {
   );
 
   /* 24 · The honest assessment — Result line per card */
-  const priorities = (sp.length ? sp.slice(0, 3) : tp.slice(0, 3).map((t) => ({ title: t.issue, description: t.why_it_matters || t.recommended_action, expected_result: t.expected_unlock })));
+  const priorities = (Array.isArray(ds.priorities) && ds.priorities.filter((p) => p && p.title).length
+    ? ds.priorities.filter((p) => p && p.title).slice(0, 3).map((p) => ({ title: p.title, description: p.body, expected_result: p.result }))
+    : (sp.length ? sp.slice(0, 3) : tp.slice(0, 3).map((t) => ({ title: t.issue, description: t.why_it_matters || t.recommended_action, expected_result: t.expected_unlock }))));
   slides.push(
-    <Slide key="honest" variant="dark" n="22" kicker="The Honest Assessment" title="If you do nothing else, do these three"
-      sub="In this order. Each is the highest-leverage move at its stage." foot={foot("THE HONEST ASSESSMENT")}>
+    <Slide key="honest" variant="dark" n="22" kicker="The Honest Assessment" title={ds.honest_title || "If you do nothing else, do these three"}
+      sub={ds.honest_sub || "In this order. Each is the highest-leverage move at its stage."} foot={foot("THE HONEST ASSESSMENT")}>
       <Row cols={3} style={{ gap: 18 }}>
         {priorities.map((p, i) => (
           <Card key={i} dark accent title={<><span style={{ color: C.rust, fontFamily: "var(--display)", fontWeight: 700, marginRight: 8 }}>{String(i + 1).padStart(2, "0")}</span>{p.title}</>}>
@@ -628,8 +636,8 @@ export default function DeckReport({ data, live }) {
           </Card>
         ))}
       </Row>
-      {(para(story.what_good_looks_like) || para(story.key_takeaway)) && (
-        <Callout className="mt2"><b>The whole story:</b> {clamp(para(story.what_good_looks_like) || para(story.key_takeaway), 220)}</Callout>
+      {(ds.closing || para(story.what_good_looks_like) || para(story.key_takeaway)) && (
+        <Callout className="mt2">{ds.closing ? leadBold(ds.closing) : <><b>The whole story:</b> {clamp(para(story.what_good_looks_like) || para(story.key_takeaway), 220)}</>}</Callout>
       )}
     </Slide>
   );
