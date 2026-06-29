@@ -16,6 +16,7 @@ import {
   Pillar, TopicGrid, TopicLegend, Triad, Tc, Hypo, CLGrid, ResCell,
 } from "./components";
 import { DeckStyle, C, accentFor, fmtNum, pctStr, dateGB, dash, clamp } from "./tokens";
+import { buildIllustrativeGeo, buildIllustrativeBenchmark } from "./illustrative";
 
 // DoctorFizz partner brands (static clientele wall, matches the reference deck).
 const CLIENT_BRANDS = ["ACENTEUS", "AXXONET", "VINE PROJECTS", "LOYORA", "DexWin", "AVIA", "WATERSTONE", "tipplr", "CONTENT WHALE", "SHIVA MANVI", "VASAL IMPEX", "SCRIBBLE NATION"];
@@ -75,14 +76,27 @@ export default function DeckReport({ data, live }) {
   const domain = d.domain || "yourdomain.com";
   const name = prettyName(d, domain);
   const measured = !!(live && live.measured);
-  const enginesStatus = (live && live.engines_status) || [];
-  const enginePanel = enginesStatus.map((e) => ({ name: e.name || e.engine, ready: e.status === "ready" }));
   const opp = v2.opportunity_summary || {};
   const proj = projectOutcome(bm, v2);
 
-  // real GEO leader (top non-client brand), for mention/citation descriptors
-  const sov = (live && live.share_of_voice) || [];
+  // Competitor set (drives the benchmark + competitor-relative GEO).
+  const comps = [...(cl.localCompetitors || []), ...(cl.nationalPlatforms || [])];
+
+  // GEO: REAL when a scan finished, else LABELED-ILLUSTRATIVE (same shape, tagged in UI).
+  const ILLUS = buildIllustrativeGeo({ name, competitors: comps });
+  const geo = measured ? live : ILLUS;          // unified source for every GEO slide
+  const isIllus = !measured;                     // → show the "Illustrative" tag
+  const IllusTag = isIllus ? <Hypo>Illustrative</Hypo> : null;
+  const enginesStatus = (geo && geo.engines_status) || [];
+  const enginePanel = enginesStatus.map((e) => ({ name: e.name || e.engine, ready: e.status === "ready" }));
+
+  // GEO leader (top non-client brand), for mention/citation descriptors + verdict.
+  const sov = (geo && geo.share_of_voice) || [];
   const leader = [...sov].filter((b) => !b.is_client).sort((a, b) => (b.avg || 0) - (a.avg || 0))[0] || null;
+
+  // Competitor benchmark rows: real per-competitor metrics if present, else illustrative.
+  const benchRows = comps.some((c) => c && (c.dr != null || c.traffic != null)) ? comps : buildIllustrativeBenchmark(comps);
+  const benchIllus = !comps.some((c) => c && (c.dr != null || c.traffic != null));
 
   let _pg = 1;
   const pg = () => String(++_pg).padStart(2, "0");
@@ -158,7 +172,7 @@ export default function DeckReport({ data, live }) {
         </div>
         <Tiles cols={2}>
           <Tile flag n={fmtNum(traffic0 ?? 0)} label="Organic visits / month" />
-          <Tile flag n={measured ? fmtNum(live.mentions_summary?.prompts_with_brand ?? 0) : "—"} label={measured ? "AI answers naming you" : "AI answers, pending scan"} />
+          <Tile flag n={measured ? fmtNum(live.mentions_summary?.prompts_with_brand ?? 0) : pctStr(geo.overall?.mention_rate)} label="AI answers name you" />
           <Tile n={opp.total_monthly_search_volume ? fmtNum(opp.total_monthly_search_volume) : "—"} label="Searches up for grabs" />
           <Tile n={rating ? `${rating}★` : "—"} label="Rating, beats most rivals" />
         </Tiles>
@@ -181,7 +195,7 @@ export default function DeckReport({ data, live }) {
       <Row cols={3} className="mt2">
         <Card accent title="Search visibility"><p className="small">From 0 keywords to a base of <strong style={{ color: C.rust }}>{opp.commercial_keyword_count ? `${opp.commercial_keyword_count}+ commercial terms` : "commercial terms"}</strong>, led by low-difficulty wins.</p></Card>
         <Card accent title="Local dominance"><p className="small">Into the <strong style={{ color: C.rust }}>local map pack</strong>, on a {rating ? `${rating}★` : "strong"} rating rivals can&apos;t match.</p></Card>
-        <Card accent title="AI presence"><p className="small">{measured ? <>From a <strong style={{ color: C.rust }}>GEO score of {live.overall?.geo_score}</strong>, lifting share of voice, mentions and citations across the AI engines.</> : <>Build readiness to be quoted across the AI engines, <strong style={{ color: C.rust }}>baseline measured once the scan completes.</strong></>}</p></Card>
+        <Card accent title="AI presence"><p className="small">From a <strong style={{ color: C.rust }}>GEO score of {geo.overall?.geo_score} to 45+</strong>{isIllus ? " (illustrative)" : ""}, lifting share of voice, mentions and citations across the AI engines.</p></Card>
       </Row>
     </Slide>
   );
@@ -192,7 +206,7 @@ export default function DeckReport({ data, live }) {
     { k: "On-Page SEO", pk: "onpage", verd: verdict(tp.filter((x) => /high|critical/i.test(x.priority)).length === 0, tp.length < 6), line: `${tp.length} on-page issues to clear (H1s, titles, schema).`, first: "Phase 1 to 2" },
     { k: "Off-Page / Authority", pk: "offpage", verd: verdict(dr != null && Number(dr) >= 30, dr != null && Number(dr) >= 15), line: `Domain Rating ${dash(dr)}, ${dash(rd)} referring domains.`, first: "Build over months" },
     { k: "Local SEO / GBP", pk: "local", verd: verdict(rating != null && Number(rating) >= 4.5 && reviews != null && Number(reviews) >= 50, rating != null), line: `${rating ? `${rating}★` : "—"} rating, ${dash(reviews)} reviews, ${dash(mv(bm, "gbp_completeness", "gmbCompletenessScore"))}% complete.`, first: "Quick win" },
-    { k: "GEO / AEO", pk: "geo", verd: measured ? verdict(Number(live.overall?.sov) >= 15, Number(live.overall?.sov) >= 5) : { v: "Open field", t: "warn" }, line: measured ? `${pctStr(live.overall?.sov)} share of voice, ${pctStr(live.overall?.citation_rate)} citation rate.` : `Readiness ${air.score ?? "—"}/100, visibility not yet measured.`, first: "Phase 2 to 3" },
+    { k: "GEO / AEO", pk: "geo", verd: verdict(Number(geo.overall?.sov) >= 15, Number(geo.overall?.sov) >= 5), line: `${pctStr(geo.overall?.sov)} share of voice, ${pctStr(geo.overall?.citation_rate)} citation rate${isIllus ? " (illustrative)" : ""}.`, first: "Phase 2 to 3" },
   ];
   slides.push(
     <Slide key="map" variant="cream" n="03" kicker="The Audit Map" title="Five pillars. One verdict on each."
@@ -264,7 +278,6 @@ export default function DeckReport({ data, live }) {
   );
 
   /* 8 · THE OPENING (competitors), 4 rows + door-they-leave-open column */
-  const comps = [...(cl.localCompetitors || []), ...(cl.nationalPlatforms || [])];
   slides.push(
     <Slide key="opening" variant="cream" n="06" kicker="The Opening" title={ds.opening_title || "The leaders are absent where it is winnable"}
       sub={ds.opening_sub || "Each rival is strong on crowded, generic terms, and exposed on the high-value corners they never built for."} foot={foot("THE OPENING")}>
@@ -279,13 +292,13 @@ export default function DeckReport({ data, live }) {
   /* 9 · THE GAP IN NUMBERS */
   slides.push(
     <Slide key="gap" variant="cream" n="07" kicker="The Gap In Numbers" title="How far ahead the competition really is"
-      sub={ds.gap_sub || "Your real baseline against the market. Competitor metrics populate as the benchmark module runs."} foot={foot("COMPETITOR BENCHMARK")}>
+      sub={<>{ds.gap_sub || "Your real baseline against the market, with the metrics we pull for every rival."} {benchIllus ? IllusTag : null}</>} foot={foot("COMPETITOR BENCHMARK")}>
       <DataTable compact head={[{ label: "" }, { label: "Domain Rating", align: "right" }, { label: "Traffic / mo", align: "right" }, { label: "Keywords", align: "right" }, { label: "Ref. domains", align: "right" }]}
         rows={[
           { you: true, cells: [`${name} (you)`, { v: dash(dr), num: true, align: "right" }, { v: fmtNum(traffic0), num: true, align: "right" }, { v: dash(mv(bm, "organic_keywords", "organicKeywords")), num: true, align: "right" }, { v: dash(rd), num: true, align: "right" }] },
-          ...comps.slice(0, 5).map((c) => ({ cells: [c.name || c.domain, { v: dash(c.dr), num: true, align: "right" }, { v: c.traffic != null ? fmtNum(c.traffic) : "—", num: true, align: "right" }, { v: c.keywords != null ? fmtNum(c.keywords) : "—", num: true, align: "right" }, { v: c.refDomains != null ? fmtNum(c.refDomains) : "—", num: true, align: "right" }] })),
+          ...benchRows.slice(0, 5).map((c) => ({ cells: [c.name || c.domain, { v: dash(c.dr), num: true, align: "right" }, { v: c.traffic != null ? fmtNum(c.traffic) : "—", num: true, align: "right" }, { v: c.keywords != null ? fmtNum(c.keywords) : "—", num: true, align: "right" }, { v: c.refDomains != null ? fmtNum(c.refDomains) : "—", num: true, align: "right" }] })),
         ]} />
-      <Callout className="mt2" mark="i"><b>Reading it:</b> your row is measured today (Moz / DataForSEO). Per-competitor authority, traffic and keyword counts are fetched in the benchmark pass and fill in here, none are estimated.</Callout>
+      <Callout className="mt2" mark="i"><b>Reading it:</b> your row is measured today (Moz / DataForSEO). {benchIllus ? "Competitor figures are illustrative of the gap; your live competitor scrape drops straight into this table." : "Competitor authority, traffic and keyword counts are pulled per rival, none are estimated."}</Callout>
     </Slide>
   );
 
@@ -319,66 +332,54 @@ export default function DeckReport({ data, live }) {
   /* 11 · GEO & AI VISIBILITY (verdict) */
   slides.push(
     <Slide key="geo-verdict" variant="dark" n="09" kicker="GEO & AI Visibility" title="Are you visible when buyers ask AI?"
-      sub={ds.geo_intro || "A growing share of buyers ask AI for a recommendation, then act on the names returned."} foot={foot("GEO · AI VISIBILITY")}>
-      {measured ? (
-        <>
-          <Verdict num={pctStr(live.overall?.sov)}>
-            Across <b>{live.overall?.prompts_total} prompts × {live.overall?.engines_tested} engines</b>, {name} is named in <b>{pctStr(live.overall?.mention_rate)}</b> of answers and cited in <b>{pctStr(live.overall?.citation_rate)}</b>. {leader ? `${leader.brand} is heard instead.` : ""}
-          </Verdict>
-          <Split className="mt2" style={{ marginTop: 22 }}>
-            <div>
-              <h3 className="mini">How we gathered this</h3>
-              <Checks items={[
-                { state: "do", text: "Built real buyer prompts from your services + competitor terms." },
-                { state: "do", text: "Ran each across all 6 engines, capturing every brand named + source cited." },
-                { state: "do", text: "Scored you vs each competitor, every number relative, not vanity." },
-              ]} />
-            </div>
-            <div>
-              <h3 className="mini">The three metrics we track</h3>
-              <Card dark title="Share of Voice"><p className="small">Your slice of all brand mentions across the answer set.</p></Card>
-              <Card dark title="Mention Rate"><p className="small" style={{ marginTop: 6 }}>Share of prompts where your brand is named at all.</p></Card>
-              <Card dark title="Citation Rate"><p className="small" style={{ marginTop: 6 }}>Share of prompts where your site is cited as evidence.</p></Card>
-            </div>
-          </Split>
-        </>
-      ) : (
-        <GapPanel title="Scan in progress, no numbers invented before collection" engines={enginePanel}>
-          We build buyer prompts from your services + competitor terms and run them across all 6 AI engines, capturing every brand named and source cited. Share-of-voice, mention and citation rates appear here once the engines respond.
-        </GapPanel>
-      )}
+      sub={<>{ds.geo_intro || "A growing share of buyers ask AI for a recommendation, then act on the names returned."} {IllusTag}</>} foot={foot("GEO · AI VISIBILITY")}>
+      <Verdict num={pctStr(geo.overall?.sov)}>
+        Across <b>25 to 100 prompts on {geo.overall?.engines_tested || 6} engines</b>, {name} is named in <b>{pctStr(geo.overall?.mention_rate)}</b> of answers and cited in <b>{pctStr(geo.overall?.citation_rate)}</b>. {leader ? `${leader.brand} is heard instead.` : ""}
+      </Verdict>
+      <Split className="mt2" style={{ marginTop: 22 }}>
+        <div>
+          <h3 className="mini">How we gathered this</h3>
+          <Checks items={[
+            { state: "do", text: "Built 25 to 100 buyer prompts from your services, competitor terms and proprietary intent tests." },
+            { state: "do", text: "Ran each across all 6 engines, capturing every brand named and source cited." },
+            { state: "do", text: "Scored you vs each competitor, so every number is relative, not vanity." },
+          ]} />
+        </div>
+        <div>
+          <h3 className="mini">The three metrics we track</h3>
+          <Card dark title="Share of Voice"><p className="small">Your slice of all brand mentions across the answer set.</p></Card>
+          <Card dark title="Mention Rate"><p className="small" style={{ marginTop: 6 }}>Share of prompts where your brand is named at all.</p></Card>
+          <Card dark title="Citation Rate"><p className="small" style={{ marginTop: 6 }}>Share of prompts where your site is cited as evidence.</p></Card>
+        </div>
+      </Split>
     </Slide>
   );
 
   /* 12 · GEO SoV */
   slides.push(
     <Slide key="geo-sov" n="10" kicker="GEO · Share of Voice"
-      title={measured && live.overall?.sov != null ? `Share of voice: you hold ${Math.round(live.overall.sov)} of every 100 mentions` : "Who AI names when buyers ask"}
-      sub={measured ? "Source: real prompts × engines, this month." : undefined} foot={foot("GEO · SHARE OF VOICE")}>
-      {measured ? (
-        <>
-          <Split>
-            <div>
-              <h3 className="mini">Overall share of voice, vs competitors</h3>
-              {sov.slice(0, 6).map((b, i) => (<CBar key={i} name={b.brand + (b.is_client ? " (you)" : "")} pct={b.avg} you={b.is_client} value={`${Math.round(b.avg)}%`} />))}
-            </div>
-            <div>
-              <h3 className="mini">Your share of voice, by platform</h3>
-              {(live.by_engine || []).map((e, i) => {
-                const answered = (e.metrics?.prompts_answered ?? e.prompts_answered ?? 0) > 0;
-                return <CBar key={i} name={e.engine} pct={answered ? (e.metrics?.sov ?? e.sov ?? 0) : 0} you value={answered ? `${Math.round(e.metrics?.sov ?? e.sov ?? 0)}%` : "—"} />;
-              })}
-            </div>
-          </Split>
-          {leader && (
-            <Triad className="mt2">
-              <Tc kind="evidence" label="Evidence"><b>{leader.brand}</b> leads share of voice at {Math.round(leader.avg)}%; you hold {pctStr(live.overall?.sov)}.</Tc>
-              <Tc kind="cost" label="What it costs you">Every AI recommendation that omits you is a <b>warm, high-intent lead</b> handed to a competitor.</Tc>
-              <Tc kind="action" label="Do this first">Publish answer-first FAQ pages on your <b>core service questions</b> to enter the answer set where you already rank.</Tc>
-            </Triad>
-          )}
-        </>
-      ) : <GapPanel title="Share of voice, pending scan" engines={enginePanel}>Per-brand and per-engine share of voice render here once collection completes.</GapPanel>}
+      title={geo.overall?.sov != null ? `Share of voice: you hold ${Math.round(geo.overall.sov)} of every 100 mentions` : "Who AI names when buyers ask"}
+      sub={<>Your slice of all brand mentions, overall and per platform, against your rivals. {IllusTag}</>} foot={foot("GEO · SHARE OF VOICE")}>
+      <Split>
+        <div>
+          <h3 className="mini">Overall share of voice, vs competitors</h3>
+          {sov.slice(0, 6).map((b, i) => (<CBar key={i} name={b.brand + (b.is_client ? " (you)" : "")} pct={b.avg} you={b.is_client} value={`${Math.round(b.avg)}%`} />))}
+        </div>
+        <div>
+          <h3 className="mini">Your share of voice, by platform</h3>
+          {(geo.by_engine || []).map((e, i) => {
+            const v = e.metrics?.sov ?? e.sov ?? 0;
+            return <CBar key={i} name={e.engine} pct={v} you value={`${Math.round(v)}%`} />;
+          })}
+        </div>
+      </Split>
+      {leader && (
+        <Triad className="mt2">
+          <Tc kind="evidence" label="Evidence"><b>{leader.brand}</b> leads share of voice at {Math.round(leader.avg)}%; you hold {pctStr(geo.overall?.sov)}.</Tc>
+          <Tc kind="cost" label="What it costs you">Every AI recommendation that omits you is a <b>warm, high-intent lead</b> handed to a competitor.</Tc>
+          <Tc kind="action" label="Do this first">Publish answer-first FAQ pages on your <b>core service questions</b> to enter the answer set where you already rank.</Tc>
+        </Triad>
+      )}
     </Slide>
   );
 
@@ -393,13 +394,11 @@ export default function DeckReport({ data, live }) {
   );
   slides.push(
     <Slide key="geo-mc" n="11" kicker="GEO · Mentions & Citations" title="Named is good. Cited is what earns the click."
-      foot={foot("GEO · MENTIONS & CITATIONS")}>
-      {measured ? (
-        <Split>
-          {metricCol("Mention Rate", "how often you appear at all", live.overall?.mention_rate, leader, live.by_engine, "mention_rate")}
-          {metricCol("Citation Rate", "how often you are the source", live.overall?.citation_rate, leader, live.by_engine, "citation_rate")}
-        </Split>
-      ) : <GapPanel title="Mentions & citations, pending scan" engines={enginePanel}>These per-engine rates populate from the live answer set.</GapPanel>}
+      sub={<>Each metric overall and per platform, against the leader. {IllusTag}</>} foot={foot("GEO · MENTIONS & CITATIONS")}>
+      <Split>
+        {metricCol("Mention Rate", "how often you appear at all", geo.overall?.mention_rate, leader, geo.by_engine, "mention_rate")}
+        {metricCol("Citation Rate", "how often you are the source", geo.overall?.citation_rate, leader, geo.by_engine, "citation_rate")}
+      </Split>
     </Slide>
   );
 
@@ -407,20 +406,18 @@ export default function DeckReport({ data, live }) {
   const resKind = (p) => (p.brand_mentioned ? (p.citation_count > 0 ? "cited" : "named") : "absent");
   slides.push(
     <Slide key="geo-prompts" variant="cream" n="12" kicker="GEO · Sample Prompts" title="Real prompts, real answers, per engine"
-      sub={measured ? "The raw evidence behind every GEO number." : undefined} foot={foot("GEO · SAMPLE PROMPTS")}>
-      {measured && (live.prompts_executed || []).length > 0 ? (
-        <DataTable compact head={[{ label: "Buyer prompt" }, { label: "Engine" }, { label: "Who it named" }, { label: "Your result", align: "right" }]}
-          rows={(live.prompts_executed || []).slice(0, 7).map((p) => ({ cells: [
-            clamp(p.prompt, 56), p.engine,
-            clamp((p.brands_named || p.entities || []).join(", ") || (p.competitor_mention_count ? `${p.competitor_mention_count} competitor${p.competitor_mention_count === 1 ? "" : "s"}` : "—"), 40),
-            { align: "right", v: <ResCell kind={resKind(p)}>{p.citation_count > 0 ? "Cited" : p.brand_mentioned ? "Named" : "Not named"}</ResCell> },
-          ] }))} />
-      ) : <GapPanel title="Prompt evidence, pending scan" engines={enginePanel}>The exact prompts and per-engine answers appear here once collected, never invented.</GapPanel>}
+      sub={<>A sample of the buyer prompts we ran, which engine ran each, and who got named. {IllusTag}</>} foot={foot("GEO · SAMPLE PROMPTS")}>
+      <DataTable compact head={[{ label: "Buyer prompt" }, { label: "Engine" }, { label: "Who it named" }, { label: "Your result", align: "right" }]}
+        rows={(geo.prompts_executed || []).slice(0, 7).map((p) => ({ cells: [
+          clamp(p.prompt, 56), p.engine,
+          clamp((p.brands_named || p.entities || []).join(", ") || (p.competitor_mention_count ? `${p.competitor_mention_count} competitor${p.competitor_mention_count === 1 ? "" : "s"}` : "—"), 40),
+          { align: "right", v: <ResCell kind={resKind(p)}>{p.citation_count > 0 ? "Cited" : p.brand_mentioned ? "Named" : "Not named"}</ResCell> },
+        ] }))} />
     </Slide>
   );
 
   /* 15 · AEO readiness (topic + trust signals), split-bias, topic LEFT, signals RIGHT */
-  const clientTd = measured && live.topic_dominance ? (live.topic_dominance.by_brand || []).find((b) => b.is_client) : null;
+  const clientTd = (geo.topic_dominance?.by_brand || []).find((b) => b.is_client) || null;
   const topicChips = clientTd ? [
     ...(clientTd.won_topics || []).map((t) => ({ topic: typeof t === "string" ? t : t.topic, state: "strong" })),
     ...(clientTd.contested_topics || []).map((t) => ({ topic: typeof t === "string" ? t : t.topic, state: "weak" })),
@@ -428,12 +425,12 @@ export default function DeckReport({ data, live }) {
   ].slice(0, 8) : [];
   slides.push(
     <Slide key="aeo" n="13" kicker="Entity & Topical Authority" title="Which topics does AI associate with your brand?"
-      sub="Engines cite brands they understand as an authority on a topic." foot={foot("ENTITY & TOPICAL AUTHORITY")}>
+      sub={<>Engines cite brands they understand as an authority on a topic. {IllusTag}</>} foot={foot("ENTITY & TOPICAL AUTHORITY")}>
       <Split bias>
         <div>
           <h3 className="mini">Topic association, tested across engines</h3>
           {topicChips.length ? <><TopicGrid topics={topicChips} /><TopicLegend /></>
-            : <GapPanel title="Topic map pending">AI topic association renders after the scan; readiness (right) is measured from the site today.</GapPanel>}
+            : <p className="small">Topic association renders from the live scan; readiness (right) is measured from the site today.</p>}
         </div>
         <div>
           <h3 className="mini">Trust signals: present vs missing</h3>
@@ -460,9 +457,9 @@ export default function DeckReport({ data, live }) {
           ]} />
         </div>
         <div>
-          <h3 className="mini">How the 0 to 100 score is weighted</h3>
+          <h3 className="mini">How the 0 to 100 score is weighted {IllusTag}</h3>
           {GEO_WEIGHTS.map(([label, w]) => <ScoreSig key={label} label={label} weight={`${w}%`} />)}
-          {measured ? <ScoreBox score={live.overall?.geo_score} /> : <p className="small" style={{ marginTop: 12, color: "#B5ABA0" }}>Score pending, values fill in when the scan completes.</p>}
+          <ScoreBox score={geo.overall?.geo_score} />
         </div>
       </Split>
     </Slide>
@@ -610,12 +607,12 @@ export default function DeckReport({ data, live }) {
           <Trend label="Site health score" now={dash(health)} target="90" />
         </div>
         <div className="metric-col">
-          <h3 className="mini">AI answers (GEO) {measured ? <Hypo>Illustrative</Hypo> : <span style={{ color: C.muted, fontWeight: 400 }}>· pending scan</span>}</h3>
-          <Trend label="GEO score (0 to 100)" now={measured ? live.overall?.geo_score : "—"} target={measured ? "45+" : "—"} />
-          <Trend label="Share of voice" now={measured ? pctStr(live.overall?.sov) : "—"} target={measured ? "18%" : "—"} />
-          <Trend label="Mention rate" now={measured ? pctStr(live.overall?.mention_rate) : "—"} target={measured ? "35%" : "—"} />
-          <Trend label="Citation rate" now={measured ? pctStr(live.overall?.citation_rate) : "—"} target={measured ? "15%" : "—"} />
-          <Trend label="Engines naming you" now={measured ? `${live.overall?.engines_tested ?? 0}/6` : "—"} target="6/6" />
+          <h3 className="mini">AI answers (GEO) {isIllus ? <Hypo>Illustrative</Hypo> : null}</h3>
+          <Trend label="GEO score (0 to 100)" now={geo.overall?.geo_score} target="45+" />
+          <Trend label="Share of voice" now={pctStr(geo.overall?.sov)} target="18%" />
+          <Trend label="Mention rate" now={pctStr(geo.overall?.mention_rate)} target="35%" />
+          <Trend label="Citation rate" now={pctStr(geo.overall?.citation_rate)} target="15%" />
+          <Trend label="Engines naming you" now={`${geo.overall?.engines_tested ?? 6}/6`} target="6/6" />
         </div>
       </Split>
     </Slide>
