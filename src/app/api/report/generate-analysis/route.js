@@ -65,7 +65,7 @@ async function safeCall(fn) {
 
 function fmt(n, fallback = "—") {
   if (n == null) return fallback;
-  // 0 is a valid DataForSEO result — show "0" rather than "—"
+  // 0 is a valid DataForSEO result, show "0" rather than "—"
   if (n === 0) return "0";
   if (n >= 1000000) return (n / 1000000).toFixed(1) + "M";
   if (n >= 1000) return (n / 1000).toFixed(1) + "K";
@@ -95,9 +95,9 @@ async function generateWithAI(systemPrompt, userPrompt, fallback = {}, meta = {}
       try { parsed = m ? JSON.parse(m[0]) : null; } catch { parsed = null; }
     }
     if (!parsed) {
-      // Almost always a truncated/over-long response — make it VISIBLE in logs instead
+      // Almost always a truncated/over-long response, make it VISIBLE in logs instead
       // of silently returning empty strategy sections on a paid report.
-      console.error(`[generate-analysis] AI JSON parse FAILED (likely truncation) — len=${(content || "").length}, tail=${JSON.stringify(String(content || "").slice(-160))}`);
+      console.error(`[generate-analysis] AI JSON parse FAILED (likely truncation), len=${(content || "").length}, tail=${JSON.stringify(String(content || "").slice(-160))}`);
     }
     return parsed || fallback;
   } catch (e) {
@@ -106,7 +106,7 @@ async function generateWithAI(systemPrompt, userPrompt, fallback = {}, meta = {}
   }
 }
 
-// ─── Real-data builders (no AI needed — derived from collected metrics) ────────
+// ─── Real-data builders (no AI needed, derived from collected metrics) ────────
 
 function buildTechnicalPrioritiesFromCrawl(crawlData) {
   if (!crawlData) return [];
@@ -114,7 +114,7 @@ function buildTechnicalPrioritiesFromCrawl(crawlData) {
   const issues = [];
 
   if (crawlData.crawlBlockedByRobots)
-    issues.push({ priority: "CRITICAL", issue: "Googlebot blocked by robots.txt", action: "Remove 'Disallow: /' from robots.txt immediately — Google cannot index any page until this is fixed." });
+    issues.push({ priority: "CRITICAL", issue: "Googlebot blocked by robots.txt", action: "Remove 'Disallow: /' from robots.txt immediately, Google cannot index any page until this is fixed." });
 
   if (!crawlData.hasSitemap)
     issues.push({ priority: "HIGH", issue: "XML sitemap is missing", action: "Create /sitemap.xml listing all important URLs and submit it in Google Search Console → Sitemaps." });
@@ -133,7 +133,7 @@ function buildTechnicalPrioritiesFromCrawl(crawlData) {
 
   const dupTitles = (crawlData.duplicates || []).filter(d => d.type === "title").length;
   if (dupTitles > 0)
-    issues.push({ priority: "MEDIUM", issue: `${dupTitles} sets of duplicate meta title tags`, action: "Duplicate titles force Google to choose which URL to rank arbitrarily — make every title unique." });
+    issues.push({ priority: "MEDIUM", issue: `${dupTitles} sets of duplicate meta title tags`, action: "Duplicate titles force Google to choose which URL to rank arbitrarily, make every title unique." });
 
   if ((crawlData.brokenLinks || []).length > 0)
     issues.push({ priority: "MEDIUM", issue: `${crawlData.brokenLinks.length} broken internal links found`, action: `Fix or 301-redirect each broken URL. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}` });
@@ -159,27 +159,27 @@ function buildLocalSearchFromGmb(gmbData) {
   const checklist = [];
 
   if (!gmb.found) {
-    checklist.push("Create Google Business Profile at business.google.com — the single highest-ROI local SEO action");
-    checklist.push("Verify within 5 days via phone or postcard — unverified listings are invisible");
+    checklist.push("Create Google Business Profile at business.google.com, the single highest-ROI local SEO action");
+    checklist.push("Verify within 5 days via phone or postcard, unverified listings are invisible");
     checklist.push("Fill NAP (Name, Address, Phone) to exactly match your website footer");
     checklist.push("Choose the most specific primary category + 2 secondary categories");
     checklist.push("Upload 10+ photos: exterior, interior, team, products, before/after");
-    checklist.push("Write 750-character business description — put primary keywords in first 250 chars");
+    checklist.push("Write 750-character business description, put primary keywords in first 250 chars");
     checklist.push("Set accurate hours including special/holiday hours");
     checklist.push("Submit consistent NAP to the top local and industry directories for your market (Google Business, Trustpilot, and your sector's trade listings)");
   } else {
-    if (!gmb.isVerified)     checklist.push("URGENT: Verify your GMB listing — unverified profiles rank far below verified ones");
-    if (!gmb.phone)          checklist.push("Add local phone number — missing contact info reduces conversions by ~30%");
-    if (!gmb.address)        checklist.push("Add full street address — required for Local Pack (map pack) ranking");
-    if (!gmb.hoursAvailable) checklist.push("Set business hours including holiday hours — affects when you appear in 'open now' searches");
-    if (!gmb.hasPhotos)      checklist.push("Upload 10+ photos — GMB listings with photos get 42% more direction requests");
+    if (!gmb.isVerified)     checklist.push("URGENT: Verify your GMB listing, unverified profiles rank far below verified ones");
+    if (!gmb.phone)          checklist.push("Add local phone number, missing contact info reduces conversions by ~30%");
+    if (!gmb.address)        checklist.push("Add full street address, required for Local Pack (map pack) ranking");
+    if (!gmb.hoursAvailable) checklist.push("Set business hours including holiday hours, affects when you appear in 'open now' searches");
+    if (!gmb.hasPhotos)      checklist.push("Upload 10+ photos, GMB listings with photos get 42% more direction requests");
     const reviews = gmb.reviewCount || 0;
     if (reviews < 25)        checklist.push(`Get to 25 reviews: WhatsApp each recent customer with a direct review link (need ${25 - reviews} more)`);
-    if ((gmbData.unrepliedReviewCount || 0) > 0) checklist.push(`Reply to all ${gmbData.unrepliedReviewCount} unanswered reviews within 24h — Google tracks owner response rate`);
+    if ((gmbData.unrepliedReviewCount || 0) > 0) checklist.push(`Reply to all ${gmbData.unrepliedReviewCount} unanswered reviews within 24h, Google tracks owner response rate`);
     if ((gmbData.listedDirectoryCount || 0) < 3)  checklist.push("Build 5+ directory citations on the directories that matter in your market (Google Business, Trustpilot, Facebook, and your industry's listings) for NAP consistency");
     checklist.push("Post 1–2 Google Business updates per week (offers, news, new services, team highlights)");
     const unansweredQA = (gmbData.qa || []).filter(q => !q.hasAnswer).length;
-    if (unansweredQA > 0)    checklist.push(`Answer ${unansweredQA} unanswered Q&As — each answered question adds free long-tail content`);
+    if (unansweredQA > 0)    checklist.push(`Answer ${unansweredQA} unanswered Q&As, each answered question adds free long-tail content`);
   }
 
   const reviews = gmb.reviewCount || 0;
@@ -191,7 +191,7 @@ function buildLocalSearchFromGmb(gmbData) {
   return { gbpChecklist: checklist.slice(0, 8), reviewTarget };
 }
 
-// Relevance vocabulary — the strongest signals of what the business ACTUALLY is:
+// Relevance vocabulary, the strongest signals of what the business ACTUALLY is:
 // the user-selected keywords, declared services, and the real homepage title. Used to
 // drop off-topic gap keywords (e.g. "live location", "good colleges in pune for mba")
 // that a competitor happens to rank for but have nothing to do with the client.
@@ -221,7 +221,7 @@ function _kwRelevant(keyword, vocab, exclusions) {
 }
 
 // Tier 1 = PRIMARY COMMERCIAL keywords only (real Service/Landing-Page intent). Every
-// tier is relevance-filtered, competitor-brand-filtered (#4 — no "social beat" etc.),
+// tier is relevance-filtered, competitor-brand-filtered (#4, no "social beat" etc.),
 // demand-gated, and de-duped across tiers (so Tier 2 never just repeats Tier 1).
 function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions, brands = []) {
   if (!keywordGapData) return null;
@@ -229,7 +229,7 @@ function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions, brands = []
   const brandList = (brands || []).map(b => String(b || "").toLowerCase().trim()).filter(b => b.length >= 3);
   const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const GENERIC = new Set("social media web digital marketing seo online india agency agencies services service company companies tech technologies technology solutions solution group studio studios labs lab design designs creative consulting consultancy global world best top hub pro new".split(/\s+/));
-  // a keyword that contains a competitor brand is dropped — the FULL brand as a word, or
+  // a keyword that contains a competitor brand is dropped, the FULL brand as a word, or
   // a single-word brand's distinctive token; never a generic word like "social"/"media".
   const isBrand = (kw) => {
     const k = ` ${String(kw || "").toLowerCase()} `;
@@ -258,7 +258,7 @@ function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions, brands = []
     .map(k => k.keyword);
 
   // Tier 3 = informational blog questions (relevant, non-brand). PAA carries no volume,
-  // so it is not demand-gated — these are topic ideas, not pages to build.
+  // so it is not demand-gated, these are topic ideas, not pages to build.
   const infoKws = (keywordGapData.paaQuestions || [])
     .map(q => q?.question ?? q)
     .filter(q => _kwRelevant(q, vocab, exclusions) && !isBrand(q))
@@ -287,7 +287,7 @@ function buildMeasuringSuccessRows(baselineMetrics, crawlData, gmbData) {
   const kN  = toNum(bm.organicKeywords);
   const rN  = toNum(bm.referringDomains);
 
-  // #17 — the CURRENT column is formatted (no raw "1248.774014055729"): compact for
+  // #17, the CURRENT column is formatted (no raw "1248.774014055729"): compact for
   // traffic, thousands-separated integers for counts. Site Health 6-month target is
   // clamped to never read below the current score (a target must be an improvement).
   const healthNow = crawlData?.healthScore;
@@ -335,7 +335,7 @@ function buildDeepSignals({ gmb, crawl, kwGap, competitorAudit }) {
   if (bl.length) out.push(`Referring domains linking to competitors but NOT you: ${bl.join(", ")}.`);
   const gaps = (kwGap?.gapKeywords || []).slice(0, 5).map((k) => `"${k.keyword}" (${k.volume}/mo, KD ${k.kd ?? "?"}, ${(k.foundIn || [])[0] || "a competitor"} ranks)`);
   if (gaps.length) out.push(`Top gap keywords: ${gaps.join("; ")}.`);
-  const cmp = (competitorAudit?.comparison || []).filter((c) => c.gap === "high" || c.gap === "medium").map((c) => `${c.signal} — you: ${c.target}, competitors: ${c.competitors}`);
+  const cmp = (competitorAudit?.comparison || []).filter((c) => c.gap === "high" || c.gap === "medium").map((c) => `${c.signal}, you: ${c.target}, competitors: ${c.competitors}`);
   if (cmp.length) out.push(`Technical gaps vs competitors: ${cmp.slice(0, 4).join("; ")}.`);
   return out.join("\n");
 }
@@ -346,7 +346,7 @@ async function generateWebsiteAnalysis({ domain, keywords, competitors, business
   const primaryKw = (keywords || []).slice(0, 5).join(", ") || domain;
   const competitorList = (competitors || []).slice(0, 5).join(", ") || "major industry players";
   const industry = businessData?.industrySector || businessData?.industry || "business";
-  // Terms the user explicitly wants excluded — never let Claude surface them in any section.
+  // Terms the user explicitly wants excluded, never let Claude surface them in any section.
   const exclusions = (Array.isArray(negativeExclusions) ? negativeExclusions : [])
     .map((t) => String(t || "").trim())
     .filter(Boolean);
@@ -355,20 +355,20 @@ async function generateWebsiteAnalysis({ domain, keywords, competitors, business
     : "";
 
   const systemPrompt = `You are DoctorFizz Intelligence, an elite SEO & GEO strategy engine.
-You produce ruthlessly specific, data-backed strategy for real businesses. Every item must reference the client's actual data — industry, keywords, competitors, domain metrics.
+You produce ruthlessly specific, data-backed strategy for real businesses. Every item must reference the client's actual data, industry, keywords, competitors, domain metrics.
 Rules:
 - ANALYZE FIRST: before writing anything, deeply read ALL the metrics provided below (domain rating, organic traffic & keywords, mobile/desktop PSI, site-health/crawl, schema coverage, GMB rating/reviews/completeness, and the real keyword-gap data). Identify THIS site's specific weaknesses and opportunities, then make every recommendation address a concrete finding and cite the actual number/fact from the data. Never give a recommendation the data does not justify, and never output generic boilerplate.
-- AUDIENCE & STYLE: write for a NON-TECHNICAL small-business owner with ZERO SEO knowledge. Use plain, everyday English. The FIRST time you use any SEO term (schema, canonical, backlink, crawl, indexing, SoV, E-E-A-T, etc.), add a 2–4 word plain explanation in parentheses. Be CONCISE and SHORT — punchy, scannable, no filler, no repetition; the reader must NOT get bored. Make each recommendation a tiny guide: WHAT to do, WHY it matters (tie it to their actual number), and HOW (one concrete step). Encouraging and clear, never intimidating or jargon-heavy.
+- AUDIENCE & STYLE: write for a NON-TECHNICAL small-business owner with ZERO SEO knowledge. Use plain, everyday English. The FIRST time you use any SEO term (schema, canonical, backlink, crawl, indexing, SoV, E-E-A-T, etc.), add a 2–4 word plain explanation in parentheses. Be CONCISE and SHORT, punchy, scannable, no filler, no repetition; the reader must NOT get bored. Make each recommendation a tiny guide: WHAT to do, WHY it matters (tie it to their actual number), and HOW (one concrete step). Encouraging and clear, never intimidating or jargon-heavy.
 - Return STRICT JSON matching the exact schema below.
 - Keyword volumes: use realistic industry estimates (format: "2K–5K/mo", "800/mo"). Never use "—" for volumes.
 - Content blueprint vol/pos: realistic estimates like "1.2K/mo", "Top 5".
 - Do NOT mention Claude, Anthropic, or any AI tool by name.
 - Describe the client and its competitors by their ACTUAL category from the data. NEVER invent size/type descriptors like "boutique", "small", "startup", or "niche" unless the data explicitly supports them.
-- The provided "Industry" hint can be WRONG (it is a manual dropdown). Determine the client's REAL industry from the homepage title/content provided and use THAT throughout — never describe the business as something the website clearly is not.
-- contentArchitecture.siteStructure must list ONLY NEW pages the site should BUILD to capture keyword gaps / uncovered services — do NOT list pages that already exist (Homepage, About, Contact, existing service pages). Each entry maps to a real keyword opportunity.
-- competitorLandscape.localCompetitors AND nationalPlatforms must BOTH be REAL businesses that DIRECTLY compete with the client (same offering, comparable tier) — draw them from the "Competitors listed" above. localCompetitors = local/regional rivals; nationalPlatforms = the same kind of direct competitor operating at national scale. NEVER list search aggregators, directories, marketplaces, review sites, or listing platforms (e.g. Justdial, Sulekha, Clutch, GoodFirms, Techreviewer, Yelp) — those are search intermediaries, NOT business competitors, and must never appear here.
-- Every keyword, competitor, and recommendation MUST be genuinely relevant to what THIS business actually offers. If a data point looks irrelevant to the business, DROP it — do not include it just to fill the list.
-- DEEP ANALYSIS (critical): the "DEEP SIGNALS" block in the data below contains REAL findings — the customer's own review sentiment (what they praise / complain about), the exact pages with technical problems, who currently owns the Google AI Overview / featured snippet for their keywords, the referring domains linking to competitors but not them, and their technical gaps vs competitors. You MUST analyse these specific signals and weave the concrete fact into the relevant section: cite the actual praise/complaint, name the exact competitor domain or AI-Overview source, reference the specific gap keyword + its difficulty, point to the exact problem page. Never give generic advice where a specific signal exists.
+- The provided "Industry" hint can be WRONG (it is a manual dropdown). Determine the client's REAL industry from the homepage title/content provided and use THAT throughout, never describe the business as something the website clearly is not.
+- contentArchitecture.siteStructure must list ONLY NEW pages the site should BUILD to capture keyword gaps / uncovered services, do NOT list pages that already exist (Homepage, About, Contact, existing service pages). Each entry maps to a real keyword opportunity.
+- competitorLandscape.localCompetitors AND nationalPlatforms must BOTH be REAL businesses that DIRECTLY compete with the client (same offering, comparable tier), draw them from the "Competitors listed" above. localCompetitors = local/regional rivals; nationalPlatforms = the same kind of direct competitor operating at national scale. NEVER list search aggregators, directories, marketplaces, review sites, or listing platforms (e.g. Justdial, Sulekha, Clutch, GoodFirms, Techreviewer, Yelp), those are search intermediaries, NOT business competitors, and must never appear here.
+- Every keyword, competitor, and recommendation MUST be genuinely relevant to what THIS business actually offers. If a data point looks irrelevant to the business, DROP it, do not include it just to fill the list.
+- DEEP ANALYSIS (critical): the "DEEP SIGNALS" block in the data below contains REAL findings, the customer's own review sentiment (what they praise / complain about), the exact pages with technical problems, who currently owns the Google AI Overview / featured snippet for their keywords, the referring domains linking to competitors but not them, and their technical gaps vs competitors. You MUST analyse these specific signals and weave the concrete fact into the relevant section: cite the actual praise/complaint, name the exact competitor domain or AI-Overview source, reference the specific gap keyword + its difficulty, point to the exact problem page. Never give generic advice where a specific signal exists.
 - Do NOT give generic advice. Every sentence must be specific to THIS business.${exclusionRule}`;
 
   const domainCtx = seoData ? `
@@ -379,7 +379,7 @@ DOMAIN AUTHORITY & TRAFFIC (live data):
   Monthly Traffic:    ${seoData.organicTraffic || "—"}
   Mobile PSI:         ${seoData.performanceMobile || "—"}
   Desktop PSI:        ${seoData.performanceDesktop || "—"}
-  Core Web Vitals — LCP: ${seoData.lcp != null ? `${seoData.lcp} ms` : "—"} | CLS: ${seoData.cls != null ? seoData.cls : "—"}` : "";
+  Core Web Vitals, LCP: ${seoData.lcp != null ? `${seoData.lcp} ms` : "—"} | CLS: ${seoData.cls != null ? seoData.cls : "—"}` : "";
 
   const crawlCtx = crawlData ? `
 
@@ -411,8 +411,8 @@ ${deepSignals}` : "";
 
 BUSINESS PROFILE:
   Domain:    ${domain}
-  Industry hint (MAY BE WRONG — verify from the homepage title): ${industry}
-  Homepage title (the REAL business — use this to determine the true industry): ${crawlData?.pages?.[0]?.metaTitle || crawlData?.pages?.[0]?.title || "(not captured)"}
+  Industry hint (MAY BE WRONG, verify from the homepage title): ${industry}
+  Homepage title (the REAL business, use this to determine the true industry): ${crawlData?.pages?.[0]?.metaTitle || crawlData?.pages?.[0]?.title || "(not captured)"}
   Offering:  ${businessData?.offeringType || "services"}
   Keywords:  ${primaryKw}
   Competitors listed: ${competitorList}
@@ -454,11 +454,11 @@ Return ONLY this JSON (no markdown, no commentary):
   },
   "competitiveIntelligence": {
     "whatWorksForThem": [
-      "specific tactic competitor uses — reference real keyword or content type",
+      "specific tactic competitor uses, reference real keyword or content type",
       "...", "...", "..."
     ],
     "gapsYouCanExploit": [
-      "specific gap ${domain} can fill — reference keyword or page type",
+      "specific gap ${domain} can fill, reference keyword or page type",
       "...", "...", "..."
     ]
   },
@@ -481,7 +481,7 @@ Return ONLY this JSON (no markdown, no commentary):
     {"blogPost": "...", "topKeyword": "...", "vol": "...", "pos": "..."}
   ],
   "uncontested": [
-    {"page": "specific page name for ${domain}", "keyword": "a LOW-COMPETITION niche or service+location long-tail the leaders do NOT already rank for — NEVER a broad head term", "volume": "realistic est monthly volume (uncontested niches are typically 100–2,000/mo, not high-volume head terms)"},
+    {"page": "specific page name for ${domain}", "keyword": "a LOW-COMPETITION niche or service+location long-tail the leaders do NOT already rank for, NEVER a broad head term", "volume": "realistic est monthly volume (uncontested niches are typically 100–2,000/mo, not high-volume head terms)"},
     {"page": "...", "keyword": "...", "volume": "..."},
     {"page": "...", "keyword": "...", "volume": "..."},
     {"page": "...", "keyword": "...", "volume": "..."}
@@ -522,7 +522,7 @@ Return ONLY this JSON (no markdown, no commentary):
 
   // Guard: "uncontested territory" must be genuinely low-competition. The model sometimes
   // mislabels a broad head term (e.g. "internet marketing services", 9,000/mo) as
-  // uncontested — by definition impossible. Drop entries whose volume is clearly head-term
+  // uncontested, by definition impossible. Drop entries whose volume is clearly head-term
   // scale; keep unknowns (volume 0/unparseable) and genuine niches.
   if (analysis && Array.isArray(analysis.uncontested)) {
     const volNum = (v) => { const n = Number(String(v ?? "").replace(/[^0-9.]/g, "")); return Number.isFinite(n) ? n : 0; };
@@ -551,7 +551,7 @@ async function generatePageAnalysis({ url, domain, keyword, businessData, psiDat
 You analyze individual web pages and produce specific, actionable optimization recommendations.
 Always return STRICT JSON. Never mention Claude, Anthropic, or DataForSEO.
 Use "DoctorFizz Intelligence" as the analysis source label.
-CRITICAL: The CURRENT page values (title, meta description, H1, word count) are PROVIDED below from a live crawl. Use the PROVIDED current values EXACTLY as given — NEVER invent, guess, or fabricate them. Only generate the recommended/optimized versions yourself. If a current value is given as "—" it was genuinely empty/missing on the page, so treat it as missing (do not make one up).`;
+CRITICAL: The CURRENT page values (title, meta description, H1, word count) are PROVIDED below from a live crawl. Use the PROVIDED current values EXACTLY as given, NEVER invent, guess, or fabricate them. Only generate the recommended/optimized versions yourself. If a current value is given as "—" it was genuinely empty/missing on the page, so treat it as missing (do not make one up).`;
 
   const userPrompt = `Analyze this page and produce a complete on-page SEO optimization report.
 
@@ -561,7 +561,7 @@ Target Keyword: ${targetKeyword}
 Industry: ${industry}
 LCP: ${lcp || "—"} | CLS: ${cls || "—"} | Performance Score: ${perfScore || "—"}
 
-CURRENT PAGE CONTENT (live crawl — use these EXACT values for every "current" field; do NOT invent):
+CURRENT PAGE CONTENT (live crawl, use these EXACT values for every "current" field; do NOT invent):
   Current Title:       ${curTitle}
   Current Meta Desc:   ${curMetaDesc}
   Current H1:          ${curH1}
@@ -671,38 +671,70 @@ Return JSON with exactly these keys:
   }, { domain, api: "claude", label: "page-analysis" });
 }
 
+// ─── Per-competitor benchmark (real DR / traffic / keywords / referring domains) ──
+// Fills the deck's "Gap In Numbers" table. DR = Moz Domain Authority; traffic/keywords
+// from DataForSEO (market-correct via countryCode); refDomains from Moz. One fetch pair
+// per competitor domain, all cached per-domain + fully soft-failing (a miss → null cells,
+// never a thrown error / blank report). Keyed by normalized domain.
+const _normDom = (d) => String(d || "").toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].trim();
+async function buildCompetitorBenchmark(competitors = [], countryCode = "in") {
+  const seen = new Set(), domains = [];
+  for (const c of competitors) { const dom = _normDom(c?.domain || c?.name); if (dom && dom.includes(".") && !seen.has(dom)) { seen.add(dom); domains.push(dom); } }
+  const out = {};
+  await Promise.all(domains.slice(0, 5).map(async (dom) => {
+    try {
+      const [moz, rank] = await Promise.all([
+        fetchMozMetrics(dom).catch(() => null),
+        fetchDomainRankOverview(dom, { countryCode }).catch(() => null),
+      ]);
+      out[dom] = {
+        dr: moz?.domainAuthority ?? null,
+        refDomains: moz?.backlinksSummary?.referring_domains ?? null,
+        traffic: rank?.organicTraffic ?? null,
+        keywords: rank?.organicKeywords ?? null,
+      };
+    } catch { out[dom] = {}; }
+  }));
+  return out;
+}
+
 // ─── Deck storytelling: the reference-deck NARRATIVE voice, from real data ────
 // Produces every storytelling slot (titles, framing subs, the spine paragraphs,
 // the so-what callouts, the priority cards) in the EXACT tone / style / logic of
-// the approved premium deck — woven from REAL numbers only (no invented facts).
+// the approved premium deck, woven from REAL numbers only (no invented facts).
 // Cached per site (30 days) like the rest of the Claude analysis.
-const DECK_VOICE_SYSTEM = `You are the lead strategist + copywriter for DOCTOR FIZZ, writing the NARRATIVE for a premium SEO & GEO strategy deck. Your only job is the STORYTELLING — the voice that carries a busy business OWNER (not an SEO) through the plan. Match this voice exactly.
+const DECK_VOICE_SYSTEM = `You are the lead strategist + copywriter for DOCTOR FIZZ, writing the NARRATIVE for a premium SEO & GEO strategy deck. Your only job is the STORYTELLING, the voice that carries a busy business OWNER (not an SEO) through the plan. Match this voice exactly.
 
 VOICE
 - Calm, confident, declarative. Short sentences. Second person ("you", "your").
 - Owner-friendly: zero SEO jargon-dumps; explain in plain English a smart non-expert follows on the first read.
 - Specific: weave the REAL numbers from the DATA into the sentences. Never a vague claim where a number exists.
-- ONE connected spine across the deck: the leaders won by being broad at national scale — and that scale is exactly why they leave the high-intent, LOCAL, and AI-ANSWER corners undefended. The client takes that undefended ground, in order, fastest.
+- ONE connected spine across the deck: the leaders won by being broad at national scale, and that scale is exactly why they leave the high-intent, LOCAL, and AI-ANSWER corners undefended. The client takes that undefended ground, in order, fastest.
 - Rhetorical pivots welcome ("That sounds like a problem. It is a blank canvas."). Confident verbs: take, own, win, capture. The rhythm of each "so what": evidence → what it costs → what to do first.
 
-STYLE EXEMPLARS (the exact register — match it; adapt to THIS business's data, never copy literally):
+STYLE EXEMPLARS (the exact register, match it; adapt to THIS business's data, never copy literally):
 - story_title_a/b: "<Name> is invisible today." / "That is the opportunity."
 - story_paragraphs: "Search Google for a partner, and <Name> does not appear. Ask an AI for a recommendation, and it is not named." / "That sounds like a problem. It is a blank canvas. The firms that rank won by owning broad, generic terms at national scale. That scale is also their blind spot." / "Their template pages have no answer for a local search, and no edge inside AI answers. That undefended ground is what this plan takes."
 - story_thesis: "The thesis: the broad terms are taken. The high-intent, local, and AI-answer corners are not. <Name> can own them, and this deck is the order to do it."
 - diagnosis_cost: "What this costs you today: with <traffic> organic visits, the roughly <volume> monthly searches in your market all go to competitors. Fixing these turns the site from invisible into found, and unlocks every later move in this plan."
-- opening_move: "The move: don't fight the leaders head-on. Take the things they won't defend — the easy commercial terms, the local angle, and the specific AI answers — before they notice."
+- opening_move: "The move: don't fight the leaders head-on. Take the things they won't defend, the easy commercial terms, the local angle, and the specific AI answers, before they notice."
 - priorities[i]: { title: "Switch the lights on", body: "Fix the load time and the missing H1. This alone explains the zero traffic.", result: "the site becomes indexable." }
 - closing: "The whole story: <Name> starts invisible but unpenalised, in a market where the leaders are too big to defend the corners that convert. Fix the foundation, take the wins, build the trust, and the ground is yours."
 
 HARD RULES
-- REALITY ONLY. Use ONLY the facts/numbers in the DATA block. Never invent a metric, competitor, keyword, or claim. Where a number is "—" (unknown), write around it — do not guess.
-- If the business is NOT invisible (has real traffic/keywords), adapt the framing honestly (e.g. "winning the easy terms but losing the ones that convert") — never force the "invisible" story onto a site that isn't.
+- REALITY ONLY. Use ONLY the facts/numbers in the DATA block. Never invent a metric, competitor, keyword, or claim. Where a number is "—" (unknown), write around it, do not guess.
+- If the business is NOT invisible (has real traffic/keywords), adapt the framing honestly (e.g. "winning the easy terms but losing the ones that convert"), never force the "invisible" story onto a site that isn't.
 - GEO/AI: describe the opportunity + how we measure it. NEVER state a share-of-voice / mention / citation NUMBER (those are measured live elsewhere).
 - Tight slots: titles ≤ 9 words; subs ≤ 28 words; each paragraph ≤ 42 words; callouts ≤ 45 words; priority body ≤ 28 words; result ≤ 10 words.
+- NEVER use an em dash (—) or en dash (–). Use a comma, a colon, a full stop, or the word "to" for ranges ("Days 31 to 60", never "Days 31–60"). This is strict.
+- NEVER write "KD" or a raw keyword-difficulty score. Say "low difficulty" / "high difficulty" in plain English.
+- The AI-visibility prompt set is always "25 to 100 prompts" reverse-engineered from website scraping, competitor analysis, and proprietary intent tests. NEVER state a single hard prompt count.
+- Where it fits, make every recommendation answer the founder's four questions plainly: what is broken, what it costs in growth, what to do first, and what result to expect (a rounded estimate). The "result" on a priority is that expected outcome.
+- UK/market terms only: never reference US-only or off-market geography or terms for a non-US client.
 
 Return ONLY this JSON (no markdown, no commentary):
 {
-  "cover_lede": "one sentence: a data-led plan to make <Name> visible where buyers search — across Google and the new AI answer engines",
+  "cover_lede": "one sentence: a data-led plan to make <Name> visible where buyers search, across Google and the new AI answer engines",
   "story_title_a": "", "story_title_b": "",
   "story_paragraphs": ["", "", ""],
   "story_thesis": "",
@@ -732,8 +764,8 @@ async function generateDeckNarrative({ name, domain, industry, location, bm = {}
   const fmtK = (v) => (v == null ? "—" : (Math.abs(v) >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + "K" : String(Math.round(v))));
   const spine = [story.the_situation, story.whats_blocking_growth, story.the_opportunity, story.what_good_looks_like]
     .filter(Boolean).map((a) => "- " + (Array.isArray(a) ? a.join(" ") : a)).join("\n");
-  const DATA = `DATA — weave ONLY these facts (in the deck voice):
-BUSINESS: ${name} (${domain})${industry ? ` — ${industry}` : ""}${location ? ` · market: ${location}` : ""}
+  const DATA = `DATA, weave ONLY these facts (in the deck voice):
+BUSINESS: ${name} (${domain})${industry ? `, ${industry}` : ""}${location ? ` · market: ${location}` : ""}
 MEASURED METRICS ("—" = unknown, write around it):
 - Organic visits/month: ${n(bm.traffic) ?? "—"} | Ranking keywords: ${n(bm.keywords) ?? "—"}
 - Domain Rating: ${n(bm.dr) ?? "—"} | Referring domains: ${n(bm.rd) ?? "—"}
@@ -743,8 +775,8 @@ OPPORTUNITY: ~${fmtK(opp.totalVol)} monthly searches in play · ${opp.commCount 
 TOP COMMERCIAL KEYWORD: ${topCommercial ? `"${topCommercial.kw}" (${fmtK(topCommercial.vol)}/mo${topCommercial.kd != null ? `, difficulty ${topCommercial.kd}` : ""})` : "—"}
 TOP TECHNICAL ISSUES: ${(topIssues || []).map((t) => t.issue || t).slice(0, 3).join(" · ") || "—"}
 COMPETITORS: ${(competitors || []).slice(0, 4).map((c) => (c.name || c.domain) + (c.strength ? ` (${c.strength})` : "")).join(", ") || "—"}
-GEO/AI STATE: ${geoMeasured ? "live scan complete (numbers shown elsewhere)" : "AI-visibility scan pending — describe the opportunity + method only, NO share-of-voice/mention/citation number"}
-GROUNDING (the data spine — paraphrase in the deck voice, keep the facts):
+GEO/AI STATE: ${geoMeasured ? "live scan complete (numbers shown elsewhere)" : "AI-visibility scan pending, describe the opportunity + method only, NO share-of-voice/mention/citation number"}
+GROUNDING (the data spine, paraphrase in the deck voice, keep the facts):
 ${spine || "- (none captured; build from the metrics above)"}`;
   return generateWithAI(DECK_VOICE_SYSTEM, DATA, {}, { domain, api: "claude", label: "deck-narrative" });
 }
@@ -776,7 +808,7 @@ export async function POST(request) {
     const reportDataType = reportCacheType({ reportType, businessData, competitorData, reportMode, keyword, countryCode, negativeExclusions });
     const _cachedReport = await getCached({ domain, dataType: reportDataType, ttlDays: 30 });
     if (_cachedReport) {
-      console.log(`[cache HIT] report:${domain} — returning saved report (no fetch, no Claude)`);
+      console.log(`[cache HIT] report:${domain}, returning saved report (no fetch, no Claude)`);
       return NextResponse.json({ id: randomUUID(), reportType, data: _cachedReport });
     }
 
@@ -802,7 +834,7 @@ export async function POST(request) {
       ? keywordData.map((k) => (typeof k === "string" ? k : k?.label)).filter(Boolean)
       : [];
 
-    // V3 Part 4 — keep business and search competitors SEPARATE so the logic layer
+    // V3 Part 4, keep business and search competitors SEPARATE so the logic layer
     // can validate them: only business competitors enter direct comparison.
     const businessCompetitors = Array.isArray(competitorData?.businessCompetitors) ? competitorData.businessCompetitors : [];
     const searchCompetitorsList = Array.isArray(competitorData?.searchCompetitors) ? competitorData.searchCompetitors : [];
@@ -825,7 +857,7 @@ export async function POST(request) {
       cwvLab = prefetchPsi.coreWebVitals ?? prefetchPsi.coreWebVitalsLab ?? {};
     }
 
-    // ── Resolve DataForSEO metrics — prefer prefetched, always fresh-fetch if missing ──
+    // ── Resolve DataForSEO metrics, prefer prefetched, always fresh-fetch if missing ──
     let dr = null;
     let referringDomains = null;
     let organicKeywords = null;
@@ -851,7 +883,7 @@ export async function POST(request) {
     ]);
 
     if (needFreshPsi && (psiMobileRaw || psiDesktopRaw)) {
-      // Use whichever succeeded — mobile preferred for CWV (most relevant)
+      // Use whichever succeeded, mobile preferred for CWV (most relevant)
       mobileScore  = normScore(psiMobileRaw?.performanceScore)  ?? null;
       desktopScore = normScore(psiDesktopRaw?.performanceScore) ?? null;
       cwvLab       = psiMobileRaw?.coreWebVitalsLab ?? psiDesktopRaw?.coreWebVitalsLab ?? {};
@@ -865,13 +897,13 @@ export async function POST(request) {
       if (dr              == null) dr              = domainRankData.rank             ?? null;
     }
 
-    // Domain Rating + referring domains + total backlinks come from Moz — the DataForSEO
+    // Domain Rating + referring domains + total backlinks come from Moz, the DataForSEO
     // domain overview does NOT carry them, which is why the report was showing them as
     // "unavailable". Same accurate source the Info panel uses (e.g. itzfizz DA 52).
     let backlinks = null;
     let mozIntel = null;
     // withList:true also returns the referring-domains list (+ per-domain DA & spam score)
-    // and the site-wide spam score — surfaced in §1 (spam) and §7 (referring-domains table).
+    // and the site-wide spam score, surfaced in §1 (spam) and §7 (referring-domains table).
     const moz = await safeCall(() => fetchMozMetrics(domain, { withList: true }));
     if (moz) {
       if (Number.isFinite(moz.domainAuthority)) dr = moz.domainAuthority;       // 0-100 DA
@@ -899,7 +931,7 @@ export async function POST(request) {
 
     // ── Build baseline metrics ────────────────────────────────────────────────
     // Metrics: store formatted strings for text fields, null for missing numbers
-    // PSI scores stored as integer (0-100), NOT as strings with "/100" — the report component adds that
+    // PSI scores stored as integer (0-100), NOT as strings with "/100", the report component adds that
     // Store RAW numbers (NOT formatted strings). The logic + report format them via
     // formatMetricValue. Passing "1.3K"-style strings here caused Number("1.3K") → NaN
     // in the storytelling ("draws NaN organic traffic"). Raw numbers also keep full
@@ -918,7 +950,7 @@ export async function POST(request) {
       cls: (cwvLab?.cls ?? cwvLab?.CLS) != null ? Math.round((cwvLab?.cls ?? cwvLab?.CLS) * 100) / 100 : null, // 2 decimals
     };
 
-    // ── Compute real-data sections (no AI needed — derived from collected metrics) ──
+    // ── Compute real-data sections (no AI needed, derived from collected metrics) ──
     const crawlRaw   = prefetchedSeoData?.websiteCrawl ?? null;
     const gmbRaw     = prefetchedSeoData?.gmbCheck     ?? null;
     const kwGapRaw   = prefetchedSeoData?.keywordGap   ?? null;
@@ -949,7 +981,7 @@ export async function POST(request) {
 
     // ── STAGE 3: Doctor Fizz business logic layer ─────────────────────────────
     // Classifies keywords, separates content, categorizes backlinks, builds GBP
-    // comparison, validates KPIs, and labels missing data — per the spec Parts 1-2.
+    // comparison, validates KPIs, and labels missing data, per the spec Parts 1-2.
     // This produces the canonical structured payload that drives the report.
     const rawKeywordsForLogic = [
       ...(kwGapRaw?.gapKeywords || []),
@@ -990,20 +1022,20 @@ export async function POST(request) {
           gbpCompletenessScore: gmbRaw?.completeness?.score ?? null,
           gbpReviewCount:       gmbRaw?.gmb?.reviewCount ?? gmbRaw?.reviewCount ?? null,
           gbpRating:            gmbRaw?.gmb?.rating ?? null,
-          // Site-audit counts — surfaced only when the crawl/audit actually provides them.
+          // Site-audit counts, surfaced only when the crawl/audit actually provides them.
           errors404:            baselineMetrics.errors404,
           redirectChains:       crawlRaw?.redirectChains ?? crawlRaw?.summary?.redirectChains ?? null,
         },
         competitors,
-        businessCompetitors,           // V3 Part 4 — validated for direct comparison
-        searchCompetitors: searchCompetitorsList, // V3 Part 4 — SERP/search context only
+        businessCompetitors,           // V3 Part 4, validated for direct comparison
+        searchCompetitors: searchCompetitorsList, // V3 Part 4, SERP/search context only
         // V3 Part 3 setup-flow inputs (each with a downstream purpose)
         reportMode:    reportMode || businessData?.reportMode || "",
         businessScope: businessData?.businessScope || businessData?.scope || "",
         coreServices:  businessData?.coreServices || businessData?.services || [],
         negativeExclusions: Array.isArray(negativeExclusions) ? negativeExclusions : (businessData?.negativeExclusions || []),
         rawKeywords: rawKeywordsForLogic,
-        // #3 — real SERP intelligence per priority keyword (top-10 + features + AI Overview).
+        // #3, real SERP intelligence per priority keyword (top-10 + features + AI Overview).
         serpIntel:   kwGapRaw?.serpIntel || {},
         crawlData:   crawlRaw,
         clientGmb:   gmbRaw,
@@ -1037,7 +1069,7 @@ export async function POST(request) {
         domain,
         keywords,
         // Competitor landscape (local + national) is built from BUSINESS competitors
-        // ONLY — real direct rivals, never SERP aggregators/directories. Falls back
+        // ONLY, real direct rivals, never SERP aggregators/directories. Falls back
         // to the merged list only if no business competitors were found at all.
         competitors: (Array.isArray(businessCompetitors) && businessCompetitors.length)
           ? businessCompetitors
@@ -1075,7 +1107,7 @@ export async function POST(request) {
         };
       }
 
-      // ── #2 / #5 — "What Pages To Build" from the REAL classified architecture, with an
+      // ── #2 / #5, "What Pages To Build" from the REAL classified architecture, with an
       // existing-page guard (never recommend a page that already exists) and a pages-vs-
       // blogs split. Service/commercial + geography → pages to build; informational → blogs.
       const _ca = structuredPayload?.content_architecture || null;
@@ -1101,7 +1133,7 @@ export async function POST(request) {
           pagesToBuild,
           blogsToBuild,
           // Count recommended pages that already exist on the site (so the report can say
-          // "N pages already exist — optimise, don't rebuild"). Rederived locally from the
+          // "N pages already exist, optimise, don't rebuild"). Rederived locally from the
           // same classified arrays + existing-page guard (was sourced from evidence_plan,
           // now removed). Mirrors buildEvidencePlan's old pages_existing_flagged count.
           pagesExistingFlagged: [
@@ -1114,13 +1146,13 @@ export async function POST(request) {
         };
       }
 
-      // §7 — replace the generic competitor link-gap with REAL referring domains that link
+      // §7, replace the generic competitor link-gap with REAL referring domains that link
       // to competitors but not to you (DataForSEO Backlinks API), when collected.
       const _blGap = Array.isArray(kwGapRaw?.backlinkGap) ? kwGapRaw.backlinkGap : [];
       if (_blGap.length) {
         aiSections.linkBuilding = aiSections.linkBuilding || {};
         aiSections.linkBuilding.competitorLinkGap = _blGap.slice(0, 8).map((g) =>
-          `${g.referring_domain}${g.rank ? ` (SERP rank ${g.rank})` : ""} links to ${(g.links_to || []).join(", ") || "a competitor"} — pitch them the same value (data, quote, resource) to earn the link.`);
+          `${g.referring_domain}${g.rank ? ` (SERP rank ${g.rank})` : ""} links to ${(g.links_to || []).join(", ") || "a competitor"}, pitch them the same value (data, quote, resource) to earn the link.`);
       }
     } else {
       // Find the REAL crawled content for THIS page so Claude uses the actual
@@ -1145,6 +1177,20 @@ export async function POST(request) {
         psiData,
         pageData,
       });
+    }
+
+    // ── Per-competitor benchmark → merge real DR/traffic/keywords/refdomains into the
+    //    competitor landscape so the deck's "Gap In Numbers" table shows real numbers ──
+    if (reportType === "website" && aiSections.competitorLandscape) {
+      try {
+        const compList = [...(aiSections.competitorLandscape.localCompetitors || []), ...(aiSections.competitorLandscape.nationalPlatforms || [])];
+        const bench = await buildCompetitorBenchmark(compList, countryCode);
+        const merge = (arr) => (arr || []).map((c) => { const m = bench[_normDom(c.domain || c.name)]; return m ? { ...c, ...m } : c; });
+        aiSections.competitorLandscape.localCompetitors = merge(aiSections.competitorLandscape.localCompetitors);
+        aiSections.competitorLandscape.nationalPlatforms = merge(aiSections.competitorLandscape.nationalPlatforms);
+        const filled = Object.values(bench).filter((b) => b.dr != null || b.traffic != null).length;
+        console.log(`[generate-analysis] competitor benchmark: ${filled}/${Object.keys(bench).length} domains with real metrics`);
+      } catch (e) { console.error("[generate-analysis] competitor benchmark failed:", e?.message); }
     }
 
     // ── Deck storytelling (the reference-deck voice, from the real data above) ──
@@ -1233,7 +1279,7 @@ export async function POST(request) {
     } catch (mErr) { console.warn("[metrics] non-fatal:", mErr?.message); }
 
     // Append the report to the 30-day cache (no-op without Mongo). Repeat reports
-    // for the same site + inputs will return this instantly — no fetches, no Claude.
+    // for the same site + inputs will return this instantly, no fetches, no Claude.
     try { await putCached({ domain, dataType: reportDataType, payload: reportData, source: "report", forClientDomain: domain }); } catch {}
 
     // ── Persist to /tmp/reports/{id}.json ────────────────────────────────────

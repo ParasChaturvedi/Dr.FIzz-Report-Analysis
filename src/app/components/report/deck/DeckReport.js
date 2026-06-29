@@ -1,6 +1,6 @@
 // src/app/components/report/deck/DeckReport.js
 // ─────────────────────────────────────────────────────────────────────────────
-// THE REPLICA RENDERER — renders the report AS the 23-slide reference deck, bound
+// THE REPLICA RENDERER, renders the report AS the 23-slide reference deck, bound
 // to REAL data (data.doctorFizz + baselineMetrics + live GEO). Never prints the
 // deck's hand-authored numbers; every value is a real binding or an honest
 // gap-state. Honesty rules enforced here: per-engine GEO gated on real collection,
@@ -17,7 +17,7 @@ import {
 } from "./components";
 import { DeckStyle, C, accentFor, fmtNum, pctStr, dateGB, dash, clamp } from "./tokens";
 
-// DoctorFizz partner brands (static clientele wall — matches the reference deck).
+// DoctorFizz partner brands (static clientele wall, matches the reference deck).
 const CLIENT_BRANDS = ["ACENTEUS", "AXXONET", "VINE PROJECTS", "LOYORA", "DexWin", "AVIA", "WATERSTONE", "tipplr", "CONTENT WHALE", "SHIVA MANVI", "VASAL IMPEX", "SCRIBBLE NATION"];
 
 /* ── small data helpers ────────────────────────────────────────────────── */
@@ -80,7 +80,7 @@ export default function DeckReport({ data, live }) {
   const opp = v2.opportunity_summary || {};
   const proj = projectOutcome(bm, v2);
 
-  // real GEO leader (top non-client brand) — for mention/citation descriptors
+  // real GEO leader (top non-client brand), for mention/citation descriptors
   const sov = (live && live.share_of_voice) || [];
   const leader = [...sov].filter((b) => !b.is_client).sort((a, b) => (b.avg || 0) - (a.avg || 0))[0] || null;
 
@@ -109,10 +109,10 @@ export default function DeckReport({ data, live }) {
       ]} />
   );
 
-  /* 2 · CONTENTS — 8 discipline groups, real slide numbers, colored dots */
+  /* 2 · CONTENTS, 8 discipline groups, real slide numbers, colored dots */
   const geoToc = measured
     ? [["09", "Are you visible when buyers ask AI?"], ["10", "Share of voice vs competitors"], ["11", "Mention & citation rates"], ["12", "The prompts we ran"], ["13", "Topic & entity association"], ["14", "How the GEO score works"]]
-    : [["09", "AI visibility — readiness & method"], ["13", "Topic & entity association"]];
+    : [["09", "AI visibility, readiness & method"], ["13", "Topic & entity association"]];
   const toc = [
     { g: "Orientation", c: C.rust, items: [["01", "The story: where you stand"], ["02", "The outcome this plan delivers"], ["03", "The audit map: five pillars"]] },
     { g: "Technical SEO", c: "#3C7D5A", items: [["04", "Three things keeping you out"], ["05", "Fix the foundation first"]] },
@@ -158,7 +158,7 @@ export default function DeckReport({ data, live }) {
         </div>
         <Tiles cols={2}>
           <Tile flag n={fmtNum(traffic0 ?? 0)} label="Organic visits / month" />
-          <Tile flag n={measured ? fmtNum(live.mentions_summary?.prompts_with_brand ?? 0) : "—"} label={measured ? "AI answers naming you" : "AI answers — pending scan"} />
+          <Tile flag n={measured ? fmtNum(live.mentions_summary?.prompts_with_brand ?? 0) : "—"} label={measured ? "AI answers naming you" : "AI answers, pending scan"} />
           <Tile n={opp.total_monthly_search_volume ? fmtNum(opp.total_monthly_search_volume) : "—"} label="Searches up for grabs" />
           <Tile n={rating ? `${rating}★` : "—"} label="Rating, beats most rivals" />
         </Tiles>
@@ -181,7 +181,7 @@ export default function DeckReport({ data, live }) {
       <Row cols={3} className="mt2">
         <Card accent title="Search visibility"><p className="small">From 0 keywords to a base of <strong style={{ color: C.rust }}>{opp.commercial_keyword_count ? `${opp.commercial_keyword_count}+ commercial terms` : "commercial terms"}</strong>, led by low-difficulty wins.</p></Card>
         <Card accent title="Local dominance"><p className="small">Into the <strong style={{ color: C.rust }}>local map pack</strong>, on a {rating ? `${rating}★` : "strong"} rating rivals can&apos;t match.</p></Card>
-        <Card accent title="AI presence"><p className="small">{measured ? <>From a <strong style={{ color: C.rust }}>GEO score of {live.overall?.geo_score}</strong>, lifting share of voice, mentions and citations across the AI engines.</> : <>Build readiness to be quoted across the AI engines — <strong style={{ color: C.rust }}>baseline measured once the scan completes.</strong></>}</p></Card>
+        <Card accent title="AI presence"><p className="small">{measured ? <>From a <strong style={{ color: C.rust }}>GEO score of {live.overall?.geo_score}</strong>, lifting share of voice, mentions and citations across the AI engines.</> : <>Build readiness to be quoted across the AI engines, <strong style={{ color: C.rust }}>baseline measured once the scan completes.</strong></>}</p></Card>
       </Row>
     </Slide>
   );
@@ -189,10 +189,10 @@ export default function DeckReport({ data, live }) {
   /* 5 · THE AUDIT MAP */
   const pillars = [
     { k: "Technical SEO", pk: "tech", verd: verdict(lcpMs != null && Number(lcpMs) < 2500, lcpMs != null && Number(lcpMs) < 6000), line: lcpMs != null ? `A ${lcpSeconds(lcpMs)} load gates everything else.` : "Crawl + speed health.", first: "Fix first" },
-    { k: "On-Page SEO", pk: "onpage", verd: verdict(tp.filter((x) => /high|critical/i.test(x.priority)).length === 0, tp.length < 6), line: `${tp.length} on-page issues to clear (H1s, titles, schema).`, first: "Phase 1–2" },
+    { k: "On-Page SEO", pk: "onpage", verd: verdict(tp.filter((x) => /high|critical/i.test(x.priority)).length === 0, tp.length < 6), line: `${tp.length} on-page issues to clear (H1s, titles, schema).`, first: "Phase 1 to 2" },
     { k: "Off-Page / Authority", pk: "offpage", verd: verdict(dr != null && Number(dr) >= 30, dr != null && Number(dr) >= 15), line: `Domain Rating ${dash(dr)}, ${dash(rd)} referring domains.`, first: "Build over months" },
     { k: "Local SEO / GBP", pk: "local", verd: verdict(rating != null && Number(rating) >= 4.5 && reviews != null && Number(reviews) >= 50, rating != null), line: `${rating ? `${rating}★` : "—"} rating, ${dash(reviews)} reviews, ${dash(mv(bm, "gbp_completeness", "gmbCompletenessScore"))}% complete.`, first: "Quick win" },
-    { k: "GEO / AEO", pk: "geo", verd: measured ? verdict(Number(live.overall?.sov) >= 15, Number(live.overall?.sov) >= 5) : { v: "Open field", t: "warn" }, line: measured ? `${pctStr(live.overall?.sov)} share of voice, ${pctStr(live.overall?.citation_rate)} citation rate.` : `Readiness ${air.score ?? "—"}/100 — visibility not yet measured.`, first: "Phase 2–3" },
+    { k: "GEO / AEO", pk: "geo", verd: measured ? verdict(Number(live.overall?.sov) >= 15, Number(live.overall?.sov) >= 5) : { v: "Open field", t: "warn" }, line: measured ? `${pctStr(live.overall?.sov)} share of voice, ${pctStr(live.overall?.citation_rate)} citation rate.` : `Readiness ${air.score ?? "—"}/100, visibility not yet measured.`, first: "Phase 2 to 3" },
   ];
   slides.push(
     <Slide key="map" variant="cream" n="03" kicker="The Audit Map" title="Five pillars. One verdict on each."
@@ -206,7 +206,7 @@ export default function DeckReport({ data, live }) {
           </Card>
         ))}
         <Card dark accent title="Read this deck as proof">
-          <p className="small">Each pillar gets its own evidence slides ahead — what we found, what it costs in growth, and the first move.</p>
+          <p className="small">Each pillar gets its own evidence slides ahead, what we found, what it costs in growth, and the first move.</p>
         </Card>
       </Row>
     </Slide>
@@ -216,7 +216,7 @@ export default function DeckReport({ data, live }) {
   const topFix = tp.slice(0, 3);
   slides.push(
     <Slide key="diagnosis" n="04" kicker="The Diagnosis" title="Three fixable things keep you out"
-      sub={ds.diagnosis_sub || "The site is not underperforming — it is not yet in the game. Each fix has a clear, measurable payoff."} foot={foot("THE DIAGNOSIS")}>
+      sub={ds.diagnosis_sub || "The site is not underperforming, it is not yet in the game. Each fix has a clear, measurable payoff."} foot={foot("THE DIAGNOSIS")}>
       <Split bias>
         <div>
           {(topFix.length ? topFix : [{ issue: "Technical foundation", why_it_matters: "Crawl and speed issues keep the site hard to index.", expected_unlock: "Indexable", estimated_effort: "" }]).map((f, i) => (
@@ -226,7 +226,7 @@ export default function DeckReport({ data, live }) {
         <Card soft title="Already working in your favour">
           <Checks items={[
             { state: "ok", text: "No penalties. Clean history, nothing to undo." },
-            { state: "ok", text: `Schema in place${air.signals?.find((s) => /faq/i.test(s.key) && s.ok) ? " — FAQ blocks AI can lift." : "."}` },
+            { state: "ok", text: `Schema in place${air.signals?.find((s) => /faq/i.test(s.key) && s.ok) ? ", FAQ blocks AI can lift." : "."}` },
             { state: rating ? "ok" : "do", text: rating ? `A genuine ${rating}★ rating. Real trust to build on.` : "Build first reviews for trust." },
             { state: "ok", text: "An open field. No one owns the commercial space." },
           ]} />
@@ -263,11 +263,11 @@ export default function DeckReport({ data, live }) {
     </Slide>
   );
 
-  /* 8 · THE OPENING (competitors) — 4 rows + door-they-leave-open column */
+  /* 8 · THE OPENING (competitors), 4 rows + door-they-leave-open column */
   const comps = [...(cl.localCompetitors || []), ...(cl.nationalPlatforms || [])];
   slides.push(
     <Slide key="opening" variant="cream" n="06" kicker="The Opening" title={ds.opening_title || "The leaders are absent where it is winnable"}
-      sub={ds.opening_sub || "Each rival is strong on crowded, generic terms — and exposed on the high-value corners they never built for."} foot={foot("THE OPENING")}>
+      sub={ds.opening_sub || "Each rival is strong on crowded, generic terms, and exposed on the high-value corners they never built for."} foot={foot("THE OPENING")}>
       {comps.length > 0 ? (
         <DataTable head={[{ label: "Competitor" }, { label: "What they own" }, { label: "The door they leave open" }, { label: "Threat", align: "right" }]}
           rows={comps.slice(0, 4).map((c) => ({ cells: [c.name || c.domain, clamp(c.description, 90), c.door_open || c.opening || "—", { align: "right", tag: { kind: /high|alert/i.test(c.strength || c.threat || "") ? "high" : "med", label: (c.strength || (c.threat ? "High" : "Med")).toString().replace("THREAT ALERT", "High") } }] }))} />
@@ -285,7 +285,7 @@ export default function DeckReport({ data, live }) {
           { you: true, cells: [`${name} (you)`, { v: dash(dr), num: true, align: "right" }, { v: fmtNum(traffic0), num: true, align: "right" }, { v: dash(mv(bm, "organic_keywords", "organicKeywords")), num: true, align: "right" }, { v: dash(rd), num: true, align: "right" }] },
           ...comps.slice(0, 5).map((c) => ({ cells: [c.name || c.domain, { v: dash(c.dr), num: true, align: "right" }, { v: c.traffic != null ? fmtNum(c.traffic) : "—", num: true, align: "right" }, { v: c.keywords != null ? fmtNum(c.keywords) : "—", num: true, align: "right" }, { v: c.refDomains != null ? fmtNum(c.refDomains) : "—", num: true, align: "right" }] })),
         ]} />
-      <Callout className="mt2" mark="i"><b>Reading it:</b> your row is measured today (Moz / DataForSEO). Per-competitor authority, traffic and keyword counts are fetched in the benchmark pass and fill in here — none are estimated.</Callout>
+      <Callout className="mt2" mark="i"><b>Reading it:</b> your row is measured today (Moz / DataForSEO). Per-competitor authority, traffic and keyword counts are fetched in the benchmark pass and fill in here, none are estimated.</Callout>
     </Slide>
   );
 
@@ -301,7 +301,7 @@ export default function DeckReport({ data, live }) {
   );
   slides.push(
     <Slide key="keywords" n="08" kicker="Keyword Strategy" title={ds.keywords_title || "Three kinds of searcher. One of them buys."}
-      sub={<>{ds.keywords_sub || "We chase the commercial tier first — the one that turns a ranking into a client."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("KEYWORD STRATEGY")}>
+      sub={<>{ds.keywords_sub || "We chase the commercial tier first, the one that turns a ranking into a client."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("KEYWORD STRATEGY")}>
       <Row cols={3} style={{ gap: 18 }}>
         {tierCard("Tier 1 · Ready to buy", "Commercial intent · a page each", ca.commercial_pages)}
         {tierCard("Tier 2 · Local", "Place-based intent", ca.geography_pages || ca.city_pages)}
@@ -331,7 +331,7 @@ export default function DeckReport({ data, live }) {
               <Checks items={[
                 { state: "do", text: "Built real buyer prompts from your services + competitor terms." },
                 { state: "do", text: "Ran each across all 6 engines, capturing every brand named + source cited." },
-                { state: "do", text: "Scored you vs each competitor — every number relative, not vanity." },
+                { state: "do", text: "Scored you vs each competitor, every number relative, not vanity." },
               ]} />
             </div>
             <div>
@@ -343,7 +343,7 @@ export default function DeckReport({ data, live }) {
           </Split>
         </>
       ) : (
-        <GapPanel title="Scan in progress — no numbers invented before collection" engines={enginePanel}>
+        <GapPanel title="Scan in progress, no numbers invented before collection" engines={enginePanel}>
           We build buyer prompts from your services + competitor terms and run them across all 6 AI engines, capturing every brand named and source cited. Share-of-voice, mention and citation rates appear here once the engines respond.
         </GapPanel>
       )}
@@ -378,7 +378,7 @@ export default function DeckReport({ data, live }) {
             </Triad>
           )}
         </>
-      ) : <GapPanel title="Share of voice — pending scan" engines={enginePanel}>Per-brand and per-engine share of voice render here once collection completes.</GapPanel>}
+      ) : <GapPanel title="Share of voice, pending scan" engines={enginePanel}>Per-brand and per-engine share of voice render here once collection completes.</GapPanel>}
     </Slide>
   );
 
@@ -399,7 +399,7 @@ export default function DeckReport({ data, live }) {
           {metricCol("Mention Rate", "how often you appear at all", live.overall?.mention_rate, leader, live.by_engine, "mention_rate")}
           {metricCol("Citation Rate", "how often you are the source", live.overall?.citation_rate, leader, live.by_engine, "citation_rate")}
         </Split>
-      ) : <GapPanel title="Mentions & citations — pending scan" engines={enginePanel}>These per-engine rates populate from the live answer set.</GapPanel>}
+      ) : <GapPanel title="Mentions & citations, pending scan" engines={enginePanel}>These per-engine rates populate from the live answer set.</GapPanel>}
     </Slide>
   );
 
@@ -415,11 +415,11 @@ export default function DeckReport({ data, live }) {
             clamp((p.brands_named || p.entities || []).join(", ") || (p.competitor_mention_count ? `${p.competitor_mention_count} competitor${p.competitor_mention_count === 1 ? "" : "s"}` : "—"), 40),
             { align: "right", v: <ResCell kind={resKind(p)}>{p.citation_count > 0 ? "Cited" : p.brand_mentioned ? "Named" : "Not named"}</ResCell> },
           ] }))} />
-      ) : <GapPanel title="Prompt evidence — pending scan" engines={enginePanel}>The exact prompts and per-engine answers appear here once collected — never invented.</GapPanel>}
+      ) : <GapPanel title="Prompt evidence, pending scan" engines={enginePanel}>The exact prompts and per-engine answers appear here once collected, never invented.</GapPanel>}
     </Slide>
   );
 
-  /* 15 · AEO readiness (topic + trust signals) — split-bias, topic LEFT, signals RIGHT */
+  /* 15 · AEO readiness (topic + trust signals), split-bias, topic LEFT, signals RIGHT */
   const clientTd = measured && live.topic_dominance ? (live.topic_dominance.by_brand || []).find((b) => b.is_client) : null;
   const topicChips = clientTd ? [
     ...(clientTd.won_topics || []).map((t) => ({ topic: typeof t === "string" ? t : t.topic, state: "strong" })),
@@ -437,14 +437,14 @@ export default function DeckReport({ data, live }) {
         </div>
         <div>
           <h3 className="mini">Trust signals: present vs missing</h3>
-          <Checks items={(air.signals || []).slice(0, 7).map((s) => ({ state: s.ok ? "ok" : "no", text: s.label + (s.detail ? ` — ${clamp(s.detail, 50)}` : "") }))} />
+          <Checks items={(air.signals || []).slice(0, 7).map((s) => ({ state: s.ok ? "ok" : "no", text: s.label + (s.detail ? `, ${clamp(s.detail, 50)}` : "") }))} />
           {(!air.signals || air.signals.length === 0) && <p className="small">Readiness signals populate from the on-site crawl.</p>}
         </div>
       </Split>
     </Slide>
   );
 
-  /* 16 · How the GEO score works — fixed methodology weights */
+  /* 16 · How the GEO score works, fixed methodology weights */
   const GEO_WEIGHTS = [["Share of voice vs competitors", 30], ["Citation rate · you as the source", 25], ["Mention rate · named at all", 20], ["Entity & topical association", 15], ["Schema & answer-readiness", 10]];
   slides.push(
     <Slide key="geo-method" variant="dark" n="14" kicker="How The GEO Score Works" title="Every GEO number, and where it comes from"
@@ -455,14 +455,14 @@ export default function DeckReport({ data, live }) {
           <Checks items={[
             { state: "do", text: "Build prompts from your site, competitors and intent tests." },
             { state: "do", text: "Run every prompt across ChatGPT, Gemini, Perplexity, Claude, Copilot, Google AIO." },
-            { state: "do", text: "Score share of voice, mention and citation — you vs each competitor, per engine." },
+            { state: "do", text: "Score share of voice, mention and citation, you vs each competitor, per engine." },
             { state: "do", text: "Re-run the same set monthly, so every movement is comparable." },
           ]} />
         </div>
         <div>
-          <h3 className="mini">How the 0–100 score is weighted</h3>
+          <h3 className="mini">How the 0 to 100 score is weighted</h3>
           {GEO_WEIGHTS.map(([label, w]) => <ScoreSig key={label} label={label} weight={`${w}%`} />)}
-          {measured ? <ScoreBox score={live.overall?.geo_score} /> : <p className="small" style={{ marginTop: 12, color: "#B5ABA0" }}>Score pending — values fill in when the scan completes.</p>}
+          {measured ? <ScoreBox score={live.overall?.geo_score} /> : <p className="small" style={{ marginTop: 12, color: "#B5ABA0" }}>Score pending, values fill in when the scan completes.</p>}
         </div>
       </Split>
     </Slide>
@@ -490,7 +490,7 @@ export default function DeckReport({ data, live }) {
     </Slide>
   );
 
-  /* 18 · The content map (optimise vs create) — 4 count-badged groups */
+  /* 18 · The content map (optimise vs create), 4 count-badged groups */
   const createPages = [...(ca.commercial_pages || []), ...(ca.geography_pages || [])];
   const createBlogs = (ca.blog_and_guides || []);
   const PbHead = ({ count, label }) => (<div className="pbhead"><span className="ct2">{count}</span><span className="cl2">{label}</span></div>);
@@ -500,7 +500,7 @@ export default function DeckReport({ data, live }) {
       <Split>
         <div>
           <Card soft><PbHead count={ca.pagesExistingFlagged ?? 0} label="pages you have · optimise" />
-            <p className="small" style={{ marginTop: 6 }}>{ca.pagesExistingFlagged > 0 ? "Matched real demand — add H1/FAQ/schema, expand thin content. Per-page detail lands with the on-page pass." : "No existing pages matched the target keywords."}</p>
+            <p className="small" style={{ marginTop: 6 }}>{ca.pagesExistingFlagged > 0 ? "Matched real demand, add H1/FAQ/schema, expand thin content. Per-page detail lands with the on-page pass." : "No existing pages matched the target keywords."}</p>
           </Card>
         </div>
         <div>
@@ -531,7 +531,7 @@ export default function DeckReport({ data, live }) {
       <div style={{ marginTop: 22 }}>
         {gbp.has_competitor_data && reviewCompetitors.length > 0 ? (
           <>
-            <h3 className="mini">Reviews — you vs competitors</h3>
+            <h3 className="mini">Reviews, you vs competitors</h3>
             <CBar name={`${name} (you)`} pct={(reviews / maxRev) * 100} you value={dash(reviews)} />
             {reviewCompetitors.map((c, i) => <CBar key={i} name={c.name} pct={((c.review_count || 0) / maxRev) * 100} value={dash(c.review_count)} />)}
           </>
@@ -542,7 +542,7 @@ export default function DeckReport({ data, live }) {
     </Slide>
   );
 
-  /* 20 · Citations & backlinks — three waves as cards */
+  /* 20 · Citations & backlinks, three waves as cards */
   const dirs = (gmb.directories || []).slice(0, 12).map((x) => ({ name: x.name, state: x.listed === true ? "have" : x.listed === false ? "miss" : "q" }));
   const citeDirs = dirs.length ? dirs : (lb.citation_links || []).slice(0, 12).map((x) => ({ name: x.platform, state: x.client_listed ? "have" : "miss" }));
   slides.push(
@@ -555,9 +555,9 @@ export default function DeckReport({ data, live }) {
         </div>
         <div>
           <KV k="Now · referring domains" v={dash(rd)} />
-          <Card style={{ marginTop: 10 }}><h4><span style={{ color: C.rust }}>Wave 1.</span> Citations · months 1–2</h4><p className="small">Consistent NAP across the trusted directories for your market.</p></Card>
-          <Card style={{ marginTop: 8 }}><h4><span style={{ color: C.rust }}>Wave 2.</span> Earned links · months 2–4</h4><p className="small">A cost calculator, an annual report, an SLA template firms cite and share.</p></Card>
-          <Card style={{ marginTop: 8 }}><h4><span style={{ color: C.rust }}>Wave 3.</span> Close the leader gap · ongoing</h4><p className="small">Trade publications + partner directories that link to rivals but not yet you{proj.dr12 != null ? ` — target DR ${proj.dr12}.` : "."}</p></Card>
+          <Card style={{ marginTop: 10 }}><h4><span style={{ color: C.rust }}>Wave 1.</span> Citations · months 1 to 2</h4><p className="small">Consistent NAP across the trusted directories for your market.</p></Card>
+          <Card style={{ marginTop: 8 }}><h4><span style={{ color: C.rust }}>Wave 2.</span> Earned links · months 2 to 4</h4><p className="small">A cost calculator, an annual report, an SLA template firms cite and share.</p></Card>
+          <Card style={{ marginTop: 8 }}><h4><span style={{ color: C.rust }}>Wave 3.</span> Close the leader gap · ongoing</h4><p className="small">Trade publications + partner directories that link to rivals but not yet you{proj.dr12 != null ? `, target DR ${proj.dr12}.` : "."}</p></Card>
         </div>
       </Split>
     </Slide>
@@ -578,10 +578,10 @@ export default function DeckReport({ data, live }) {
     </Slide>
   );
 
-  /* 22 · The 30/60/90/180 plan — color-coded dots */
+  /* 22 · The 30/60/90/180 plan, color-coded dots */
   const phaseDefs = [
-    { badge: "30", duration: "First 30 days", title: "Foundation" }, { badge: "60", duration: "Days 31–60", title: "Capture" },
-    { badge: "90", duration: "Days 61–90", title: "Authority" }, { badge: "180", duration: "Days 91–180", title: "Compound" },
+    { badge: "30", duration: "First 30 days", title: "Foundation" }, { badge: "60", duration: "Days 31 to 60", title: "Capture" },
+    { badge: "90", duration: "Days 61 to 90", title: "Authority" }, { badge: "180", duration: "Days 91 to 180", title: "Compound" },
   ];
   slides.push(
     <Slide key="plan" n="20" kicker="The 30/60/90/180 Plan" title="One job per phase. Move on when it's done." foot={foot("THE 30/60/90/180 PLAN")}>
@@ -611,7 +611,7 @@ export default function DeckReport({ data, live }) {
         </div>
         <div className="metric-col">
           <h3 className="mini">AI answers (GEO) {measured ? <Hypo>Illustrative</Hypo> : <span style={{ color: C.muted, fontWeight: 400 }}>· pending scan</span>}</h3>
-          <Trend label="GEO score (0–100)" now={measured ? live.overall?.geo_score : "—"} target={measured ? "45+" : "—"} />
+          <Trend label="GEO score (0 to 100)" now={measured ? live.overall?.geo_score : "—"} target={measured ? "45+" : "—"} />
           <Trend label="Share of voice" now={measured ? pctStr(live.overall?.sov) : "—"} target={measured ? "18%" : "—"} />
           <Trend label="Mention rate" now={measured ? pctStr(live.overall?.mention_rate) : "—"} target={measured ? "35%" : "—"} />
           <Trend label="Citation rate" now={measured ? pctStr(live.overall?.citation_rate) : "—"} target={measured ? "15%" : "—"} />
@@ -621,7 +621,7 @@ export default function DeckReport({ data, live }) {
     </Slide>
   );
 
-  /* 24 · The honest assessment — Result line per card */
+  /* 24 · The honest assessment, Result line per card */
   const priorities = (Array.isArray(ds.priorities) && ds.priorities.filter((p) => p && p.title).length
     ? ds.priorities.filter((p) => p && p.title).slice(0, 3).map((p) => ({ title: p.title, description: p.body, expected_result: p.result }))
     : (sp.length ? sp.slice(0, 3) : tp.slice(0, 3).map((t) => ({ title: t.issue, description: t.why_it_matters || t.recommended_action, expected_result: t.expected_unlock }))));
@@ -642,7 +642,7 @@ export default function DeckReport({ data, live }) {
     </Slide>
   );
 
-  /* 25 · Clientele & next steps — brand wall + 4 steps + CTA */
+  /* 25 · Clientele & next steps, brand wall + 4 steps + CTA */
   slides.push(
     <Slide key="close" variant="dark" n={null} kicker="Trusted & Ready When You Are" title="Brands we have partnered with" foot={foot("DOCTOR FIZZ")}>
       <CLGrid names={CLIENT_BRANDS} />
