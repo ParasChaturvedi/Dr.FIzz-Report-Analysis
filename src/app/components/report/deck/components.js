@@ -125,7 +125,7 @@ export const PhaseCol = ({ badge, duration, title, mission, items = [], goal }) 
     {mission && <div className="pm">{mission}</div>}
     <ul>
       {items.map((it, i) => (
-        <li key={i}><span className="dotc" style={it.color ? { background: it.color } : undefined} />{it.text || it}</li>
+        <li key={i}><span className="dotc" style={(it && it.color) ? { background: it.color } : undefined} />{typeof it === "string" ? it : (it?.text || "")}</li>
       ))}
     </ul>
     {goal && <div className="goal"><div className="gl">{goal.label || "Target"}</div><div className="gt">{goal.text}</div></div>}
