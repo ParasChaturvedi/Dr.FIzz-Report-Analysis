@@ -160,8 +160,21 @@ export default function DownloadReportModal({ domain, data, onClose }) {
     hiddenEls.forEach   ((el) => { el.style.opacity    = el._bak || ""; delete el._bak; });
     transformEls.forEach((el) => { el.style.transform  = el._bak || ""; delete el._bak; });
 
-    // 4. PDF-specific overrides — clean layout, no animations, exact colours
-    const pdfOverrides = [
+    // 4. PDF-specific overrides — clean layout, no animations, exact colours.
+    // The new deck renderer (#report-content.df-deck) is fixed 1280×720 16:9 slides
+    // that are already print-ready via its own @media print rules — the legacy
+    // Tailwind section overrides below would DISTORT it, so the deck gets a minimal
+    // set (colour accuracy + hide chrome + one page per slide).
+    const isDeck = !!document.querySelector("#report-content.df-deck");
+    const deckOverrides = [
+      "* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-scheme: light !important; }",
+      "* { transition: none !important; animation: none !important; }",
+      ".fixed, [class*='sticky'] { display: none !important; }",
+      ".df-deck { background: #ffffff !important; padding: 0 !important; }",
+      ".df-deck .slide { margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; page-break-after: always !important; break-after: page !important; }",
+      ".df-deck .slide:last-child { page-break-after: auto !important; break-after: auto !important; }",
+    ].join("\n");
+    const legacyOverrides = [
       /* 1 – Colour accuracy */
       "* { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-scheme: light !important; }",
 
@@ -223,6 +236,7 @@ export default function DownloadReportModal({ domain, data, onClose }) {
       "#report-content .text-4xl { font-size: 1.875rem !important; }",
 
     ].join("\n");
+    const pdfOverrides = isDeck ? deckOverrides : legacyOverrides;
 
     // 5. Assemble completely self-contained HTML document
     // Note: viewport width 1280 ensures md: breakpoint classes (≥768px) apply,
@@ -251,7 +265,7 @@ export default function DownloadReportModal({ domain, data, onClose }) {
     const resp = await fetch("/api/report/download-pdf", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ htmlContent: htmlDoc, domain }),
+      body:    JSON.stringify({ htmlContent: htmlDoc, domain, deck: isDeck }),
     });
 
     if (!resp.ok) {

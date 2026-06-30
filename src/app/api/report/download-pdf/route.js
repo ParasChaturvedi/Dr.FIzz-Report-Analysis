@@ -68,12 +68,13 @@ async function launchBrowser() {
 }
 
 // ── Render the self-contained HTML with headless Chromium ─────────────────────
-async function renderWithChromium(htmlContent) {
+async function renderWithChromium(htmlContent, deck = false) {
   let browser = null;
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 1696, deviceScaleFactor: 2 });
+    // Deck = fixed 1280×720 16:9 slides; render at slide width so layout is exact.
+    await page.setViewport({ width: 1280, height: deck ? 720 : 1696, deviceScaleFactor: 2 });
 
     // Load the fully self-contained HTML. networkidle0 waits for fonts/images.
     await page.setContent(htmlContent, { waitUntil: "networkidle0", timeout: 45000 });
@@ -82,7 +83,9 @@ async function renderWithChromium(htmlContent) {
     await page.emulateMediaType("print");
 
     const pdf = await page.pdf({
-      format: "A4",
+      // Deck: one 1280×720 landscape page PER slide (slides carry page-break-after).
+      // Legacy report: A4 portrait flow.
+      ...(deck ? { width: "1280px", height: "720px" } : { format: "A4" }),
       printBackground: true,
       preferCSSPageSize: false,
       margin: { top: "0mm", right: "0mm", bottom: "0mm", left: "0mm" },
@@ -133,7 +136,7 @@ async function renderWithConvertApi({ htmlContent, reportUrl }) {
 
 export async function POST(req) {
   try {
-    const { reportUrl, htmlContent, domain } = await req.json();
+    const { reportUrl, htmlContent, domain, deck = false } = await req.json();
 
     if (!htmlContent && !reportUrl) {
       return Response.json({ error: "Either htmlContent or reportUrl is required." }, { status: 400 });
@@ -145,7 +148,7 @@ export async function POST(req) {
     // Primary: self-hosted Chromium (only works with htmlContent)
     if (htmlContent) {
       try {
-        pdfBuffer = await renderWithChromium(htmlContent);
+        pdfBuffer = await renderWithChromium(htmlContent, deck);
       } catch (chromeErr) {
         console.error("[download-pdf] Chromium failed, trying fallback:", chromeErr?.message);
         engine = "convertapi";
