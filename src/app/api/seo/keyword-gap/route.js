@@ -234,10 +234,12 @@ export async function POST(request) {
   }
 
   const body = await request.json().catch(() => ({}));
-  const { domain, competitors = [], keywords = [] } = body;
+  const { domain, competitors = [], keywords = [], countryCode = "in" } = body;
 
   if (!domain) return NextResponse.json({ error: "domain required" }, { status: 400 });
 
+  // Market-correct DataForSEO location for every call below (was hardcoded "India").
+  const locationName = locationNameForCountry(countryCode);
   const target = norm(domain);
   const compDomains = competitors.map(norm).filter(Boolean).slice(0, 4);
 

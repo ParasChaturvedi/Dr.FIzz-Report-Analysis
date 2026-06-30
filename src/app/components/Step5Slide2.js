@@ -933,7 +933,7 @@ export default function Step5Slide2({
           const res = await fetch("/api/seo/gmb", {
             method:  "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ domain, businessName }),
+            body: JSON.stringify({ domain, businessName, countryCode: marketCC }),
           });
           if (!res.ok) throw new Error(`gmb ${res.status}`);
           return res.json();

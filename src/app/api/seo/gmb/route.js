@@ -8,6 +8,7 @@ import { claudeChat }   from "@/lib/claude/client";
 import { loadMarketplaceDirectories } from "@/lib/seo/geo/marketplace-source";
 import { getOrFetch } from "@/lib/cache/mongo";
 import { logUsage } from "@/lib/cache/usage";
+import { locationNameForCountry } from "@/lib/seo/market";
 
 export const runtime    = "nodejs";
 export const maxDuration = 300; // allows the inline live GEO scan to run on a cache miss
@@ -553,16 +554,18 @@ export async function checkGmb(domain, businessName = "", location = "India", op
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { domain, businessName, location, skipDirectories } = body;
+    const { domain, businessName, location, skipDirectories, countryCode } = body;
     if (!domain) return NextResponse.json({ error: "domain required" }, { status: 400 });
-    // 30-day persistent cache by domain (cross-user reuse: a competitor that matches
-    // an already-checked domain reuses its GMB data). No-op if Mongo isn't configured.
+    // Market-correct GMB search location (was hardcoded "India" → a UK business was searched
+    // on Indian Maps and never found). Explicit `location` wins, else derive from the market.
+    const loc = location || locationNameForCountry(countryCode || "in");
+    // 30-day persistent cache by domain + MARKET (so a UK lookup is never served India data).
     const { data: result, cached } = await getOrFetch({
       domain,
-      dataType: `gmb:${skipDirectories ? "nodirs" : "full"}`,
+      dataType: `gmb:${loc}:${skipDirectories ? "nodirs" : "full"}`,
       ttlDays: 30,
       source: "gmb",
-      fetchFn: () => checkGmb(domain, businessName || "", location || "India", { skipDirectories: !!skipDirectories }),
+      fetchFn: () => checkGmb(domain, businessName || "", loc, { skipDirectories: !!skipDirectories }),
     });
     await logUsage({ domain, api: "gmb", costUSD: cached ? 0 : (skipDirectories ? 0.015 : 0.03), cached });
     return NextResponse.json(result);

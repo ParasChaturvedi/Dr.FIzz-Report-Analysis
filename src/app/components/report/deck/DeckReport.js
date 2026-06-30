@@ -58,12 +58,16 @@ function projectOutcome(bm, v2) {
 export default function DeckReport({ data, live }) {
   const d = data || {};
   const df = d.doctorFizz || {};
-  const bm = d.baselineMetrics || {};
+  // Prefer the CANONICAL Stage-3 structured payload (doctorFizz.*) — it carries the FULL
+  // metric set ({value,label} objects incl. referring_domains / perf / site-health / GBP),
+  // the validated content architecture, etc. The top-level aiSections fields are partial
+  // mirrors and often miss metrics, so they're only the fallback.
+  const bm = df.baseline || d.baselineMetrics || {};
   const story = df.story || {};
   const ds = d.deckStory || {}; // Claude-written narrative in the reference-deck voice (real data)
   const v2 = df.v2_additions || {};
   const cl = d.competitorLandscape || {};
-  const ca = d.contentArchitecture || {};
+  const ca = (df.content_architecture && (df.content_architecture.commercial_pages?.length || df.content_architecture.blog_and_guides?.length)) ? df.content_architecture : (d.contentArchitecture || df.content_architecture || {});
   const tp = Array.isArray(d.technicalPriorities) ? d.technicalPriorities : [];
   const lb = d.linkBuilding || {};
   const gbp = df.gbp_comparison || {};
