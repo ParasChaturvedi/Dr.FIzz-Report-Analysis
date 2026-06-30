@@ -74,7 +74,11 @@ export default function DeckReport({ data, live }) {
   const gmb = d.gmbCheck || {};
   const rm = Array.isArray(d.roadmap) ? d.roadmap : [];
   const air = df.ai_readiness || {};
-  const ksRows = Array.isArray(d.measuringSuccessRows) ? d.measuringSuccessRows : [];
+  // KPI rows: prefer the canonical Stage-3 kpis.metrics ({key,baseline,target_6/12_months});
+  // the top-level measuringSuccessRows is a {metric,now,s6,s12} mirror used only as fallback.
+  const ksRows = (Array.isArray(df.kpis?.metrics) && df.kpis.metrics.length)
+    ? df.kpis.metrics
+    : (Array.isArray(d.measuringSuccessRows) ? d.measuringSuccessRows : []);
   const sp = Array.isArray(d.strategicPriorities) ? d.strategicPriorities : [];
 
   const domain = d.domain || "yourdomain.com";
@@ -607,7 +611,7 @@ export default function DeckReport({ data, live }) {
       <Split>
         <div className="metric-col">
           <h3 className="mini">Search (SEO)</h3>
-          {seoBoard.map(([label, r], i) => (<Trend key={i} label={label} now={r ? dash(r.baseline) : "—"} target={r ? dash(r.target_12_months ?? r.target_6_months) : "—"} />))}
+          {seoBoard.map(([label, r], i) => (<Trend key={i} label={label} now={r ? dash(r.baseline ?? r.now) : "—"} target={r ? dash(r.target_12_months ?? r.target_6_months ?? r.s12 ?? r.s6) : "—"} />))}
           <Trend label="Site health score" now={dash(health)} target="90" />
         </div>
         <div className="metric-col">
