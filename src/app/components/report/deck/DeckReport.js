@@ -586,12 +586,23 @@ export default function DeckReport({ data, live }) {
     ] };
   });
   const useAioPrompts = aioMeasured && aioPromptRows.length > 0;
+  // Proper engine display names (never a raw key like "aioverviews") + round-robin the
+  // sample across EVERY engine that actually ran, so the table shows the real spread
+  // (e.g. Google AI Overviews + Claude) instead of 10 rows of one engine. Each prompt is
+  // only ever labelled with the engine that REALLY answered it — never a fabricated one.
+  const ENG_NAME = { aioverviews: "Google AI Overviews", "google ai overviews": "Google AI Overviews", chatgpt: "ChatGPT", gemini: "Gemini", perplexity: "Perplexity", claude: "Claude", copilot: "Microsoft Copilot", "microsoft copilot": "Microsoft Copilot" };
+  const engName = (e) => ENG_NAME[String(e || "").toLowerCase()] || e || "—";
+  const _pxByEng = {};
+  for (const p of (geo.prompts_executed || [])) { const k = String(p.engine || "?").toLowerCase(); (_pxByEng[k] = _pxByEng[k] || []).push(p); }
+  const _pxPools = Object.values(_pxByEng).map((a) => a.slice());
+  const geoPromptsMixed = [];
+  for (let _more = true; _more;) { _more = false; for (const pool of _pxPools) { if (pool.length) { geoPromptsMixed.push(pool.shift()); _more = true; } } }
   slides.push(
     <Slide key="geo-prompts" variant="cream" n="12" kicker="The Prompts We Ran" title={useAioPrompts ? "What AI cites for your buyer terms, and where you're absent" : "Real prompts, real answers, per engine"}
       sub={<>{useAioPrompts ? "The real sources Google's AI Overview quotes for your buyer terms today." : "A sample of the buyer questions we ran and what each engine returned. This is the raw evidence behind every GEO number."} {useAioPrompts ? MeasTag : IllusTag}</>} foot={foot("12 · GEO · SAMPLE PROMPTS")}>
       <DataTable compact head={[{ label: useAioPrompts ? "Buyer term" : "Buyer prompt" }, { label: "Engine" }, { label: useAioPrompts ? "Sources it cited" : "Who it named" }, { label: `${name} result`, align: "right" }]}
-        rows={useAioPrompts ? aioPromptRows : (geo.prompts_executed || []).slice(0, 10).map((p) => ({ cells: [
-          clamp(p.prompt, 56), p.engine,
+        rows={useAioPrompts ? aioPromptRows : geoPromptsMixed.slice(0, 10).map((p) => ({ cells: [
+          clamp(p.prompt, 56), engName(p.engine),
           clamp((p.brands_named || p.entities || []).join(", ") || (p.competitor_mention_count ? `${p.competitor_mention_count} competitor${p.competitor_mention_count === 1 ? "" : "s"}` : "—"), 40),
           { align: "right", v: <ResCell kind={resKind(p)}>{p.citation_count > 0 ? "Cited" : p.brand_mentioned ? "Named" : "Not named"}</ResCell> },
         ] }))} />

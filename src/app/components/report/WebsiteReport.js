@@ -732,6 +732,18 @@ const GEO_SIGNAL_LABELS = {
   topic_coverage:           "Topic coverage",
 };
 
+// Proper engine display names (never a raw key like "aioverviews") + a round-robin so the
+// prompt sample shows every engine that actually ran, not a block of one. Each prompt keeps
+// the engine that REALLY answered it — never a fabricated one.
+const GEO_ENG_NAME = { aioverviews: "Google AI Overviews", "google ai overviews": "Google AI Overviews", chatgpt: "ChatGPT", gemini: "Gemini", perplexity: "Perplexity", claude: "Claude", copilot: "Microsoft Copilot", "microsoft copilot": "Microsoft Copilot" };
+const engName = (e) => GEO_ENG_NAME[String(e || "").toLowerCase()] || e || "—";
+function interleaveByEngine(list = []) {
+  const by = {}; for (const p of list) { const k = String(p.engine || "?").toLowerCase(); (by[k] = by[k] || []).push(p); }
+  const pools = Object.values(by).map((a) => a.slice()); const out = [];
+  for (let more = true; more;) { more = false; for (const pool of pools) { if (pool.length) { out.push(pool.shift()); more = true; } } }
+  return out;
+}
+
 // Resolve the plain-language definition for a metric card: prefer the live payload's
 // per-metric .plain_language, fall back to the local PLAIN_LANGUAGE map (by metric key
 // or card label), and finally to the existing technical sub-label.
@@ -998,9 +1010,9 @@ function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
       {live.prompts_executed?.length > 0 && (
         <div className="rounded-lg bg-white p-5" style={cardB}>
           <Lbl>Top {Math.min(10, live.prompts_executed.length)} prompts we ran &amp; deeply analysed{live.prompts_executed.length > 10 ? ` (of ${live.prompts_executed.length})` : ""} — real AI-engine answers</Lbl>
-          <div className="space-y-3 mt-2">{live.prompts_executed.slice(0, 10).map((p, i) => (
+          <div className="space-y-3 mt-2">{interleaveByEngine(live.prompts_executed).slice(0, 10).map((p, i) => (
             <div key={i} style={{ borderTop: i ? "1px solid #F0F0F0" : "none", paddingTop: i ? 10 : 0 }}>
-              <div style={{ fontFamily: BODY, fontSize: "12.5px", fontWeight: 700, color: INK }}>{p.prompt} <span style={{ color: "#8A8A8A", fontWeight: 400 }}>· {p.engine}</span></div>
+              <div style={{ fontFamily: BODY, fontSize: "12.5px", fontWeight: 700, color: INK }}>{p.prompt} <span style={{ color: "#8A8A8A", fontWeight: 400 }}>· {engName(p.engine)}</span></div>
               {/* Per-prompt evidence (all real, parsed from THIS answer): were you named, how many
                   competitors, citations, the answer's tone + shape. Turns a flat dump into proof. */}
               <div style={{ fontFamily: BODY, fontSize: "11px", marginTop: 3, display: "flex", flexWrap: "wrap", gap: 9 }}>
