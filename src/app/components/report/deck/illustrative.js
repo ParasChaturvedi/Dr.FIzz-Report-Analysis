@@ -30,22 +30,29 @@ function buildShareOfVoice(name, competitors) {
   const shares = [28, 24, 16, 10]; // leader → 4th
   const by = comp.map((b, i) => ({
     brand: b, is_client: false, avg: shares[i] ?? 8,
+    // Per-metric values so the mention/citation slides cite distinct leader benchmarks
+    // (leader SoV 28 → ~61% mention, ~24% citation, matching the reference shape).
+    mention_rate: Math.round((shares[i] ?? 8) * 2.18),
+    citation_rate: Math.round((shares[i] ?? 8) * 0.86),
     per_engine: ENGINES.reduce((m, e, j) => ((m[e] = Math.max(0, (shares[i] ?? 8) + ((j % 3) - 1) * 2)), m), {}),
   }));
-  by.push({ brand: name, is_client: true, avg: 3, per_engine: ENGINES.reduce((m, e) => ((m[e] = CLIENT_BY_ENGINE[e].sov), m), {}) });
+  by.push({ brand: name, is_client: true, avg: 3, mention_rate: 9, citation_rate: 2, per_engine: ENGINES.reduce((m, e) => ((m[e] = CLIENT_BY_ENGINE[e].sov), m), {}) });
   return by.sort((a, b) => b.avg - a.avg);
 }
 
 // Sample buyer prompts (the raw evidence layer) — competitor-named, plausible outcomes.
-function buildPrompts(name, competitors) {
+// Market/industry-NEUTRAL wording (no hardcoded "UK"/industry) so the template never
+// looks wrong for a client; `topic` (client's primary service) is woven in when given.
+function buildPrompts(name, competitors, topic = "") {
   const comp = competitors.map(clean).filter(Boolean);
   const lead = comp[0] || "a national rival", second = comp[1] || "a rival", third = comp[2] || comp[0] || "a rival";
+  const svc = topic || "your service";
   return [
-    { prompt: "Best outsourced service for UK firms?", engine: "ChatGPT", brands_named: [lead, second, third], brand_mentioned: false, competitor_mention_count: 3, citation_count: 0 },
-    { prompt: "Who offers white-label support for UK practices?", engine: "Perplexity", brands_named: [lead, name], brand_mentioned: true, competitor_mention_count: 1, citation_count: 0 },
-    { prompt: "Local partner in your city?", engine: "Claude", brands_named: ["generic firms"], brand_mentioned: false, competitor_mention_count: 0, citation_count: 0 },
-    { prompt: "Top providers for small practices?", engine: "Microsoft Copilot", brands_named: [third, name], brand_mentioned: true, competitor_mention_count: 1, citation_count: 1 },
-    { prompt: "Most cost-effective option for UK firms?", engine: "Gemini", brands_named: [lead, second], brand_mentioned: false, competitor_mention_count: 2, citation_count: 0 },
+    { prompt: `Best ${svc} provider for businesses like mine?`, engine: "ChatGPT", brands_named: [lead, second, third], brand_mentioned: false, competitor_mention_count: 3, citation_count: 0 },
+    { prompt: `Who offers ${svc} for small businesses?`, engine: "Perplexity", brands_named: [lead, name], brand_mentioned: true, competitor_mention_count: 1, citation_count: 0 },
+    { prompt: "Trusted partner in my city for this?", engine: "Claude", brands_named: ["generic firms"], brand_mentioned: false, competitor_mention_count: 0, citation_count: 0 },
+    { prompt: `Top-rated ${svc} providers?`, engine: "Microsoft Copilot", brands_named: [third, name], brand_mentioned: true, competitor_mention_count: 1, citation_count: 1 },
+    { prompt: `Most cost-effective ${svc} option?`, engine: "Gemini", brands_named: [lead, second], brand_mentioned: false, competitor_mention_count: 2, citation_count: 0 },
     { prompt: "What is the service and who provides it?", engine: "Perplexity", brands_named: [second, name], brand_mentioned: true, competitor_mention_count: 1, citation_count: 1 },
     { prompt: "Best-reviewed providers near me?", engine: "Google AI Overviews", brands_named: [lead, third], brand_mentioned: false, competitor_mention_count: 2, citation_count: 0 },
   ];
@@ -72,7 +79,7 @@ export function buildIllustrativeGeo({ name = "Your brand", competitors = [], to
     illustrative: true, measured: false,
     overall: { geo_score: 18, sov: 3, mention_rate: 9, citation_rate: 2, engines_tested: 6, prompts_total: null, prompts_answered: null },
     share_of_voice, by_engine,
-    prompts_executed: buildPrompts(name, competitors),
+    prompts_executed: buildPrompts(name, competitors, topics[0] || ""),
     topic_dominance,
     score_breakdown: { signals: { citation_presence: 6, brand_presence: 9, citation_position: 12, intent_match: 9, cross_engine_consistency: 70, topic_coverage: 25 } },
     engines_status: ENGINES.map((e) => ({ engine: e, name: e, status: "illustrative" })),

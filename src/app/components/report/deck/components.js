@@ -73,7 +73,7 @@ export const FixRow = ({ title, desc, goal, when }) => (
 
 /* ---- compare bars (SoV / per-engine / reviews) ---- */
 export const CBar = ({ name, pct, value, you = false, them = false }) => {
-  const w = clampPct(pct);
+  const w = Math.round(clampPct(pct));
   return (
     <div className="cbar">
       <div className="cn">{name}</div>
@@ -148,8 +148,11 @@ export const ActionRow = ({ accentClass = "a-content", title, desc, meta }) => (
 );
 
 /* ---- verdict band (GEO) ---- */
-export const Verdict = ({ num, children }) => (
-  <div className="verdict"><div className="vnum">{num}</div><div className="vtxt">{children}</div></div>
+export const Verdict = ({ num, children, compact = false }) => (
+  <div className="verdict" style={compact ? { padding: "14px 18px", marginTop: 10 } : undefined}>
+    <div className="vnum" style={compact ? { fontSize: 34 } : undefined}>{num}</div>
+    <div className="vtxt" style={compact ? { fontSize: 11 } : undefined}>{children}</div>
+  </div>
 );
 
 /* ---- directory chips ---- */
@@ -164,8 +167,8 @@ export const Ring = ({ value = 0, label = "Complete" }) => {
   return (
     <div className="ring">
       <svg width="150" height="150" viewBox="0 0 150 150">
-        <circle cx="75" cy="75" r={r} fill="none" stroke={C.line} strokeWidth="12" />
-        <circle cx="75" cy="75" r={r} fill="none" stroke={C.rust} strokeWidth="12" strokeLinecap="round"
+        <circle cx="75" cy="75" r={r} fill="none" stroke={C.line} strokeWidth="13" />
+        <circle cx="75" cy="75" r={r} fill="none" stroke={C.rust} strokeWidth="13" strokeLinecap="round"
           strokeDasharray={`${(v / 100) * circ} ${circ}`} transform="rotate(-90 75 75)" />
       </svg>
       <div className="rv"><div className="rn">{v}</div><div className="rl">{label}</div></div>

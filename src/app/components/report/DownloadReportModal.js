@@ -18,10 +18,10 @@ export default function DownloadReportModal({ domain, data, onClose }) {
     return errs;
   };
 
-  // ── html2canvas fallback (localhost / dev only) ────────────────────────────
-  // Used when running on localhost where ConvertAPI can't reach the URL.
-  // globals.css has color-mix(in oklab) replaced with plain hex, so this
-  // should render cleanly. onclone provides extra safety for any edge cases.
+  // ── html2canvas fallback (legacy non-deck reports) ─────────────────────────
+  // Full-page raster capture for the old long-form report layout. globals.css has
+  // color-mix(in oklab) replaced with plain hex, so this renders cleanly; onclone
+  // provides extra safety for any edge cases.
   const generateWithHtml2Canvas = async (element) => {
     // Make IntersectionObserver-animated sections fully visible before capture
     const hiddenEls = element.querySelectorAll(".opacity-0.translate-y-5");
@@ -93,12 +93,12 @@ export default function DownloadReportModal({ domain, data, onClose }) {
     pdf.save(`DoctorFizz-Report-${domain || "report"}-${Date.now()}.pdf`);
   };
 
-  // ── ConvertAPI HTML→PDF (production) ─────────────────────────────────────
-  // The browser inlines all <link rel="stylesheet"> CSS into <style> tags,
-  // then sends a fully self-contained HTML document to the server.
-  // ConvertAPI receives the HTML directly — no URL visit, no sessionStorage
-  // dependency — so the report renders perfectly even on Vercel.
-  const generateWithConvertAPI = async () => {
+  // ── Server-side Chromium HTML→PDF (vector quality) ───────────────────────
+  // The browser inlines all <link rel="stylesheet"> CSS into <style> tags, then
+  // POSTs a fully self-contained HTML document to /api/report/download-pdf, which
+  // renders it with headless Chromium (no third-party service). If the server
+  // can't render, the caller falls back to the in-browser per-slide render.
+  const generateServerPdf = async () => {
     // 1. Fetch and inline every linked stylesheet (same-origin fetch works fine)
     const linkEls  = Array.from(document.querySelectorAll('link[rel="stylesheet"]'));
     const cssChunks = await Promise.all(
@@ -261,7 +261,7 @@ export default function DownloadReportModal({ domain, data, onClose }) {
       "</html>",
     ].join("\n");
 
-    // 6. POST self-contained HTML to our server → ConvertAPI HTML→PDF
+    // 6. POST self-contained HTML to our server → headless Chromium HTML→PDF
     const resp = await fetch("/api/report/download-pdf", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
@@ -283,6 +283,57 @@ export default function DownloadReportModal({ domain, data, onClose }) {
     anchor.click();
     document.body.removeChild(anchor);
     URL.revokeObjectURL(url);
+  };
+
+  // ── Client-side deck PDF (reliable fallback) ─────────────────────────────────
+  // Renders the fixed 1280×720 .df-deck slides one-per-page, fully in the browser
+  // (html2canvas → jsPDF). No server, no Chromium, no ConvertAPI — so the download
+  // never depends on serverless Chromium libs or a third-party conversion quota.
+  const generateDeckClientSide = async () => {
+    const deckEl = document.getElementById("report-content");
+    if (!deckEl) throw new Error("Report content not found");
+    const slides = Array.from(deckEl.querySelectorAll(".slide"));
+    if (!slides.length) throw new Error("No deck slides found");
+
+    const [html2canvas, { jsPDF }] = await Promise.all([
+      import("html2canvas").then((m) => m.default),
+      import("jspdf"),
+    ]);
+
+    // Reveal any animation-hidden / transformed elements before capture.
+    const hiddenEls = Array.from(deckEl.querySelectorAll(".opacity-0, [data-hidden='true'], [style*='translateY'], [style*='opacity: 0']"));
+    hiddenEls.forEach((el) => { el._bak = { o: el.style.opacity, t: el.style.transform, tr: el.style.transition }; el.style.opacity = "1"; el.style.transform = "none"; el.style.transition = "none"; });
+    await new Promise((r) => setTimeout(r, 120));
+
+    // html2canvas (1.4.x) crashes on oklab/oklch/color-mix; strip them in the clone.
+    const oklchFix = (_doc) => {
+      try {
+        const strip = (css) => css
+          .replace(/color-mix\s*\([^)]*\)/gi, "#888888")
+          .replace(/\b(?:ok)?lab\s*\([^)]*\)/gi, "#888888")
+          .replace(/\b(?:ok)?lch\s*\([^)]*\)/gi, "#888888");
+        _doc.querySelectorAll("style").forEach((tag) => {
+          const t = tag.textContent || "";
+          if (/color-mix|oklab|oklch|lab\(|lch\(/i.test(t)) tag.textContent = strip(t);
+        });
+      } catch (_) { /* ignore */ }
+    };
+
+    const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [1280, 720], compress: true });
+    for (let i = 0; i < slides.length; i++) {
+      const canvas = await html2canvas(slides[i], {
+        scale: 2, useCORS: true, allowTaint: true, logging: false,
+        backgroundColor: "#ffffff", width: 1280, height: 720,
+        windowWidth: 1280, windowHeight: 720, scrollX: 0, scrollY: 0,
+        onclone: oklchFix,
+      });
+      const img = canvas.toDataURL("image/jpeg", 0.92);
+      if (i > 0) pdf.addPage([1280, 720], "landscape");
+      pdf.addImage(img, "JPEG", 0, 0, 1280, 720, undefined, "FAST");
+    }
+
+    hiddenEls.forEach((el) => { if (el._bak) { el.style.opacity = el._bak.o; el.style.transform = el._bak.t; el.style.transition = el._bak.tr; delete el._bak; } });
+    pdf.save(`DoctorFizz-Report-${domain || "report"}-${Date.now()}.pdf`);
   };
 
   // ── Main submit ────────────────────────────────────────────────────────────
@@ -326,14 +377,23 @@ export default function DownloadReportModal({ domain, data, onClose }) {
         window.location.hostname === "localhost" ||
         window.location.hostname === "127.0.0.1";
 
+      const isDeck = !!document.querySelector("#report-content.df-deck");
       if (isLocalhost) {
-        // Dev: html2canvas (ConvertAPI can't reach localhost)
-        const el = document.getElementById("report-content");
-        if (!el) throw new Error("Report content not found");
-        await generateWithHtml2Canvas(el);
+        // Dev: client-side render (server Chromium can't reach localhost).
+        if (isDeck) await generateDeckClientSide();
+        else await generateWithHtml2Canvas(document.getElementById("report-content"));
       } else {
-        // Production: ConvertAPI Web→PDF — real Chrome, perfect quality
-        await generateWithConvertAPI();
+        // Production: try the server route first (Chromium → vector PDF, best
+        // quality). If it fails for ANY reason — e.g. serverless Chromium libs
+        // missing — fall back to a fully client-side render so the download
+        // always succeeds. No third-party conversion service involved.
+        try {
+          await generateServerPdf();
+        } catch (serverErr) {
+          console.warn("[DownloadReportModal] server PDF failed, using client-side render:", serverErr?.message);
+          if (isDeck) await generateDeckClientSide();
+          else await generateWithHtml2Canvas(document.getElementById("report-content"));
+        }
       }
 
       setDone(true);

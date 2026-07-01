@@ -10,10 +10,11 @@
  *   • Local dev  → uses the locally-installed Google Chrome.
  *   • Vercel/AWS → uses @sparticuz/chromium (a Lambda-sized Chromium build).
  *
- * If Chromium fails to launch for any reason and a CONVERTAPI_SECRET is present,
- * we fall back to ConvertAPI so a download is never lost.
+ * No third-party conversion service. If Chromium can't launch (e.g. missing libs
+ * on a serverless host), this returns 502 and the client falls back to its own
+ * in-browser per-slide render (DownloadReportModal.generateDeckClientSide).
  *
- * Body: { htmlContent: string, domain?: string }   (reportUrl supported for legacy)
+ * Body: { htmlContent: string, domain?: string, deck?: boolean }
  * Returns: application/pdf binary stream
  */
 
@@ -97,69 +98,22 @@ async function renderWithChromium(htmlContent, deck = false) {
   }
 }
 
-// ── ConvertAPI fallback (only used if Chromium fails AND a secret is set) ──────
-async function renderWithConvertApi({ htmlContent, reportUrl }) {
-  const secret = process.env.CONVERTAPI_SECRET;
-  if (!secret) throw new Error("Chromium unavailable and no ConvertAPI fallback configured.");
-
-  let resp;
-  if (htmlContent) {
-    const htmlBase64 = Buffer.from(htmlContent, "utf-8").toString("base64");
-    resp = await fetch(`https://v2.convertapi.com/convert/html/to/pdf?Secret=${secret}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ Parameters: [
-        { Name: "File", FileValue: { Name: "report.html", Data: htmlBase64 } },
-        { Name: "PageSize", Value: "A4" }, { Name: "MarginTop", Value: "0" },
-        { Name: "MarginBottom", Value: "0" }, { Name: "MarginLeft", Value: "0" },
-        { Name: "MarginRight", Value: "0" }, { Name: "FullPage", Value: "true" },
-        { Name: "PrintBackground", Value: "true" },
-      ] }),
-    });
-  } else if (reportUrl) {
-    resp = await fetch(`https://v2.convertapi.com/convert/web/to/pdf?Secret=${secret}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ Parameters: [
-        { Name: "Url", Value: reportUrl }, { Name: "PageSize", Value: "A4" },
-        { Name: "PrintBackground", Value: "true" }, { Name: "WaitTime", Value: "6" },
-      ] }),
-    });
-  } else {
-    throw new Error("Either htmlContent or reportUrl is required.");
-  }
-
-  if (!resp.ok) throw new Error(`ConvertAPI returned ${resp.status}: ${await resp.text()}`);
-  const data = await resp.json();
-  const fileData = data?.Files?.[0]?.FileData;
-  if (!fileData) throw new Error("ConvertAPI returned no file data.");
-  return Buffer.from(fileData, "base64");
-}
-
 export async function POST(req) {
   try {
-    const { reportUrl, htmlContent, domain, deck = false } = await req.json();
+    const { htmlContent, domain, deck = false } = await req.json();
 
-    if (!htmlContent && !reportUrl) {
-      return Response.json({ error: "Either htmlContent or reportUrl is required." }, { status: 400 });
+    // Self-hosted Chromium only. No ConvertAPI. If Chromium can't render, return a
+    // 502 so the client falls back to its own in-browser per-slide render.
+    if (!htmlContent) {
+      return Response.json({ error: "htmlContent is required." }, { status: 400 });
     }
 
     let pdfBuffer = null;
-    let engine = "chromium";
-
-    // Primary: self-hosted Chromium (only works with htmlContent)
-    if (htmlContent) {
-      try {
-        pdfBuffer = await renderWithChromium(htmlContent, deck);
-      } catch (chromeErr) {
-        console.error("[download-pdf] Chromium failed, trying fallback:", chromeErr?.message);
-        engine = "convertapi";
-      }
-    } else {
-      engine = "convertapi"; // legacy reportUrl path → ConvertAPI only
-    }
-
-    // Fallback: ConvertAPI (if Chromium failed or only a URL was provided)
-    if (!pdfBuffer) {
-      pdfBuffer = await renderWithConvertApi({ htmlContent, reportUrl });
+    try {
+      pdfBuffer = await renderWithChromium(htmlContent, deck);
+    } catch (chromeErr) {
+      console.error("[download-pdf] Chromium failed:", chromeErr?.message);
+      return Response.json({ error: "Chromium render failed; use client fallback." }, { status: 502 });
     }
 
     if (!pdfBuffer || pdfBuffer.byteLength < 1000) {
@@ -168,7 +122,7 @@ export async function POST(req) {
 
     const safeDomain = (domain || "report").replace(/[^a-z0-9.-]/gi, "_");
     const filename   = `ItzFizz-Report-${safeDomain}-${Date.now()}.pdf`;
-    console.log(`[download-pdf] OK via ${engine}: ${pdfBuffer.byteLength} bytes`);
+    console.log(`[download-pdf] OK via chromium: ${pdfBuffer.byteLength} bytes`);
 
     return new Response(pdfBuffer, {
       status: 200,
@@ -176,7 +130,7 @@ export async function POST(req) {
         "Content-Type":        "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Content-Length":      String(pdfBuffer.byteLength),
-        "X-PDF-Engine":        engine,
+        "X-PDF-Engine":        "chromium",
       },
     });
   } catch (err) {

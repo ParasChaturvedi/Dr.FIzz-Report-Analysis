@@ -323,15 +323,22 @@ export function classifyKeyword(kw, ctx = {}) {
   }
 
   // ── Step 3: Location modifier + commercial term? → local-commercial ──
+  // Only CITY / REGION scope is genuinely "place-based / local". COUNTRY-scope terms
+  // ("... in india") are NATIONAL commercial intent — they must NOT carry the
+  // Local/Place-based label or become a "city page", so they fall through to the
+  // transactional (national commercial) branch below.
   if (hasLocationModifier(keyword) && hasCommercialTerm(keyword)) {
     const geo = extractGeography(keyword);
-    return {
-      ...base,
-      intent_class:          "local-commercial",
-      recommended_asset_type: geo.page_type || "City Page",
-      funnel_role:           "Conversion",
-      reason:                `Geo-modifier combined with a commercial term. Maps to a ${(geo.page_type || "geography page").toLowerCase()} at the ${geo.scope} level, not a generic service page.`,
-    };
+    if (geo.scope === "city" || geo.scope === "region") {
+      return {
+        ...base,
+        intent_class:          "local-commercial",
+        recommended_asset_type: geo.page_type || "City Page",
+        funnel_role:           "Conversion",
+        reason:                `Geo-modifier combined with a commercial term. Maps to a ${(geo.page_type || "geography page").toLowerCase()} at the ${geo.scope} level, not a generic service page.`,
+      };
+    }
+    // country scope → treat as national commercial (falls through to Step 4).
   }
 
   // ── Step 3.5: Clear question / research phrasing? → informational ──
@@ -481,10 +488,51 @@ function computeKeywordPriority(k) {
  * @param {Array} accepted  accepted keywords from classifyKeywords
  * @returns {object} content_architecture per Part 2 schema
  */
+// A query is LISTICLE / directory intent when the searcher wants a ranked LIST of
+// providers, not one company's page — "top/best/leading X", "list of…", or a PLURAL
+// provider head ("digital marketing companies", "seo agencies", "top firms"). A single
+// business cannot rank its own landing page for these; the play is to get FEATURED on
+// the listicles that already rank (outreach/PR), so these must NOT be suggested as pages
+// to build. (Reviewer #3.)
+export function isListicleQuery(kw) {
+  const k = String(kw || "").toLowerCase();
+  // "top / best / leading / list of X" → always listicle intent.
+  if (/\b(top|best|leading|cheapest|top\s*\d+)\b/.test(k) || /\blist of\b/.test(k)) return true;
+  // PLURAL provider heads ("digital marketing companies", "seo agencies") → the SERP is
+  // owned by directories/listicles; a single business can't rank its own page. Only the
+  // clear provider nouns (not ambiguous ones like "consultant"/"services").
+  if (/\b(companies|agencies|firms|consultancies)\b/.test(k)) return true;
+  return false;
+}
+
+// A bare CATEGORY HEAD ("marketing agency", "digital marketing agency", "seo company")
+// is effectively unwinnable with a single new page — that SERP is owned by national
+// brands + directories, and the volume (49.5K etc.) is not realistically capturable.
+// True only when EVERY meaningful token is a generic industry word AND there is no
+// qualifier (audience / city / service-specificity / long-tail). Qualified variants
+// ("wordpress agency", "seo for saas", "digital marketing agency in mumbai") are winnable.
+const OVERBROAD_TOKENS = new Set(
+  "digital marketing seo sem smm social media online web website websites design development agency agencies company companies firm firms service services solution solutions advertising branding ppc content".split(/\s+/)
+);
+export function isOverBroadHead(kw) {
+  const words = String(kw || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)
+    .filter((w) => w.length >= 2 && !/^(for|the|an?|and|or|in|on|to|of|with|your|you|our|my|me)$/.test(w));
+  if (words.length < 2 || words.length > 3) return false;   // only short bare heads
+  return words.every((w) => OVERBROAD_TOKENS.has(w));
+}
+
+// Off-topic academic/theory marketing terms that share the token "marketing" with the
+// client vocab but are NOT services a digital agency sells (rejected from keyword tiers).
+export function isOffTopicTheory(kw) {
+  const k = String(kw || "").toLowerCase();
+  return /\b(societal|green|holistic|relationship|internal|differentiated|undifferentiated)\s+marketing\b|\bmarketing\s+(mix|management|myopia|environment|concept|orientation)\b|\bkotler\b|\b4\s*p'?s\b|\bfull\s+form\b|\bmeaning\s+of\b|\bdefinition\s+of\b/.test(k);
+}
+
 export function buildContentArchitecture(accepted = []) {
   const commercial_pages = [];
   const blog_and_guides  = [];
   const geography_pages  = [];
+  const listicle_outreach = [];  // plural/"top X" queries → get FEATURED, not a page to build
 
   const slugify = (s) => String(s).toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60);
@@ -521,7 +569,14 @@ export function buildContentArchitecture(accepted = []) {
       geography_relevance: geoRel,
     };
 
-    if (k.intent_class === "transactional") {
+    // Route "top/best/companies/agencies" queries to outreach — a page can't rank for them.
+    if ((k.intent_class === "transactional" || k.intent_class === "local-commercial") && isListicleQuery(k.keyword)) {
+      listicle_outreach.push({ ...fundamentals, keyword: k.keyword, page_name: toTitle(k.keyword), play: `Get featured on the ranked lists for "${k.keyword}" (outreach/PR), don't build a page — the SERP is owned by directories and listicles.` });
+    } else if (k.intent_class === "transactional" && isOverBroadHead(k.keyword)) {
+      // Bare category head (e.g. "digital marketing agency") — unwinnable with a single
+      // page. Recommend an authority/brand play over time, not a page to build.
+      listicle_outreach.push({ ...fundamentals, keyword: k.keyword, page_name: toTitle(k.keyword), play: `Own "${k.keyword}" through brand + domain authority over time (PR, links, reviews) — a single new page cannot outrank the national brands and directories on this head term.` });
+    } else if (k.intent_class === "transactional") {
       commercial_pages.push({
         ...fundamentals,
         page_name:        toTitle(k.keyword),
@@ -552,11 +607,22 @@ export function buildContentArchitecture(accepted = []) {
     }
   }
 
+  // Prioritise + CAP each bucket so the report recommends a focused, decisive build list
+  // (the reviewer flagged "27 pages to create" — too many). Sort by priority then demand,
+  // keep the top few. Difficulty/priority-aware where available, else volume-led.
+  const _score = (p) => (Number(p?.priority) || 0) * 1e7 + (Number(p?.primary_volume) || 0);
+  const byScore = (a, b) => _score(b) - _score(a);
+  commercial_pages.sort(byScore);
+  geography_pages.sort(byScore);
+  blog_and_guides.sort(byScore);
+  const CAP_COMMERCIAL = 8, CAP_GEO = 4, CAP_BLOG = 6, CAP_LISTICLE = 6;
+  const geoCapped = geography_pages.slice(0, CAP_GEO);
   return {
-    commercial_pages,
-    blog_and_guides,
-    geography_pages,                 // V3 Part 7.3 — parent category (city/region/country)
-    city_pages: geography_pages,     // backward-compatible alias for existing consumers
+    commercial_pages: commercial_pages.slice(0, CAP_COMMERCIAL),
+    blog_and_guides:  blog_and_guides.slice(0, CAP_BLOG),
+    geography_pages:  geoCapped,      // V3 Part 7.3 — parent category (city/region/country)
+    city_pages:       geoCapped,      // backward-compatible alias for existing consumers
+    listicle_outreach: listicle_outreach.slice(0, CAP_LISTICLE),  // plural/"top X"/head → outreach, not pages to build
     schema_additions: [], // populated by the GEO layer, kept separate per spec
   };
 }
@@ -569,7 +635,7 @@ function toTitle(s) {
  * Resolve the geography of a local keyword to the narrowest matching scope.
  * @returns {{ place: string, scope: "city"|"region"|"country", page_type: string }}
  */
-function extractGeography(keyword) {
+export function extractGeography(keyword) {
   const k = String(keyword).toLowerCase();
   for (const loc of KNOWN_LOCATIONS) {                       // city (most specific)
     if (new RegExp(`\\b${escapeRegex(loc)}\\b`).test(k)) return { place: toTitle(loc), scope: "city", page_type: "City Page" };
@@ -1364,6 +1430,7 @@ export function buildTechnicalIssues(crawlData) {
   if (!crawlData) return [];
   const s = crawlData.summary || {};
   const issues = [];
+  const pl = (n, word, suf = "s") => `${n} ${word}${Number(n) === 1 ? "" : suf}`;
   // True site size for sitewide framing: prefer Google-indexed / sitemap total
   // over the number of pages we deep-audited (a sample).
   const siteSize = crawlData.totalPagesEstimate || crawlData.indexedPages || crawlData.sitemapUrlCount || crawlData.pageCount || null;
@@ -1380,36 +1447,76 @@ export function buildTechnicalIssues(crawlData) {
     issues.push({ priority: "HIGH", issue: "Zero structured data (schema) sitewide", affected_count: siteSize, why_it_matters: "Without structured data the site cannot be parsed into entities, so it is invisible to AI answer engines and ineligible for rich results.", recommended_action: "Add LocalBusiness + WebSite JSON-LD to the homepage, Service schema to service pages, and FAQPage schema to FAQ blocks.", estimated_effort: "≈1 day", expected_unlock: "Eligibility for rich results and AI Overview / GEO citation." });
 
   if ((s.pagesMissingMetaTitle || 0) > 0)
-    issues.push({ priority: "HIGH", issue: `${s.pagesMissingMetaTitle} pages missing <title> tags`, affected_count: s.pagesMissingMetaTitle, why_it_matters: "The <title> is the single strongest on-page ranking signal and the clickable headline in search results.", recommended_action: 'Write unique 50–60 char titles as "Primary Keyword | Brand", starting with highest-traffic pages.', estimated_effort: "≈3 hours", expected_unlock: "Recovered relevance and click-through on every fixed page." });
+    issues.push({ priority: "HIGH", issue: `${pl(s.pagesMissingMetaTitle, "page")} missing a <title> tag`, affected_count: s.pagesMissingMetaTitle, why_it_matters: "The <title> is the single strongest on-page ranking signal and the clickable headline in search results.", recommended_action: 'Write unique 50–60 char titles as "Primary Keyword | Brand", starting with highest-traffic pages.', estimated_effort: "≈3 hours", expected_unlock: "Recovered relevance and click-through on every fixed page." });
 
   if ((s.pagesMissingH1 || 0) > 0)
-    issues.push({ priority: "HIGH", issue: `${s.pagesMissingH1} pages with no H1`, affected_count: s.pagesMissingH1, why_it_matters: "The H1 is the clearest on-page topic signal Google reads; without it, pages are ambiguous about what they rank for.", recommended_action: "Add exactly one keyword-rich H1 per page.", estimated_effort: "≈2 hours", expected_unlock: "Sharper topical relevance on each affected page." });
+    issues.push({ priority: "HIGH", issue: `${pl(s.pagesMissingH1, "page")} with no H1`, affected_count: s.pagesMissingH1, why_it_matters: "The H1 is the clearest on-page topic signal Google reads; without it, pages are ambiguous about what they rank for.", recommended_action: "Add exactly one keyword-rich H1 per page.", estimated_effort: "≈2 hours", expected_unlock: "Sharper topical relevance on each affected page." });
+
+  if ((s.pagesMultipleTitle || 0) > 0)
+    issues.push({ priority: "HIGH", issue: `${pl(s.pagesMultipleTitle, "page")} with multiple <title> tags`, affected_count: s.pagesMultipleTitle, why_it_matters: "Multiple <title> tags (usually a theme/plugin conflict) force Google to pick one arbitrarily, weakening the strongest on-page signal.", recommended_action: "Remove the duplicate <title> tags so each page has exactly one, in the <head>.", estimated_effort: "≈2 hours", expected_unlock: "A single, trusted title signal per page." });
+
+  if ((s.pagesTitleOutsideHead || 0) > 0)
+    issues.push({ priority: "HIGH", issue: `${pl(s.pagesTitleOutsideHead, "page")} with a <title> outside the <head>`, affected_count: s.pagesTitleOutsideHead, why_it_matters: "A <title> placed after the <body> can be ignored by search engines, so the page may rank with no title at all.", recommended_action: "Move the <title> into the <head> element at the top of the HTML.", estimated_effort: "≈2 hours", expected_unlock: "Reliable title rendering in search results." });
+
+  if ((s.pagesMultipleHead || 0) > 0)
+    issues.push({ priority: "HIGH", issue: `${pl(s.pagesMultipleHead, "page")} with multiple <head> tags`, affected_count: s.pagesMultipleHead, why_it_matters: "Invalid duplicate <head> elements can cause critical metadata (canonical, robots, title) to be mixed up or dropped by crawlers.", recommended_action: "Fix the template so there is one valid <head> as the first element in <html>.", estimated_effort: "≈3 hours", expected_unlock: "Metadata that crawlers read reliably." });
+
+  if ((s.pagesMultipleBody || 0) > 0)
+    issues.push({ priority: "MEDIUM", issue: `${pl(s.pagesMultipleBody, "page")} with multiple <body> tags`, affected_count: s.pagesMultipleBody, why_it_matters: "Duplicate <body> elements are invalid HTML and can cause content to be parsed or rendered inconsistently.", recommended_action: "Fix the template so each page has a single <body> element.", estimated_effort: "≈3 hours", expected_unlock: "Consistent rendering and parsing." });
+
+  if ((s.pagesWithMixedContent || 0) > 0)
+    issues.push({ priority: "MEDIUM", issue: `${pl(s.pagesWithMixedContent, "page")} loading insecure HTTP resources`, affected_count: s.pagesWithMixedContent, why_it_matters: "Mixed content (http:// assets on an https page) triggers 'Not Secure' warnings and can block the resource from loading.", recommended_action: "Update all internal links and asset URLs to https:// (or protocol-relative).", estimated_effort: "≈2 hours", expected_unlock: "A fully secure page with no browser warnings." });
 
   const lcpVal = crawlData.coreWebVitals?.lcp ?? crawlData.coreWebVitals?.LCP;
   if (lcpVal && Number(lcpVal) > 2500)
     issues.push({ priority: "HIGH", issue: `Mobile LCP at ${lcpVal}ms (target <2500ms)`, affected_count: crawlData.pageCount || null, why_it_matters: "Core Web Vitals are a mobile ranking signal; a slow LCP suppresses the majority of mobile searches regardless of content quality.", recommended_action: "Compress hero images to WebP, preload the LCP element, and defer non-critical JS.", estimated_effort: "≈1 week", expected_unlock: "Moves pages out of the speed-penalty tier into the eligible ranking band." });
 
   if ((s.pagesMissingMetaDesc || 0) > 0)
-    issues.push({ priority: "MEDIUM", issue: `${s.pagesMissingMetaDesc} pages missing meta descriptions`, affected_count: s.pagesMissingMetaDesc, why_it_matters: "The description is the snippet that wins or loses the click on impressions the site already earns.", recommended_action: "Write 150–160 char descriptions with a clear CTA.", estimated_effort: "≈2 hours", expected_unlock: "5–10% more clicks from rankings already held." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(s.pagesMissingMetaDesc, "page")} missing a meta description`, affected_count: s.pagesMissingMetaDesc, why_it_matters: "The description is the snippet that wins or loses the click on impressions the site already earns.", recommended_action: "Write 150–160 char descriptions with a clear CTA.", estimated_effort: "≈2 hours", expected_unlock: "5–10% more clicks from rankings already held." });
 
   const dupTitles = (crawlData.duplicates || []).filter(d => d.type === "title").length;
   if (dupTitles > 0)
-    issues.push({ priority: "MEDIUM", issue: `${dupTitles} sets of duplicate meta titles`, affected_count: dupTitles, why_it_matters: "Duplicate titles force Google to pick a ranking URL arbitrarily, splitting relevance across competing pages.", recommended_action: "Make every title unique to its page and intent.", estimated_effort: "≈2 hours", expected_unlock: "Consolidated ranking signal per page." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(dupTitles, "set")} of duplicate meta titles`, affected_count: dupTitles, why_it_matters: "Duplicate titles force Google to pick a ranking URL arbitrarily, splitting relevance across competing pages.", recommended_action: "Make every title unique to its page and intent.", estimated_effort: "≈2 hours", expected_unlock: "Consolidated ranking signal per page." });
 
   if ((crawlData.brokenLinks || []).length > 0)
-    issues.push({ priority: "MEDIUM", issue: `${crawlData.brokenLinks.length} broken internal links`, affected_count: crawlData.brokenLinks.length, why_it_matters: "Broken internal links waste crawl budget and leak link equity into dead ends.", recommended_action: `Fix or 301-redirect each. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}`, estimated_effort: "≈2 hours", expected_unlock: "Recovered crawl efficiency and internal link equity." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(crawlData.brokenLinks.length, "broken internal link")}`, affected_count: crawlData.brokenLinks.length, why_it_matters: "Broken internal links waste crawl budget and leak link equity into dead ends.", recommended_action: `Fix or 301-redirect each. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}`, estimated_effort: "≈2 hours", expected_unlock: "Recovered crawl efficiency and internal link equity." });
 
   if ((s.thinContentCount || 0) > 0)
-    issues.push({ priority: "MEDIUM", issue: `${s.thinContentCount} thin-content pages (<200 words)`, affected_count: s.thinContentCount, why_it_matters: "Thin pages drag down the sitewide quality signal Google applies to the whole domain.", recommended_action: "Expand to 600+ words with FAQs and local context.", estimated_effort: "≈1 week", expected_unlock: "A stronger sitewide quality signal lifting all pages." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(s.thinContentCount, "thin-content page")} (<200 words)`, affected_count: s.thinContentCount, why_it_matters: "Thin pages drag down the sitewide quality signal Google applies to the whole domain.", recommended_action: "Expand to 600+ words with FAQs and local context.", estimated_effort: "≈1 week", expected_unlock: "A stronger sitewide quality signal lifting all pages." });
 
   if ((s.totalImgsWithoutAlt || 0) > 5)
-    issues.push({ priority: "MEDIUM", issue: `${s.totalImgsWithoutAlt} images without alt text`, affected_count: s.totalImgsWithoutAlt, why_it_matters: "Missing alt text costs image-search visibility and lowers the accessibility score.", recommended_action: "Add descriptive, keyword-natural alt text.", estimated_effort: "≈2 hours", expected_unlock: "Image-search traffic and a cleaner accessibility profile." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(s.totalImgsWithoutAlt, "image")} without alt text`, affected_count: s.totalImgsWithoutAlt, why_it_matters: "Missing alt text costs image-search visibility and lowers the accessibility score.", recommended_action: "Add descriptive, keyword-natural alt text.", estimated_effort: "≈2 hours", expected_unlock: "Image-search traffic and a cleaner accessibility profile." });
 
   if ((s.pagesMultipleH1 || 0) > 0)
-    issues.push({ priority: "LOW", issue: `${s.pagesMultipleH1} pages with multiple H1s`, affected_count: s.pagesMultipleH1, why_it_matters: "Multiple H1s dilute the single clear topic signal per page.", recommended_action: "Demote extra H1s to H2/H3 — one H1 per page.", estimated_effort: "≈1 hour", expected_unlock: "A single unambiguous topic signal per page." });
+    issues.push({ priority: "LOW", issue: `${pl(s.pagesMultipleH1, "page")} with multiple H1s`, affected_count: s.pagesMultipleH1, why_it_matters: "Multiple H1s dilute the single clear topic signal per page.", recommended_action: "Demote extra H1s to H2/H3 — one H1 per page.", estimated_effort: "≈1 hour", expected_unlock: "A single unambiguous topic signal per page." });
 
   if (!crawlData.hasRobots)
     issues.push({ priority: "LOW", issue: "robots.txt not found", affected_count: null, why_it_matters: "Without robots.txt crawlers get no sitemap directive or crawl guidance.", recommended_action: "Create /robots.txt with a Sitemap: directive pointing to your sitemap.xml.", estimated_effort: "≈15 min", expected_unlock: "Clear crawl guidance and sitemap discovery." });
+
+  // Attach the SPECIFIC affected page URLs to each issue (so the report shows
+  // WHERE to fix, not just how many) — matched from the crawled pages by issue type.
+  const pages = Array.isArray(crawlData.pages) ? crawlData.pages : [];
+  const pathOf = (u) => { try { return new URL(u).pathname.replace(/\/+$/, "") || "/"; } catch { return u; } };
+  const urlsWhere = (pred, n = 12) => pages.filter((p) => { try { return pred(p); } catch { return false; } }).map((p) => pathOf(p.url)).filter(Boolean).slice(0, n);
+  const matchers = [
+    [/no H1\b/i,                     () => urlsWhere((p) => (p.h1s || []).length === 0)],
+    [/multiple H1/i,                 () => urlsWhere((p) => (p.h1s || []).length > 1)],
+    [/missing a <title>/i,           () => urlsWhere((p) => !p.metaTitle)],
+    [/multiple <title>/i,            () => urlsWhere((p) => p.multipleTitle)],
+    [/<title> outside/i,             () => urlsWhere((p) => p.titleOutsideHead)],
+    [/multiple <head>/i,             () => urlsWhere((p) => p.multipleHead)],
+    [/multiple <body>/i,             () => urlsWhere((p) => p.multipleBody)],
+    [/insecure HTTP|mixed content/i, () => urlsWhere((p) => (p.httpResourceCount || 0) > 0)],
+    [/missing a meta description/i,  () => urlsWhere((p) => !p.metaDesc)],
+    [/thin.content/i,                () => urlsWhere((p) => (p.content?.wordCount || 0) < 200)],
+    [/without alt text|missing.*alt/i, () => urlsWhere((p) => (p.imgsWithoutAlt || 0) > 0)],
+    [/broken internal link/i,        () => (crawlData.brokenLinks || []).map((b) => pathOf(b.url || b)).filter(Boolean).slice(0, 12)],
+  ];
+  for (const it of issues) {
+    for (const [re, fn] of matchers) {
+      if (re.test(it.issue)) { const u = fn(); if (u.length) it.affected_urls = u; break; }
+    }
+  }
 
   const rank = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
   return issues.sort((a, b) => rank[a.priority] - rank[b.priority]).slice(0, 12);

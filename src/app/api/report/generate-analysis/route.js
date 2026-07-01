@@ -16,7 +16,7 @@ import {
 } from "@/lib/seo/dataforseo";
 import { fetchPsiForStrategy } from "@/lib/seo/psi";
 import { fetchMozMetrics } from "@/lib/seo/moz/client";
-import { runBusinessLogic, deriveCompetitorBrands } from "@/lib/seo/doctor-fizz-logic";
+import { runBusinessLogic, deriveCompetitorBrands, isListicleQuery, isOverBroadHead, isOffTopicTheory, extractGeography } from "@/lib/seo/doctor-fizz-logic";
 import { runQaGate } from "@/lib/seo/doctor-fizz-qa";
 import { locationNameForCountry } from "@/lib/seo/market";
 import { getSiteProfile } from "@/lib/claude/pipeline";
@@ -112,43 +112,49 @@ function buildTechnicalPrioritiesFromCrawl(crawlData) {
   if (!crawlData) return [];
   const s = crawlData.summary || {};
   const issues = [];
+  // Each issue carries the full detail the deck renders: the fix (action), why it matters,
+  // the expected unlock/goal, and the affected count — so the diagnosis + technical slides
+  // show real, specific evidence rather than a bare issue string.
+  const add = (priority, issue, action, why_it_matters, expected_unlock, affected_count) =>
+    issues.push({ priority, issue, action, why_it_matters, expected_unlock, affected_count: affected_count != null ? affected_count : null });
+  const plural = (n, word) => `${n} ${word}${Number(n) === 1 ? "" : "s"}`;
 
   if (crawlData.crawlBlockedByRobots)
-    issues.push({ priority: "CRITICAL", issue: "Googlebot blocked by robots.txt", action: "Remove 'Disallow: /' from robots.txt immediately, Google cannot index any page until this is fixed." });
+    add("CRITICAL", "Googlebot blocked by robots.txt", "Remove 'Disallow: /' from robots.txt immediately, Google cannot index any page until this is fixed.", "Google cannot index a single page while this rule is live.", "An indexable site", 1);
 
   if (!crawlData.hasSitemap)
-    issues.push({ priority: "HIGH", issue: "XML sitemap is missing", action: "Create /sitemap.xml listing all important URLs and submit it in Google Search Console → Sitemaps." });
+    add("HIGH", "XML sitemap is missing", "Create /sitemap.xml listing all important URLs and submit it in Google Search Console → Sitemaps.", "Crawlers have no map of your URLs to discover and prioritise.", "Faster, complete indexing", 1);
 
   if (!(s.pagesWithSchemaTypes || []).length)
-    issues.push({ priority: "HIGH", issue: "Zero structured data (schema) on any page", action: "Add LocalBusiness + WebSite JSON-LD to homepage, Service schema to service pages, FAQ schema to FAQ sections. Critical for AI Overview (GEO) inclusion." });
+    add("HIGH", "Zero structured data (schema) on any page", "Add LocalBusiness + WebSite JSON-LD to homepage, Service schema to service pages, FAQ schema to FAQ sections. Critical for AI Overview (GEO) inclusion.", "Engines and AI answers can't reliably parse what you offer.", "AI Overview eligibility", 1);
 
   if ((s.pagesMissingMetaTitle || 0) > 0)
-    issues.push({ priority: "HIGH", issue: `${s.pagesMissingMetaTitle} pages missing <title> tags`, action: `Write unique 50–60 character titles formatted "Primary Keyword | Brand". Start with highest-traffic pages.` });
+    add("HIGH", `${plural(s.pagesMissingMetaTitle, "page")} missing a title tag`, `Write unique 50–60 character titles formatted "Primary Keyword | Brand". Start with highest-traffic pages.`, "Without a title, Google can't read the topic of the page.", "Pages become rankable", s.pagesMissingMetaTitle);
 
   if ((s.pagesMissingH1 || 0) > 0)
-    issues.push({ priority: "HIGH", issue: `${s.pagesMissingH1} of ${crawlData.pageCount} pages have no H1 heading`, action: "Add exactly one keyword-rich H1 per page. This is the clearest on-page relevance signal for Google." });
+    add("HIGH", `${s.pagesMissingH1} of ${crawlData.pageCount} pages have no H1 heading`, "Add exactly one keyword-rich H1 per page. This is the clearest on-page relevance signal for Google.", "Google can't tell what the page is about.", "+1 clear relevance signal", s.pagesMissingH1);
 
   if ((s.pagesMissingMetaDesc || 0) > 0)
-    issues.push({ priority: "MEDIUM", issue: `${s.pagesMissingMetaDesc} pages missing meta descriptions`, action: "Write 150–160 character descriptions with a CTA. Good meta descriptions improve click-through rate by 5–10%." });
+    add("MEDIUM", `${plural(s.pagesMissingMetaDesc, "page")} missing meta descriptions`, "Write 150–160 character descriptions with a CTA. Good meta descriptions improve click-through rate by 5–10%.", "Weaker snippets lose clicks even when you rank.", "+5–10% click-through", s.pagesMissingMetaDesc);
 
   const dupTitles = (crawlData.duplicates || []).filter(d => d.type === "title").length;
   if (dupTitles > 0)
-    issues.push({ priority: "MEDIUM", issue: `${dupTitles} sets of duplicate meta title tags`, action: "Duplicate titles force Google to choose which URL to rank arbitrarily, make every title unique." });
+    add("MEDIUM", `${plural(dupTitles, "set")} of duplicate meta title tags`, "Duplicate titles force Google to choose which URL to rank arbitrarily, make every title unique.", "Google ranks one of the duplicates arbitrarily.", "Cleaner ranking signals", dupTitles);
 
   if ((crawlData.brokenLinks || []).length > 0)
-    issues.push({ priority: "MEDIUM", issue: `${crawlData.brokenLinks.length} broken internal links found`, action: `Fix or 301-redirect each broken URL. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}` });
+    add("MEDIUM", `${plural(crawlData.brokenLinks.length, "broken internal link")} found`, `Fix or 301-redirect each broken URL. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}`, "Crawlers hit dead ends and waste crawl budget.", "A crawlable, trusted site", crawlData.brokenLinks.length);
 
   if ((s.thinContentCount || 0) > 0)
-    issues.push({ priority: "MEDIUM", issue: `${s.thinContentCount} pages with thin content (<200 words)`, action: "Expand to 600+ words with FAQs and local context. Thin pages drag down the entire site's quality signal." });
+    add("MEDIUM", `${plural(s.thinContentCount, "page")} with thin content (<200 words)`, "Expand to 600+ words with FAQs and local context. Thin pages drag down the entire site's quality signal.", "Thin pages drag down the whole site's quality score.", "A stronger quality signal", s.thinContentCount);
 
   if ((s.totalImgsWithoutAlt || 0) > 5)
-    issues.push({ priority: "MEDIUM", issue: `${s.totalImgsWithoutAlt} images missing alt text`, action: "Add descriptive alt text to every image using keywords naturally. Affects accessibility score and image search visibility." });
+    add("MEDIUM", `${plural(s.totalImgsWithoutAlt, "image")} missing alt text`, "Add descriptive alt text to every image using keywords naturally. Affects accessibility score and image search visibility.", "Lost image-search and accessibility signals.", "Image search + accessibility", s.totalImgsWithoutAlt);
 
   if ((s.pagesMultipleH1 || 0) > 0)
-    issues.push({ priority: "LOW", issue: `${s.pagesMultipleH1} pages have multiple H1 tags`, action: "Each page should have exactly one H1. Demote extra H1s to H2 or H3." });
+    add("LOW", `${plural(s.pagesMultipleH1, "page")} with multiple H1 tags`, "Each page should have exactly one H1. Demote extra H1s to H2 or H3.", "Multiple H1s send mixed signals about the main topic.", "Clearer topic focus", s.pagesMultipleH1);
 
   if (!crawlData.hasRobots)
-    issues.push({ priority: "LOW", issue: "robots.txt file not found", action: "Create /robots.txt and include: Sitemap: https://yourdomain.com/sitemap.xml" });
+    add("LOW", "robots.txt file not found", "Create /robots.txt and include: Sitemap: https://yourdomain.com/sitemap.xml", "No crawl guidance for search bots.", "Guided crawling", 1);
 
   return issues.slice(0, 8);
 }
@@ -242,8 +248,12 @@ function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions, brands = []
   const isCommercial = (intent) => ["transactional", "commercial", "local", "navigational"].includes(String(intent || "").toLowerCase());
   const seen = new Set();
   const fresh = (s) => { const n = String(s || "").toLowerCase().trim(); if (!n || seen.has(n)) return false; seen.add(n); return true; };
-  // relevant + non-brand + (demand>0 for page tiers).
-  const okPage = (k) => _kwRelevant(k?.keyword, vocab, exclusions) && !isBrand(k?.keyword) && Number(k?.volume ?? 0) > 0;
+  // A buildable page target must be: relevant + non-brand + real demand + NOT a listicle
+  // head ("top/best/…companies"), NOT an unwinnable bare category head ("digital marketing
+  // agency"), and NOT off-topic theory ("benefits of societal marketing"). These gates
+  // mirror buildContentArchitecture so slides 10/17/18 tell one consistent story (#3, #6).
+  const okPage = (k) => _kwRelevant(k?.keyword, vocab, exclusions) && !isBrand(k?.keyword) && Number(k?.volume ?? 0) > 0
+    && !isListicleQuery(k?.keyword) && !isOverBroadHead(k?.keyword) && !isOffTopicTheory(k?.keyword);
 
   const tier1 = (keywordGapData.easyWins || [])
     .filter(k => isCommercial(k.intent) && okPage(k))
@@ -251,17 +261,20 @@ function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions, brands = []
     .slice(0, 8)
     .map(k => ({ keyword: k.keyword, volume: fmtVol(k.volume), targetPageType: "Service/Landing Page", kd: k.kd ?? null }));
 
+  // Tier 2 = LOCAL only. Country-scope terms ("… in india") are national commercial, not
+  // place-based — gate to city/region scope so the "Local / Place-based" pillar is honest.
   const localKws = (keywordGapData.gapKeywords || [])
     .filter(k => (k.intent === "local" || k.intent === "transactional") && okPage(k))
+    .filter(k => { const s = extractGeography(k.keyword).scope; return s === "city" || s === "region"; })
     .filter(k => fresh(k.keyword))
     .slice(0, 6)
     .map(k => k.keyword);
 
-  // Tier 3 = informational blog questions (relevant, non-brand). PAA carries no volume,
-  // so it is not demand-gated, these are topic ideas, not pages to build.
+  // Tier 3 = informational blog questions (relevant, non-brand, on-topic). PAA carries no
+  // volume, so it is not demand-gated — these are topic ideas, not pages to build.
   const infoKws = (keywordGapData.paaQuestions || [])
     .map(q => q?.question ?? q)
-    .filter(q => _kwRelevant(q, vocab, exclusions) && !isBrand(q))
+    .filter(q => _kwRelevant(q, vocab, exclusions) && !isBrand(q) && !isListicleQuery(q) && !isOffTopicTheory(q))
     .filter(q => fresh(q))
     .slice(0, 6);
 
@@ -425,13 +438,13 @@ Return ONLY this JSON (no markdown, no commentary):
 {
   "competitorLandscape": {
     "localCompetitors": [
-      {"name": "...", "domain": "...", "description": "what makes them strong vs ${domain}", "strength": "High/Medium/Low"},
-      {"name": "...", "domain": "...", "description": "...", "strength": "..."},
-      {"name": "...", "domain": "...", "description": "...", "strength": "..."}
+      {"name": "...", "domain": "...", "description": "what makes them strong vs ${domain}", "door": "the specific high-value corner THIS rival leaves open for ${domain} (e.g. a location, an intent, an AI-answer query they never built for) — 3 to 6 words", "strength": "High/Medium/Low"},
+      {"name": "...", "domain": "...", "description": "...", "door": "...", "strength": "..."},
+      {"name": "...", "domain": "...", "description": "...", "door": "...", "strength": "..."}
     ],
     "nationalPlatforms": [
-      {"name": "real national-scale competitor (NOT an aggregator/directory)", "domain": "...", "description": "why this national competitor is a threat to ${domain}", "threat": "High/Medium"},
-      {"name": "...", "domain": "...", "description": "...", "threat": "..."}
+      {"name": "real national-scale competitor (NOT an aggregator/directory)", "domain": "...", "description": "why this national competitor is a threat to ${domain}", "door": "the specific high-value corner THIS rival leaves open for ${domain} — 3 to 6 words", "threat": "High/Medium"},
+      {"name": "...", "domain": "...", "description": "...", "door": "...", "threat": "..."}
     ],
     "localOpening": "2–3 sentences on the specific local opportunity for ${domain} given the competitor landscape"
   },
@@ -1128,10 +1141,50 @@ export async function POST(request) {
           ...newOnly(_ca.geography_pages || _ca.city_pages).map((p) => toBuild(p, "geo")),
         ].slice(0, 8);
         const blogsToBuild = newOnly(_ca.blog_and_guides).map((p) => toBuild(p, "blog")).slice(0, 8);
+        // OPTIMISE list (reviewer #6): the EXACT existing page that already owns each cluster,
+        // its URL, and what to fix on it (derived from that page's real crawl signals). This is
+        // what makes "optimise vs create" concrete instead of a bare count.
+        const _pathOf = (u) => { try { return new URL(u).pathname.replace(/\/+$/, "") || "/"; } catch { return u; } };
+        const optimiseAction = (cp, kw) => {
+          const f = [];
+          if (cp && (cp.h1s || []).length === 0) f.push("add an H1");
+          else if (cp && (cp.h1s || []).length > 1) f.push("fix multiple H1s");
+          if (cp && !cp.metaTitle) f.push("add a title tag");
+          if (cp && !cp.metaDesc) f.push("add a meta description");
+          if (cp && (cp.content?.wordCount || 0) < 600) f.push("expand thin content");
+          if (cp && cp.isNoindex) f.push("remove noindex");
+          if (!(cp && (cp.schemas || []).length)) f.push("add schema + FAQs");
+          f.push(kw ? `tighten intent for "${trim1(kw)}"` : "align intent");
+          return f.slice(0, 3).join(", ");
+        };
+        const collectOptimise = (arr) => (Array.isArray(arr) ? arr : []).map((p) => {
+          const ex = checkExistingPage(p, _crawlPages);
+          if (!ex.exists) return null;
+          const cp = _crawlPages.find((c) => c.url === ex.url) || null;
+          return {
+            page:        trim1(p.page_name || p.proposed_title || p.keyword_cluster || ""),
+            matched_url: _pathOf(ex.url),
+            keyword:     trim1(p.keyword_cluster || p.geo_target || ""),
+            volume:      fmtVol(p.primary_volume),
+            indexed:     ex.indexed !== false,
+            action:      optimiseAction(cp, p.keyword_cluster),
+          };
+        }).filter(Boolean);
+        // SPLIT service/commercial-page optimisations from blog-post optimisations so the
+        // content-map slide fills BOTH left quadrants ("service pages you have · optimise"
+        // and "blog posts you have · optimise") with concrete rows (reviewer #6).
+        const pagesToOptimise = [
+          ...collectOptimise(_ca.commercial_pages),
+          ...collectOptimise(_ca.geography_pages || _ca.city_pages),
+        ].slice(0, 5);
+        const blogsToOptimise = collectOptimise(_ca.blog_and_guides).slice(0, 3);
         aiSections.contentArchitecture = {
           ...(aiSections.contentArchitecture || {}),
           pagesToBuild,
           blogsToBuild,
+          pagesToOptimise,       // reviewer #6: concrete existing SERVICE page → keyword → fix
+          blogsToOptimise,       // reviewer #6: concrete existing BLOG post → keyword → fix
+          listicle_outreach: (_ca.listicle_outreach || []).slice(0, 6),  // reviewer #3
           // Count recommended pages that already exist on the site (so the report can say
           // "N pages already exist, optimise, don't rebuild"). Rederived locally from the
           // same classified arrays + existing-page guard (was sourced from evidence_plan,

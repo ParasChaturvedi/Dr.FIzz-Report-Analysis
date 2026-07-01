@@ -47,7 +47,7 @@ export function Slide({
         {title && <h1 className="title">{title}</h1>}
         {sub && <p className="deck-sub">{sub}</p>}
       </div>
-      <div className={`content${contentTop ? " top" : ""}`}>{children}</div>
+      <div className={`content${contentTop ? " top" : ""}`}><div className="content-fit">{children}</div></div>
       {foot && (
         <div className="foot">
           <span>{foot.left}</span>

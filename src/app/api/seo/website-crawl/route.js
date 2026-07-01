@@ -9,12 +9,16 @@ import { getOrFetch } from "@/lib/cache/mongo";
 import { logUsage } from "@/lib/cache/usage";
 
 export const runtime    = "nodejs";
-export const maxDuration = 90;
+export const maxDuration = 300;   // Vercel Pro ceiling
 
 const FETCH_TIMEOUT_MS  = 10000;
-const MAX_PAGES         = 50;     // pages we deep-audit (HTML parsed) — sample of the full index
+const MAX_PAGES         = 300;    // upper bound on pages we deep-audit (HTML parsed) —
+                                  // covers a full crawl for the vast majority of sites
 const SITEMAP_SCAN_CAP  = 5000;   // sitemap URLs we count for the total estimate
-const CONCURRENCY       = 5;
+const CONCURRENCY       = 8;      // parallel page fetches (fast but polite to the target)
+const CRAWL_BUDGET_MS   = 140000; // stop crawling new pages after this, leaving room for
+                                  // post-processing within maxDuration — so most sites are
+                                  // crawled FULLY and huge sites stop gracefully, never time out.
 
 // ── DataForSEO: total indexed pages via `site:domain` ─────────────────────────
 function dfsAuth() {
@@ -393,6 +397,23 @@ async function auditPage(url, keywords = [], host = "") {
   const allImgs = [...html.matchAll(/<img\s([^>]*)>/gi)].map(m => m[1]);
   const imgsWithoutAlt  = allImgs.filter(a => !(/alt=["'][^"']+["']/i.test(a)) || /alt=["']\s*["']/i.test(a)).length;
   const imgsWithoutDims = allImgs.filter(a => !/width=/i.test(a) || !/height=/i.test(a)).length;
+  // Split to match Screaming Frog: no alt= attribute at all vs alt present-but-empty.
+  const imgsMissingAltAttr = allImgs.filter(a => !/\balt=/i.test(a)).length;
+  const imgsMissingAltText = allImgs.filter(a => /\balt=["']\s*["']/i.test(a)).length;
+
+  // Structural validation — common CMS/plugin breakage Screaming Frog flags.
+  const headCount  = count(html, /<head[\s>]/gi);
+  const bodyCount  = count(html, /<body[\s>]/gi);
+  const titleCount = count(html, /<title[\s>]/gi);
+  const multipleHead  = headCount > 1;
+  const multipleBody  = bodyCount > 1;
+  const multipleTitle = titleCount > 1;
+  const headEndIdx = html.search(/<\/head>/i);
+  const firstTitleIdx = html.search(/<title[\s>]/i);
+  const titleOutsideHead = headEndIdx >= 0 && firstTitleIdx >= 0 && firstTitleIdx > headEndIdx;
+  // Mixed content: insecure http:// resources/links on an https page.
+  const httpResourceCount = (html.match(/(?:src|href)=["']http:\/\/[^"']+["']/gi) || [])
+    .filter(s => !/http:\/\/(localhost|127\.0|schema\.org|www\.w3\.org|ogp\.me|purl\.org|gmpg\.org)/i.test(s)).length;
 
   // Internal links
   const internalLinks = extractInternalLinks(html, url, host);
@@ -435,6 +456,12 @@ async function auditPage(url, keywords = [], host = "") {
   else if (h1s.length > 1)            issues.push(`Multiple H1 tags (${h1s.length}) — use only one`);
   if (kws.length > 0 && !h1HasKeyword) issues.push("H1 doesn't include a target keyword");
 
+  if (multipleTitle)                   issues.push(`Multiple <title> tags (${titleCount})`);
+  if (titleOutsideHead)                issues.push("Page <title> is outside the <head>");
+  if (multipleHead)                    issues.push(`Multiple <head> tags (${headCount})`);
+  if (multipleBody)                    issues.push(`Multiple <body> tags (${bodyCount})`);
+  if (httpResourceCount > 0)           issues.push(`${httpResourceCount} insecure HTTP resource(s) — mixed content`);
+
   if (imgsWithoutAlt > 0)             issues.push(`${imgsWithoutAlt} image(s) missing alt text`);
   if (imgsWithoutDims > 0)            issues.push(`${imgsWithoutDims} image(s) missing width/height (CLS risk)`);
   if (schemas.length === 0)           issues.push("No Schema.org structured data");
@@ -452,7 +479,8 @@ async function auditPage(url, keywords = [], host = "") {
     metaTitle, metaDesc, canonical, robotsMeta, isNoindex, isNofollow,
     viewport, charset, hreflang,
     h1s, h1HasKeyword, h2s,
-    imgsWithoutAlt, imgsWithoutDims,
+    imgsWithoutAlt, imgsWithoutDims, imgsMissingAltAttr, imgsMissingAltText,
+    multipleHead, multipleBody, multipleTitle, titleOutsideHead, httpResourceCount,
     internalLinks,
     schemas,
     social,
@@ -670,11 +698,18 @@ export async function crawlDomain(domain, keywords = []) {
       pagesMissingMetaDesc:  0,
       pagesMissingH1:        0,
       pagesMultipleH1:       0,
+      pagesMultipleTitle:    0,
+      pagesTitleOutsideHead: 0,
+      pagesMultipleHead:     0,
+      pagesMultipleBody:     0,
+      pagesWithMixedContent: 0,
       pagesNoindex:          0,
       pagesNoCanonical:      0,
       pagesWithSchemaTypes:  [],
       schemaTypes:           {},
       totalImgsWithoutAlt:   0,
+      totalImgsMissingAltAttr: 0,
+      totalImgsMissingAltText: 0,
       totalImgsWithoutDims:  0,
       slugIssuesCount:       0,
       thinContentCount:      0,
@@ -712,14 +747,31 @@ export async function crawlDomain(domain, keywords = []) {
   if (sitemap.found) result.sitemapUrl = sitemap.url;
 
   // 3. Build the deep-audit page list.
-  //    Prefer sitemap URLs; if the sitemap is missing or thin, fall back to a
-  //    breadth-first crawl of internal links so we don't report "1 page" for a
-  //    site that actually has hundreds.
+  //    PRIORITISE the homepage's own nav/footer links — those are the site's most
+  //    important pages (services, blog, contact…). A post-heavy sitemap can
+  //    otherwise bury them past the MAX_PAGES sample, so real issues on the main
+  //    pages (e.g. a missing H1 on /contact) go unreported while we audit 50 blog
+  //    posts that all have H1s. We crawl homepage-links FIRST, then fill the rest
+  //    from the sitemap. Falls back to a BFS link crawl if there's no usable sitemap.
+  let navLinks = [];
+  try {
+    const homeR = await timedFetch(base);
+    if (homeR.ok && (homeR.headers.get("content-type") || "").includes("html")) {
+      navLinks = extractInternalLinks(await homeR.text(), base, host);
+    }
+  } catch { /* ignore */ }
+
   let pagesToCrawl;
   const sitemapPages = sitemap.urls.filter(u => u !== base);
-  if (sitemapPages.length >= 3) {
-    pagesToCrawl = [base, ...sitemapPages].slice(0, MAX_PAGES);
-    result.discoveryMethod = "sitemap";
+  if (sitemapPages.length >= 3 || navLinks.length) {
+    const seen = new Set();
+    pagesToCrawl = [base, ...navLinks, ...sitemapPages].filter((u) => {
+      const k = u.split("#")[0].split("?")[0].replace(/\/+$/, "");
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).slice(0, MAX_PAGES);
+    result.discoveryMethod = sitemapPages.length >= 3 ? (navLinks.length ? "sitemap+nav" : "sitemap") : "links";
   } else {
     // Seed BFS from homepage (+ any few sitemap URLs we did find)
     const discovered = await discoverViaLinks(base, host, [base, ...sitemapPages], MAX_PAGES);
@@ -727,9 +779,17 @@ export async function crawlDomain(domain, keywords = []) {
     result.discoveryMethod = discovered.length > 1 ? "links" : "homepage-only";
   }
 
-  // 4. Crawl with concurrency
+  // 4. Crawl with concurrency, bounded by a wall-clock budget. Small/medium sites
+  //    finish fully (well under the budget); very large sites crawl as many pages
+  //    as time allows and stop gracefully instead of timing out the function.
   const pages = [];
+  const crawlDeadline = Date.now() + CRAWL_BUDGET_MS;
+  result.crawlTruncated = false;
   for (let i = 0; i < pagesToCrawl.length; i += CONCURRENCY) {
+    if (Date.now() > crawlDeadline) {
+      result.crawlTruncated = true;   // ran out of time budget before finishing the list
+      break;
+    }
     const batch = pagesToCrawl.slice(i, i + CONCURRENCY);
     const res   = await Promise.all(batch.map(u => auditPage(u, keywords, host)));
     pages.push(...res);
@@ -767,9 +827,16 @@ export async function crawlDomain(domain, keywords = []) {
     if (!p.metaDesc)           result.summary.pagesMissingMetaDesc++;
     if ((p.h1s||[]).length===0) result.summary.pagesMissingH1++;
     if ((p.h1s||[]).length > 1) result.summary.pagesMultipleH1++;
+    if (p.multipleTitle)       result.summary.pagesMultipleTitle++;
+    if (p.titleOutsideHead)    result.summary.pagesTitleOutsideHead++;
+    if (p.multipleHead)        result.summary.pagesMultipleHead++;
+    if (p.multipleBody)        result.summary.pagesMultipleBody++;
+    if ((p.httpResourceCount||0) > 0) result.summary.pagesWithMixedContent++;
     if (p.isNoindex)           result.summary.pagesNoindex++;
     if (!p.canonical)          result.summary.pagesNoCanonical++;
     result.summary.totalImgsWithoutAlt  += p.imgsWithoutAlt  || 0;
+    result.summary.totalImgsMissingAltAttr += p.imgsMissingAltAttr || 0;
+    result.summary.totalImgsMissingAltText += p.imgsMissingAltText || 0;
     result.summary.totalImgsWithoutDims += p.imgsWithoutDims || 0;
     if ((p.slug?.issues||[]).length > 0) result.summary.slugIssuesCount++;
     if ((p.content?.wordCount||0) < 200) result.summary.thinContentCount++;
