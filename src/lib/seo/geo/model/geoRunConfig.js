@@ -55,7 +55,7 @@ export function resolveGeoRunConfig(input = {}) {
     residential_proxy_enabled,
     execution_provider,
     max_retries: clamp(input.max_retries ?? 2, 0, 5),
-    concurrency_limit: clamp(input.concurrency_limit ?? 4, 1, 12),
+    concurrency_limit: clamp(input.concurrency_limit ?? preset.concurrency_limit ?? 4, 1, 12),
     cache_reuse_enabled: input.cache_reuse_enabled ?? true,
     force_refresh: !!input.force_refresh,
     screenshot_mode: input.screenshot_mode || preset.screenshot_mode || "on_error",

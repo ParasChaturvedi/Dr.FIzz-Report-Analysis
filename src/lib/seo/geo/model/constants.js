@@ -141,7 +141,10 @@ export const OPPORTUNITY_WEIGHTS = {
 // accounts must NOT fire on every prompt × engine × account by default.
 
 // Run modes (DEFAULT is "standard" — Full GEO is an advanced, higher-cost opt-in).
-export const RUN_MODES = ["dev_smoke", "standard", "full", "validation"];
+// "fast" = the pre-report inline scan: ~30 focused prompts across ALL engines, tuned to
+// finish in ~10-15 min (engines run in one parallel pool) so the report can WAIT for real
+// GEO data before it generates — no "pending" placeholder ever ships.
+export const RUN_MODES = ["fast", "dev_smoke", "standard", "full", "validation"];
 export const DEFAULT_RUN_MODE = "standard";
 
 // Execution-provider abstraction — Browserless is NOT hardcoded as the only path.
@@ -153,6 +156,7 @@ export const SCREENSHOT_MODES = ["off", "on_error", "always"];
 
 // Cost-safe presets per run mode. Standard = the default; Full is opt-in.
 export const RUN_MODE_PRESETS = {
+  fast:       { label: "Fast (pre-report)", prompt_limit: 30, concurrency_limit: 8, default_engines: GEO_ENGINES,             validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: false, cost_level: "medium", screenshot_mode: "off" },
   dev_smoke:  { label: "Dev / Smoke Test", prompt_limit: 25,  default_engines: ["aioverviews", "perplexity"], validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: false, cost_level: "low",    screenshot_mode: "on_error" },
   standard:   { label: "Standard GEO",     prompt_limit: 80,  default_engines: GEO_ENGINES,                    validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: false, cost_level: "medium", screenshot_mode: "on_error" },
   full:       { label: "Full GEO",         prompt_limit: 250, default_engines: GEO_ENGINES,                    validation_enabled: true,  validation_sample_percent: 15, residential_proxy_default: false, cost_level: "full",   screenshot_mode: "on_error" },
@@ -162,7 +166,7 @@ export const RUN_MODE_PRESETS = {
 // Prompt-volume band per run mode (§ run modes). The planner targets the UPPER bound
 // and lands anywhere in the band based on how much real project data is available.
 export const RUN_MODE_PROMPT_RANGE = {
-  dev_smoke: [20, 25], standard: [60, 80], full: [150, 250], validation: [40, 50],
+  fast: [24, 30], dev_smoke: [20, 25], standard: [60, 80], full: [150, 250], validation: [40, 50],
 };
 // Friendly aliases → canonical run-mode keys (so "smoke" resolves to "dev_smoke").
 export const RUN_MODE_ALIASES = { smoke: "dev_smoke", dev: "dev_smoke", "dev-smoke": "dev_smoke", default: "standard", production: "full" };

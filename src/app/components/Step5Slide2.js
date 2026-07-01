@@ -1066,34 +1066,35 @@ export default function Step5Slide2({
       // raw responses in MongoDB (30 days). The report's Section 10 reads that cache
       // and computes real Share-of-Voice + citations. Fail-safe: on error/timeout the
       // report falls back to the GEO readiness placeholders.
-      updateStage("geoLlm", { state: "loading", value: "Scanning AI engines (ChatGPT, Gemini, AI Overview, Perplexity, Claude)…" }, { force: true });
+      // Kick off the FAST multi-engine GEO scan on the VPS worker (~30 prompts × all engines,
+      // one parallel pool, ~10-15 min). Fire-and-continue: it collects in the BACKGROUND while
+      // the remaining steps (validation, opportunities, strategy) run; we WAIT for it just
+      // before generating the report (below) so the deck ships REAL GEO data — never "pending".
+      updateStage("geoLlm", { state: "loading", value: "Scanning AI engines (ChatGPT, Gemini, Perplexity, Claude, Copilot, AI Overviews)…" }, { force: true });
       try {
-        const geoRes = await fetch("/api/seo/geo-scan", {
+        await fetch("/api/seo/geo/ensure", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            url,
-            brand: businessData?.businessName || businessData?.name || domain,
-            industry: businessData?.industrySector || businessData?.industry || businessData?.category || "",
-            category: businessData?.category || "",
-            competitors: allCompetitors,            // geo-scan derives the brand label (name) for SoV
-            competitorDomains: allCompetitors,      // domains → citation host-matching (kept distinct from names)
-            keywords,            // real keywords → higher-quality neutral prompts (§17)
-            // §16 localization — use the business's own 2-letter country when known
-            // (was hardcoded "in", which forced every scan to India). Full country/
-            // state/city/global selector lands in the location phase.
-            countryCode: (businessData?.countryCode && /^[a-z]{2}$/i.test(businessData.countryCode))
-              ? String(businessData.countryCode).toLowerCase()
-              : "in",
-            location: businessData?.location || businessData?.city || businessData?.state || businessData?.country || "",
+            domain,
+            runMode: "fast",                        // 30 prompts, all engines, tuned for ~10-15 min
+            source: {
+              domain,
+              name: businessData?.businessName || businessData?.name || domain,
+              industry: businessData?.industrySector || businessData?.industry || businessData?.category || "",
+              category: businessData?.category || "",
+              keywords,
+              competitors: allCompetitors,
+              country: (businessData?.countryCode && /^[a-z]{2}$/i.test(businessData.countryCode)) ? String(businessData.countryCode).toLowerCase() : "in",
+              location: businessData?.location || businessData?.city || businessData?.state || businessData?.country || "",
+            },
           }),
-        });
-        const geoJson = geoRes.ok ? await geoRes.json() : null;
-        const nResp = geoJson?.geo?.responses?.length || 0;
-        updateStage("geoLlm", { state: "done", value: nResp ? `AI visibility scanned (${nResp} answers)` : "AI-readiness assessed" });
+        }).catch(() => {});
+        // Keep the stage LOADING — it collects in the background; the poll-wait below completes it.
+        updateStage("geoLlm", { value: "Scanning AI engines in the background…" });
       } catch (e) {
-        console.warn("[Step5] GEO scan failed:", e?.message);
-        updateStage("geoLlm", { state: "done", value: "AI-readiness assessed" });
+        console.warn("[Step5] GEO scan trigger failed:", e?.message);
+        updateStage("geoLlm", { value: "AI scan queued…" });
       }
 
       // ═══════════════════════════════════════════════════════════════════════
@@ -1216,6 +1217,31 @@ export default function Step5Slide2({
       // ═══════════════════════════════════════════════════════════════════════
       // PHASE 6 — MASTER AI REPORT GENERATION
       // (all modules collected, validated, analysed → assemble the report)
+      // ── WAIT for the background GEO scan to finish before generating the report, so the
+      // deck ships REAL 6-engine GEO data and no "pending" note ever appears. Bounded so a
+      // stuck scan can never hang onboarding; on timeout/fail we proceed with whatever exists.
+      updateStage("geoLlm", { state: "loading", value: "Finalising AI-visibility scan…" }, { force: true });
+      try {
+        const GEO_MAX_WAIT_MS = 16 * 60 * 1000, GEO_POLL_MS = 8000, geoStart = Date.now();
+        let geoDone = false;
+        while (Date.now() - geoStart < GEO_MAX_WAIT_MS) {
+          const gr = await fetch(`/api/seo/geo/report?domain=${encodeURIComponent(domain)}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+          if (gr?.measured === true) { geoDone = true; break; }
+          const st = gr?.geo_status?.state;
+          if (st === "failed" || st === "session_required") break;   // won't complete — ship what we have
+          const gs = gr?.geo_status || {};
+          const c = Number(gs.completed_count ?? gs.collected_count ?? 0);
+          const t = Number(gs.prompt_count ? gs.prompt_count * 6 : 0);
+          const mins = Math.round((Date.now() - geoStart) / 60000);
+          updateStage("geoLlm", { value: t && c ? `Scanning AI engines… ${Math.min(99, Math.round((c / t) * 100))}%` : `Scanning AI engines… (${mins}m)` });
+          await delay(GEO_POLL_MS);
+        }
+        updateStage("geoLlm", { state: "done", value: geoDone ? "AI visibility measured across all engines" : "AI-visibility scan (partial data)" });
+      } catch (e) {
+        console.warn("[Step5] GEO wait failed:", e?.message);
+        updateStage("geoLlm", { state: "done", value: "AI-readiness assessed" });
+      }
+
       // ── Report generation (gate already passed above) ─────────────────────
       updateStage("report", { state: "loading" });
 

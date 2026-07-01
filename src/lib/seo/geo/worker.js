@@ -101,33 +101,39 @@ export async function runGeoJob(run, opts = {}) {
   const perEngine = {};
   let saved = 0, failed = 0, cost = 0, stopped = false;
   try {
-    for (const engine of ready) {
-      // stop-run support (#7) — check between engines
-      try { const cur = await getGeoRun(runId); if (cur?.stopped_by_user) { stopped = true; break; } } catch {}
-      let scan;
+    // stop-run support (#7) — check once before the (now parallel) scan.
+    try { const cur = await getGeoRun(runId); if (cur?.stopped_by_user) stopped = true; } catch {}
+    // Run ALL ready engines through ONE parallel concurrency pool (GEO_CONCURRENCY) instead
+    // of one engine at a time. runGeoScan already builds an (engine × prompt) task list and
+    // runs it through a bounded pool, so the whole scan finishes in ~the slowest wave rather
+    // than the SUM of 6 sequential engine scans — this is what turns a ~1hr run into ~10-15
+    // min for ~30 prompts. Each task still uses the correct per-engine session + fresh context.
+    let scan = { responses: [], errors: [] };
+    if (!stopped) {
       try {
         scan = await runGeoScan({
           mode, transport: provider.transport,
           brand, clientDomain: brandDomain,
           competitors: competitors.map((c) => c.name), competitorDomains,
           location: project.country || "", proxyCountry: provider.proxyCountry || (String(project.country || "in").slice(0, 2).toLowerCase()),
-          engineKeys: [engine], sessions, prompts: scanPrompts,
+          engineKeys: ready, sessions, prompts: scanPrompts,
         });
       } catch (e) {
-        await logGeoError({ geo_project_id: projectId, geo_run_id: runId, engine, error_type: /timeout/i.test(String(e?.message)) ? "timeout" : "other", message: String(e?.message || e).slice(0, 400) });
-        failed += scanPrompts.length;
-        continue;
+        await logGeoError({ geo_project_id: projectId, geo_run_id: runId, engine: "all", error_type: /timeout/i.test(String(e?.message)) ? "timeout" : "other", message: String(e?.message || e).slice(0, 400) });
+        failed += scanPrompts.length * ready.length;
       }
+      // Responses/errors are each tagged with their own engine → attribute per engine.
       for (const resp of (scan.responses || [])) {
+        const ek = ENGINE_KEY_BY_NAME[String(resp.engine || "").toLowerCase()] || resp.engine || "unknown";
         const result = parseAnswer(resp, ctx);
         await saveRunResult({ runId, projectId, result });
         parsed.push(result);
-        saved++; perEngine[engine] = (perEngine[engine] || 0) + 1;
-        cost += APPROX_COST[engine] ?? 0.02;
-        opts.onProgress?.({ saved, failed, engine });
+        saved++; perEngine[ek] = (perEngine[ek] || 0) + 1;
+        cost += APPROX_COST[ek] ?? 0.02;
+        opts.onProgress?.({ saved, failed, engine: ek });
       }
       for (const err of (scan.errors || [])) {
-        const ek = ENGINE_KEY_BY_NAME[String(err.engine || "").toLowerCase()] || engine;
+        const ek = ENGINE_KEY_BY_NAME[String(err.engine || "").toLowerCase()] || "unknown";
         const msg = String(err.error || "");
         await logGeoError({ geo_project_id: projectId, geo_run_id: runId, prompt_id: err.promptId || null, engine: ek, error_type: /session|login|storageState/i.test(msg) ? "session_expired" : (/timeout/i.test(msg) ? "timeout" : "other"), message: msg.slice(0, 400) });
         failed++;
