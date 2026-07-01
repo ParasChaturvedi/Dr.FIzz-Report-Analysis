@@ -418,6 +418,13 @@ export function classifyKeywords(rawKeywords, ctx = {}) {
       excluded.push({ keyword: classified.keyword, reason: "No measurable monthly search demand (0 volume) and no current ranking — not a justified page to build." });
       continue;
     }
+    // Off-topic academic/theory terms ("benefits of societal marketing", "marketing mix")
+    // share the token "marketing" with the vocab but are NOT services this business offers
+    // or buyer queries — exclude so they never become a recommended page or blog (#6).
+    if (isOffTopicTheory(classified.keyword)) {
+      excluded.push({ keyword: classified.keyword, reason: "Off-topic marketing-theory term — not a service or buyer query for this business." });
+      continue;
+    }
 
     switch (classified.intent_class) {
       case "competitor-branded":

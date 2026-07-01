@@ -350,7 +350,10 @@ export default function DeckReport({ data, live }) {
           ]} />
         </Card>
       </Split>
-      <Callout className="mt2">{ds.diagnosis_cost ? leadBold(ds.diagnosis_cost) : <><b>What this costs you today:</b> with {fmtNum(traffic0 ?? 0)} organic visits, the {opp.total_monthly_search_volume ? `roughly ${fmtNum(opp.total_monthly_search_volume)}` : ""} monthly searches in your market go to competitors. Fixing these three things is what turns the site from invisible into found, and unlocks every later move in this plan.</>}{leadsLost ? <> At a conservative <b>5% capture × 2% conversion</b>, that undefended demand is <strong style={{ color: C.rust }}>~{fmtNum(leadsLost)} qualified leads a month</strong> handed to rivals.</> : null}</Callout>
+      {/* Number-critical callout: always compute from the real bindings (traffic, search
+          volume, leads) — never Claude's ds.diagnosis_cost, which mis-scaled these on itzfizz
+          ("125K" for 1.3K, "$6K" for 56K). Correctness of these figures outranks phrasing. */}
+      <Callout className="mt2"><b>What this costs you today:</b> with {fmtNum(traffic0 ?? 0)} organic visits, the {opp.total_monthly_search_volume ? `roughly ${fmtNum(opp.total_monthly_search_volume)}` : ""} monthly searches in your market go to competitors. Fixing these three things is what turns the site from invisible into found, and unlocks every later move in this plan.{leadsLost ? <> At a conservative <b>5% capture × 2% conversion</b>, that undefended demand is <strong style={{ color: C.rust }}>~{fmtNum(leadsLost)} qualified leads a month</strong> handed to rivals.</> : null}</Callout>
     </Slide>
   );
 
@@ -776,6 +779,20 @@ export default function DeckReport({ data, live }) {
     : rm.flatMap((p) => (p.actions || []).map((a) => (typeof a === "string" ? { title: a, desc: "", phase: p.duration } : { ...a, phase: p.timeframe ?? p.duration })))
   ).slice(0, 6);
   const prioKind = (p) => (/high|crit/i.test(p || "") ? "high" : /med/i.test(p || "") ? "med" : "low");
+  // Reference action-board rows carry a "Days X to Y" timeframe chip, not the work-type
+  // name. Map each action's tier/phase (or, failing that, its priority) to a day range.
+  const phaseDays = (phase, priority) => {
+    const p = String(phase || "").toLowerCase();
+    if (/\bday/.test(p)) return String(phase);
+    const m = p.match(/\b(30|60|90|180)\b/);
+    if (m) return m[1] === "30" ? "Days 1 to 30" : m[1] === "60" ? "Days 30 to 60" : m[1] === "90" ? "Days 60 to 90" : "Days 90 to 180";
+    if (/found|technical|fix|load|crawl|speed|index|h1|meta|schema/.test(p)) return "Days 1 to 30";
+    if (/capture|commercial|page|content|on.?page|keyword|build/.test(p)) return "Days 30 to 60";
+    if (/author|local|geo|citation|review|gbp|map/.test(p)) return "Days 60 to 90";
+    if (/compound|link|pr|scale|press|outreach|listicle/.test(p)) return "Days 90 to 180";
+    const pr = String(priority || "").toLowerCase();
+    return /high|crit/.test(pr) ? "Days 1 to 30" : /med/.test(pr) ? "Days 30 to 90" : "Days 90 to 180";
+  };
   slides.push(
     <Slide key="actions" variant="cream" n="19" kicker="Who Does What" title="Every move, sorted by the work it takes"
       sub={ds.actions_sub || "Every move tagged by type AND owner, so each one lands on the right desk with a clear name against it."} foot={foot("19 · THE ACTION BOARD")}>
@@ -785,7 +802,7 @@ export default function DeckReport({ data, live }) {
       ]} />
       {actionRows.length ? actionRows.map((a, i) => (
         <ActionRow key={i} accentClass={accentFor(a.channel || a.title)} title={clamp(a.title, 72)} desc={clamp(a.desc || a.description || "", 88)}
-          meta={<>{a.priority ? <Tag kind={prioKind(a.priority)}>{titleCase(a.priority)}</Tag> : null}<span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: C.muted, margin: "0 8px", whiteSpace: "nowrap" }}>{ownerFor(a.channel || a.title)}</span><Pill>{a.phase || "Phase 1"}</Pill></>} />
+          meta={<>{a.priority ? <Tag kind={prioKind(a.priority)}>{titleCase(a.priority)}</Tag> : null}<span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: C.muted, margin: "0 8px", whiteSpace: "nowrap" }}>{ownerFor(a.channel || a.title)}</span><Pill>{phaseDays(a.phase, a.priority)}</Pill></>} />
       )) : <GapPanel title="Action board pending">Recommendations populate from the strategy build.</GapPanel>}
     </Slide>
   );
