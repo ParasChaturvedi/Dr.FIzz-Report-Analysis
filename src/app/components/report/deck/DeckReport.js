@@ -572,7 +572,7 @@ export default function DeckReport({ data, live }) {
   /* 14 · The prompts we ran */
   const resKind = (p) => (p.brand_mentioned ? (p.citation_count > 0 ? "cited" : "named") : "absent");
   // REAL Google AI-Overview evidence: each buyer term, the actual domains Google cited, and your result.
-  const aioPromptRows = (aio.per_keyword || []).filter((k) => (k.sources || []).length).slice(0, 7).map((k) => {
+  const aioPromptRows = (aio.per_keyword || []).filter((k) => (k.sources || []).length).slice(0, 10).map((k) => {
     const cited = (k.sources || []).some((s) => lc(s).includes(lc(String(domain).split(".")[0])));
     return { cells: [
       clamp(k.keyword, 44), <span className="eng-pill" key="e">Google AIO</span>,
@@ -585,7 +585,7 @@ export default function DeckReport({ data, live }) {
     <Slide key="geo-prompts" variant="cream" n="12" kicker="The Prompts We Ran" title={useAioPrompts ? "What AI cites for your buyer terms, and where you're absent" : "Real prompts, real answers, per engine"}
       sub={<>{useAioPrompts ? "The real sources Google's AI Overview quotes for your buyer terms today." : "A sample of the buyer questions we ran and what each engine returned. This is the raw evidence behind every GEO number."} {useAioPrompts ? MeasTag : IllusTag}</>} foot={foot("12 · GEO · SAMPLE PROMPTS")}>
       <DataTable compact head={[{ label: useAioPrompts ? "Buyer term" : "Buyer prompt" }, { label: "Engine" }, { label: useAioPrompts ? "Sources it cited" : "Who it named" }, { label: `${name} result`, align: "right" }]}
-        rows={useAioPrompts ? aioPromptRows : (geo.prompts_executed || []).slice(0, 7).map((p) => ({ cells: [
+        rows={useAioPrompts ? aioPromptRows : (geo.prompts_executed || []).slice(0, 10).map((p) => ({ cells: [
           clamp(p.prompt, 56), p.engine,
           clamp((p.brands_named || p.entities || []).join(", ") || (p.competitor_mention_count ? `${p.competitor_mention_count} competitor${p.competitor_mention_count === 1 ? "" : "s"}` : "—"), 40),
           { align: "right", v: <ResCell kind={resKind(p)}>{p.citation_count > 0 ? "Cited" : p.brand_mentioned ? "Named" : "Not named"}</ResCell> },

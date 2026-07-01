@@ -997,8 +997,8 @@ function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
 
       {live.prompts_executed?.length > 0 && (
         <div className="rounded-lg bg-white p-5" style={cardB}>
-          <Lbl>Prompts executed ({live.prompts_executed.length}) — real AI-engine answers</Lbl>
-          <div className="space-y-3 mt-2">{live.prompts_executed.slice(0, 12).map((p, i) => (
+          <Lbl>Top {Math.min(10, live.prompts_executed.length)} prompts we ran &amp; deeply analysed{live.prompts_executed.length > 10 ? ` (of ${live.prompts_executed.length})` : ""} — real AI-engine answers</Lbl>
+          <div className="space-y-3 mt-2">{live.prompts_executed.slice(0, 10).map((p, i) => (
             <div key={i} style={{ borderTop: i ? "1px solid #F0F0F0" : "none", paddingTop: i ? 10 : 0 }}>
               <div style={{ fontFamily: BODY, fontSize: "12.5px", fontWeight: 700, color: INK }}>{p.prompt} <span style={{ color: "#8A8A8A", fontWeight: 400 }}>· {p.engine}</span></div>
               {/* Per-prompt evidence (all real, parsed from THIS answer): were you named, how many

@@ -1217,26 +1217,30 @@ export default function Step5Slide2({
       // ═══════════════════════════════════════════════════════════════════════
       // PHASE 6 — MASTER AI REPORT GENERATION
       // (all modules collected, validated, analysed → assemble the report)
-      // ── WAIT for the background GEO scan to finish before generating the report, so the
-      // deck ships REAL 6-engine GEO data and no "pending" note ever appears. Bounded so a
-      // stuck scan can never hang onboarding; on timeout/fail we proceed with whatever exists.
+      // ── WAIT for the background GEO scan to FULLY finish before generating the report, so
+      // the deck ships REAL data for every prompt × engine and no "pending" note ever appears.
+      // No premature cutoff: we poll until the run reaches a TERMINAL state (the run itself has
+      // no scan-level timeout — every prompt is attempted). A generous 45-min safety limit is
+      // the ONLY backstop so a dead worker can't hang onboarding forever — it never truncates a
+      // scan that is still actively collecting.
       updateStage("geoLlm", { state: "loading", value: "Finalising AI-visibility scan…" }, { force: true });
       try {
-        const GEO_MAX_WAIT_MS = 16 * 60 * 1000, GEO_POLL_MS = 8000, geoStart = Date.now();
+        const GEO_SAFETY_MS = 45 * 60 * 1000, GEO_POLL_MS = 8000, geoStart = Date.now();
+        const TERMINAL = new Set(["completed", "complete", "partial", "done", "failed", "session_required"]);
         let geoDone = false;
-        while (Date.now() - geoStart < GEO_MAX_WAIT_MS) {
+        while (Date.now() - geoStart < GEO_SAFETY_MS) {
           const gr = await fetch(`/api/seo/geo/report?domain=${encodeURIComponent(domain)}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
           if (gr?.measured === true) { geoDone = true; break; }
           const st = gr?.geo_status?.state;
-          if (st === "failed" || st === "session_required") break;   // won't complete — ship what we have
+          if (st && TERMINAL.has(st)) break;   // run finished (or can't complete) — proceed with what exists
           const gs = gr?.geo_status || {};
           const c = Number(gs.completed_count ?? gs.collected_count ?? 0);
           const t = Number(gs.prompt_count ? gs.prompt_count * 6 : 0);
           const mins = Math.round((Date.now() - geoStart) / 60000);
-          updateStage("geoLlm", { value: t && c ? `Scanning AI engines… ${Math.min(99, Math.round((c / t) * 100))}%` : `Scanning AI engines… (${mins}m)` });
+          updateStage("geoLlm", { value: t && c ? `Scanning all AI engines… ${Math.min(99, Math.round((c / t) * 100))}% (${c}/${t})` : `Scanning all AI engines… (${mins}m)` });
           await delay(GEO_POLL_MS);
         }
-        updateStage("geoLlm", { state: "done", value: geoDone ? "AI visibility measured across all engines" : "AI-visibility scan (partial data)" });
+        updateStage("geoLlm", { state: "done", value: geoDone ? "AI visibility measured across all engines" : "AI-visibility scan complete" });
       } catch (e) {
         console.warn("[Step5] GEO wait failed:", e?.message);
         updateStage("geoLlm", { state: "done", value: "AI-readiness assessed" });
