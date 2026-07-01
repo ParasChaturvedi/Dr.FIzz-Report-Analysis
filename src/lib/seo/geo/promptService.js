@@ -50,8 +50,11 @@ export function normalizeSource(input = {}) {
   const b5 = s.step5b || input.step5b || {};
 
   // ── Step 1-2 — identity / business context ──
-  const brand = clean(s.brand || s.clientName || s.brandName || meta.client_name || "");
+  // Accept the common brand-name field aliases: onboarding + report callers pass the
+  // business as `name`/`businessName`, not always `brand` — missing this left brand empty,
+  // which made runGeoScan throw "`brand` is required" and every scan fail with 0 saved.
   const domain = stripDomain(s.domain || meta.domain || "");
+  const brand = clean(s.brand || s.clientName || s.brandName || s.businessName || s.business_name || s.name || meta.client_name || meta.business_name || "") || clean((domain || "").split(".")[0].replace(/[-_]+/g, " "));
   const industry = clean(s.industry || meta.industry || "");
   const category = clean(s.category || (Array.isArray(s.coreServices) && s.coreServices[0]) || (Array.isArray(report?.coreServices) && report.coreServices[0]) || "");
   const businessType = clean(s.businessType || s.business_type || meta.business_type || "");

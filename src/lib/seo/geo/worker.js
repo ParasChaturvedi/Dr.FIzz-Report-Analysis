@@ -60,7 +60,10 @@ export async function runGeoJob(run, opts = {}) {
   if (run.prompt_limit) prompts = prompts.slice(0, run.prompt_limit);
   if (!prompts.length) { await updateGeoRun(runId, { status: "failed", error: "no approved prompts to run", completed_at: nowIso() }); return { ok: false, error: "no approved prompts" }; }
 
-  const brand = project.brand_name || run.target_brand || "";
+  // brand fallback: EXISTING projects may have an empty brand_name (created before the
+  // normalizeSource fix). Derive one from the domain so runGeoScan never throws "`brand`
+  // is required" and fails the whole scan. New projects get a proper brand_name at creation.
+  const brand = project.brand_name || run.target_brand || (project.brand_domain ? project.brand_domain.split(".")[0].replace(/[-_]+/g, " ").trim() : "") || "the brand";
   const brandDomain = project.brand_domain || "";
   const competitors = (project.competitors || []).map((c) => (typeof c === "string" ? { name: c, domain: "" } : { name: c.name || c.brand || "", domain: c.domain || "" })).filter((c) => c.name || c.domain);
   const competitorDomains = competitors.map((c) => c.domain).filter(Boolean);
