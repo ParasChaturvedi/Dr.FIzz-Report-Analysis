@@ -185,7 +185,12 @@ export default function DeckReport({ data, live }) {
     : (Number(geo.overall?.mention_rate) >= 30 ? "Yes" : Number(geo.overall?.mention_rate) >= 10 ? "Barely" : "No");
 
   // GEO leader (top non-client brand), for mention/citation descriptors + verdict.
-  const sov = (geo && geo.share_of_voice) || [];
+  // share_of_voice shape differs by source: the illustrative bundle is an ARRAY of brand
+  // rows, but the REAL measured /geo/report returns an OBJECT { engines, by_brand:[…] }.
+  // Normalise to an array so downstream .slice/[...spread]/.filter never crash (this dict
+  // shape was the client-side exception on measured reports).
+  const _sovRaw = geo && geo.share_of_voice;
+  const sov = Array.isArray(_sovRaw) ? _sovRaw : (Array.isArray(_sovRaw?.by_brand) ? _sovRaw.by_brand : []);
   const leader = [...sov].filter((b) => !b.is_client).sort((a, b) => (b.avg || 0) - (a.avg || 0))[0] || null;
 
   // Competitor benchmark rows: real per-competitor metrics if present, else illustrative.
