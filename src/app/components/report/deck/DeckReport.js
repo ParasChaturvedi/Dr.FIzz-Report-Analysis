@@ -193,6 +193,27 @@ export default function DeckReport({ data, live }) {
   const sov = Array.isArray(_sovRaw) ? _sovRaw : (Array.isArray(_sovRaw?.by_brand) ? _sovRaw.by_brand : []);
   const leader = [...sov].filter((b) => !b.is_client).sort((a, b) => (b.avg || 0) - (a.avg || 0))[0] || null;
 
+  // ── Canonical 6-engine framing (matches the reference deck). The by-platform panels
+  // always list all 6 engines: the ones that actually ran carry REAL values; the rest
+  // render dimmed as "not yet scanned" — so the GEO section is never sparse/1-bar. ──
+  const ENG_NAME = { aioverviews: "Google AI Overviews", "google ai overviews": "Google AI Overviews", chatgpt: "ChatGPT", gemini: "Gemini", perplexity: "Perplexity", claude: "Claude", copilot: "Microsoft Copilot", "microsoft copilot": "Microsoft Copilot" };
+  const engName = (e) => ENG_NAME[String(e || "").toLowerCase()] || e || "—";
+  const CANON_ENGINES = [
+    { key: "chatgpt", name: "ChatGPT" }, { key: "gemini", name: "Gemini" }, { key: "perplexity", name: "Perplexity" },
+    { key: "claude", name: "Claude" }, { key: "copilot", name: "Microsoft Copilot" }, { key: "aioverviews", name: "Google AI Overviews" },
+  ];
+  const ENGINES_TOTAL = 6;
+  const _engIdx = {};
+  for (const e of (geo.by_engine || [])) _engIdx[String(e.engine || "").toLowerCase().replace(/[^a-z]/g, "")] = e;
+  const engineRows = (metricKey) => CANON_ENGINES.map((ce) => {
+    const e = _engIdx[ce.key] || _engIdx[ce.name.toLowerCase().replace(/[^a-z]/g, "")] || null;
+    return { engine: ce.name, value: e ? Number(e.metrics?.[metricKey] ?? e[metricKey] ?? 0) : 0, scanned: !!e };
+  }).sort((a, b) => (Number(b.scanned) - Number(a.scanned)) || (b.value - a.value));
+  const enginesRun = (geo.by_engine || []).length || (aioMeasured ? 1 : 0);
+  // Real cited domains (who AI quotes instead of you) — the honest "who owns the answer
+  // space" for a client with no measured Share of Voice. From the measured citation analysis.
+  const citedDomains = ((geo.citation_analysis || aio.citation_analysis || {}).top_source_domains || []).filter((d) => d && d.domain);
+
   // Competitor benchmark rows: real per-competitor metrics if present, else illustrative.
   const benchRows = comps.some((c) => c && (c.dr != null || c.traffic != null)) ? comps : buildIllustrativeBenchmark(comps);
   const benchIllus = !comps.some((c) => c && (c.dr != null || c.traffic != null));
@@ -510,11 +531,13 @@ export default function DeckReport({ data, live }) {
       sub={<>{aioMeasured ? "Of every source cited in Google's AI Overviews, this is the slice each domain owns." : "Of every brand named across the full prompt set, this is the slice each competitor owns."}</>} foot={foot("10 · GEO · SHARE OF VOICE")}>
       <Split>
         <div>
-          <h3 className="mini">{aioMeasured ? <>Google AI Overview citations, vs competitors {MeasTag}</> : <>Overall share of voice, vs competitors {IllusTag}</>}</h3>
+          <h3 className="mini">{aioMeasured ? <>Google AI Overview citations, vs competitors {MeasTag}</> : (sov.filter((b) => !b.is_client).length ? <>Overall share of voice, vs competitors {IllusTag}</> : <>Who AI cites instead of you {MeasTag}</>)}</h3>
           {aioMeasured
             ? [...aioCompetitors.sort((a, b) => b.pct - a.pct), aioSovRows.find((s) => s.is_client), ...aioSovRows.filter((s) => s.is_other)].filter(Boolean).map((b, i) => (
                 <CBar key={i} name={b.brand + (b.is_client ? " (you)" : "")} pct={b.pct} you={b.is_client} value={`${Math.round(b.pct)}%`} />))
-            : sov.slice(0, 6).map((b, i) => (<CBar key={i} name={b.brand + (b.is_client ? " (you)" : "")} pct={b.avg} you={b.is_client} value={`${Math.round(b.avg)}%`} />))}
+            : (sov.filter((b) => !b.is_client).length
+              ? sov.slice(0, 6).map((b, i) => (<CBar key={i} name={b.brand + (b.is_client ? " (you)" : "")} pct={b.avg} you={b.is_client} value={`${Math.round(b.avg)}%`} />))
+              : citedDomains.slice(0, 6).map((d, i) => { const mx = citedDomains[0]?.count || 1; return <CBar key={i} name={String(d.domain).replace(/^www\./, "")} pct={Math.round((d.count / mx) * 100)} value={`${d.count}×`} />; }))}
         </div>
         <div>
           {aioMeasured ? (
@@ -525,10 +548,7 @@ export default function DeckReport({ data, live }) {
           ) : (
             <>
               <h3 className="mini">Your share of voice, by platform {IllusTag}</h3>
-              {[...(geo.by_engine || [])].sort((a, b) => (b.metrics?.sov ?? b.sov ?? 0) - (a.metrics?.sov ?? a.sov ?? 0)).map((e, i) => {
-                const v = e.metrics?.sov ?? e.sov ?? 0;
-                return <CBar key={i} name={e.engine} pct={v} you value={`${Math.round(v)}%`} />;
-              })}
+              {engineRows("sov").map((e, i) => <CBar key={i} name={e.engine} pct={e.value} you value={e.scanned ? `${Math.round(e.value)}%` : "—"} dim={!e.scanned} />)}
             </>
           )}
         </div>
@@ -544,25 +564,24 @@ export default function DeckReport({ data, live }) {
   );
 
   /* 13 · GEO mentions & citations */
-  const metricCol = (label, sub, value, leaderVal, leaderName, eng, key, measuredNote) => (
+  const metricCol = (label, sub, value, leaderVal, leaderName, rows, measuredNote) => (
     <div className="metric-col">
       <div className="mh"><span className="mt2x">{label}</span><span className="mbig">{pctStr(value)}</span></div>
       <p className="mdesc">{leaderVal != null ? `Leader ${leaderName} sits at ${Math.round(leaderVal)}%.` : (measuredNote || "Measured across the answered prompts.")}</p>
-      {[...(eng || [])].sort((a, b) => (b.metrics?.[key] ?? b[key] ?? 0) - (a.metrics?.[key] ?? a[key] ?? 0)).map((e, i) => <CBar key={i} name={e.engine} pct={e.metrics?.[key] ?? e[key] ?? 0} you />)}
+      {(rows || []).map((e, i) => <CBar key={i} name={e.engine} pct={e.value} you value={e.scanned ? `${Math.round(e.value)}%` : "—"} dim={!e.scanned} />)}
     </div>
   );
   // When only Google AIO is measured we have no real per-engine mention/citation data or a
-  // measured leader — pass no engines + no leader so the slide shows the measured overall
-  // number with an honest note, never illustrative per-platform bars.
-  const mcEng = aioMeasured ? [] : geo.by_engine;
+  // measured leader — pass no rows + no leader so the slide shows the measured overall
+  // number with an honest note. Otherwise the canonical 6-engine scaffold (real + dimmed).
   const mcLeader = aioMeasured ? null : leader;
   const mcNote = aioMeasured ? "Measured in Google AI Overviews. Per-platform detail follows the full scan." : null;
   slides.push(
     <Slide key="geo-mc" n="11" kicker="GEO · Mentions & Citations" title="Mention rate and citation rate, by platform"
       sub={<>Being mentioned is good. Being cited as the source is what builds trust and clicks. You are weak on both, and almost invisible as a source. {aioMeasured ? MeasTag : IllusTag}</>} foot={foot("11 · GEO · MENTIONS & CITATIONS")}>
       <Split>
-        {metricCol("Mention Rate", "how often you appear at all", geo.overall?.mention_rate, mcLeader?.mention_rate, mcLeader?.brand, mcEng, "mention_rate", mcNote)}
-        {metricCol("Citation Rate", "how often you are the source", geo.overall?.citation_rate, mcLeader?.citation_rate, mcLeader?.brand, mcEng, "citation_rate", mcNote)}
+        {metricCol("Mention Rate", "how often you appear at all", geo.overall?.mention_rate, mcLeader?.mention_rate, mcLeader?.brand, aioMeasured ? [] : engineRows("mention_rate"), mcNote)}
+        {metricCol("Citation Rate", "how often you are the source", geo.overall?.citation_rate, mcLeader?.citation_rate, mcLeader?.brand, aioMeasured ? [] : engineRows("citation_rate"), mcNote)}
       </Split>
       <Triad className="mt2">
         <Tc kind="evidence" label="Evidence">{aioMeasured
@@ -590,8 +609,6 @@ export default function DeckReport({ data, live }) {
   // sample across EVERY engine that actually ran, so the table shows the real spread
   // (e.g. Google AI Overviews + Claude) instead of 10 rows of one engine. Each prompt is
   // only ever labelled with the engine that REALLY answered it — never a fabricated one.
-  const ENG_NAME = { aioverviews: "Google AI Overviews", "google ai overviews": "Google AI Overviews", chatgpt: "ChatGPT", gemini: "Gemini", perplexity: "Perplexity", claude: "Claude", copilot: "Microsoft Copilot", "microsoft copilot": "Microsoft Copilot" };
-  const engName = (e) => ENG_NAME[String(e || "").toLowerCase()] || e || "—";
   const _pxByEng = {};
   for (const p of (geo.prompts_executed || [])) { const k = String(p.engine || "?").toLowerCase(); (_pxByEng[k] = _pxByEng[k] || []).push(p); }
   const _pxPools = Object.values(_pxByEng).map((a) => a.slice());

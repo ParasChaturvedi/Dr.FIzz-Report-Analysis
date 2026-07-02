@@ -72,11 +72,11 @@ export const FixRow = ({ title, desc, goal, when }) => (
 );
 
 /* ---- compare bars (SoV / per-engine / reviews) ---- */
-export const CBar = ({ name, pct, value, you = false, them = false }) => {
+export const CBar = ({ name, pct, value, you = false, them = false, dim = false }) => {
   const w = Math.round(clampPct(pct));
   return (
-    <div className="cbar">
-      <div className="cn">{name}</div>
+    <div className="cbar" style={dim ? { opacity: 0.55 } : undefined}>
+      <div className="cn">{name}{dim ? <span style={{ color: C.faint, fontWeight: 400, fontSize: 8.5, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>not yet scanned</span> : null}</div>
       <div className="ct"><div className={`cf ${you ? "you" : "them"}`} style={{ width: `${w}%` }}>{w >= 14 ? `${w}%` : ""}</div></div>
       <div className="cv">{value != null ? value : `${w}%`}</div>
     </div>
