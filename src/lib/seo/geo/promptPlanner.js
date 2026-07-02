@@ -163,11 +163,15 @@ function isNeutralClean(text, forbidden) {
 // Tidy a templated prompt: collapse adjacent duplicate words/bigrams ("services
 // services" → "services", "seo services seo services" → "seo services") so the
 // subject/keyword value injection never reads awkwardly.
-function tidyPrompt(s) {
+function tidyPrompt(s, locLabel = "") {
   let p = clean(s);
   p = p.replace(/\b(\w+\s+\w+)\s+\1\b/gi, "$1");   // adjacent duplicate bigram
   p = p.replace(/\b(\w+)(\s+\1\b)+/gi, "$1");        // adjacent duplicate word(s)
   p = p.replace(/\bservices\s+services\b/gi, "services");
+  // Fix a DANGLING location preposition (e.g. "… agency in") — left when the {loc} value was
+  // empty, or a 2-letter code that collided with "in" and got deduped. Append the real place
+  // name when we have one (→ "… agency in India"), otherwise drop the bare preposition.
+  p = p.replace(/\s+\b(in|near|at|across|within|throughout|serving|for)\b\s*$/i, locLabel ? ` in ${locLabel}` : "");
   return clean(p);
 }
 
@@ -202,7 +206,10 @@ function buildLocations(locationCtx = {}, extra = [], keywordTerms = []) {
   const add = (label, scope) => { const l = clean(label); if (l) out.push({ label: l, scope }); };
   if (locationCtx.city) add(locationCtx.city, "city");
   if (locationCtx.state) add(locationCtx.state, "state");
-  if (locationCtx.country) add(locationCtx.country, "country");
+  // Country: use the NAME (India), never the raw 2-letter code (in) — the code produces
+  // "… in in" which deduping collapses to a dangling "in".
+  const _cn = locationCtx.country_name || (String(locationCtx.country || "").length > 3 ? locationCtx.country : "");
+  if (_cn) add(_cn, "country");
   if (locationCtx.label) add(locationCtx.label, locationCtx.mode || "market");
   for (const e of (Array.isArray(extra) ? extra : [])) add(typeof e === "string" ? e : e?.label, "city");
   // mine "in <Place>" from keywords (conservative: 1–2 capitalised-ish alpha words)
@@ -687,7 +694,7 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
   const comps = uniq(competitorNames(source.competitors || source.businessCompetitors));
   const industry = lc(source.industry || source.category || indFromKeywords(keywordThemes) || "service providers");
   const subject = lc(source.category || source.industry || indFromKeywords(keywordThemes) || "services");
-  const locationCtx = source.locationContext || { mode: source.locationMode || "country", country: source.location || "", label: source.location || "" };
+  const locationCtx = source.locationContext || { mode: source.locationMode || "country", country: source.location || "", country_name: source.location || "", label: source.location || "" };
   const locations = buildLocations(locationCtx, source.locations, keywordThemes);
   const serp = source.serp || {};
   const audit = source.audit || {};
@@ -765,7 +772,7 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
   // ── STRICT NEUTRALITY (final guard) — drop ANY prompt that still contains a brand /
   //    competitor / company / domain / website name. This catches Claude output too. ──
   //    Also tidy templated redundancy ("services services" → "services").
-  merged = merged.filter((r) => isNeutralClean(r.prompt, forbidden)).map((r) => ({ ...r, prompt: tidyPrompt(r.prompt) }));
+  merged = merged.filter((r) => isNeutralClean(r.prompt, forbidden)).map((r) => ({ ...r, prompt: tidyPrompt(r.prompt, locationCtx.label || locationCtx.country_name || "") }));
 
   // ── 4. (location variants already produced inside deterministic + Claude) ──
   // ── 5. dedupe ──
