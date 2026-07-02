@@ -43,6 +43,19 @@ const arr = (v) => (Array.isArray(v) ? v : []);
  * SERP / backlinks / authority / competitor signals) is captured for PROMPT PLANNING
  * + CONTEXT only — it is never turned into a GEO result/score (that's Phase 3).
  */
+// ISO-3166 alpha-2 → country NAME. Prompts must read "… in India", never "… in in"
+// (the 2-letter code collides with the preposition and gets deduped to a dangling "in").
+const COUNTRY_NAMES = {
+  in: "India", us: "United States", gb: "United Kingdom", uk: "United Kingdom", ca: "Canada", au: "Australia",
+  ae: "United Arab Emirates", sg: "Singapore", de: "Germany", fr: "France", es: "Spain", it: "Italy", nl: "Netherlands",
+  br: "Brazil", mx: "Mexico", za: "South Africa", ng: "Nigeria", ke: "Kenya", pk: "Pakistan", bd: "Bangladesh",
+  lk: "Sri Lanka", np: "Nepal", ph: "Philippines", id: "Indonesia", my: "Malaysia", th: "Thailand", vn: "Vietnam",
+  jp: "Japan", cn: "China", kr: "South Korea", sa: "Saudi Arabia", qa: "Qatar", ie: "Ireland", nz: "New Zealand",
+  se: "Sweden", ch: "Switzerland", be: "Belgium", pl: "Poland", pt: "Portugal", tr: "Turkey", eg: "Egypt",
+};
+// A 2-letter token = a country code → map to its name; anything longer is already a name.
+const countryToName = (c) => { const t = String(c || "").trim(); return COUNTRY_NAMES[t.toLowerCase()] || (t.length > 3 ? t : ""); };
+
 export function normalizeSource(input = {}) {
   const s = input.source || input || {};
   const report = input.report || s.report || null;
@@ -62,11 +75,16 @@ export function normalizeSource(input = {}) {
   const businessScope = clean(s.businessScope || s.business_scope || meta.business_scope || "");
 
   const locationMode = s.locationMode || s.location_mode || report?.report_meta?.location_mode || "country";
-  const location = clean(s.location || meta.location || report?.location || "");
+  // Step-3 location: prefer the NARROWEST real place the user selected (city → state →
+  // country NAME), never the raw 2-letter country code. This is what fills "{ind} in {loc}".
+  const _countryName = countryToName(s.country || meta.country);
+  const location = clean(s.location || meta.location || report?.location || s.city || s.state || _countryName || "");
   const locationContext = s.locationContext || s.location_context || {
     mode: locationMode,
     country: clean(s.country || ""), state: clean(s.state || ""), city: clean(s.city || ""),
-    label: location || clean([s.city, s.state, s.country].filter(Boolean).join(", ")),
+    country_name: _countryName,
+    // label = the human place name used inside prompts (city > state > country name).
+    label: clean(s.city || s.state || _countryName || location || ""),
   };
   const homepageTitle = clean(s.homepageTitle || s.homepage_title || "");
   const homepageContent = clean(s.homepageContent || s.homepage_content || "");

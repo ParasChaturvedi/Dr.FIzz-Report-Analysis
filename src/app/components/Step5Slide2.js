@@ -1085,8 +1085,11 @@ export default function Step5Slide2({
               category: businessData?.category || "",
               keywords,
               competitors: allCompetitors,
-              country: (businessData?.countryCode && /^[a-z]{2}$/i.test(businessData.countryCode)) ? String(businessData.countryCode).toLowerCase() : "in",
-              location: businessData?.location || businessData?.city || businessData?.state || businessData?.country || "",
+              // Step-3 place selection — pass city/state/country structured so the prompt
+              // location reads as a real name ("… in Mumbai" / "… in India"), never a code.
+              country: (businessData?.countryCode && /^[a-z]{2}$/i.test(businessData.countryCode)) ? String(businessData.countryCode).toLowerCase() : (businessData?.country || "in"),
+              state: businessData?.state || businessData?.region || "",
+              city: businessData?.city || "",
             },
           }),
         }).catch(() => {});
