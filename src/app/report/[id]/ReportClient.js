@@ -16,26 +16,36 @@ export default function ReportClient({ id }) {
   const [proceeding, setProceeding]   = useState(false);
   const [progress, setProgress]       = useState(0);
 
-  // ── Load report from sessionStorage ──────────────────────────────────────
+  // ── Load report: sessionStorage first, then the durable 30-day MongoDB store ──────────────
   useEffect(() => {
     if (!id) { setNotFound(true); setLoading(false); return; }
-    try {
-      const raw = sessionStorage.getItem(`drfizz:report:${id}`);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed?.reportType && parsed?.data) {
-          setReportType(parsed.reportType);
-          setData(parsed.data);
-          setLoading(false);
-          return;
+    let cancelled = false;
+    (async () => {
+      // 1) FAST PATH — the per-tab sessionStorage copy written at generation time.
+      try {
+        const raw = sessionStorage.getItem(`drfizz:report:${id}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.reportType && parsed?.data) {
+            setReportType(parsed.reportType); setData(parsed.data); setLoading(false); return;
+          }
         }
-      }
-    } catch (e) {
-      console.warn("[ReportClient] sessionStorage read failed:", e);
-    }
-    // Not found in sessionStorage
-    setNotFound(true);
-    setLoading(false);
+      } catch (e) { console.warn("[ReportClient] sessionStorage read failed:", e); }
+      // 2) DURABLE FALLBACK — fetch the report by id from MongoDB (survives a refresh, a new browser
+      //    tab, or a shared link). No longer session-fragile.
+      try {
+        const res = await fetch(`/api/report/by-id?id=${encodeURIComponent(id)}`);
+        if (res.ok) {
+          const j = await res.json();
+          if (!cancelled && j?.reportType && j?.data) {
+            try { sessionStorage.setItem(`drfizz:report:${id}`, JSON.stringify({ id, reportType: j.reportType, data: j.data })); } catch {}
+            setReportType(j.reportType); setData(j.data); setLoading(false); return;
+          }
+        }
+      } catch (e) { console.warn("[ReportClient] durable report fetch failed:", e); }
+      if (!cancelled) { setNotFound(true); setLoading(false); }
+    })();
+    return () => { cancelled = true; };
   }, [id]);
 
   // ── Background pre-fetch: start /api/seo as soon as report loads ─────────

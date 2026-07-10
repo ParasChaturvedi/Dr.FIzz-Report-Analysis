@@ -4,9 +4,9 @@
 // duplicate detection, Core Web Vitals hints, social meta, SERP preview,
 // content quality, page speed hints, E-E-A-T signals, overall health score.
 
-import { NextResponse } from "next/server";
 import { getOrFetch } from "@/lib/cache/mongo";
 import { logUsage } from "@/lib/cache/usage";
+import { CRAWL_ENGINE_VERSION } from "@/lib/crawl/engineVersion";
 
 export const runtime    = "nodejs";
 export const maxDuration = 300;   // Vercel Pro ceiling
@@ -16,7 +16,10 @@ const MAX_PAGES         = 300;    // upper bound on pages we deep-audit (HTML pa
                                   // covers a full crawl for the vast majority of sites
 const SITEMAP_SCAN_CAP  = 5000;   // sitemap URLs we count for the total estimate
 const CONCURRENCY       = 8;      // parallel page fetches (fast but polite to the target)
-const CRAWL_BUDGET_MS   = 140000; // stop crawling new pages after this, leaving room for
+// In the Vercel route this stays 140s (room for post-processing under maxDuration=300).
+// The VPS crawl worker has no 300s cap, so it sets CRAWL_BUDGET_MS high (e.g. 600000) to
+// render + audit a FULL site. Env override only; default is byte-identical to before.
+const CRAWL_BUDGET_MS   = Number(process.env.CRAWL_BUDGET_MS) || 140000; // stop crawling new pages after this, leaving room for
                                   // post-processing within maxDuration — so most sites are
                                   // crawled FULLY and huge sites stop gracefully, never time out.
 
@@ -163,14 +166,21 @@ function analyzeSchema(html) {
     try {
       const parsed = JSON.parse(b);
       const arr = Array.isArray(parsed) ? parsed : [parsed];
-      for (const obj of arr) {
-        const type = obj["@type"] || null;
-        if (!type) continue;
-        const props = {};
-        for (const k of ["name","telephone","email","address","url","description","ratingValue","reviewCount","priceRange","openingHours","geo","sameAs"]) {
-          if (obj[k] !== undefined) props[k] = typeof obj[k] === "object" ? JSON.stringify(obj[k]).slice(0, 80) : String(obj[k]).slice(0, 80);
+      for (const top of arr) {
+        // Yoast / RankMath / WordPress emit {"@context":..,"@graph":[{...},{...}]}: the typed
+        // nodes live inside @graph, not at the top level (which has no @type). Expand it, else
+        // every schema is missed and "No Schema.org structured data" (a -10 health hit) fires
+        // wrongly on the most common CMS in the market.
+        const nodes = Array.isArray(top && top["@graph"]) ? top["@graph"] : [top];
+        for (const obj of nodes) {
+          const type = obj && obj["@type"] || null;
+          if (!type) continue;
+          const props = {};
+          for (const k of ["name","telephone","email","address","url","description","ratingValue","reviewCount","priceRange","openingHours","geo","sameAs"]) {
+            if (obj[k] !== undefined) props[k] = typeof obj[k] === "object" ? JSON.stringify(obj[k]).slice(0, 80) : String(obj[k]).slice(0, 80);
+          }
+          schemas.push({ type, properties: props, propertyCount: Object.keys(obj).length - 1 });
         }
-        schemas.push({ type, properties: props, propertyCount: Object.keys(obj).length - 1 });
       }
     } catch {
       const m = b.match(/"@type"\s*:\s*"([^"]+)"/);
@@ -180,22 +190,48 @@ function analyzeSchema(html) {
   return schemas;
 }
 
+// ── CMS / SEO-plugin detection (static markers only, no rendering) ──────────────
+// Populates crawlData.cms / cmsPlugin, which doctor-fizz-logic.js already reads to name
+// the LIKELY cause of duplicate title/head tags (e.g. "your site runs on WordPress, an SEO
+// plugin is likely duplicating tags"). Before this, those fields were never set, so that
+// cause hint was always empty. All markers are in the raw HTML/headers we already fetched.
+function detectCms(html, headers) {
+  const h = String(html || "");
+  const gen = (h.match(/<meta\s[^>]*name=["']generator["'][^>]*content=["']([^"']+)["']/i) || [])[1] || "";
+  const hdr = (k) => { try { return String(headers?.get?.(k) || ""); } catch { return ""; } };
+  const powered = hdr("x-powered-by"), server = hdr("server");
+  let cms = "";
+  if (/wordpress/i.test(gen) || /\/wp-content\//i.test(h) || /\/wp-json\//i.test(h)) cms = "WordPress";
+  else if (/shopify/i.test(gen) || /cdn\.shopify\.com/i.test(h) || /Shopify\.theme/i.test(h) || /shopify/i.test(powered)) cms = "Shopify";
+  else if (/wix/i.test(gen) || /static\.parastorage\.com/i.test(h) || hdr("x-wix-request-id")) cms = "Wix";
+  else if (/squarespace/i.test(gen) || /(?:assets|static)\.squarespace\.com/i.test(h)) cms = "Squarespace";
+  else if (/webflow/i.test(gen) || /assets\.website-files\.com/i.test(h)) cms = "Webflow";
+  else if (/drupal/i.test(gen) || /\/sites\/default\/files\//i.test(h) || /drupal/i.test(powered)) cms = "Drupal";
+  else if (/joomla/i.test(gen)) cms = "Joomla";
+  else if (/ghost/i.test(gen) || /ghost/i.test(powered)) cms = "Ghost";
+  let plugin = "";
+  if (/yoast/i.test(h)) plugin = "Yoast SEO";
+  else if (/rank\s*math/i.test(h)) plugin = "Rank Math";
+  else if (/all in one seo|aioseo/i.test(h)) plugin = "All in One SEO";
+  return { cms, plugin };
+}
+
 // ── Core Web Vitals hints ─────────────────────────────────────────────────────
 function cwvHints(html) {
   const hints = [];
   // LCP: large images without loading=eager (might be lazy = bad for LCP)
   const lazyHeroRisk = /loading=["']lazy["'][^>]*(?:class|id)=["'][^"']*(?:hero|banner|header|above)[^"']*["']/i.test(html)
     || /(?:class|id)=["'][^"']*(?:hero|banner|header)[^"']*["'][^>]*loading=["']lazy["']/i.test(html);
-  if (lazyHeroRisk) hints.push({ type: "LCP", issue: "Hero/banner image may be lazy-loaded — can delay LCP", severity: "high" });
+  if (lazyHeroRisk) hints.push({ type: "LCP", issue: "Hero/banner image may be lazy-loaded, can delay LCP", severity: "high" });
 
   // CLS: images without width+height attributes
   const imgs = [...html.matchAll(/<img\s([^>]*)>/gi)].map(m => m[1]);
   const imgsMissingDims = imgs.filter(a => !/width=/i.test(a) || !/height=/i.test(a)).length;
-  if (imgsMissingDims > 0) hints.push({ type: "CLS", issue: `${imgsMissingDims} image(s) missing width/height — causes layout shift`, severity: imgsMissingDims > 3 ? "high" : "medium" });
+  if (imgsMissingDims > 0) hints.push({ type: "CLS", issue: `${imgsMissingDims} image(s) missing width/height, causes layout shift`, severity: imgsMissingDims > 3 ? "high" : "medium" });
 
   // FID/INP: many render-blocking scripts
   const blockingScripts = count(html, /<script(?!\s[^>]*(?:async|defer|type=["']module["']))[^>]*src=/gi);
-  if (blockingScripts > 3) hints.push({ type: "FID/INP", issue: `${blockingScripts} render-blocking scripts — blocks main thread`, severity: "medium" });
+  if (blockingScripts > 3) hints.push({ type: "FID/INP", issue: `${blockingScripts} render-blocking scripts, blocks main thread`, severity: "medium" });
 
   // Inline styles bloat
   const inlineStyles = count(html, /style=["'][^"']{100,}["']/gi);
@@ -203,25 +239,33 @@ function cwvHints(html) {
 
   // Total script count
   const totalScripts = count(html, /<script/gi);
-  if (totalScripts > 20) hints.push({ type: "INP", issue: `${totalScripts} total script tags — heavy JS payload`, severity: totalScripts > 40 ? "high" : "medium" });
+  if (totalScripts > 20) hints.push({ type: "INP", issue: `${totalScripts} total script tags, heavy JS payload`, severity: totalScripts > 40 ? "high" : "medium" });
 
   return hints;
 }
 
 // ── Social meta completeness ──────────────────────────────────────────────────
 function socialMeta(html) {
+  // Match EITHER attribute order. Many CMSs emit content-first
+  // (<meta content=".." property="og:title">); the old property-first-only regexes
+  // returned null on those and reported the tags as missing. Mirrors the reversed-order
+  // fallback already used for the meta description above.
+  const ogM = (p, n) => first(html, new RegExp(`<meta\\s[^>]*property=["']${p}["'][^>]*content=["']([^"']{1,${n}})["']`, "i"))
+                     || first(html, new RegExp(`<meta\\s[^>]*content=["']([^"']{1,${n}})["'][^>]*property=["']${p}["']`, "i"));
+  const twM = (t, n) => first(html, new RegExp(`<meta\\s[^>]*name=["']${t}["'][^>]*content=["']([^"']{1,${n}})["']`, "i"))
+                     || first(html, new RegExp(`<meta\\s[^>]*content=["']([^"']{1,${n}})["'][^>]*name=["']${t}["']`, "i"));
   const og = {
-    title:       first(html, /<meta\s[^>]*property=["']og:title["'][^>]*content=["']([^"']{1,200})["']/i),
-    description: first(html, /<meta\s[^>]*property=["']og:description["'][^>]*content=["']([^"']{1,400})["']/i),
-    image:       first(html, /<meta\s[^>]*property=["']og:image["'][^>]*content=["']([^"']{1,500})["']/i),
-    type:        first(html, /<meta\s[^>]*property=["']og:type["'][^>]*content=["']([^"']{1,50})["']/i),
-    url:         first(html, /<meta\s[^>]*property=["']og:url["'][^>]*content=["']([^"']{1,300})["']/i),
+    title:       ogM("og:title", 200),
+    description: ogM("og:description", 400),
+    image:       ogM("og:image", 500),
+    type:        ogM("og:type", 50),
+    url:         ogM("og:url", 300),
   };
   const twitter = {
-    card:        first(html, /<meta\s[^>]*name=["']twitter:card["'][^>]*content=["']([^"']{1,50})["']/i),
-    title:       first(html, /<meta\s[^>]*name=["']twitter:title["'][^>]*content=["']([^"']{1,200})["']/i),
-    description: first(html, /<meta\s[^>]*name=["']twitter:description["'][^>]*content=["']([^"']{1,400})["']/i),
-    image:       first(html, /<meta\s[^>]*name=["']twitter:image["'][^>]*content=["']([^"']{1,500})["']/i),
+    card:        twM("twitter:card", 50),
+    title:       twM("twitter:title", 200),
+    description: twM("twitter:description", 400),
+    image:       twM("twitter:image", 500),
   };
   const issues = [];
   if (!og.title)       issues.push("Missing og:title");
@@ -309,7 +353,11 @@ function eatSignals(html, url, host) {
   if (!signals.hasContactInfo)   missing.push("No contact information on page");
   if (!signals.hasTrustBadges)   missing.push("No trust signals/awards/certifications");
   if (!signals.hasSocialLinks)   missing.push("No social media links");
-  return { ...signals, score, maxScore: Object.keys(signals).length - 1, missing };
+  // Expose `hasAuthor` too: report-evidence.js reads p.eeat.author/byline/hasAuthor for the
+  // weight-8 Author E-E-A-T signal, but the producer only ever set hasAuthorInfo, so that
+  // signal was permanently OFF on every site. Alias it here (score/maxScore are computed
+  // from `signals` above and are unaffected, so no drift).
+  return { ...signals, hasAuthor: signals.hasAuthorInfo, score, maxScore: Object.keys(signals).length - 1, missing };
 }
 
 // ── SERP preview generator ────────────────────────────────────────────────────
@@ -332,34 +380,49 @@ function pageSpeedHints(html) {
   const preloads      = count(html, /<link[^>]*rel=["']preload["']/gi);
 
   const hints = [];
-  if (totalScripts > 25) hints.push(`${totalScripts} scripts — consider bundling/deferring`);
-  if (totalStyles > 5)   hints.push(`${totalStyles} stylesheets — consider combining`);
+  if (totalScripts > 25) hints.push(`${totalScripts} scripts, consider bundling/deferring`);
+  if (totalStyles > 5)   hints.push(`${totalStyles} stylesheets, consider combining`);
   if (lazyImages < totalImages / 2 && totalImages > 3) hints.push(`Only ${lazyImages}/${totalImages} images use lazy loading`);
-  if (nextGenImages === 0 && totalImages > 0) hints.push("No WebP/AVIF images found — serve next-gen formats");
-  if (iframes > 3)       hints.push(`${iframes} iframes — may slow down page`);
-  if (preloads === 0)    hints.push("No <link rel=preload> found — consider preloading critical assets");
+  if (nextGenImages === 0 && totalImages > 0) hints.push("No WebP/AVIF images found, serve next-gen formats");
+  if (iframes > 3)       hints.push(`${iframes} iframes, may slow down page`);
+  if (preloads === 0)    hints.push("No <link rel=preload> found, consider preloading critical assets");
 
   return { totalScripts, totalStyles, totalImages, lazyImages, nextGenImages, iframes, preloads, hints };
 }
 
 // ── Full page audit ───────────────────────────────────────────────────────────
-async function auditPage(url, keywords = [], host = "") {
+// `prefetched` (optional): a RENDERED page already fetched via Browserless
+// ({ html, statusCode, lastModified, contentType, xRobotsHeader, error }). When present,
+// every extractor below runs on the JS-rendered DOM, so client-side H1/schema/links/word
+// count become visible. When absent, behaviour is byte-identical to the raw-HTML crawl.
+async function auditPage(url, keywords = [], host = "", prefetched = null) {
   let html = "";
   let statusCode = null;
   let lastModified = null;
   let contentType = null;
   let xRobotsHeader = "";
   let fetchError = null;
+  const renderMode = prefetched ? "rendered" : "raw";
 
   try {
-    const res = await timedFetch(url);
-    statusCode  = res.status;
-    lastModified = res.headers.get("last-modified") || null;
-    contentType  = res.headers.get("content-type") || "";
-    xRobotsHeader = res.headers.get("x-robots-tag") || "";   // noindex/nofollow can be set via HTTP header, not just <meta>
-    if (!res.ok) return { url, statusCode, error: `HTTP ${res.status}`, issues: [] };
-    if (!contentType.includes("html")) return { url, statusCode, error: "Not HTML", issues: [] };
-    html = await res.text();
+    if (prefetched) {
+      statusCode    = prefetched.statusCode ?? null;
+      lastModified  = prefetched.lastModified || null;
+      contentType   = prefetched.contentType || "text/html";
+      xRobotsHeader = prefetched.xRobotsHeader || "";
+      html          = prefetched.html || "";
+      if (prefetched.error || !html) return { url, statusCode, error: prefetched.error || "empty render", issues: [] };
+      if (statusCode != null && statusCode >= 400) return { url, statusCode, error: `HTTP ${statusCode}`, issues: [] };
+    } else {
+      const res = await timedFetch(url);
+      statusCode  = res.status;
+      lastModified = res.headers.get("last-modified") || null;
+      contentType  = res.headers.get("content-type") || "";
+      xRobotsHeader = res.headers.get("x-robots-tag") || "";   // noindex/nofollow can be set via HTTP header, not just <meta>
+      if (!res.ok) return { url, statusCode, error: `HTTP ${res.status}`, issues: [] };
+      if (!contentType.includes("html")) return { url, statusCode, error: "Not HTML", issues: [] };
+      html = await res.text();
+    }
   } catch (err) {
     return { url, statusCode, error: err?.message || "fetch failed", issues: [] };
   }
@@ -367,10 +430,13 @@ async function auditPage(url, keywords = [], host = "") {
   const kws = keywords.map(k => String(k).toLowerCase());
 
   // Meta basics
-  const metaTitle  = first(html, /<title[^>]*>([^<]{1,200})<\/title>/i);
+  // Caps raised well past any real length: an over-long title/description used to fail the
+  // bounded regex entirely and get reported as MISSING (the opposite of the real problem).
+  // The too-long/too-short grading below still flags length issues.
+  const metaTitle  = first(html, /<title[^>]*>([^<]{1,3000})<\/title>/i);
   const metaDesc   =
-    first(html, /<meta\s[^>]*name=["']description["'][^>]*content=["']([^"']{1,400})["']/i) ||
-    first(html, /<meta\s[^>]*content=["']([^"']{1,400})["'][^>]*name=["']description["']/i);
+    first(html, /<meta\s[^>]*name=["']description["'][^>]*content=["']([^"']{1,3000})["']/i) ||
+    first(html, /<meta\s[^>]*content=["']([^"']{1,3000})["'][^>]*name=["']description["']/i);
   const canonical  =
     first(html, /<link\s[^>]*rel=["']canonical["'][^>]*href=["']([^"']*)["']/i) ||
     first(html, /<link\s[^>]*href=["']([^"']*)["'][^>]*rel=["']canonical["']/i);
@@ -401,16 +467,29 @@ async function auditPage(url, keywords = [], host = "") {
   const imgsMissingAltAttr = allImgs.filter(a => !/\balt=/i.test(a)).length;
   const imgsMissingAltText = allImgs.filter(a => /\balt=["']\s*["']/i.test(a)).length;
 
-  // Structural validation — common CMS/plugin breakage Screaming Frog flags.
-  const headCount  = count(html, /<head[\s>]/gi);
-  const bodyCount  = count(html, /<body[\s>]/gi);
-  const titleCount = count(html, /<title[\s>]/gi);
-  const multipleHead  = headCount > 1;
-  const multipleBody  = bodyCount > 1;
-  const multipleTitle = titleCount > 1;
-  const headEndIdx = html.search(/<\/head>/i);
+  // Structural validation — count from the DOCUMENT STRUCTURE, not raw bytes, so the result
+  // matches what a browser (and Google) actually parse. A page-builder "HTML" widget
+  // (Elementor, WPBakery, etc.) commonly holds a pasted <!DOCTYPE html>…<head>…<title>…<body>
+  // boilerplate; that whole blob is BODY content, so the browser DISCARDS the nested
+  // <head>/<body> and keeps exactly one of each. Counting raw <head>/<body>/<title>
+  // occurrences (the old regex) falsely flagged ~every page as "multiple head/body/title".
+  // The real document head ends at the first </head>; nothing after it can add a second
+  // structural head, and only a <title> INSIDE that head sets the page title. Verified vs a
+  // parse5 DOM parse of a live Elementor site: raw regex saw 3/3/3, the real DOM is 1/1/1.
+  const headEndIdx   = html.search(/<\/head>/i);
+  const bodyStartIdx = html.search(/<body[\s>]/i);
+  const headRegionEnd = headEndIdx >= 0 ? headEndIdx : (bodyStartIdx >= 0 ? bodyStartIdx : html.length);
+  const headRegion    = html.slice(0, headRegionEnd);
+  const headInStruct  = count(headRegion, /<head[\s>]/gi);   // genuine structural heads (usually 1)
+  const titleInHead   = count(headRegion, /<title[\s>]/gi);  // the <title> that is the SEO signal
+  const headCount  = Math.max(headInStruct, /<head[\s>]/i.test(html) ? 1 : 0);
+  const bodyCount  = /<body[\s>]/i.test(html) ? 1 : 0;       // a real DOM always resolves to one <body>
+  const titleCount = titleInHead;
+  const multipleHead  = headCount > 1;   // true only for a genuine second structural <head>
+  const multipleBody  = bodyCount > 1;   // effectively never; kept for output-shape parity
+  const multipleTitle = titleCount > 1;  // more than one <title> inside the real <head>
   const firstTitleIdx = html.search(/<title[\s>]/i);
-  const titleOutsideHead = headEndIdx >= 0 && firstTitleIdx >= 0 && firstTitleIdx > headEndIdx;
+  const titleOutsideHead = titleInHead === 0 && firstTitleIdx >= 0;
   // Mixed content: insecure http:// resources/links on an https page.
   const httpResourceCount = (html.match(/(?:src|href)=["']http:\/\/[^"']+["']/gi) || [])
     .filter(s => !/http:\/\/(localhost|127\.0|schema\.org|www\.w3\.org|ogp\.me|purl\.org|gmpg\.org)/i.test(s)).length;
@@ -453,20 +532,20 @@ async function auditPage(url, keywords = [], host = "") {
   else if (metaDesc.length > 160)      issues.push(`Meta description too long (${metaDesc.length} chars, max 160)`);
 
   if (h1s.length === 0)                issues.push("No H1 tag found");
-  else if (h1s.length > 1)            issues.push(`Multiple H1 tags (${h1s.length}) — use only one`);
+  else if (h1s.length > 1)            issues.push(`Multiple H1 tags (${h1s.length}), use only one`);
   if (kws.length > 0 && !h1HasKeyword) issues.push("H1 doesn't include a target keyword");
 
   if (multipleTitle)                   issues.push(`Multiple <title> tags (${titleCount})`);
   if (titleOutsideHead)                issues.push("Page <title> is outside the <head>");
   if (multipleHead)                    issues.push(`Multiple <head> tags (${headCount})`);
   if (multipleBody)                    issues.push(`Multiple <body> tags (${bodyCount})`);
-  if (httpResourceCount > 0)           issues.push(`${httpResourceCount} insecure HTTP resource(s) — mixed content`);
+  if (httpResourceCount > 0)           issues.push(`${httpResourceCount} insecure HTTP resource(s), mixed content`);
 
   if (imgsWithoutAlt > 0)             issues.push(`${imgsWithoutAlt} image(s) missing alt text`);
   if (imgsWithoutDims > 0)            issues.push(`${imgsWithoutDims} image(s) missing width/height (CLS risk)`);
   if (schemas.length === 0)           issues.push("No Schema.org structured data");
-  if (isNoindex)                      issues.push("Page is noindex — won't appear in search results");
-  if (!viewport)                      issues.push("No viewport meta tag — not mobile-friendly");
+  if (isNoindex)                      issues.push("Page is noindex, so it will not appear in search results");
+  if (!viewport)                      issues.push("No viewport meta tag, not mobile-friendly");
   if (slug.issues.length > 0)        issues.push(`Slug: ${slug.issues.join(", ")}`);
   if (content.wordCount < 200)        issues.push(`Thin content (only ${content.wordCount} words)`);
   if (social.issues.length > 0)      issues.push(...social.issues);
@@ -492,6 +571,7 @@ async function auditPage(url, keywords = [], host = "") {
     slug,
     issues,
     issueCount: issues.length,
+    render_mode: renderMode,   // "rendered" (Browserless) | "raw" — additive, honest provenance
   };
 }
 
@@ -682,6 +762,8 @@ export async function crawlDomain(domain, keywords = []) {
     robotsContent: null,
     robotsDisallows: [],
     crawlBlockedByRobots: false,
+    hasLlmsTxt: false,        // GEO/AEO: does the site publish an /llms.txt guide for AI engines
+    llmsTxtUrl: null,
     pageCount: 0,           // pages we deep-audited
     sitemapUrlCount: 0,     // total URLs listed in the sitemap(s)
     indexedPages: null,     // Google-indexed page count via site:domain
@@ -728,11 +810,44 @@ export async function crawlDomain(domain, keywords = []) {
       result.hasRobots       = true;
       result.robotsContent   = txt.slice(0, 3000);
       result.robotsDisallows = [...txt.matchAll(/^Disallow:\s*(.+)$/gm)].map(m => m[1].trim());
-      if (/^User-agent:\s*\*[\s\S]*?Disallow:\s*\/(?:\s|$)/m.test(txt))
-        result.crawlBlockedByRobots = true;
+      // Only block when the group that applies to "*" actually disallows the site root.
+      // The old lazy /User-agent:\s*\*[\s\S]*?Disallow:\s*\// matched ACROSS group
+      // boundaries, so a robots.txt that allowed "*" but had a later
+      // "User-agent: BadBot / Disallow: /" block falsely set crawlBlockedByRobots=true and
+      // cost that client 20 health points for no reason. Walk the groups and check the "*"
+      // group only (a bare "Disallow: /", not overridden by an "Allow: /").
+      let starDisallowsRoot = false, inStar = false;
+      for (const rawLine of txt.split(/\r?\n/)) {
+        const line = rawLine.split("#")[0].trim();
+        const m = line.match(/^(user-agent|allow|disallow)\s*:\s*(.*)$/i);
+        if (!m) continue;
+        const field = m[1].toLowerCase(), value = m[2].trim();
+        if (field === "user-agent") { inStar = value === "*"; continue; }
+        if (!inStar) continue;
+        if (field === "disallow" && value === "/") starDisallowsRoot = true;
+        else if (field === "allow" && value === "/") starDisallowsRoot = false;   // explicit allow-root overrides
+      }
+      if (starDisallowsRoot) result.crawlBlockedByRobots = true;
 
       const sitemapHint = txt.match(/^Sitemap:\s*(https?:\/\/\S+)/im)?.[1]?.trim();
       if (sitemapHint) result.sitemapUrl = sitemapHint;
+    }
+  } catch { /* ignore */ }
+
+  // 1b. llms.txt — the GEO/AEO equivalent of robots.txt: a curated Markdown guide
+  //     that tells AI answer engines what the site is and which pages to read.
+  //     Count it as "present" only when it returns 200 with real Markdown content
+  //     (not an SPA/404 HTML fallback served as text/html).
+  try {
+    const lr = await timedFetch(`${base}/llms.txt`);
+    if (lr.ok) {
+      const ct = (lr.headers.get("content-type") || "").toLowerCase();
+      const body = (await lr.text()) || "";
+      const looksLikeMarkdown = body.trim().length > 20 && !/^\s*<(?:!doctype|html)/i.test(body);
+      if (!ct.includes("text/html") && looksLikeMarkdown) {
+        result.hasLlmsTxt = true;
+        result.llmsTxtUrl = `${base}/llms.txt`;
+      }
     }
   } catch { /* ignore */ }
 
@@ -757,7 +872,11 @@ export async function crawlDomain(domain, keywords = []) {
   try {
     const homeR = await timedFetch(base);
     if (homeR.ok && (homeR.headers.get("content-type") || "").includes("html")) {
-      navLinks = extractInternalLinks(await homeR.text(), base, host);
+      const homeHtml = await homeR.text();
+      navLinks = extractInternalLinks(homeHtml, base, host);
+      const detected = detectCms(homeHtml, homeR.headers);   // populate cms/cmsPlugin (cause hint for dup tags)
+      if (detected.cms) result.cms = detected.cms;
+      if (detected.plugin) result.cmsPlugin = detected.plugin;
     }
   } catch { /* ignore */ }
 
@@ -782,18 +901,64 @@ export async function crawlDomain(domain, keywords = []) {
   // 4. Crawl with concurrency, bounded by a wall-clock budget. Small/medium sites
   //    finish fully (well under the budget); very large sites crawl as many pages
   //    as time allows and stop gracefully instead of timing out the function.
-  const pages = [];
+  let pages = [];
   const crawlDeadline = Date.now() + CRAWL_BUDGET_MS;
   result.crawlTruncated = false;
-  for (let i = 0; i < pagesToCrawl.length; i += CONCURRENCY) {
+
+  // ── RENDERED CRAWL (opt-in via CRAWLER_ENGINE=v2) ─────────────────────────────
+  // When enabled, the first MAX_RENDER pages are fetched through a real headless Chromium
+  // (Browserless, the same engine the GEO worker uses), so JS-injected H1/schema/links/word
+  // count become visible. Every extractor below is UNCHANGED; only the HTML source is richer.
+  // Bounded to stay inside the Vercel budget (full-site rendering runs on the VPS worker); a
+  // render failure on any page silently falls back to the raw fetch. Default (legacy) is the
+  // raw-HTML crawl, byte-identical to before.
+  const CRAWLER_ENGINE = String(process.env.CRAWLER_ENGINE || "legacy").toLowerCase();
+  const useRendered = CRAWLER_ENGINE === "v2" && !!process.env.BROWSERLESS_TOKEN;
+  const MAX_RENDER = Math.max(0, Number(process.env.CRAWL_MAX_RENDER || 25));
+  const effConc = useRendered ? Math.max(1, Number(process.env.CRAWL_RENDER_CONCURRENCY || 3)) : CONCURRENCY;
+  let renderFetcher = null;
+  if (useRendered && MAX_RENDER > 0) {
+    try {
+      const { createPlaywrightFetcher } = await import("@/lib/seo/crawler/playwrightFetch");
+      renderFetcher = await createPlaywrightFetcher({});
+    } catch { renderFetcher = null; }   // renderer unavailable -> whole crawl falls back to raw
+  }
+  const renderPrefetch = async (u) => {
+    if (!renderFetcher) return null;
+    try {
+      const rp = await renderFetcher.fetchPage(u);
+      if (!rp || rp.error || !rp._body || (rp.status != null && rp.status >= 400)) return null;
+      const h = rp.headers || {};
+      const hg = (k) => h[k] || h[k.toLowerCase()] || "";
+      return { statusCode: rp.status ?? 200, html: rp._body, contentType: hg("content-type") || "text/html", lastModified: hg("last-modified") || null, xRobotsHeader: hg("x-robots-tag") || "" };
+    } catch { return null; }
+  };
+  let renderedCount = 0;
+  for (let i = 0; i < pagesToCrawl.length; i += effConc) {
     if (Date.now() > crawlDeadline) {
       result.crawlTruncated = true;   // ran out of time budget before finishing the list
       break;
     }
-    const batch = pagesToCrawl.slice(i, i + CONCURRENCY);
-    const res   = await Promise.all(batch.map(u => auditPage(u, keywords, host)));
+    const batch = pagesToCrawl.slice(i, i + effConc);
+    const res   = await Promise.all(batch.map(async (u, bi) => {
+      if (renderFetcher && (i + bi) < MAX_RENDER) {
+        const pre = await renderPrefetch(u);
+        if (pre) { renderedCount++; return auditPage(u, keywords, host, pre); }
+      }
+      return auditPage(u, keywords, host);   // raw (default, or fallback on a render failure)
+    }));
     pages.push(...res);
   }
+  if (renderFetcher) { try { await renderFetcher.close(); } catch { /* ignore */ } }
+  result.crawlEngine  = useRendered ? "v2-rendered" : "v1-legacy";
+  result.renderedCount = renderedCount;
+  // Errored fetches (4xx/5xx, timeouts, non-HTML) come back as bare {url, error, ...}
+  // with no metaTitle/H1/canonical/content. Left in, every one of them is counted as a
+  // "missing title/desc/H1/canonical" page and drags avgWordCount/E-E-A-T down, so a few
+  // 404s silently deflate the health score and inflate the "missing meta" percentages.
+  // Only successfully-audited HTML pages are real deep-audited pages, so drop the rest
+  // BEFORE any summary/health/average math (everything below reads this same `pages`).
+  pages = pages.filter((p) => !p.error);
 
   result.pages     = pages;
   result.pageCount = pages.length;
@@ -883,17 +1048,21 @@ export async function POST(request) {
   try {
     const body = await request.json();
     const { domain, keywords = [] } = body;
-    if (!domain) return NextResponse.json({ error: "domain required" }, { status: 400 });
+    if (!domain) return Response.json({ error: "domain required" }, { status: 400 });
     // 30-day persistent cache by domain (cross-user: a competitor crawl already done
     // for one user is reused for another). No-op if Mongo isn't configured.
+    // dataType carries CRAWL_ENGINE_VERSION so a crawler-output change (new engine,
+    // fixed check, threshold) misses the old cache and re-crawls, instead of serving
+    // 30-day-stale crawl data. Report cache (report-key.js) already folds in the same
+    // version; without this line the report busts but still reads the OLD crawl.
     const { data: result, cached } = await getOrFetch({
-      domain, dataType: "crawl", ttlDays: 30, source: "crawl",
+      domain, dataType: `crawl-${CRAWL_ENGINE_VERSION}`, ttlDays: 30, source: "crawl",
       fetchFn: () => crawlDomain(domain, keywords),
     });
     await logUsage({ domain, api: "crawl", costUSD: cached ? 0 : 0.02, cached });
-    return NextResponse.json(result);
+    return Response.json(result);
   } catch (err) {
     console.error("[website-crawl] Error:", err);
-    return NextResponse.json({ error: err?.message || "crawl failed" }, { status: 500 });
+    return Response.json({ error: err?.message || "crawl failed" }, { status: 500 });
   }
 }

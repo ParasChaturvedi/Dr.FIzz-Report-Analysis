@@ -117,6 +117,7 @@ export async function validateWebsite(domain) {
 
     // Final (non-redirect) response
     finalUrl = currentUrl;
+    result.finalStatus = status;   // the real HTTP status of the live homepage
     if (status >= 200 && status < 300) {
       try { finalHtml = await res.text(); } catch { finalHtml = ""; }
     }
@@ -165,6 +166,22 @@ export async function validateWebsite(domain) {
     result.checks.domainValidation.pass &&
     result.checks.dnsValidation.pass &&
     result.checks.sslVerification.pass;
+
+  // Stage 1 — audit ELIGIBILITY. Valid DNS + SSL is not enough: the homepage must actually
+  // respond with a live page. A 404/500, or an auth wall (401/403), means there is no real
+  // site to crawl, so the audit should flag it rather than build a report on empty data.
+  const _st = Number(result.finalStatus) || 0;
+  result.checks.homepageReachable = {
+    pass: _st >= 200 && _st < 300,
+    status: _st,
+    detail: _st >= 200 && _st < 300 ? "Homepage responds with a live page"
+      : (_st === 401 || _st === 403) ? `Homepage is behind an auth wall (HTTP ${_st}), it cannot be crawled`
+      : _st >= 400 ? `Homepage returns HTTP ${_st}, not a live page`
+      : "Homepage did not respond",
+  };
+  if (!result.checks.homepageReachable.pass) result.issues.push("Homepage is not reachable for a full audit");
+  // A site is eligible for a complete audit only when it validates AND its homepage is live.
+  result.eligible_for_audit = result.valid && result.checks.homepageReachable.pass;
 
   return result;
 }

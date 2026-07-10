@@ -17,9 +17,12 @@
 // ── #17 — number formatting ───────────────────────────────────────────────────
 const _trim = (x) => String(x).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
 
-/** Compact number: 1248.77 → "1.25K", 3_400_000 → "3.4M", 42 → "42". */
-export function fmtNum(v, { decimals = 2 } = {}) {
-  if (v == null || v === "") return "—";
+/** Compact number: 1248.77 → "1.2K", 3_400_000 → "3.4M", 42 → "42".
+ *  ONE decimal by default so this matches the deck's tokens.fmtNum exactly
+ *  (item 6 — the intro "1.25K" vs a later slide's "1.3K" came from this being 2dp
+ *  while the deck rendered 1dp; both are 1dp now so the same value reads identically). */
+export function fmtNum(v, { decimals = 1 } = {}) {
+  if (v == null || v === "") return "N/A";
   const n = typeof v === "number" ? v : Number(String(v).replace(/[, ]/g, ""));
   if (!isFinite(n)) return String(v);
   const sign = n < 0 ? "-" : "";
@@ -32,7 +35,7 @@ export function fmtNum(v, { decimals = 2 } = {}) {
 }
 /** Whole number with thousands separators, no suffix (good for ≤ 9,999 counts). */
 export function fmtInt(v) {
-  if (v == null || v === "") return "—";
+  if (v == null || v === "") return "N/A";
   const n = Number(String(v).replace(/[, ]/g, ""));
   return isFinite(n) ? Math.round(n).toLocaleString("en-US") : String(v);
 }
@@ -45,6 +48,30 @@ export function fmtRating(v) {
   if (v == null || v === "") return "—";
   const n = Number(v);
   return isFinite(n) ? `${_trim(n.toFixed(1))}★` : String(v);
+}
+
+// ── Human-writing hygiene — NO em/en dashes anywhere in client-facing copy ────
+// Marketers do not litter copy with em dashes. deDash() rewrites any em/en dash into
+// clean punctuation: numeric ranges become "X to Y", a dash used as a sentence break
+// becomes a comma, and a lone dash placeholder becomes "N/A". Plain hyphens (-) are left
+// untouched. deDashDeep() walks an object/array so a whole payload can be cleaned at once.
+export function deDash(v) {
+  if (v == null) return v;
+  let s = String(v);
+  if (/^\s*[–—]+\s*$/.test(s)) return "N/A";          // a lone en/em dash placeholder
+  if (!/[–—]/.test(s)) return s;                       // fast path: nothing to do
+  s = s.replace(/(\d)\s*[–—]\s*(\d)/g, "$1 to $2");    // numeric ranges: 5–10 -> 5 to 10
+  s = s.replace(/\s+[–—]+\s+/g, ", ");                  // spaced dash break -> comma
+  s = s.replace(/([A-Za-z0-9%)\]])[–—]+([A-Za-z0-9(])/g, "$1, $2"); // glued dash -> comma
+  s = s.replace(/[–—]+/g, ", ");                        // any remaining -> comma
+  s = s.replace(/\s+([,.;:!?])/g, "$1").replace(/,\s*,/g, ",").replace(/\s{2,}/g, " ").trim();
+  return s;
+}
+export function deDashDeep(v) {
+  if (typeof v === "string") return deDash(v);
+  if (Array.isArray(v)) return v.map(deDashDeep);
+  if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) o[k] = deDashDeep(v[k]); return o; }
+  return v;
 }
 
 // ── #15 / #16 — canonical metric terminology + data source ────────────────────

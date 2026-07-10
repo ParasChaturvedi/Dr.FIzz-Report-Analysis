@@ -31,7 +31,12 @@ try {
 } catch {}
 
 const args = new Set(process.argv.slice(2));
-const transport = args.has("--local") ? "local" : (args.has("--browserless") ? "browserless" : undefined);
+// --hybrid  → local for AIO+Claude, Browserless-residential for chatgpt/gemini/perplexity/copilot
+// --local   → all engines via captured local Chrome profiles
+// --browserless → all engines via hosted Browserless
+const transport = args.has("--hybrid") ? "hybrid"
+  : args.has("--local") ? "local"
+  : (args.has("--browserless") ? "browserless" : undefined);
 const mode = args.has("--mock") ? "mock" : "live";
 const once = args.has("--once");
 

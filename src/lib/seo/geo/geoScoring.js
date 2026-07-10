@@ -110,11 +110,25 @@ function shareOfVoice(byEngine, ctx) {
   ensure(brandName);
   for (const c of (ctx.competitors || [])) { const nm = (typeof c === "string" ? c : c?.name || c?.brand || "").trim(); if (nm) ensure(nm); }
 
+  // DISCOVERED competitors — brands the AI actually named that were NOT configured. Real market
+  // intel worth showing. Noise guard: only keep a brand that surfaced in ≥2 DISTINCT prompts, then
+  // take the top few by prompt-spread. These fold into the same SoV math (tagged discovered:true).
+  const discPrompts = {}; // name -> Set(promptId)
+  for (const e of engines) for (const r of (byEngine[e] || [])) {
+    const pid = r.promptId || r.prompt_id || `${e}:${String(r.rawPrompt || "").slice(0, 40)}`;
+    for (const d of (r.discoveredBrands || [])) { const nm = String(d?.name || "").trim(); if (nm) (discPrompts[nm] ||= new Set()).add(pid); }
+  }
+  const discSet = new Set(
+    Object.entries(discPrompts).filter(([, s]) => s.size >= 2).sort((a, b) => b[1].size - a[1].size).slice(0, 5).map(([n]) => n)
+  );
+  for (const n of discSet) tally[n] ||= { brand: n, is_client: false, discovered: true, per_engine: {} };
+
   for (const e of engines) {
     const counts = {}; let total = 0;
     for (const r of byEngine[e]) {
       for (const m of (r.brandMentions || [])) { const k = brandName; const c = Number(m.mention_count) || 1; counts[k] = (counts[k] || 0) + c; total += c; }
       for (const m of (r.competitorMentions || [])) { const k = (m.entity_name || "competitor").trim(); const c = Number(m.mention_count) || 1; ensure(k); counts[k] = (counts[k] || 0) + c; total += c; }
+      for (const d of (r.discoveredBrands || [])) { const k = String(d?.name || "").trim(); if (!k || !discSet.has(k)) continue; const c = Number(d.count) || 1; counts[k] = (counts[k] || 0) + c; total += c; }
     }
     for (const name of Object.keys(tally)) tally[name].per_engine[e] = pct(counts[name] || 0, total);
   }

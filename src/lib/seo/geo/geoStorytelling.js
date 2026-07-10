@@ -11,7 +11,20 @@
 // shown in the report. Skipped entirely when there are no real results.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const clean = (s) => String(s == null ? "" : s).trim().replace(/\s+/g, " ");
+// clean() also strips em/en dashes (human-writing hygiene): ranges become "X to Y", a dash
+// break becomes a comma, and a lone dash placeholder becomes "N/A". Plain hyphens stay.
+const clean = (s) => {
+  let x = String(s == null ? "" : s).trim().replace(/\s+/g, " ");
+  if (/^[–—]+$/.test(x)) return "N/A";
+  if (/[–—]/.test(x)) {
+    x = x.replace(/(\d)\s*[–—]\s*(\d)/g, "$1 to $2")
+         .replace(/\s+[–—]+\s+/g, ", ")
+         .replace(/([A-Za-z0-9%)\]])[–—]+([A-Za-z0-9(])/g, "$1, $2")
+         .replace(/[–—]+/g, ", ")
+         .replace(/\s+([,.;:!?])/g, "$1").replace(/,\s*,/g, ",").replace(/\s{2,}/g, " ").trim();
+  }
+  return x;
+};
 
 /**
  * @param {object} input
@@ -52,9 +65,9 @@ export async function generateGeoStorytelling({ brand, competitors = [], metrics
     sample_answers: samples,
   };
 
-  const system = `You are a GEO (Generative Engine Optimization) analyst writing for a non-technical founder. You are given the REAL results of querying AI search engines (ChatGPT, Google AI Overviews, Gemini, Claude, Perplexity, Copilot) about this business's market. Narrate ONLY what the data shows — never invent a Share-of-Voice, citation, mention or answer. If the brand has 0% visibility, say so plainly and turn it into the opportunity.
+  const system = `You are a GEO (Generative Engine Optimization) analyst writing for a non-technical founder. You are given the REAL results of querying AI search engines (Google AI Overviews, Claude, Gemini, Perplexity, ChatGPT) about this business's market. Narrate ONLY what the data shows, never invent a Share-of-Voice, citation, mention or answer. If the brand has 0% visibility, say so plainly and turn it into the opportunity.
 
-Write concise, plain-language storytelling. Return ONLY valid JSON, an array of 4-6 sections:
+Write like a skilled human marketer: correct spelling and grammar, clean punctuation, plain language. NEVER use em dashes or en dashes ("—"/"–"); use commas, colons, or short sentences. No markdown or stray symbols. Return ONLY valid JSON, an array of 4-6 sections:
 [{"section_key":"where_you_stand|who_ai_recommends|sources_ai_trusts|why_this_matters|what_to_do","title":"short title","body":"2-4 sentences, plain language, grounded in the numbers given"}]
 
 Guidance:

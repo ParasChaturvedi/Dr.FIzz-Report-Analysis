@@ -8,7 +8,7 @@
 //
 //   GET /api/seo/geo/report?projectId=…[&answers=1]
 // ─────────────────────────────────────────────────────────────────────────────
-import { getGeoReportBundle, getGeoProjectByDomain } from "@/lib/seo/geo/model/geoStore";
+import { getGeoReportBundle, getGeoProjectByDomain, getGeoPrompts } from "@/lib/seo/geo/model/geoStore";
 import { buildGeoStatus } from "@/lib/seo/report-evidence";
 import { getEngineAdapters } from "@/lib/seo/geo/engineAdapters";
 import { resolveExecutionProvider } from "@/lib/seo/geo/executionProvider";
@@ -76,10 +76,22 @@ export async function GET(req) {
     const citationDocs = bundle.citations || [];
     const errs = bundle.errors || [];
 
+    // Results don't store the prompt's campaign, so join it in: the deck groups the prompts
+    // into the 3 architect campaigns (Citation Commercial / Mentions / Citation Information).
+    let clusterById = {};
+    try {
+      const promptDocs = await getGeoPrompts(projectId);
+      for (const p of (promptDocs || [])) if (p && p.prompt_id) clusterById[p.prompt_id] = p.cluster || "";
+    } catch { clusterById = {}; }
+
     const prompts_executed = results.map((r) => ({
       prompt_id: r.prompt_id, prompt: r.raw_prompt, engine: r.engine,
+      cluster: clusterById[r.prompt_id] || r.cluster || "",   // campaign tag for the deck's 3-way split
       executed_at: r.created_at, version: r.version,
       brand_mentioned: !!r.brand_mentioned, brand_mention_count: r.brand_mention_count || 0, competitor_mention_count: r.competitor_mention_count || 0,
+      brands_named: Array.isArray(r.brands_mentioned) ? r.brands_mentioned : [],   // real "who it named" column (deck slide 12)
+      brand_cited: !!r.brand_cited,   // citation-truth: brand's OWN domain was a real source (not just "answer had citations")
+      answer_length: Number(r.answer_length) || 0,   // distinguishes "answered, none named" from "no answer" (deck dash clarity)
       citation_count: r.citation_count || 0, source_domains: r.source_domains || [],
       answer_structure: r.answer_structure, sentiment: r.sentiment || null, parse_confidence: r.parse_confidence,
       ...(withAnswers ? { answer: String(r.rendered_text || "").slice(0, 4000) } : {}),

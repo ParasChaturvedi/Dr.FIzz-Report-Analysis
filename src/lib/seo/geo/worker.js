@@ -70,74 +70,110 @@ export async function runGeoJob(run, opts = {}) {
   const selectedEngines = opts.engineKeys || run.selected_engines || run.engines || ["aioverviews", "perplexity", "claude"];
   const mode = opts.mode || "live";
 
-  // ── execution provider (cost-guarded) + engine adapter preflight ──
-  const override = opts.transport === "local" ? "local-playwright" : (opts.transport === "browserless" ? "browserless" : undefined);
-  const provider = mode === "mock"
-    ? { provider: "mock", transport: "browserless", residentialProxy: false, proxyCountry: "", enabled: true, reason: "mock pipeline (no browser)" }
-    : resolveExecutionProvider(run, { override });
-  const adapters = await getEngineAdapters({ provider });
-  const ready = mode === "mock" ? selectedEngines : runnableEngines(adapters, selectedEngines);
-  const blocked = mode === "mock" ? [] : blockedEngines(adapters, selectedEngines);
+  // ── HYBRID transport routing ──────────────────────────────────────────────
+  // The 2 free/reliable engines stay LOCAL (Google AI Overviews = no login, Claude =
+  // Anthropic API). The 4 Cloudflare-gated consumer apps run through hosted Browserless
+  // with a RESIDENTIAL India IP (trusted IP bypasses "Just a moment…" + carries the
+  // captured login session). Each pass resolves its OWN provider and applies/restores
+  // its own env, so the two transports never collide. `hybrid` is the worker default
+  // once BROWSERLESS_TOKEN is present; --local / --browserless force a single transport.
+  const HYBRID_LOCAL = new Set(["aioverviews", "claude"]);
+  const HYBRID_BLESS = new Set(["chatgpt", "gemini", "perplexity", "copilot"]);
+  const hybrid = opts.transport === "hybrid";
 
-  await updateGeoRun(runId, { status: "running", started_at: run.started_at || nowIso(), execution_provider: provider.provider });
-
-  // log blocked engines honestly — NO browser call, NO fake result (#5/#9)
-  for (const b of blocked) {
-    await logGeoError({ geo_project_id: projectId, geo_run_id: runId, engine: b.engine, error_type: statusToErrorType(b.status), message: `${b.name}: ${b.status} — ${b.reason}` });
-  }
-
-  // nothing runnable → honest session_required / failed, ZERO cost
-  if (!ready.length) {
-    const anySession = blocked.some((b) => b.status === "session_required");
-    const status = anySession ? "session_required" : "failed";
-    await updateGeoRun(runId, { status, completed_at: nowIso(), error: blocked.map((b) => `${b.name}:${b.status}`).join("; ") || provider.reason, blocked_engines: blocked.map((b) => ({ engine: b.engine, status: b.status, reason: b.reason })) });
-    return { ok: false, status, provider: provider.provider, ready: 0, blocked: blocked.length };
-  }
-
-  // ── apply cost-guarded env (proxy/concurrency/retry/screenshot) then collect ──
-  const restore = mode === "mock" ? () => {} : applyExecutionEnv(provider, run);
   const sessions = mode === "mock" ? {} : await loadGeoSessions().catch(() => ({}));
   const scanPrompts = prompts.map((p) => ({ id: p.prompt_id, prompt: p.prompt_text || p.prompt, brand }));
   const ctx = { brand, brandDomain, competitors };
 
   const parsed = [];
   const perEngine = {};
-  let saved = 0, failed = 0, cost = 0, stopped = false;
-  try {
-    for (const engine of ready) {
-      // stop-run support (#7) — check between engines
-      try { const cur = await getGeoRun(runId); if (cur?.stopped_by_user) { stopped = true; break; } } catch {}
-      let scan;
-      try {
-        scan = await runGeoScan({
-          mode, transport: provider.transport,
-          brand, clientDomain: brandDomain,
-          competitors: competitors.map((c) => c.name), competitorDomains,
-          location: project.country || "", proxyCountry: provider.proxyCountry || (String(project.country || "in").slice(0, 2).toLowerCase()),
-          engineKeys: [engine], sessions, prompts: scanPrompts,
-        });
-      } catch (e) {
-        await logGeoError({ geo_project_id: projectId, geo_run_id: runId, engine, error_type: /timeout/i.test(String(e?.message)) ? "timeout" : "other", message: String(e?.message || e).slice(0, 400) });
-        failed += scanPrompts.length;
-        continue;
-      }
-      for (const resp of (scan.responses || [])) {
-        const result = parseAnswer(resp, ctx);
-        await saveRunResult({ runId, projectId, result });
-        parsed.push(result);
-        saved++; perEngine[engine] = (perEngine[engine] || 0) + 1;
-        cost += APPROX_COST[engine] ?? 0.02;
-        opts.onProgress?.({ saved, failed, engine });
-      }
-      for (const err of (scan.errors || [])) {
-        const ek = ENGINE_KEY_BY_NAME[String(err.engine || "").toLowerCase()] || engine;
-        const msg = String(err.error || "");
-        await logGeoError({ geo_project_id: projectId, geo_run_id: runId, prompt_id: err.promptId || null, engine: ek, error_type: /session|login|storageState/i.test(msg) ? "session_expired" : (/timeout/i.test(msg) ? "timeout" : "other"), message: msg.slice(0, 400) });
-        failed++;
-      }
-      await updateGeoRun(runId, { completed_count: saved, failed_count: failed, per_engine_progress: perEngine });
+  const allBlocked = [];
+  let saved = 0, failed = 0, cost = 0, stopped = false, readyCount = 0, providerLabel = hybrid ? "hybrid" : "";
+
+  await updateGeoRun(runId, { status: "running", started_at: run.started_at || nowIso(), execution_provider: hybrid ? "hybrid (local + browserless-residential)" : "" });
+
+  // Run ONE transport pass over a subset of engines (mutates the shared accumulators).
+  async function runEnginePass(engineKeys, override) {
+    if (!engineKeys.length) return;
+    const provider = mode === "mock"
+      ? { provider: "mock", transport: "browserless", residentialProxy: false, proxyCountry: "", enabled: true, reason: "mock pipeline (no browser)" }
+      : resolveExecutionProvider(run, { override });
+    if (!hybrid) providerLabel = provider.provider;
+    const adapters = await getEngineAdapters({ provider });
+    const ready = mode === "mock" ? engineKeys : runnableEngines(adapters, engineKeys);
+    const blocked = mode === "mock" ? [] : blockedEngines(adapters, engineKeys);
+
+    // log blocked engines honestly — NO browser call, NO fake result (#5/#9)
+    for (const b of blocked) {
+      allBlocked.push(b);
+      await logGeoError({ geo_project_id: projectId, geo_run_id: runId, engine: b.engine, error_type: statusToErrorType(b.status), message: `${b.name}: ${b.status} — ${b.reason}` });
     }
-  } finally { try { restore(); } catch {} }
+    if (!ready.length) return;
+    readyCount += ready.length;
+
+    // ── apply cost-guarded env (proxy/concurrency/retry/screenshot) then collect ──
+    const restore = mode === "mock" ? () => {} : applyExecutionEnv(provider, run);
+    try {
+      for (const engine of ready) {
+        if (stopped) break;
+        // stop-run support (#7) — check between engines
+        try { const cur = await getGeoRun(runId); if (cur?.stopped_by_user) { stopped = true; break; } } catch {}
+        let scan;
+        try {
+          scan = await runGeoScan({
+            mode, transport: provider.transport,
+            brand, clientDomain: brandDomain,
+            competitors: competitors.map((c) => c.name), competitorDomains,
+            location: project.country || "", proxyCountry: provider.proxyCountry || (String(project.country || "in").slice(0, 2).toLowerCase()),
+            engineKeys: [engine], sessions, prompts: scanPrompts,
+          });
+        } catch (e) {
+          await logGeoError({ geo_project_id: projectId, geo_run_id: runId, engine, error_type: /timeout/i.test(String(e?.message)) ? "timeout" : "other", message: String(e?.message || e).slice(0, 400) });
+          failed += scanPrompts.length;
+          continue;
+        }
+        for (const resp of (scan.responses || [])) {
+          const result = parseAnswer(resp, ctx);
+          await saveRunResult({ runId, projectId, result });
+          parsed.push(result);
+          saved++; perEngine[engine] = (perEngine[engine] || 0) + 1;
+          cost += APPROX_COST[engine] ?? 0.02;
+          opts.onProgress?.({ saved, failed, engine });
+        }
+        for (const err of (scan.errors || [])) {
+          const ek = ENGINE_KEY_BY_NAME[String(err.engine || "").toLowerCase()] || engine;
+          const msg = String(err.error || "");
+          await logGeoError({ geo_project_id: projectId, geo_run_id: runId, prompt_id: err.promptId || null, engine: ek, error_type: /session|login|storageState/i.test(msg) ? "session_expired" : (/timeout/i.test(msg) ? "timeout" : "other"), message: msg.slice(0, 400) });
+          failed++;
+        }
+        await updateGeoRun(runId, { completed_count: saved, failed_count: failed, per_engine_progress: perEngine });
+      }
+    } finally { try { restore(); } catch {} }
+  }
+
+  if (hybrid) {
+    // Run the two passes CONCURRENTLY — the local pass (AIO + Claude, local Chrome / Anthropic API)
+    // and the Browserless pass (Gemini + Perplexity + ChatGPT, hosted residential, up to 10 parallel
+    // browsers) use SEPARATE infra, so overlapping them cuts the wall-clock to ≈ the slower pass. The
+    // report waits for the FULL scan so every engine runs every prompt (no partial / dummy data).
+    // Safe because: applyExecutionEnv no longer lets the local pass touch the Browserless env, and the
+    // shared accumulators are mutated on JS's single event loop (interleaved, never torn).
+    await Promise.all([
+      runEnginePass(selectedEngines.filter((e) => HYBRID_LOCAL.has(e)), "local-playwright"),
+      runEnginePass(selectedEngines.filter((e) => HYBRID_BLESS.has(e)), "browserless-residential-proxy"),
+    ]);
+  } else {
+    const override = opts.transport === "local" ? "local-playwright" : (opts.transport === "browserless" ? "browserless" : undefined);
+    await runEnginePass(selectedEngines, override);
+  }
+
+  // nothing runnable across all passes → honest session_required / failed, ZERO cost
+  if (readyCount === 0) {
+    const anySession = allBlocked.some((b) => b.status === "session_required");
+    const status = anySession ? "session_required" : "failed";
+    await updateGeoRun(runId, { status, completed_at: nowIso(), error: allBlocked.map((b) => `${b.name}:${b.status}`).join("; ") || "no runnable engines", blocked_engines: allBlocked.map((b) => ({ engine: b.engine, status: b.status, reason: b.reason })) });
+    return { ok: false, status, provider: providerLabel || "disabled", ready: 0, blocked: allBlocked.length };
+  }
 
   // ── score from the REAL parsed results (empty → zeros; never invented) ──
   const metrics = computeGeoMetrics(parsed, ctx);
@@ -152,16 +188,16 @@ export async function runGeoJob(run, opts = {}) {
     } catch (e) { try { console.warn("[geo-worker] storytelling:", e?.message); } catch {} }
   }
 
-  const status = stopped ? "partial" : (saved > 0 ? ((failed > 0 || blocked.length) ? "partial" : "completed") : "failed");
+  const status = stopped ? "partial" : (saved > 0 ? ((failed > 0 || allBlocked.length) ? "partial" : "completed") : "failed");
   await updateGeoRun(runId, {
     status, completed_at: nowIso(),
     completed_count: saved, failed_count: failed, valid_result_count: saved, error_count: failed,
     per_engine_progress: perEngine, actual_cost_usd: Math.round(cost * 100) / 100,
     geo_score: metrics.overall.geo_score, overall_sov: metrics.overall.sov,
-    blocked_engines: blocked.map((b) => ({ engine: b.engine, status: b.status, reason: b.reason })),
+    blocked_engines: allBlocked.map((b) => ({ engine: b.engine, status: b.status, reason: b.reason })),
     stopped_by_user: stopped || run.stopped_by_user || false,
   });
-  return { ok: saved > 0, runId, saved, failed, status, provider: provider.provider, ready: ready.length, blocked: blocked.length, metrics };
+  return { ok: saved > 0, runId, saved, failed, status, provider: providerLabel || "mixed", ready: readyCount, blocked: allBlocked.length, metrics };
 }
 
 /**

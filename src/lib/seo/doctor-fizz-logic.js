@@ -25,7 +25,7 @@
 
 // Track 1.2 — evidence framework (every recommendation → 10-field evidence structure,
 // existing-page checks, honest GEO status, findings-vs-projections separation).
-import { buildGeoStatus, separateKpis, buildAiReadiness, buildAioVisibility } from "./report-evidence.js";
+import { buildGeoStatus, separateKpis, buildAiReadiness, buildAioVisibility, checkExistingPage } from "./report-evidence.js";
 
 // ── Missing data labels (Problem 7) ───────────────────────────────────────────
 export const MISSING_LABELS = {
@@ -96,6 +96,12 @@ const KNOWN_LOCATIONS = [
   "bhopal", "patna", "vadodara", "ghaziabad", "ludhiana", "agra", "nashik", "faridabad",
   "new york", "london", "dubai", "singapore", "toronto", "sydney", "los angeles",
   "chicago", "san francisco", "boston", "seattle", "austin", "miami", "dallas",
+  // Metro neighbourhoods / localities (so "<service> in Malad" resolves as a local, city-scope
+  // keyword instead of a national commercial one).
+  "malad", "andheri", "borivali", "goregaon", "kandivali", "dahisar", "bandra", "powai",
+  "chembur", "mulund", "ghatkopar", "kurla", "dadar", "vile parle", "thane", "vashi",
+  "navi mumbai", "koramangala", "indiranagar", "whitefield", "hsr layout", "dwarka",
+  "rohini", "saket",
 ];
 
 // Regions/states + countries — so local demand can resolve to the NARROWEST
@@ -146,18 +152,32 @@ function escapeRegex(s) {
  * Step 2: is the keyword topically related to the client's products/services?
  * Uses the client's own keyword/service vocabulary as the relevance anchor.
  */
+// Generic words that appear in service/industry vocab but are TOO broad to anchor topical
+// relevance on their own — e.g. an accounting firm's "business services" must NOT let
+// "what is corporate social responsibility in business" through on the token "business".
+// Only SPECIFIC service tokens (accounting, payroll, bookkeeping…) should accept a keyword.
+const GENERIC_RELEVANCE_TOKENS = new Set([
+  "business", "businesses", "company", "companies", "service", "services", "online", "solution",
+  "solutions", "professional", "professionals", "provider", "providers", "agency", "agencies",
+  "firm", "firms", "consultant", "consultants", "expert", "experts", "specialist", "specialists",
+  "best", "top", "near", "local", "small", "corporate", "global", "group", "limited", "based",
+  "management", "support", "advice", "guide", "list", "review", "reviews", "compare", "cost", "price",
+]);
 function isTopicallyRelevant(keyword, relevanceTerms) {
   if (!relevanceTerms.length) return true; // no anchor → don't over-filter
   const k = String(keyword).toLowerCase();
+  // Collect only SPECIFIC (non-generic) anchor tokens/phrases across all relevance terms — a
+  // generic token like "business" must not anchor relevance or off-topic keywords sharing a
+  // generic word slip through ("what is corporate social responsibility in business").
+  const specific = [];
   for (const term of relevanceTerms) {
     const t = String(term).toLowerCase().trim();
     if (!t) continue;
-    const tokens = t.split(/\s+/).filter(w => w.length >= 4);
-    for (const tok of tokens) {
-      if (k.includes(tok)) return true;
-    }
-    if (k.includes(t)) return true;
+    for (const w of t.split(/\s+/)) if (w.length >= 4 && !GENERIC_RELEVANCE_TOKENS.has(w)) specific.push(w);
+    if (t.length >= 6 && !GENERIC_RELEVANCE_TOKENS.has(t)) specific.push(t); // keep multi-word service phrases
   }
+  if (!specific.length) return true; // only generic anchors available → don't over-filter
+  for (const tok of specific) if (k.includes(tok)) return true;
   return false;
 }
 
@@ -535,7 +555,7 @@ export function isOffTopicTheory(kw) {
   return /\b(societal|green|holistic|relationship|internal|differentiated|undifferentiated)\s+marketing\b|\bmarketing\s+(mix|management|myopia|environment|concept|orientation)\b|\bkotler\b|\b4\s*p'?s\b|\bfull\s+form\b|\bmeaning\s+of\b|\bdefinition\s+of\b/.test(k);
 }
 
-export function buildContentArchitecture(accepted = []) {
+export function buildContentArchitecture(accepted = [], crawlPages = []) {
   const commercial_pages = [];
   const blog_and_guides  = [];
   const geography_pages  = [];
@@ -549,7 +569,12 @@ export function buildContentArchitecture(accepted = []) {
   // packages for small businesses". Cluster by ≥70% token overlap, keep the highest volume.
   const _STOP = new Set("for the a an and or with your you our in on to of at by".split(" "));
   const _sing = (w) => /(s|x|z|ch|sh)es$/.test(w) ? w.slice(0, -2) : /ies$/.test(w) ? w.slice(0, -3) + "y" : /ss$/.test(w) ? w : /s$/.test(w) ? w.slice(0, -1) : w;
-  const _toks = (s) => new Set(String(s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 3 && !_STOP.has(w)).map(_sing));
+  // Collapse interchangeable industry synonyms so semantic duplicates merge instead of forming
+  // separate pages, e.g. "digital marketing agency in india" == "indian digital marketing company"
+  // == "digital advertising company in india". Kept deliberately small: only provider-noun,
+  // marketing/advertising, and india/indian equivalences (do not broaden without re-checking dedup).
+  const _SYN = { agency: "provider", company: "provider", firm: "provider", advertising: "marketing", indian: "india" };
+  const _toks = (s) => new Set(String(s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 3 && !_STOP.has(w)).map(_sing).map((w) => _SYN[w] || w));
   const _jaccard = (a, b) => { let h = 0; for (const t of a) if (b.has(t)) h++; return h / Math.max(1, a.size + b.size - h); };
   const _deduped = [];
   for (const k of (accepted || [])) {
@@ -622,7 +647,93 @@ export function buildContentArchitecture(accepted = []) {
   commercial_pages.sort(byScore);
   geography_pages.sort(byScore);
   blog_and_guides.sort(byScore);
-  const CAP_COMMERCIAL = 8, CAP_GEO = 4, CAP_BLOG = 6, CAP_LISTICLE = 6;
+
+  // Guarantee a real business always gets its core service pages. If the winnability filters
+  // diverted EVERY transactional term into outreach (e.g. an agency whose accepted keywords are
+  // all bare service heads like "digital marketing agency"), commercial_pages would be empty and
+  // the "What We Build" slide would render a blank void. Promote the top few heads back into
+  // commercial_pages as core service pages (they stay in outreach too, for the authority play).
+  if (!commercial_pages.length && listicle_outreach.length) {
+    for (const o of listicle_outreach.filter((x) => !isListicleQuery(x.keyword_cluster || x.keyword || "")).slice(0, 3)) {
+      commercial_pages.push({
+        keyword_cluster:     o.keyword_cluster,
+        primary_volume:      o.primary_volume,
+        intent_class:        o.intent_class || "transactional",
+        asset_type:          o.asset_type,
+        funnel_role:         o.funnel_role,
+        priority:            o.priority,
+        geography_relevance: o.geography_relevance || "Not geo-specific",
+        page_name:           o.page_name || toTitle(o.keyword_cluster || o.keyword || ""),
+        url_slug:            "/" + slugify(o.keyword_cluster || o.keyword || ""),
+        commercial_reason:   `Your core service page for "${o.keyword_cluster || o.keyword}". A single page cannot outrank the national brands on this head overnight, so win it over time with depth, reviews and internal links, backed by the authority play.`,
+      });
+    }
+    commercial_pages.sort(byScore);
+  }
+
+  // ── item 15 — guarantee a real "learning tier" (aim for 5–10 informational topics). When the
+  // raw keyword pool yields too few question/informational terms, synthesize on-topic blog angles
+  // from the client's OWN top commercial service clusters — relevance-derived, never generic — using
+  // the proven awareness patterns that AI engines cite and that feed GEO/AI visibility. Volume is
+  // left at 0 (shown as "—") because these are derived angles, not measured demand (kept honest).
+  const TARGET_BLOG = 6;
+  if (blog_and_guides.length < TARGET_BLOG) {
+    const _seen = new Set(blog_and_guides.map((b) => String(b.proposed_title || b.keyword_cluster || "").toLowerCase().trim()));
+    // Service source for the synthesized angles. Prefer real commercial pages, but if none were
+    // accepted (e.g. only informational/head terms), fall back through the over-broad head terms
+    // (which ARE the core service, e.g. "digital marketing agency"), then geography pages, then the
+    // top accepted keywords — so the learning tier is never left with 0–1 topics (item 15 gap).
+    let _svcSrc = commercial_pages;
+    if (!_svcSrc.length) _svcSrc = listicle_outreach;
+    if (!_svcSrc.length) _svcSrc = geography_pages;
+    const _svc = _svcSrc.slice(0, 4).map((p) => String(p.keyword_cluster || p.page_name || p.keyword || "").trim()).filter(Boolean);
+    if (!_svc.length) for (const { k } of _deduped.slice(0, 4)) { const t = String(k.keyword || "").trim(); if (t) _svc.push(t); }
+    const _angles = (svc) => [
+      { t: `How to choose the right ${svc}`,          kw: `how to choose ${svc}` },
+      { t: `${toTitle(svc)}: a complete guide`,       kw: `${svc} guide` },
+      { t: `How much does ${svc} cost?`,              kw: `${svc} cost` },
+      { t: `${toTitle(svc)} mistakes to avoid`,       kw: `${svc} mistakes` },
+      { t: `What to look for in a ${svc} provider`,   kw: `best ${svc} provider` },
+    ];
+    for (let round = 0; round < 5 && blog_and_guides.length < TARGET_BLOG; round++) {
+      for (let si = 0; si < _svc.length; si++) {
+        if (blog_and_guides.length >= TARGET_BLOG) break;
+        const svc = _svc[si];
+        // vary the angle per service (offset by index) so the list isn't all "how to choose …" —
+        // e.g. service A gets "how to choose", B gets "complete guide", C gets "cost", etc.
+        const a = _angles(svc)[(round + si) % 5];
+        if (!a) continue;
+        const key = a.t.toLowerCase().trim();
+        if (_seen.has(key)) continue;
+        _seen.add(key);
+        blog_and_guides.push({
+          keyword_cluster:     a.kw,
+          primary_volume:      0,
+          intent_class:        "informational",
+          asset_type:          "Blog / Guide",
+          funnel_role:         "Awareness",
+          priority:            0,
+          geography_relevance: "Not geo-specific",
+          proposed_title:      a.t,
+          search_intent:       "Informational — researcher in the awareness stage",
+          funnel_connection:   `Answers an awareness-stage question and internally links to the "${svc}" service page, feeding the commercial funnel.`,
+          synthesized:         true,
+        });
+      }
+    }
+  }
+
+  // Bug 4 — read the crawl FIRST: tag each recommendation optimise-existing vs create-new, so the
+  // action plan never says "build X, no page ranks for it" when that page already exists. slice()
+  // below keeps the same element references, so tagging the source arrays propagates into the slices.
+  const _tagExisting = (p) => {
+    const ex = checkExistingPage(p, crawlPages);
+    p.action = ex.exists ? "optimise-existing" : "create-new";
+    p.existing_url = ex.exists ? ex.url : null;
+  };
+  [commercial_pages, geography_pages, blog_and_guides].forEach((arr) => (Array.isArray(arr) ? arr : []).forEach(_tagExisting));
+
+  const CAP_COMMERCIAL = 8, CAP_GEO = 4, CAP_BLOG = 8, CAP_LISTICLE = 6;
   const geoCapped = geography_pages.slice(0, CAP_GEO);
   return {
     commercial_pages: commercial_pages.slice(0, CAP_COMMERCIAL),
@@ -1433,14 +1544,33 @@ function parseMetricValue(v) {
  * Each issue: { priority, issue, affected_count, recommended_action, estimated_effort }
  * Ranked CRITICAL → HIGH → MEDIUM → LOW. Every recommendation is developer-actionable.
  */
-export function buildTechnicalIssues(crawlData) {
+export function buildTechnicalIssues(crawlData, siteValidation = null) {
   if (!crawlData) return [];
   const s = crawlData.summary || {};
   const issues = [];
   const pl = (n, word, suf = "s") => `${n} ${word}${Number(n) === 1 ? "" : suf}`;
+  // item 11 — when the CMS/builder was detected from the homepage, name the LIKELY cause of
+  // duplicate title/head tags instead of the generic "usually a theme/plugin conflict".
+  const _cms = crawlData.cms || "", _plugin = crawlData.cmsPlugin || "";
+  const _cmsCause = _cms
+    ? (_plugin
+        ? ` Your site runs on ${_cms}, and the most common cause here is the ${_plugin} plugin emitting a tag while the theme also renders one, so configure the theme to defer that tag to ${_plugin}.`
+        : ` Your site runs on ${_cms}, and on ${_cms} this is almost always an SEO/title plugin conflicting with the theme; disable the duplicate output in one of them.`)
+    : "";
   // True site size for sitewide framing: prefer Google-indexed / sitemap total
   // over the number of pages we deep-audited (a sample).
   const siteSize = crawlData.totalPagesEstimate || crawlData.indexedPages || crawlData.sitemapUrlCount || crawlData.pageCount || null;
+
+  // Stage-1 Website Validation FAILURES become technical issues so a broken foundation
+  // (bad SSL, a redirect loop, or an unreachable/auth-walled homepage) surfaces in the
+  // diagnosis AND the action plan, not just a silent onboarding tick. Passing sites push nothing.
+  const _vc = siteValidation?.checks || {};
+  if (siteValidation && _vc.sslVerification && _vc.sslVerification.pass === false)
+    issues.push({ priority: "CRITICAL", issue: "SSL/HTTPS not verified", affected_count: null, why_it_matters: "An unsecured or misconfigured HTTPS site is flagged 'Not Secure' by browsers and demoted by Google, so visitors bounce before the page loads.", recommended_action: "Install or renew a valid SSL certificate and force HTTPS site-wide.", estimated_effort: "≈2 hours", expected_unlock: "A secure, trusted site browsers and Google stop penalising." });
+  if (siteValidation && _vc.redirectAnalysis && _vc.redirectAnalysis.pass === false)
+    issues.push({ priority: "HIGH", issue: "Redirect loop or broken redirect chain", affected_count: null, why_it_matters: "A redirect loop leaves the homepage unreachable for crawlers and users, so nothing below it can be indexed.", recommended_action: `Fix the redirect chain so the homepage resolves in one hop${_vc.redirectAnalysis.detail ? ` (${_vc.redirectAnalysis.detail})` : ""}.`, estimated_effort: "≈2 hours", expected_unlock: "A homepage crawlers can actually reach and index." });
+  if (siteValidation && _vc.homepageReachable && _vc.homepageReachable.pass === false)
+    issues.push({ priority: "CRITICAL", issue: _vc.homepageReachable.detail || "Homepage is not reachable for a full audit", affected_count: null, why_it_matters: "If the homepage returns an error or sits behind an auth wall, search engines see no live page to rank.", recommended_action: "Make the homepage return a live 200 page to anonymous visitors (remove any auth wall or fix the server error).", estimated_effort: "≈1 day", expected_unlock: "A live, crawlable homepage that can enter the index." });
 
   // V3 §07 — every technical fix carries all five fields:
   // issue · why_it_matters · recommended_action (what to do) · estimated_effort · expected_unlock
@@ -1460,13 +1590,13 @@ export function buildTechnicalIssues(crawlData) {
     issues.push({ priority: "HIGH", issue: `${pl(s.pagesMissingH1, "page")} with no H1`, affected_count: s.pagesMissingH1, why_it_matters: "The H1 is the clearest on-page topic signal Google reads; without it, pages are ambiguous about what they rank for.", recommended_action: "Add exactly one keyword-rich H1 per page.", estimated_effort: "≈2 hours", expected_unlock: "Sharper topical relevance on each affected page." });
 
   if ((s.pagesMultipleTitle || 0) > 0)
-    issues.push({ priority: "HIGH", issue: `${pl(s.pagesMultipleTitle, "page")} with multiple <title> tags`, affected_count: s.pagesMultipleTitle, why_it_matters: "Multiple <title> tags (usually a theme/plugin conflict) force Google to pick one arbitrarily, weakening the strongest on-page signal.", recommended_action: "Remove the duplicate <title> tags so each page has exactly one, in the <head>.", estimated_effort: "≈2 hours", expected_unlock: "A single, trusted title signal per page." });
+    issues.push({ priority: "HIGH", issue: `${pl(s.pagesMultipleTitle, "page")} with multiple <title> tags`, affected_count: s.pagesMultipleTitle, why_it_matters: "Multiple <title> tags force Google to pick one arbitrarily, weakening the strongest on-page signal.", recommended_action: `Remove the duplicate <title> tags so each page has exactly one, in the <head>.`, cms_cause: _cmsCause.trim() || undefined, estimated_effort: "≈2 hours", expected_unlock: "A single, trusted title signal per page." });
 
   if ((s.pagesTitleOutsideHead || 0) > 0)
     issues.push({ priority: "HIGH", issue: `${pl(s.pagesTitleOutsideHead, "page")} with a <title> outside the <head>`, affected_count: s.pagesTitleOutsideHead, why_it_matters: "A <title> placed after the <body> can be ignored by search engines, so the page may rank with no title at all.", recommended_action: "Move the <title> into the <head> element at the top of the HTML.", estimated_effort: "≈2 hours", expected_unlock: "Reliable title rendering in search results." });
 
   if ((s.pagesMultipleHead || 0) > 0)
-    issues.push({ priority: "HIGH", issue: `${pl(s.pagesMultipleHead, "page")} with multiple <head> tags`, affected_count: s.pagesMultipleHead, why_it_matters: "Invalid duplicate <head> elements can cause critical metadata (canonical, robots, title) to be mixed up or dropped by crawlers.", recommended_action: "Fix the template so there is one valid <head> as the first element in <html>.", estimated_effort: "≈3 hours", expected_unlock: "Metadata that crawlers read reliably." });
+    issues.push({ priority: "HIGH", issue: `${pl(s.pagesMultipleHead, "page")} with multiple <head> tags`, affected_count: s.pagesMultipleHead, why_it_matters: "Invalid duplicate <head> elements can cause critical metadata (canonical, robots, title) to be mixed up or dropped by crawlers.", recommended_action: `Fix the template so there is one valid <head> as the first element in <html>.`, cms_cause: _cmsCause.trim() || undefined, estimated_effort: "≈3 hours", expected_unlock: "Metadata that crawlers read reliably." });
 
   if ((s.pagesMultipleBody || 0) > 0)
     issues.push({ priority: "MEDIUM", issue: `${pl(s.pagesMultipleBody, "page")} with multiple <body> tags`, affected_count: s.pagesMultipleBody, why_it_matters: "Duplicate <body> elements are invalid HTML and can cause content to be parsed or rendered inconsistently.", recommended_action: "Fix the template so each page has a single <body> element.", estimated_effort: "≈3 hours", expected_unlock: "Consistent rendering and parsing." });
@@ -1525,8 +1655,46 @@ export function buildTechnicalIssues(crawlData) {
     }
   }
 
+  // Plain-English "what this is" for a NON-technical reader — a business owner does not know
+  // what a title tag, an H1 or a meta description is. One jargon-free line per issue, rendered
+  // under each row so the report explains itself instead of assuming SEO knowledge.
+  const _plainFor = [
+    [/Googlebot blocked/i, "A setting is currently telling Google not to look at the site at all, so nothing can show up in search until it is removed."],
+    [/missing a <title>|missing.*title tag/i, "The title is the clickable headline your page shows in Google's results and the browser tab. With none, Google has no headline to display, so far fewer people click."],
+    [/with no H1/i, "The H1 is the big headline a visitor reads at the very top of the page itself. It tells readers and Google what the page is about at a glance; without it the page looks topic-less."],
+    [/multiple <title>/i, "These pages carry two competing search headlines, so Google picks one at random and the page's relevance is weakened."],
+    [/<title> outside/i, "The page's headline code sits in the wrong place, so search engines can ignore it and show the page with no title at all."],
+    [/multiple <head>/i, "A template bug puts two page-setup sections in the code, which can scramble the instructions (title, canonical, robots) Google reads."],
+    [/multiple <body>/i, "A template bug puts two page-body sections in the code, which can make the page render or get read inconsistently."],
+    [/multiple H1/i, "These pages have several main headlines competing, which blurs what the page is actually about for Google."],
+    [/meta description/i, "The meta description is the short grey summary under your headline in Google's results. With none, Google writes its own weaker one, so fewer people click."],
+    [/insecure HTTP|mixed content/i, "These pages load some files over an insecure connection, so browsers show visitors a 'Not Secure' warning that costs trust."],
+    [/thin.content/i, "These pages have very little text (under 200 words), which Google treats as low quality and rarely ranks."],
+    [/duplicate meta titles/i, "Several pages share the exact same search headline, so Google struggles to tell them apart and splits their ranking power."],
+    [/broken internal link/i, "Links on the site point to pages that no longer exist, wasting Google's crawl time and sending visitors to dead ends."],
+    [/without alt text|missing.*alt/i, "Alt text is the written description of an image. Without it, images can't show in Google Images and the site is harder for the visually impaired to use."],
+    [/LCP|load time/i, "This is how long your main content takes to appear. A slow load makes visitors leave and Google rank the page lower on mobile."],
+    [/XML sitemap|sitemap missing/i, "A sitemap is the list of your pages you hand to Google so it can find them all. Without one, deep pages can stay undiscovered for weeks."],
+    [/structured data|schema/i, "Schema is hidden code that tells AI and Google exactly what your business is. Without it they can't reliably identify you as a real entity."],
+    [/robots\.txt not found/i, "robots.txt is the small file that guides search engines around your site. Without it they get no crawl directions."],
+    [/SSL|HTTPS not verified/i, "This is the padlock that makes a site secure. Without a valid one, browsers warn visitors the site is 'Not Secure'."],
+    [/Redirect loop/i, "The homepage keeps bouncing between addresses instead of settling on one, so search engines and visitors can't reach it."],
+    [/Homepage.*not reachable|auth wall/i, "The homepage does not return a normal live page to visitors, so search engines see nothing to rank."],
+  ];
+  for (const it of issues) { const m = _plainFor.find(([re]) => re.test(it.issue)); if (m) it.plain = m[1]; }
+
   const rank = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-  return issues.sort((a, b) => rank[a.priority] - rank[b.priority]).slice(0, 12);
+  const sorted = issues.sort((a, b) => rank[a.priority] - rank[b.priority]);
+  // item 10 — collapse issues that reduce to the same normalized signal (e.g. count-only
+  // variants of one problem) so no two rows say the same thing; the highest-priority
+  // instance survives because we dedupe AFTER the priority sort.
+  const _seen = new Set();
+  // Keep the TAG NAME when normalizing (…<head>… vs …<title>… vs …<body>… must stay DISTINCT).
+  // Erasing the whole tag collapsed "multiple <title>/<head>/<body> tags" into one signature, so
+  // the dedupe silently dropped the <head> and <body> rows (bug #6).
+  const _sig = (str) => String(str).toLowerCase().replace(/<\/?([a-z0-9]+)[^>]*>/gi, " $1 ").replace(/[0-9]+/g, "#").replace(/[^a-z# ]/g, "").replace(/\s+/g, " ").trim();
+  const deduped = sorted.filter((it) => { const k = _sig(it.issue); if (_seen.has(k)) return false; _seen.add(k); return true; });
+  return deduped.slice(0, 12);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1595,7 +1763,14 @@ export function buildGeoVisibility(input = {}) {
   let share_of_voice = null, citation_analysis = null, geo_metrics = null, topic_dominance = null;
   const raw = input.aiResponses || input.ai_visibility_raw || null;
   if (raw && Array.isArray(raw.responses) && raw.responses.length) {
-    const _brandSet = raw.brandSet || [clientName || domain, ...(competitors || []).map(c => c.name || c.domain).filter(Boolean)];
+    // Client + configured competitors are always trusted; only DISCOVERED (AI-named) brands
+    // are screened for noise (generic/AI-platform phrases the extractor mis-caught). Filtering
+    // here (before buildShareOfVoice/buildGeoMetrics) keeps SoV percentages correctly
+    // renormalised and re-runs at report build, so it cleans existing scans without a re-scan.
+    const _cfgBrandNorms = new Set([clientName || domain, ...(competitors || []).map(c => c.name || c.domain)].filter(Boolean).map(_geoNorm));
+    const _brandSet = (raw.brandSet || [clientName || domain, ...(competitors || []).map(c => c.name || c.domain).filter(Boolean)])
+      .filter(Boolean)
+      .filter(b => _cfgBrandNorms.has(_geoNorm(b)) || !_isNoiseBrand(b));
     const _compDomains = raw.competitorDomains || (competitors || []).map(c => c.domain).filter(Boolean);
     share_of_voice = buildShareOfVoice({ brandSet: _brandSet, client: clientName || domain, responses: raw.responses });
     citation_analysis = buildCitationAnalysis({
@@ -1723,6 +1898,30 @@ function buildFaqSchemaJsonLd(industry) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const _geoNorm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+// A discovered ("AI-named") brand is NOISE when EVERY token is a generic/AI-platform word,
+// with no distinctive brand token. The brand extractor occasionally catches phrases an AI
+// used to describe ITSELF or a category, e.g. "Computer Spaces Artifacts", "Customize
+// Connectors Skills", "Search Computer Model", "Google Continue". Real rivals carry a
+// distinctive token (Lollypop, Ungrammary, Bonoboz, WATConsult) so they survive. Only
+// applied to DISCOVERED brands — the client and configured competitors are never filtered.
+const _BRAND_NOISE_WORDS = new Set((
+  "computer spaces artifacts customize connectors skills search model models continue projects canvas " +
+  "workspace assistant copilot chatbot prompt prompts agent agents api plugin plugins feature features " +
+  "tool tools mode memory context token tokens integration integrations extension extensions " +
+  "google microsoft openai anthropic claude gemini chatgpt perplexity bard llama meta bing " +
+  "the a an and or of for to in on at with your our their this that these those it its is are be by " +
+  "best top new free online offline digital web website app apps software platform platforms solution solutions " +
+  "service services system systems company companies business businesses marketing media content design development " +
+  "data cloud smart pro plus ai ml seo agency agencies studio labs group global tech technology technologies " +
+  "how what why when which who where guide guides tips list overview review reviews"
+).split(/\s+/));
+function _isNoiseBrand(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length < 2) return false;   // single tokens are already vetted by the extractor's brandy-check
+  return words.every((w) => _BRAND_NOISE_WORDS.has(w.toLowerCase().replace(/[^a-z0-9]/g, "")));
+}
+
 const _geoHost = (url) => {
   try { return new URL(String(url).includes("://") ? url : `https://${url}`).hostname.replace(/^www\./, "").toLowerCase(); }
   catch { return String(url || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase(); }
@@ -2361,22 +2560,34 @@ export function buildPriorityActionPlan({ technical_issues = [], content_archite
     actions.push({ tier, description, channel, priority, effort, why, _impact: PRIORITY_IMPACT[priority] || 2, _hours: effortToHours(effort) });
 
   // ── Tier 1: Foundation fixes (technical blockers gate everything) ──
+  // item 10 — EVERY diagnosed technical issue must have a matching fix in the action plan,
+  // not just CRITICAL/HIGH. Lower-priority findings (e.g. duplicate meta titles, duplicate
+  // <head> tags) previously appeared on the diagnosis page but never in the action board;
+  // now nothing found is left without a corresponding action.
   for (const t of technical_issues) {
-    if (t.priority === "CRITICAL" || t.priority === "HIGH") {
-      add("Foundation Fixes", t.issue + " — " + (t.recommended_action || "").split(".")[0], "SEO", t.priority, t.estimated_effort,
-        t.why_it_matters || t.expected_unlock || "Search engines read this technical signal before they read the content, so it caps every page above it.");
-    }
+    add("Foundation Fixes", t.issue + " — " + (t.recommended_action || "").split(".")[0], "SEO", t.priority || "MEDIUM", t.estimated_effort,
+      t.why_it_matters || t.expected_unlock || "Search engines read this technical signal before they read the content, so it caps every page above it.");
   }
 
   // ── Tier 2: Content & on-page work ──
   for (const p of (content_architecture.commercial_pages || []).slice(0, 4)) {
-    add("Content & On-Page Work", `Build commercial page: ${p.page_name} (${p.url_slug}) targeting "${p.keyword_cluster}"`, "SEO", p.priority === "HIGH" ? "HIGH" : "MEDIUM", "≈1 week",
-      `Targets uncaptured commercial demand for "${p.keyword_cluster}"${p.primary_volume ? ` (~${Number(p.primary_volume).toLocaleString()} searches/mo)` : ""} — no page currently ranks for it.`);
+    if (p.action === "optimise-existing") {
+      add("Content & On-Page Work", `Optimise existing page for "${p.keyword_cluster}"${p.existing_url ? ` (${p.existing_url})` : ""}`, "SEO", p.priority === "HIGH" ? "HIGH" : "MEDIUM", "≈3 days",
+        `A page already exists for "${p.keyword_cluster}", so strengthen its intent, depth and on-page SEO rather than building a duplicate.`);
+    } else {
+      add("Content & On-Page Work", `Build commercial page: ${p.page_name} (${p.url_slug}) targeting "${p.keyword_cluster}"`, "SEO", p.priority === "HIGH" ? "HIGH" : "MEDIUM", "≈1 week",
+        `Targets uncaptured commercial demand for "${p.keyword_cluster}"${p.primary_volume ? ` (~${Number(p.primary_volume).toLocaleString()} searches/mo)` : ""} — no page currently ranks for it.`);
+    }
   }
   for (const p of (content_architecture.geography_pages || content_architecture.city_pages || []).slice(0, 3)) {
     const where = p.geo_target || p.city_target;
-    add("Content & On-Page Work", `Create ${(p.page_type || "geography page").toLowerCase()}${where ? ` for ${where}` : ""}: "${p.keyword_cluster}"`, "SEO", "MEDIUM", "≈3 hours",
-      `Captures local "near me" demand${where ? ` in ${where}` : ""} that a generic page cannot win.`);
+    if (p.action === "optimise-existing") {
+      add("Content & On-Page Work", `Optimise existing ${(p.page_type || "geography page").toLowerCase()}${where ? ` for ${where}` : ""}: "${p.keyword_cluster}"${p.existing_url ? ` (${p.existing_url})` : ""}`, "SEO", "MEDIUM", "≈2 hours",
+        `A local page already exists${where ? ` for ${where}` : ""}, so improve its local relevance rather than creating a duplicate.`);
+    } else {
+      add("Content & On-Page Work", `Create ${(p.page_type || "geography page").toLowerCase()}${where ? ` for ${where}` : ""}: "${p.keyword_cluster}"`, "SEO", "MEDIUM", "≈3 hours",
+        `Captures local "near me" demand${where ? ` in ${where}` : ""} that a generic page cannot win.`);
+    }
   }
   for (const p of (content_architecture.blog_and_guides || []).slice(0, 3)) {
     add("Content & On-Page Work", `Publish guide: "${p.proposed_title}"`, "SEO", "MEDIUM", "≈1 week",
@@ -2706,6 +2917,10 @@ export function runBusinessLogic(input = {}) {
     // clientDomain, competitorDomains }. When present, Section 10 shows REAL Share-of-
     // Voice + citation intelligence instead of "pending" placeholders.
     aiVisibility = null,
+    // Stage-1 Website Validation output ({ valid, eligible_for_audit, checks:{ sslVerification,
+    // redirectAnalysis, canonicalDetection, homepageReachable }, issues }). Feeds real
+    // SSL/redirect/reachability FAILURES into the technical issues so they gate + surface.
+    siteValidation = null,
   } = input;
 
   // ── #3 — per-keyword competitor SERP evidence (which competitor ranks, at what URL +
@@ -2783,7 +2998,7 @@ export function runBusinessLogic(input = {}) {
   });
 
   // ── Content architecture (Problem 3) ──
-  const content_architecture = buildContentArchitecture(keywords.accepted);
+  const content_architecture = buildContentArchitecture(keywords.accepted, Array.isArray(crawlData?.pages) ? crawlData.pages : []);
 
   // ── Backlinks (Problem 4) ──
   // Pull competitor directory listings (from their GMB audits) so citation
@@ -2809,7 +3024,7 @@ export function runBusinessLogic(input = {}) {
   const { baseline, missing_fields } = buildBaseline(baselineRawResolved);
 
   // ── Technical issues (Section 07) ──
-  const technical_issues = buildTechnicalIssues(crawlData);
+  const technical_issues = buildTechnicalIssues(crawlData, siteValidation);
 
   // ── GEO & AI visibility + schema additions (Section 10) ──
   const hasSchema = !!(crawlData?.summary?.pagesWithSchemaTypes || []).length;

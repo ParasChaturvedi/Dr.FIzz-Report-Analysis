@@ -38,15 +38,15 @@ export function DeckStyle() {
 }
 
 // ── tiny formatting helpers (shared by slide builders) ──────────────────────
-export const dash = (v) => (v === 0 ? "0" : v == null || v === "" || Number.isNaN(v) ? "—" : v);
+export const dash = (v) => (v === 0 ? "0" : v == null || v === "" || Number.isNaN(v) ? "N/A" : v);
 export function fmtNum(n) {
-  if (n == null || n === "" || Number.isNaN(Number(n))) return "—";
+  if (n == null || n === "" || Number.isNaN(Number(n))) return "N/A";
   const x = Number(n);
   if (Math.abs(x) >= 1_000_000) return (x / 1_000_000).toFixed(x % 1_000_000 ? 1 : 0) + "M";
   if (Math.abs(x) >= 1_000) return (x / 1_000).toFixed(x % 1_000 ? 1 : 0) + "K";
   return String(Math.round(x));
 }
-export const pctStr = (v) => (v == null || Number.isNaN(Number(v)) ? "—" : `${Math.round(Number(v))}%`);
+export const pctStr = (v) => (v == null || Number.isNaN(Number(v)) ? "N/A" : `${Math.round(Number(v))}%`);
 export function dateGB(d) {
   try {
     const dt = d ? new Date(d) : new Date();

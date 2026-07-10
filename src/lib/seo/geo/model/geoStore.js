@@ -312,6 +312,9 @@ export async function saveRunResult({ runId, projectId, result }) {
       brand_mentioned: Array.isArray(result.brandMentions) && result.brandMentions.length > 0,
       brand_mention_count: Array.isArray(result.brandMentions) ? result.brandMentions.reduce((a, m) => a + (Number(m.mention_count) || 1), 0) : 0,
       competitor_mention_count: Array.isArray(result.competitorMentions) ? result.competitorMentions.reduce((a, m) => a + (Number(m.mention_count) || 1), 0) : 0,
+      brands_mentioned: Array.isArray(result.brandsMentioned) ? result.brandsMentioned : [],   // real "who it named" list (deck prompts table)
+      lead_brand: result.leadBrand || "",                                                      // brand the AI led with (topic dominance)
+      brand_cited: !!result.brandCited,   // citation-truth: was the BRAND'S OWN domain a real source in this answer
       citation_count: Array.isArray(result.citations) ? result.citations.length : 0,
       source_domains: Array.isArray(result.sourceDomains) ? result.sourceDomains : [],
       parse_confidence: Number(result.parseConfidence) || 0,

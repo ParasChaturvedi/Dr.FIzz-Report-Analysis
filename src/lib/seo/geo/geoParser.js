@@ -37,6 +37,80 @@ function firstOccurrence(text, term) {
   return { count, firstIndex };
 }
 
+// ── Open brand discovery ──────────────────────────────────────────────────────
+// Brands the AI ACTUALLY named that were NOT in the client's configured competitor list.
+// These are real market intelligence (the rivals AI recommends), so we surface them in the
+// report. Precision matters more than recall: a strict stoplist + "must look like a brand"
+// gate here, then a "must appear in ≥2 prompts" threshold at aggregation, keep noise out.
+// OPENERS = sentence-starters / connectives / rank words that are NEVER part of a brand name.
+// These are TRIMMED from the ends of a candidate (so "Consider WATConsult" -> "WATConsult").
+const _OPENERS = new Set(`the this that these those their there they them we you our your it its his her who whom whose what which where when while
+a an and or but for to of in on at by as is are was were be been being have has had do does did will would can could should may might must not no yes if then than so such more less least very much also just even still
+best top leading trusted popular great good better several some many most other others various overall however additionally furthermore moreover note consider choose look here below above first second third fourth fifth sixth finally including includes include based known offers offer provides provide offering try use using check explore discover recommended recommend see find get make`.split(/\s+/).filter(Boolean));
+// GENERIC = business / marketing / platform words that ARE often capitalised in answers but are
+// NOT company names. A candidate is DROPPED when EVERY one of its words is generic (or an opener /
+// the client's location) — so "Email Marketing", "E-commerce", "Digital Marketing", "Branding",
+// "B2B", "Shopify" go, while a real name with at least one distinctive word ("Social Panga") stays.
+const _GENERIC = new Set([...
+_OPENERS,
+...`services service solutions solution company companies agency agencies firm firms provider providers platform platforms
+business businesses brand brands branding team teams group groups digital marketing seo sem ppc smm advertising ads
+design designs development developer media creative consulting consultancy consultants studio studios partners partner
+global international national local regional enterprise enterprises industries industry sector market marketplace clients client
+customers customer results result strategy strategies campaign campaigns content social website websites web app apps
+software tool tools email ecommerce e-commerce commerce retail wholesale b2b b2c saas crm cms roi kpi ux ui api seo-friendly
+analytics automation optimization optimisation conversion engagement audience traffic leads sales revenue growth
+google chatgpt gemini perplexity claude copilot microsoft openai anthropic bing meta amazon apple facebook instagram
+linkedin twitter youtube tiktok pinterest shopify wordpress wix webflow squarespace hubspot mailchimp klaviyo salesforce
+zoho magento woocommerce wordpress ai llm gpt overview overviews
+profile profiles maps map engine engines search graphic page pages listing listings review reviews rating ratings
+post posts vitals core experience voice keyword keywords backlink backlinks ranking rankings score scores sitemap
+robots schema canonical redirect redirects title titles tag tags heading headings snippet snippets citation citations
+generative discovery presence visibility awareness reputation positioning outreach funnel pipeline dashboard report reports
+january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday
+india indian usa uk us united states america american europe european asia asian australia canada uae dubai singapore mumbai delhi gurgaon bangalore bengaluru chennai pune kolkata hyderabad noida`.split(/\s+/).filter(Boolean)]);
+
+// Generic industry acronyms that survive the "all-caps prefix" brand test but are NOT company names.
+const _GEN_ACRONYMS = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux ui api cms crm saas faq kpi aov b2b b2c ai llm gpt serp url gmb nap eeat eat".split(/\s+/));
+
+function discoverBrands(text, { known = new Set(), location = "" } = {}) {
+  const t = String(text || "");
+  if (t.length < 20) return [];
+  const loc = new Set(String(location || "").toLowerCase().split(/[\s,]+/).filter(Boolean));
+  const counts = {};
+  // ONLY runs of CONSECUTIVE Title-Case words (no "and"/"of"/"the"/"." connectors — those merge
+  // separate brands or bleed across a sentence boundary). 1–3 tokens per run.
+  const re = /\b([A-Z][A-Za-z0-9'&\-]+(?:\s+[A-Z][A-Za-z0-9'&\-]+){0,2})\b/g;
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    let words = m[1].trim().split(/\s+/);
+    // trim ONLY opener/connective tokens from the ends (keeps a distinctive word like "Social" in
+    // "Social Panga", which a full-stoplist trim would have stripped down to just "Panga").
+    while (words.length && (_OPENERS.has(words[0].toLowerCase()) || loc.has(words[0].toLowerCase()))) words.shift();
+    while (words.length && (_OPENERS.has(words[words.length - 1].toLowerCase()) || loc.has(words[words.length - 1].toLowerCase()))) words.pop();
+    if (!words.length) continue;
+    const name = words.join(" ");
+    const low = name.toLowerCase();
+    if (name.length < 3 || known.has(low) || loc.has(low)) continue;
+    // DROP when every word is generic/opener/location (e.g. "Email Marketing", "Digital Media").
+    if (words.every((w) => _GENERIC.has(w.toLowerCase()) || loc.has(w.toLowerCase()))) continue;
+    if (words.length === 1) {
+      // A single-word brand must LOOK like a real product name: camelCase (PageTraffic, WordStream)
+      // or an all-caps prefix then lowercase (WATConsult). Plain Title-case single words (Branding,
+      // Email, Shopify) are dropped — they are almost always generic, not a competitor.
+      const w = words[0];
+      // Generic industry ACRONYMS ("KPIs", "ROI", "SEO", "PPC") pass the all-caps-prefix test but are
+      // NOT brands — drop them (they were leaking into the "AI-named competitors" list).
+      const _acr = w.toLowerCase().replace(/s$/, "");
+      if (_GEN_ACRONYMS.has(_acr)) continue;
+      const brandy = /[a-z][A-Z]/.test(w) || /^[A-Z]{2,}[a-z]/.test(w);
+      if (!brandy) continue;
+    }
+    counts[name] = (counts[name] || 0) + 1;
+  }
+  return Object.entries(counts).map(([name, count]) => ({ name, count }));
+}
+
 // Sentiment toward the brand, ONLY when detectable from language NEAR the brand mention.
 // Returns "positive" | "negative" | "neutral" | null (null = brand not mentioned / no signal).
 const POS_CUES = /\b(best|top|leading|excellent|great|strong|recommended|trusted|reliable|popular|highly rated|standout|impressive|go-to|premier|award)\b/i;
@@ -94,6 +168,10 @@ export function parseAnswer(response = {}, ctx = {}) {
   const brandMentions = entities.filter((e) => e.type === "brand" && e.count > 0).map(toMention);
   const competitorMentions = entities.filter((e) => e.type === "competitor" && e.count > 0).map(toMention);
 
+  // discovered competitors — brands the AI named that are NOT the client or a configured rival.
+  const _known = new Set([brand, ...competitors.map((c) => c.name)].filter(Boolean).map((s) => s.toLowerCase()));
+  const discoveredBrands = discoverBrands(text, { known: _known, location: clean(ctx.location || ctx.region || "") });
+
   // ── citations (classified by domain) ──
   const citations = citeUrls.map((url, i) => {
     const dom = domainOf(url); const root = rootDomain(dom);
@@ -128,6 +206,23 @@ export function parseAnswer(response = {}, ctx = {}) {
     answerLength: text.length,
     brandMentions,
     competitorMentions,
+    discoveredBrands,   // brands AI named that weren't configured — surfaced as extra competitors
+    // Flat, ordered list of EVERY brand/competitor actually named in this answer, plus the one the
+    // AI led with. This is the real "who it named" evidence the deck's prompts table renders — the
+    // renderer/API had a field for it but the parser never emitted it (so it always read empty).
+    // bug #3 — the "Who it named" column read ONLY configured brands, so every prompt where the AI
+    // named an OPEN rival (not in the client's competitor set) showed "none named". Merge the
+    // open-discovered brands in too (configured names first for stable order, then deduped). The
+    // client is never self-listed (discoverBrands excludes it) and the tightened stoplist keeps
+    // generic terms out, so this surfaces the REAL rivals the AI recommended for that prompt.
+    brandsMentioned: [...present.map((e) => e.name), ...discoveredBrands.map((d) => d.name)]
+      .filter(Boolean)
+      .filter((n, i, a) => a.findIndex((x) => x.toLowerCase() === n.toLowerCase()) === i),
+    leadBrand: present[0]?.name || discoveredBrands[0]?.name || "",
+    // CITATION TRUTH: "cited" means the BRAND'S OWN domain was an actual source in this answer —
+    // NOT merely that the answer had any citation. The deck's result column must read this, never
+    // citation_count>0, so it never says "Cited" when a rival's domain (not yours) was the source.
+    brandCited: citations.some((c) => c.is_brand_domain),
     citations,
     citationCount: citations.length,
     sourceDomains,

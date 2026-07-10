@@ -409,6 +409,10 @@ TASK:
     confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0.35,
     publicSignalsUsed: Array.isArray(parsed.publicSignalsUsed) ? parsed.publicSignalsUsed : [],
     assumptions: Array.isArray(parsed.assumptions) ? parsed.assumptions : [],
+    // item 11 — carry the evidence-based CMS / builder + likely SEO plugin through to the report.
+    cms: signals.cms || "",
+    cmsPlugin: signals.cmsPlugin || "",
+    cmsEvidence: signals.cmsEvidence || "",
   };
 
   if (cacheKey) cacheSet(`profile:${cacheKey}`, profile);

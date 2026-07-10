@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
-import { getCached, putCached } from "@/lib/cache/mongo";
+import { getCached, putCached, cacheConfigured } from "@/lib/cache/mongo";
 import { scoreCompleteness, summarizeUsage } from "@/lib/cache/usage";
 import { reportCacheType } from "@/lib/cache/report-key";
 
@@ -20,7 +20,7 @@ import { runBusinessLogic, deriveCompetitorBrands, isListicleQuery, isOverBroadH
 import { runQaGate } from "@/lib/seo/doctor-fizz-qa";
 import { locationNameForCountry } from "@/lib/seo/market";
 import { getSiteProfile } from "@/lib/claude/pipeline";
-import { fmtNum, fmtInt } from "@/lib/seo/report-format";
+import { fmtNum, fmtInt, deDash, deDashDeep } from "@/lib/seo/report-format";
 import { checkExistingPage } from "@/lib/seo/report-evidence";
 
 export const runtime     = "nodejs";
@@ -245,7 +245,9 @@ function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions, brands = []
       return toks.length === 1 && toks[0].length >= 5 && !GENERIC.has(toks[0]) && new RegExp(`\\b${esc(toks[0])}\\b`).test(k);
     });
   };
-  const isCommercial = (intent) => ["transactional", "commercial", "local", "navigational"].includes(String(intent || "").toLowerCase());
+  // "local" is deliberately NOT commercial: place-based keywords ("... in malad", "near me")
+  // belong in the Tier-2 hyper-local bucket, not Tier-1 primary commercial.
+  const isCommercial = (intent) => ["transactional", "commercial", "navigational"].includes(String(intent || "").toLowerCase());
   const seen = new Set();
   const fresh = (s) => { const n = String(s || "").toLowerCase().trim(); if (!n || seen.has(n)) return false; seen.add(n); return true; };
   // A buildable page target must be: relevant + non-brand + real demand + NOT a listicle
@@ -292,7 +294,8 @@ function buildMeasuringSuccessRows(baselineMetrics, crawlData, gmbData) {
     const mult = m[2]?.toLowerCase() === "k" ? 1000 : m[2]?.toLowerCase() === "m" ? 1000000 : 1;
     return Math.round(n * mult);
   };
-  const fmtN = (n) => n >= 1000000 ? `${(n/1000000).toFixed(1)}M` : n >= 1000 ? `${(n/1000).toFixed(0)}K` : String(n);
+  // (fmtN removed — the whole forecast table now uses the shared fmtNum so every compact
+  // number matches the deck's format everywhere, e.g. "1.25K", never a second "1.3K" style.)
 
   const bm = baselineMetrics || {};
   const drN = toNum(bm.domainRating);
@@ -308,8 +311,8 @@ function buildMeasuringSuccessRows(baselineMetrics, crawlData, gmbData) {
   const health12 = healthNow != null ? Math.max(Number(healthNow) + 3, 90) : 90;
   return [
     { metric: "Domain Rating",     now: drN != null ? fmtInt(drN) : (bm.domainRating || "—"), s6: drN != null ? String(Math.min(100, drN + 5))      : "Growing", s12: drN != null ? String(Math.min(100, drN + 15)) : "20+" },
-    { metric: "Organic Keywords",  now: kN  != null ? fmtInt(kN)  : "—",                      s6: kN  != null ? fmtN(Math.round(kN * 1.6))          : "+60%",    s12: kN  != null ? fmtN(kN * 3)                   : "+200%" },
-    { metric: "Organic Traffic",   now: tN  != null ? `${fmtNum(tN)}/mo` : "—",               s6: tN  != null ? `${fmtN(Math.round(tN * 1.8))}/mo`  : "+80%",    s12: tN  != null ? `${fmtN(tN * 4)}/mo`           : "+300%" },
+    { metric: "Organic Keywords",  now: kN  != null ? fmtInt(kN)  : "—",                      s6: kN  != null ? fmtNum(Math.round(kN * 1.6))        : "+60%",    s12: kN  != null ? fmtNum(kN * 3)                 : "+200%" },
+    { metric: "Organic Traffic",   now: tN  != null ? `${fmtNum(tN)}/mo` : "—",               s6: tN  != null ? `${fmtNum(Math.round(tN * 1.8))}/mo`: "+80%",    s12: tN  != null ? `${fmtNum(tN * 4)}/mo`         : "+300%" },
     { metric: "Referring Domains", now: rN  != null ? fmtInt(rN)  : "—",                      s6: rN  != null ? String(rN + 15)                     : "+15",     s12: rN  != null ? String(rN + 40)                : "+40" },
     { metric: "Site Health Score", now: healthNow != null ? `${healthNow}/100` : "—",         s6: `${health6}/100`,  s12: `${health12}/100` },
     { metric: "GMB Completeness",  now: gmbData?.completeness?.score != null ? `${gmbData.completeness.score}/100` : "—", s6: "80/100", s12: "95/100" },
@@ -355,7 +358,49 @@ function buildDeepSignals({ gmb, crawl, kwGap, competitorAudit }) {
 
 // ─── Website-level AI analysis ────────────────────────────────────────────────
 
-async function generateWebsiteAnalysis({ domain, keywords, competitors, businessData, seoData, crawlData, gmbData, keywordGapData, negativeExclusions, deepSignals = "" }) {
+// ── Report text sanitizer (items 4 + 5) ─────────────────────────────────────
+// Deterministic cleanup applied to the Claude narrative BEFORE it ships: (a) strip any leftover
+// internal/OCR markers that must never reach a client ("Start of OCR for page 1", etc.); (b) fix
+// domain misspellings — Claude sometimes writes near-variants (itrfizz/itfizz/itsfizz) of the real
+// domain, so any domain-like token within edit-distance 2 of the canonical domain is normalised.
+function _lev(a, b) {
+  a = String(a); b = String(b);
+  const m = a.length, n = b.length; if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+}
+function sanitizeReportText(obj, canonicalDomain) {
+  const base = String(canonicalDomain || "").split(".")[0].toLowerCase();
+  const walk = (v) => {
+    if (typeof v === "string") {
+      let s = v;
+      // (5) strip OCR / internal markers.
+      s = s.replace(/\b(start|end)\s+of\s+ocr(\s+for)?(\s+page)?\s*\d*\b[:.\s-]*/gi, "").replace(/\bocr\s+(text|output|result)\b[:.\s-]*/gi, "");
+      // (4) normalise domain-like tokens that are a near-variant of the canonical domain.
+      if (base.length >= 4) {
+        s = s.replace(/\b([a-z][a-z0-9-]{1,24})(\.(?:com|co\.uk|in|net|org|io|ai))\b/gi, (m, name) => {
+          const n = name.toLowerCase();
+          if (n !== base && Math.abs(n.length - base.length) <= 2 && _lev(n, base) <= 2) return canonicalDomain;
+          return m;
+        });
+      }
+      // human-writing hygiene: no em/en dashes in client-facing copy.
+      s = deDash(s);
+      return s;
+    }
+    if (Array.isArray(v)) return v.map(walk);
+    if (v && typeof v === "object") { const o = {}; for (const k of Object.keys(v)) o[k] = walk(v[k]); return o; }
+    return v;
+  };
+  return walk(obj);
+}
+
+async function generateWebsiteAnalysis({ domain, keywords, competitors, businessData, seoData, crawlData, gmbData, keywordGapData, negativeExclusions, deepSignals = "", fixInstructions = "" }) {
   const primaryKw = (keywords || []).slice(0, 5).join(", ") || domain;
   const competitorList = (competitors || []).slice(0, 5).join(", ") || "major industry players";
   const industry = businessData?.industrySector || businessData?.industry || "business";
@@ -371,10 +416,13 @@ async function generateWebsiteAnalysis({ domain, keywords, competitors, business
 You produce ruthlessly specific, data-backed strategy for real businesses. Every item must reference the client's actual data, industry, keywords, competitors, domain metrics.
 Rules:
 - ANALYZE FIRST: before writing anything, deeply read ALL the metrics provided below (domain rating, organic traffic & keywords, mobile/desktop PSI, site-health/crawl, schema coverage, GMB rating/reviews/completeness, and the real keyword-gap data). Identify THIS site's specific weaknesses and opportunities, then make every recommendation address a concrete finding and cite the actual number/fact from the data. Never give a recommendation the data does not justify, and never output generic boilerplate.
-- AUDIENCE & STYLE: write for a NON-TECHNICAL small-business owner with ZERO SEO knowledge. Use plain, everyday English. The FIRST time you use any SEO term (schema, canonical, backlink, crawl, indexing, SoV, E-E-A-T, etc.), add a 2–4 word plain explanation in parentheses. Be CONCISE and SHORT, punchy, scannable, no filler, no repetition; the reader must NOT get bored. Make each recommendation a tiny guide: WHAT to do, WHY it matters (tie it to their actual number), and HOW (one concrete step). Encouraging and clear, never intimidating or jargon-heavy.
+- AUDIENCE & STYLE: write for a NON-TECHNICAL small-business owner with ZERO SEO knowledge. Use plain, everyday English. The FIRST time you use any SEO term (schema, canonical, backlink, crawl, indexing, SoV, E-E-A-T, etc.), add a 2 to 4 word plain explanation in parentheses. Be CONCISE and SHORT, punchy, scannable, no filler, no repetition; the reader must NOT get bored. Make each recommendation a tiny guide: WHAT to do, WHY it matters (tie it to their actual number), and HOW (one concrete step). Encouraging and clear, never intimidating or jargon-heavy.
+- WRITING QUALITY (critical): every sentence must read as if a skilled human marketer wrote it. Use correct British/American-neutral spelling, correct grammar, and clean punctuation. NEVER use em dashes or en dashes ("—" or "–"); use commas, colons, or two short sentences instead. Do not use markdown symbols, asterisks, or stray formatting inside values. No double spaces, no trailing spaces, no sentence fragments. Vary sentence length so it reads naturally, not robotic. Proofread every line before returning it.
 - Return STRICT JSON matching the exact schema below.
 - Keyword volumes: use realistic industry estimates (format: "2K–5K/mo", "800/mo"). Never use "—" for volumes.
 - Content blueprint vol/pos: realistic estimates like "1.2K/mo", "Top 5".
+- NUMBER CONSISTENCY (critical): whenever you restate the site's organic-traffic figure, write it EXACTLY as it appears in the data above (same compact form, e.g. "1.25K") — never reformat or re-round it to a different value like "1.3K". Pick the value from the data and reuse that identical string everywhere.
+- LOAD-TIME FORMAT: always express page load / LCP time in SECONDS to one decimal (e.g. "16.1s"), never in milliseconds. Use one unit consistently across the whole report.
 - Do NOT mention Claude, Anthropic, or any AI tool by name.
 - Describe the client and its competitors by their ACTUAL category from the data. NEVER invent size/type descriptors like "boutique", "small", "startup", or "niche" unless the data explicitly supports them.
 - The provided "Industry" hint can be WRONG (it is a manual dropdown). Determine the client's REAL industry from the homepage title/content provided and use THAT throughout, never describe the business as something the website clearly is not.
@@ -382,7 +430,8 @@ Rules:
 - competitorLandscape.localCompetitors AND nationalPlatforms must BOTH be REAL businesses that DIRECTLY compete with the client (same offering, comparable tier), draw them from the "Competitors listed" above. localCompetitors = local/regional rivals; nationalPlatforms = the same kind of direct competitor operating at national scale. NEVER list search aggregators, directories, marketplaces, review sites, or listing platforms (e.g. Justdial, Sulekha, Clutch, GoodFirms, Techreviewer, Yelp), those are search intermediaries, NOT business competitors, and must never appear here.
 - Every keyword, competitor, and recommendation MUST be genuinely relevant to what THIS business actually offers. If a data point looks irrelevant to the business, DROP it, do not include it just to fill the list.
 - DEEP ANALYSIS (critical): the "DEEP SIGNALS" block in the data below contains REAL findings, the customer's own review sentiment (what they praise / complain about), the exact pages with technical problems, who currently owns the Google AI Overview / featured snippet for their keywords, the referring domains linking to competitors but not them, and their technical gaps vs competitors. You MUST analyse these specific signals and weave the concrete fact into the relevant section: cite the actual praise/complaint, name the exact competitor domain or AI-Overview source, reference the specific gap keyword + its difficulty, point to the exact problem page. Never give generic advice where a specific signal exists.
-- Do NOT give generic advice. Every sentence must be specific to THIS business.${exclusionRule}`;
+- CMS / DUPLICATE-TAG CAUSE (item 11): if a "Platform / CMS detected" line appears in the data, and the site has duplicate/multiple <title> or <head> tag issues, NAME that platform as the likely cause and, where a plugin is given, name it (e.g. "Your WordPress site's duplicate title tags are typically caused by the Yoast SEO plugin outputting a title while the theme also renders one — set the theme to defer titles to the plugin"). Only name a platform/plugin that is in the data — never guess one that is not detected.
+- Do NOT give generic advice. Every sentence must be specific to THIS business.${exclusionRule}${fixInstructions ? `\n\nCRITICAL — a quality evaluator REJECTED your previous output. You MUST fix EVERY issue listed below and keep everything else correct and specific. Do not reintroduce any of these problems:\n${fixInstructions}` : ""}`;
 
   const domainCtx = seoData ? `
 DOMAIN AUTHORITY & TRAFFIC (live data):
@@ -392,14 +441,15 @@ DOMAIN AUTHORITY & TRAFFIC (live data):
   Monthly Traffic:    ${seoData.organicTraffic || "—"}
   Mobile PSI:         ${seoData.performanceMobile || "—"}
   Desktop PSI:        ${seoData.performanceDesktop || "—"}
-  Core Web Vitals, LCP: ${seoData.lcp != null ? `${seoData.lcp} ms` : "—"} | CLS: ${seoData.cls != null ? seoData.cls : "—"}` : "";
+  Core Web Vitals, LCP: ${seoData.lcp != null ? `${(Number(seoData.lcp) / 1000).toFixed(1)} s` : "—"} | CLS: ${seoData.cls != null ? seoData.cls : "—"}` : "";
 
   const crawlCtx = crawlData ? `
 
 SITE HEALTH (crawl audit):
   Health Score: ${crawlData.healthScore ?? "N/A"}/100  |  Pages: ${crawlData.pageCount || 0}  |  Avg word count: ${crawlData.summary?.avgWordCount ?? 0}
   Schema types found: ${(crawlData.summary?.pagesWithSchemaTypes || []).join(", ") || "NONE"}
-  Sitemap: ${crawlData.hasSitemap ? "Present" : "MISSING"}  |  Crawl blocked: ${crawlData.crawlBlockedByRobots ? "YES" : "No"}` : "";
+  Sitemap: ${crawlData.hasSitemap ? "Present" : "MISSING"}  |  Crawl blocked: ${crawlData.crawlBlockedByRobots ? "YES" : "No"}${businessData?.cms ? `
+  Platform / CMS detected: ${businessData.cms}${businessData.cmsPlugin ? ` · likely SEO/title plugin: ${businessData.cmsPlugin}` : ""}${businessData.cmsEvidence ? ` (evidence: ${businessData.cmsEvidence})` : ""}` : ""}` : "";
 
   const gmbCtx = gmbData ? `
 
@@ -549,7 +599,9 @@ Return ONLY this JSON (no markdown, no commentary):
 async function generatePageAnalysis({ url, domain, keyword, businessData, psiData, pageData }) {
   const targetKeyword = keyword || domain;
   const industry = businessData?.industrySector || businessData?.industry || "business";
-  const lcp = psiData?.coreWebVitals?.LCP || psiData?.coreWebVitals?.lcp;
+  const _lcpRaw = psiData?.coreWebVitals?.LCP || psiData?.coreWebVitals?.lcp;
+  // item 12 — express LCP in SECONDS to one decimal (ms values are >50), never raw milliseconds.
+  const lcp = _lcpRaw == null ? null : (Number(_lcpRaw) > 50 ? `${(Number(_lcpRaw) / 1000).toFixed(1)}s` : `${Number(_lcpRaw).toFixed(1)}s`);
   const cls = psiData?.coreWebVitals?.CLS || psiData?.coreWebVitals?.cls;
   const perfScore = psiData?.performanceScoreMobile || psiData?.performanceScore;
 
@@ -564,7 +616,9 @@ async function generatePageAnalysis({ url, domain, keyword, businessData, psiDat
 You analyze individual web pages and produce specific, actionable optimization recommendations.
 Always return STRICT JSON. Never mention Claude, Anthropic, or DataForSEO.
 Use "DoctorFizz Intelligence" as the analysis source label.
-CRITICAL: The CURRENT page values (title, meta description, H1, word count) are PROVIDED below from a live crawl. Use the PROVIDED current values EXACTLY as given, NEVER invent, guess, or fabricate them. Only generate the recommended/optimized versions yourself. If a current value is given as "—" it was genuinely empty/missing on the page, so treat it as missing (do not make one up).`;
+CRITICAL: The CURRENT page values (title, meta description, H1, word count) are PROVIDED below from a live crawl. Use the PROVIDED current values EXACTLY as given, NEVER invent, guess, or fabricate them. Only generate the recommended/optimized versions yourself. If a current value is given as "—" it was genuinely empty/missing on the page, so treat it as missing (do not make one up).
+LOAD-TIME FORMAT (item 12): always express page load / LCP time in SECONDS to one decimal (e.g. "2.5s"), never in milliseconds, using one unit consistently.
+WRITING QUALITY: write like a skilled human marketer. Correct spelling and grammar, clean punctuation. NEVER use em or en dashes ("—"/"–"); use commas, colons, or short sentences. No markdown symbols or stray formatting inside values, no double spaces. Proofread every line.`;
 
   const userPrompt = `Analyze this page and produce a complete on-page SEO optimization report.
 
@@ -703,8 +757,11 @@ async function buildCompetitorBenchmark(competitors = [], countryCode = "in") {
       out[dom] = {
         dr: moz?.domainAuthority ?? null,
         refDomains: moz?.backlinksSummary?.referring_domains ?? null,
-        traffic: rank?.organicTraffic ?? null,
-        keywords: rank?.organicKeywords ?? null,
+        // A DataForSEO "no coverage" domain returns 0, not a measured zero. Coalesce 0 -> null
+        // so the deck renders an honest "N/A" instead of a false "0 traffic / 0 keywords" for a
+        // real competitor (e.g. an agency domain not in their DB). Real non-zero values survive.
+        traffic: rank?.organicTraffic || null,
+        keywords: rank?.organicKeywords || null,
       };
     } catch { out[dom] = {}; }
   }));
@@ -723,7 +780,8 @@ VOICE
 - Owner-friendly: zero SEO jargon-dumps; explain in plain English a smart non-expert follows on the first read.
 - Specific: weave the REAL numbers from the DATA into the sentences. Never a vague claim where a number exists.
 - ONE connected spine across the deck: the leaders won by being broad at national scale, and that scale is exactly why they leave the high-intent, LOCAL, and AI-ANSWER corners undefended. The client takes that undefended ground, in order, fastest.
-- Rhetorical pivots welcome ("That sounds like a problem. It is a blank canvas."). Confident verbs: take, own, win, capture. The rhythm of each "so what": evidence → what it costs → what to do first.
+- Rhetorical pivots welcome ("That sounds like a problem. It is a blank canvas."). Confident verbs: take, own, win, capture. The rhythm of each "so what": evidence, then what it costs, then what to do first.
+- WRITING QUALITY: flawless human copywriting. Correct spelling and grammar, clean punctuation. NEVER use em dashes or en dashes ("—"/"–"); use commas, colons, or two short sentences. No markdown, no stray symbols, no double spaces. Read every line back as if it will be printed and handed to the client.
 
 STYLE EXEMPLARS (the exact register, match it; adapt to THIS business's data, never copy literally):
 - story_title_a/b: "<Name> is invisible today." / "That is the opportunity."
@@ -774,7 +832,9 @@ Return ONLY this JSON (no markdown, no commentary):
 
 async function generateDeckNarrative({ name, domain, industry, location, bm = {}, story = {}, competitors = [], opp = {}, topIssues = [], topCommercial = null, geoMeasured = false }) {
   const n = (v) => (v == null || v === "" || Number.isNaN(Number(v)) ? null : v);
-  const fmtK = (v) => (v == null ? "—" : (Math.abs(v) >= 1000 ? (v / 1000).toFixed(v % 1000 ? 1 : 0) + "K" : String(Math.round(v))));
+  // item 6 — use the SAME shared fmtNum the deck renders with, so the narrative never prints a
+  // second style ("1.2K") next to the deck's "1.25K". One formatter across the whole report.
+  const fmtK = (v) => (v == null ? "—" : fmtNum(v));
   const spine = [story.the_situation, story.whats_blocking_growth, story.the_opportunity, story.what_good_looks_like]
     .filter(Boolean).map((a) => "- " + (Array.isArray(a) ? a.join(" ") : a)).join("\n");
   const DATA = `DATA, weave ONLY these facts (in the deck voice):
@@ -840,8 +900,24 @@ export async function POST(request) {
           businessData.industrySector = profile.industry;
           if (profile.primaryOffering && !businessData.offering) businessData.offering = profile.primaryOffering;
         }
+        // item 11 — carry the detected CMS / builder + likely SEO plugin onto businessData so
+        // both the Claude narrative and the deterministic technical issues can name the probable
+        // cause of duplicate title/head tags (evidence-based, never a guess).
+        if (profile?.cms) { businessData.cms = profile.cms; businessData.cmsPlugin = profile.cmsPlugin || ""; businessData.cmsEvidence = profile.cmsEvidence || ""; }
       } catch (e) { console.warn("[generate-analysis] industry detect failed:", e?.message); }
     }
+
+    // ── Fire the technical-SEO EVALUATOR's site audit NOW (fire, await at the end) ──
+    // The teacher: an independent Playwright audit (doctorfizz-site-crawler skill) over
+    // the rendered DOM. Started here so its crawl overlaps the analysis + narrative work;
+    // it is graded against the report's technical claims just before the payload is built.
+    // Best-effort: never blocks the report; adds only a verdict field, changes no data.
+    const siteAuditPromise = (async () => {
+      try {
+        const { runSiteAudit } = await import("@/lib/seo/crawler/technicalEvaluator");
+        return await runSiteAudit({ domain, maxUrls: Number(process.env.EVAL_MAX_URLS || 8), fetchedBy: businessData?.businessName || businessData?.name || "" });
+      } catch (e) { try { console.warn("[generate-analysis] site audit failed:", e?.message); } catch {} return null; }
+    })();
 
     const keywords = Array.isArray(keywordData)
       ? keywordData.map((k) => (typeof k === "string" ? k : k?.label)).filter(Boolean)
@@ -967,6 +1043,7 @@ export async function POST(request) {
     const crawlRaw   = prefetchedSeoData?.websiteCrawl ?? null;
     const gmbRaw     = prefetchedSeoData?.gmbCheck     ?? null;
     const kwGapRaw   = prefetchedSeoData?.keywordGap   ?? null;
+    const validationRaw = prefetchedSeoData?.websiteValidation ?? null;  // Stage-1 Website Validation output
 
     // Real broken-page count from the crawl (status >= 400 / unreachable) → the "404
     // Errors" baseline metric. Only set when the crawl actually ran (else stays null).
@@ -1021,6 +1098,10 @@ export async function POST(request) {
 
     let structuredPayload = null;
     let qaResult = null;
+    // item 11 — carry the detected CMS/plugin onto the crawl object so the deterministic
+    // technical-issues builder can name the probable cause of duplicate title/head tags.
+    if (crawlRaw && businessData?.cms) { crawlRaw.cms = businessData.cms; crawlRaw.cmsPlugin = businessData.cmsPlugin || ""; }
+
     try {
       structuredPayload = runBusinessLogic({
         aiVisibility: geoViz,
@@ -1051,6 +1132,7 @@ export async function POST(request) {
         // #3, real SERP intelligence per priority keyword (top-10 + features + AI Overview).
         serpIntel:   kwGapRaw?.serpIntel || {},
         crawlData:   crawlRaw,
+        siteValidation: validationRaw,   // Stage-1 validation → SSL/redirect/reachability failures into technical issues
         clientGmb:   gmbRaw,
         competitorGmbs,
         competitorAudits: Array.isArray(prefetchedSeoData?.competitorAudit?.competitors)
@@ -1073,12 +1155,32 @@ export async function POST(request) {
     } catch (logicErr) {
       console.error("[generate-analysis] business logic failed:", logicErr?.message);
     }
+    // Stage-1 Website Validation → a compact, render-ready summary on the payload so the
+    // report SURFACES the SSL / redirect / canonical / reachability checks (not just a
+    // silent onboarding tick). Real failures already became technical issues above.
+    if (structuredPayload && validationRaw) {
+      const _c = validationRaw.checks || {};
+      structuredPayload.site_validation = {
+        eligible_for_audit: validationRaw.eligible_for_audit !== false,
+        final_url: validationRaw.finalUrl || null,
+        signals: [
+          { label: "HTTPS / SSL secure",                 ok: _c.sslVerification?.pass    !== false, detail: _c.sslVerification?.detail || "" },
+          { label: "Clean redirects (resolves in one hop)", ok: _c.redirectAnalysis?.pass  !== false, detail: _c.redirectAnalysis?.detail || (Array.isArray(_c.redirectAnalysis?.chain) && _c.redirectAnalysis.chain.length ? `${_c.redirectAnalysis.chain.length} hop(s)` : "") },
+          { label: "Canonical host set",                 ok: _c.canonicalDetection?.pass !== false, detail: _c.canonicalDetection?.canonical || _c.canonicalDetection?.detail || "" },
+          { label: "Homepage live and crawlable",        ok: _c.homepageReachable?.pass  !== false, detail: _c.homepageReachable?.detail || "" },
+        ],
+        issues: Array.isArray(validationRaw.issues) ? validationRaw.issues.slice(0, 4) : [],
+      };
+    }
+    // human-writing hygiene: strip em/en dashes from every deterministic string in the payload
+    // (technical issues, action plan, reasons, competitor blurbs) so nothing client-facing uses them.
+    if (structuredPayload) { try { structuredPayload = deDashDeep(structuredPayload); } catch { /* leave payload as-is on any failure */ } }
 
     // ── Generate AI sections (strategic/creative only) ────────────────────────
     let aiSections = {};
 
     if (reportType === "website") {
-      aiSections = await generateWebsiteAnalysis({
+      const _genArgs = {
         domain,
         keywords,
         // Competitor landscape (local + national) is built from BUSINESS competitors
@@ -1090,9 +1192,11 @@ export async function POST(request) {
         businessData,
         seoData: {
           dr:               dr             != null ? String(dr)           : "—",
-          referringDomains: referringDomains != null ? fmt(referringDomains) : "—",
-          organicKeywords:  organicKeywords  != null ? fmt(organicKeywords)  : "—",
-          organicTraffic:   organicTraffic   != null ? fmt(organicTraffic)   : "—",
+          // item 6 — use the SHARED fmtNum (same as the deck) so the traffic/keyword figures
+          // Claude sees match the rendered numbers exactly (e.g. "1.25K", never a second "1.2K").
+          referringDomains: referringDomains != null ? fmtNum(referringDomains) : "—",
+          organicKeywords:  organicKeywords  != null ? fmtNum(organicKeywords)  : "—",
+          organicTraffic:   organicTraffic   != null ? fmtNum(organicTraffic)   : "—",
           performanceMobile:  mobileScore  != null ? `${mobileScore}/100`  : "—",
           performanceDesktop: desktopScore != null ? `${desktopScore}/100` : "—",
           // Core Web Vitals (already rounded + null-safe in baselineMetrics) so Claude can cite them
@@ -1106,7 +1210,31 @@ export async function POST(request) {
         negativeExclusions: Array.isArray(negativeExclusions) ? negativeExclusions : (businessData?.negativeExclusions || []),
         // Deep signals so Claude analyses the REAL review/technical/SERP/backlink/competitor data.
         deepSignals: buildDeepSignals({ gmb: gmbRaw, crawl: crawlRaw, kwGap: kwGapRaw, competitorAudit: prefetchedSeoData?.competitorAudit }),
-      });
+      };
+      aiSections = await generateWebsiteAnalysis(_genArgs);
+
+      // ── AUTO-CORRECT LOOP (Phase 4): evaluate the generated narrative; if the QA gate REJECTS it
+      // on regeneration-fixable issues, re-analyse with Claude (feeding the exact failures as fix
+      // instructions) and re-evaluate — up to 2 passes. The evaluator itself never edits the content;
+      // Claude re-generates it. Wrapped so any loop error NEVER breaks generation (fallback = as-is).
+      try {
+        // Missing-DATA failures are NOT fixable by regeneration → they fall through to the
+        // verified:false hold, never to an endless regen loop.
+        const _dataFail = new Set(["Website Validation", "Performance (PSI)", "Domain Metrics", "Website Crawl", "Content Extraction", "On-Page Analysis", "Keyword Rankings", "Local SEO (GMB)", "Competitor Audit", "Keyword Gap"]);
+        let _nq = runQaGate(structuredPayload, JSON.stringify(aiSections)), _p = 0;
+        while (!_nq.passed && _p < 1) {   // max ONE regeneration — bounds latency (Vercel 300s) + Claude cost
+          const _fix = (_nq.failures || []).filter((f) => !_dataFail.has(f.name)).map((f) => `- ${f.name}${f.detail ? `: ${f.detail}` : ""}`);
+          if (!_fix.length) break;   // only missing-data failures remain → not regen-fixable
+          _p += 1;
+          console.log(`[generate-analysis] QA rejected (${_nq.failures.length} issue(s)) — Claude re-analysing, pass ${_p}`);
+          const _re = await generateWebsiteAnalysis({ ..._genArgs, fixInstructions: _fix.join("\n") });
+          if (_re && Object.keys(_re).length) { aiSections = _re; _nq = runQaGate(structuredPayload, JSON.stringify(aiSections)); } else break;
+        }
+        qaResult = _nq;   // narrative-aware QA → feeds reportData + the verified gate
+      } catch (acErr) { console.warn("[generate-analysis] auto-correct loop skipped:", acErr?.message); }
+
+      // (items 4 + 5) Strip OCR/internal markers + normalise domain misspellings in the narrative.
+      try { aiSections = sanitizeReportText(aiSections, domain); } catch (sErr) { console.warn("[generate-analysis] sanitize skipped:", sErr?.message); }
 
       // Override AI placeholders with real computed sections
       if (realTechnical.length > 0)  aiSections.technicalPriorities = realTechnical;
@@ -1230,6 +1358,9 @@ export async function POST(request) {
         psiData,
         pageData,
       });
+      // item 5 — page reports must be sanitized too (OCR markers / domain typos were only
+      // stripped on the website path before, so page reports could leak them to the client).
+      try { aiSections = sanitizeReportText(aiSections, domain); } catch (sErr) { console.warn("[generate-analysis] page sanitize skipped:", sErr?.message); }
     }
 
     // ── Per-competitor benchmark → merge real DR/traffic/keywords/refdomains into the
@@ -1273,10 +1404,44 @@ export async function POST(request) {
           opp: { totalVol: oppS.total_monthly_search_volume, commCount: oppS.commercial_keyword_count, up6: oppS.estimated_traffic_uplift_6m, up12: oppS.estimated_traffic_uplift_12m },
           topIssues: Array.isArray(aiSections.technicalPriorities) ? aiSections.technicalPriorities : [],
           topCommercial: cp ? { kw: cp.keyword_cluster || cp.page_name, vol: cp.primary_volume, kd: cp.difficulty } : null,
-          geoMeasured: false,
+          // Was hardcoded false, so the narrative ALWAYS said "the AI scan is pending" even when
+          // the scan had completed (30 prompts x 5 engines). Derive it from the real GEO state:
+          // measured when the geo-visibility scan produced answers (mirrors runBusinessLogic's gate).
+          geoMeasured: !!(geoViz && (geoViz.measured === true || (Array.isArray(geoViz.responses) && geoViz.responses.length > 0))),
         });
         if (deckStory && Object.keys(deckStory).length) console.log(`[generate-analysis] deck narrative: ${Object.keys(deckStory).length} storytelling slots generated`);
+        // item 5 — the deck narrative renders on 15+ slides, so it MUST be sanitized too:
+        // strip OCR markers ("Start of OCR for page 1") and normalize domain-typo tokens,
+        // exactly like aiSections. Without this, internal text can leak through the story.
+        if (deckStory) { try { deckStory = sanitizeReportText(deckStory, domain); } catch (sErr) { console.warn("[generate-analysis] deckStory sanitize skipped:", sErr?.message); } }
       } catch (e) { console.error("[generate-analysis] deck narrative failed:", e?.message); }
+    }
+
+    // ── Grade the report against the live audit (teacher's verdict) ─────────────
+    // Await the site audit started earlier, grade the report's technical claims against
+    // it, and attach the verdict as doctorFizz.technical_evaluation. This does NOT alter
+    // any report data or slide; it only adds an independent verification result.
+    if (structuredPayload) {
+      try {
+        // The audit is triple-bounded (connect timeout + per-crawl deadline + an overall hard
+        // cap in runSiteAudit) so it ALWAYS resolves within ~150s, and it is fired early and
+        // runs in parallel with the analysis. So we WAIT for it here (accuracy over speed: the
+        // verdict is always included, never skipped for time). Because the audit is bounded,
+        // the report's total time is max(analysis_time, audit_time), always well under the 300s
+        // limit. The cap is only a backstop against a truly stuck state that cannot occur now.
+        const audit = await Promise.race([
+          siteAuditPromise,
+          new Promise((r) => setTimeout(() => r(null), Number(process.env.EVAL_AWAIT_CAP_MS || 160000))),
+        ]);
+        if (audit) {
+          const { gradeReport } = await import("@/lib/seo/crawler/technicalEvaluator");
+          const verdict = gradeReport(audit, structuredPayload.technical_issues || []);
+          if (verdict) {
+            structuredPayload.technical_evaluation = verdict;
+            try { console.log(`[generate-analysis] technical evaluator: ${verdict.grade} | ${verdict.confirmed.length} confirmed, ${verdict.unconfirmed.length} unconfirmed, ${verdict.additional.length} additional (${audit.html_pages} pages).`); } catch {}
+          }
+        }
+      } catch (e) { try { console.warn("[generate-analysis] technical evaluation skipped:", e?.message); } catch {} }
     }
 
     // ── Assemble final report data ────────────────────────────────────────────
@@ -1331,23 +1496,45 @@ export async function POST(request) {
       };
     } catch (mErr) { console.warn("[metrics] non-fatal:", mErr?.message); }
 
-    // Append the report to the 30-day cache (no-op without Mongo). Repeat reports
-    // for the same site + inputs will return this instantly, no fetches, no Claude.
-    try { await putCached({ domain, dataType: reportDataType, payload: reportData, source: "report", forClientDomain: domain }); } catch {}
-
-    // ── Persist to /tmp/reports/{id}.json ────────────────────────────────────
+    // Append the report to the 30-day cache AND VERIFY the write landed before we call the report
+    // "verified". putCached returns true on a real write; a readback whose generatedAt matches the
+    // just-written unique timestamp proves the corrected report is really persisted for the 30-day
+    // window (cross-user cache correctness). Repeat reports return this instantly (no fetch, no Claude).
     const id = randomUUID();
-    const reportsDir = join("/tmp", "reports");
+    let _persisted = false;
+    try {
+      _persisted = (await putCached({ domain, dataType: reportDataType, payload: reportData, source: "report", forClientDomain: domain })) === true;
+      if (_persisted) {
+        const _rb = await getCached({ domain, dataType: reportDataType, ttlDays: 30 });
+        _persisted = !!(_rb && _rb.metrics?.generatedAt === reportData.metrics?.generatedAt);
+      }
+      // ALSO store the report BY ITS UUID id so /report/{id} is DURABLE — survives a refresh, a new
+      // browser tab, or a shared link (not just the per-tab sessionStorage). The report page falls
+      // back to fetching this when sessionStorage misses. Keyed by the id (30-day window).
+      await putCached({ domain: id, dataType: "report-by-id", payload: { id, reportType, data: reportData }, source: "report-by-id", forClientDomain: domain });
+    } catch { _persisted = false; }
 
+    // ── Persist to /tmp/reports/{id}.json (best-effort; NOT the read path) ────
+    const reportsDir = join("/tmp", "reports");
     try {
       await mkdir(reportsDir, { recursive: true });
       await writeFile(join(reportsDir, `${id}.json`), JSON.stringify({ id, reportType, data: reportData }), "utf8");
     } catch (writeErr) {
       console.error("[generate-analysis] Failed to write report file:", writeErr?.message);
-      // Still return the data even if file write fails
     }
 
-    return NextResponse.json({ id, reportType, data: reportData });
+    // VERIFIED gate: the report is release-ready only when the QA gate passed AND the DB write is
+    // confirmed. A deliberately Mongo-less deploy verifies on QA-pass alone (else it could never
+    // redirect). The CORRECTED report data is in this response body, so the client's sessionStorage
+    // copy is the verified one; the client gates its redirect on `verified`.
+    const _qaPass = qaResult ? qaResult.passed !== false : true;
+    const _verified = _qaPass && (_persisted || !cacheConfigured());
+    console.log(`[generate-analysis] verified=${_verified} (qaPass=${_qaPass}, persisted=${_persisted}, mongo=${cacheConfigured()})`);
+    return NextResponse.json({
+      id, reportType, data: reportData,
+      verified: _verified, persisted: _persisted,
+      qa: qaResult ? { pass: qaResult.pass !== false, score: qaResult.score, failures: (qaResult.failures || []).map((f) => f.name || f).slice(0, 12) } : null,
+    });
   } catch (err) {
     console.error("[generate-analysis] Error:", err);
     return NextResponse.json({ error: "Failed to generate report", details: err?.message }, { status: 500 });

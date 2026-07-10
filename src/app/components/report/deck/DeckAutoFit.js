@@ -17,15 +17,39 @@ import { useEffect } from "react";
 
 export default function DeckAutoFit() {
   useEffect(() => {
+    const READABLE = 0.82;   // below this, scaling makes text too small — grow the slide instead
     const fitOne = (content) => {
       const inner = content.querySelector(":scope > .content-fit") || content.querySelector(".content-fit");
       if (!inner) return;
+      const slide = content.closest(".slide");
       inner.style.transform = "";
-      const avail = content.clientHeight;   // room between head and foot
-      const needed = inner.scrollHeight;     // natural height of the content's children
-      if (avail > 0 && needed > avail + 2) {
-        inner.style.transform = `scale(${Math.max(0.5, avail / needed)})`;
-        inner.style.transformOrigin = "top center";
+      inner.style.width = "";
+      // "avail" = the fixed-720 content area (720 - vertical padding 108 - head - foot - 8). We derive
+      // it from head/foot heights (which do NOT change when a slide is grown) instead of
+      // content.clientHeight, so the grow/scale decision can't oscillate into an infinite loop.
+      const head = slide && slide.querySelector(":scope > .head");
+      const foot = slide && slide.querySelector(":scope > .foot");
+      const avail = 720 - 108 - (head ? head.offsetHeight : 0) - (foot ? foot.offsetHeight : 0) - 8;
+      const needed = inner.scrollHeight;     // natural height of the content at full width
+      if (!slide || avail <= 0 || needed <= avail + 2) {
+        if (slide) { slide.style.height = ""; slide.style.overflow = ""; }
+        return;   // fits the fixed 16:9 slide — leave it alone
+      }
+      const s = avail / needed;
+      if (s >= READABLE) {
+        // Mildly tall -> keep the fixed 16:9 slide. WIDEN by 1/s so the content spans the FULL width
+        // after scaling (no more shrinking into a half-width corner). Widening only reflows text
+        // SHORTER, so scaling by s (computed for the taller layout) can never overflow the foot.
+        slide.style.height = ""; slide.style.overflow = "";
+        inner.style.width = `${(100 / s).toFixed(1)}%`;
+        inner.style.transform = `scale(${s})`;
+        inner.style.transformOrigin = "top left";
+      } else {
+        // WAY too tall to stay readable at 720px (e.g. a 14-row action board) -> GROW the slide so
+        // every row renders full-size instead of cramming it tiny and overlapping the footer.
+        // Adjustable height per the design ask; the foot flows to the new bottom, no overlap.
+        slide.style.height = "auto";
+        slide.style.overflow = "visible";
       }
     };
     const fitAll = () => document.querySelectorAll(".df-deck .content").forEach(fitOne);

@@ -275,6 +275,38 @@ function extractSignalsFromHtml(html, origin) {
 
   const { ogTitle, ogDescription } = extractOpenGraph(html);
 
+  // item 11 — identify the CMS / page-builder from real homepage evidence (never a guess):
+  // the <meta name="generator"> tag first, then unambiguous asset-path / markup fingerprints.
+  // Surfaced so the technical section can name the LIKELY cause of duplicate title/head tags
+  // (e.g. a WordPress SEO plugin fighting the theme's own <title> output) instead of guessing.
+  const cmsInfo = (() => {
+    const gen = firstMatch(html, /<meta[^>]+name=["']generator["'][^>]*content=["']([\s\S]*?)["'][^>]*>/i)
+             || firstMatch(html, /<meta[^>]+content=["']([\s\S]*?)["'][^>]*name=["']generator["'][^>]*>/i);
+    const g = String(gen || "").trim();
+    const has = (re) => re.test(html);
+    let cms = "", evidence = "";
+    if (/wordpress/i.test(g) || has(/\/wp-content\//i) || has(/\/wp-includes\//i) || has(/\/wp-json/i)) { cms = "WordPress"; evidence = g || "wp-content / wp-json asset paths"; }
+    else if (/shopify/i.test(g) || has(/cdn\.shopify\.com/i) || has(/Shopify\.theme/)) { cms = "Shopify"; evidence = g || "cdn.shopify.com assets"; }
+    else if (/wix/i.test(g) || has(/static\.wixstatic\.com/i) || has(/wix\.com/i)) { cms = "Wix"; evidence = g || "wixstatic.com assets"; }
+    else if (/squarespace/i.test(g) || has(/static1\.squarespace\.com/i) || has(/squarespace\.com/i)) { cms = "Squarespace"; evidence = g || "squarespace.com assets"; }
+    else if (/webflow/i.test(g) || has(/assets\.website-files\.com/i) || has(/\.webflow\.io/i)) { cms = "Webflow"; evidence = g || "website-files.com assets"; }
+    else if (has(/\/_next\//) || has(/__NEXT_DATA__/)) { cms = "Next.js"; evidence = "/_next/ build assets"; }
+    else if (has(/\/_nuxt\//)) { cms = "Nuxt"; evidence = "/_nuxt/ build assets"; }
+    else if (/drupal/i.test(g) || has(/\/sites\/(default|all)\/(files|modules|themes)\//i)) { cms = "Drupal"; evidence = g || "Drupal /sites/ paths"; }
+    else if (/joomla/i.test(g) || has(/\/media\/jui\//i) || has(/com_content/i)) { cms = "Joomla"; evidence = g || "Joomla component paths"; }
+    else if (g) { cms = g.split(/\s+\d/)[0].trim(); evidence = g; }   // trust the generator tag if present
+    // WordPress SEO/title plugin fingerprints — the usual root cause of duplicate <title> tags.
+    let plugin = "";
+    if (cms === "WordPress") {
+      if (has(/yoast|wpseo/i)) plugin = "Yoast SEO";
+      else if (has(/rank[-_ ]?math/i)) plugin = "Rank Math";
+      else if (has(/all[-_ ]?in[-_ ]?one[-_ ]?seo|aioseo/i)) plugin = "All in One SEO";
+      else if (has(/seopress/i)) plugin = "SEOPress";
+      else if (has(/elementor/i)) plugin = "Elementor (page builder)";
+    }
+    return cms ? { cms, cmsEvidence: evidence.slice(0, 120), cmsPlugin: plugin } : null;
+  })();
+
   const h1s = allMatches(html, /<h1[^>]*>([\s\S]*?)<\/h1>/gi, 12).map(stripTags);
   const h2s = allMatches(html, /<h2[^>]*>([\s\S]*?)<\/h2>/gi, 30).map(stripTags);
   const h3s = allMatches(html, /<h3[^>]*>([\s\S]*?)<\/h3>/gi, 35).map(stripTags);
@@ -329,6 +361,9 @@ function extractSignalsFromHtml(html, origin) {
     slugPhrases,
     bodyTextSample: extractBodyTextSample(html, 3000),
     jsonLdEntities: extractJsonLdEntities(html),
+    cms: cmsInfo?.cms || "",              // item 11 — detected CMS / builder (evidence-based)
+    cmsEvidence: cmsInfo?.cmsEvidence || "",
+    cmsPlugin: cmsInfo?.cmsPlugin || "",  // likely SEO/title plugin (duplicate-tag root cause)
   };
 }
 
@@ -700,6 +735,12 @@ async function computeSiteProfile(domain) {
       ogDescription: homeSignals.ogDescription,
       h1s: homeSignals.h1s,
     },
+
+    // item 11 — detected CMS / page-builder + likely SEO plugin (evidence-based, from the
+    // homepage HTML) so the report can name the probable cause of duplicate title/head tags.
+    cms: homeSignals.cms || "",
+    cmsEvidence: homeSignals.cmsEvidence || "",
+    cmsPlugin: homeSignals.cmsPlugin || "",
 
     // ✅ richer outputs to drive your “generate keywords from content” step
     seeds,

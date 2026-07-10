@@ -465,6 +465,21 @@ export async function checkGmb(domain, businessName = "", location = "India", op
     const viaMaps = await fetchGmbViaMaps(keyword, location, auth, listingErrs).catch(() => null);
     if (viaMaps?.found) info = viaMaps;
   }
+  // bug #8 — DOMAIN-CONSISTENCY GUARD. A free-text business name ("Paras") can match a random,
+  // unrelated GMB listing (wrong city, rating null), which then gets cached for 30 days and poisons
+  // the report (N/A rating, 0 reviews, wrong completeness). If the match's website is NOT on the
+  // client's own domain AND it has no rating, it is almost certainly the wrong business — re-run the
+  // lookup using the DOMAIN STEM (e.g. "itzfizz"), which finds the real listing. Kept LENIENT: only
+  // overrides when the stem lookup is clearly better (website on the domain, or has a rating), so a
+  // real client listing that genuinely has no reviews yet is never replaced.
+  const _stem = host.split(".")[0].toLowerCase();
+  const _mHost = (x) => String(x?.website || "").toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+  const _wrongMatch = info?.found && (info.rating == null || info.rating === 0) && !_mHost(info).includes(_stem);
+  if (_stem.length >= 3 && String(keyword || "").toLowerCase() !== _stem && _wrongMatch) {
+    let byStem = await fetchGmbInfo(_stem, location, auth, listingErrs).catch(() => null);
+    if (!byStem?.found) { const vm = await fetchGmbViaMaps(_stem, location, auth, listingErrs).catch(() => null); if (vm?.found) byStem = vm; }
+    if (byStem?.found && (_mHost(byStem).includes(_stem) || byStem.rating != null)) { info = byStem; keyword = _stem; }
+  }
   // Listing lookup errored AND nothing was found → degraded fetch, must not be cached.
   const _listingDegraded = !info?.found && listingErrs.length > 0;
   const matchedKeyword = info?.keywordUsed || info?.name || keyword;

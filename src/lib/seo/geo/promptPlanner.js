@@ -34,6 +34,7 @@ import {
   CLUSTER_DEFAULT_INTENT, CLUSTER_EXPECTED_ANSWER, CLUSTER_WEIGHT, ANSWER_STRUCTURES,
   RUN_MODE_PROMPT_RANGE, RUN_MODE_PRESETS, normalizeRunMode,
 } from "./model/constants.js";
+import { semanticSig } from "./semanticSig.js";
 
 // ── small text helpers ───────────────────────────────────────────────────────
 const clean = (s) => String(s || "").trim().replace(/\s+/g, " ");
@@ -581,15 +582,13 @@ async function generateWithClaude(quotas, ctx, domain) {
   return all;
 }
 
-// ── dedup (§10) — normalized token signature collapses near-duplicates ────────
-const SIG_STOP = new Set([
-  "a", "an", "the", "in", "for", "of", "to", "and", "or", "is", "are", "my", "me", "near",
-  "best", "top", "leading", "most", "popular", "trusted", "recommended", "rated", "good", "great",
-  "2024", "2025", "2026", "2027", "how", "what", "who", "which", "do", "does",
-]);
+// ── dedup (§10) — canonical semantic signature collapses meaning-duplicates ───
+// Delegates to the shared signature (see ./semanticSig.js) so the template
+// fallback drops the same "best X in India" == "top X companies in India" pairs
+// the architect does. It also folds companies/competitors/brands/providers/etc,
+// which the old token-strip signature missed and which leaked the flagged dups.
 export function dedupeSignature(prompt) {
-  const toks = lc(prompt).replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((t) => t && !SIG_STOP.has(t) && !/^\d{4}$/.test(t));
-  return uniq(toks).sort().join(" ");
+  return semanticSig(prompt);
 }
 function dedupe(records) {
   const seen = new Set();
@@ -687,13 +686,62 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
   const target = Math.max(1, Math.min(250, Math.round(targetCount || band[1])));
   const minBand = band[0];
 
+  // ── PRIMARY GENERATOR — the seo-geo-prompt-set-architect Agent Skill ─────────────
+  //    Run the skill EXACTLY (full bundle pinned in the system prompt, executed via
+  //    Claude) on everything DoctorFizz collected. It returns the NON-BRANDED, humanized,
+  //    buyer-grade three-campaign set (Citation Commercial, Mentions, Citation Information)
+  //    at the reference quality. This is the prompt logic the client asked for; the
+  //    deterministic template pipeline below stays as the safe fallback.
+  if (useClaude && String(process.env.ANTHROPIC_API_KEY || "").trim()) {
+    try {
+      const { generatePromptSet } = await import("./promptSetArchitect.js");
+      const arch = await generatePromptSet(source, { size: target, domain: source.domain || "" });
+      if (arch && Array.isArray(arch.prompts) && arch.prompts.length >= Math.min(minBand, 12)) {
+        const locCtx = source.locationContext || { mode: source.locationMode || "country", country: source.location || "", country_name: source.location || "", label: source.location || "" };
+        const _loc = { mode: locCtx.mode || "country", label: locCtx.label || locCtx.country_name || locCtx.country || "", city: locCtx.city || "", state: locCtx.state || "", country: locCtx.country || "" };
+        const prompts = arch.prompts.slice(0, target).map((r, i) => ({
+          prompt: r.prompt,
+          cluster: r.cluster,
+          campaign: r.campaign,
+          topic: r.topic || "",
+          weight: r.weight || "M",
+          intent: r.intent,
+          neutral: true,
+          source_keyword: "",
+          expected_answer_type: r.expected_answer_type,
+          quality_score: r.quality_score,
+          priority_score: r.priority_score,
+          priority: i + 1,
+          dedup_key: r.dedup_key,
+          location_context: _loc,
+        }));
+        const distribution = { by_cluster: {}, by_intent: {}, by_campaign: {} };
+        for (const p of prompts) {
+          distribution.by_cluster[p.cluster] = (distribution.by_cluster[p.cluster] || 0) + 1;
+          distribution.by_intent[p.intent] = (distribution.by_intent[p.intent] || 0) + 1;
+          distribution.by_campaign[p.campaign] = (distribution.by_campaign[p.campaign] || 0) + 1;
+        }
+        return { prompts, distribution, target, runMode: mode, planMode, usedClaude: true, analysisUsed: true, architect: true, modelled: !!arch.modelled };
+      }
+    } catch (e) {
+      try { console.warn("[planGeoPrompts] prompt-set-architect unavailable, using deterministic pipeline:", e?.message); } catch {}
+    }
+  }
+
   // ── build the grounding context from the FULL dataset (Steps 1-5 + 5B) ──
   const keywordObjs = keywordObjects(source.keywords);
   const keywordThemes = uniq(keywordStrings(source.keywords)).slice(0, 60);
   const competitorThemes = uniq(keywordStrings(source.competitorKeywords)).slice(0, 30);
   const comps = uniq(competitorNames(source.competitors || source.businessCompetitors));
-  const industry = lc(source.industry || source.category || indFromKeywords(keywordThemes) || "service providers");
-  const subject = lc(source.category || source.industry || indFromKeywords(keywordThemes) || "services");
+  // bug #4 — the SUBJECT/INDUSTRY must be ONE clean business phrase, never the raw multi-value
+  // string ("search engine optimization (seo), ui/ux design, social media marketing, …") which was
+  // getting stuffed into every {x} template AND the Claude payload, producing garbage prompts like
+  // "best search engine optimization (seo), ui/ux design,… in India". Take the FIRST clean phrase
+  // and prefer the business TYPE ("digital marketing agency") over one service, so a prompt reads
+  // like a real buyer query ("best digital marketing agency in India").
+  const _first = (s) => String(s || "").split(/\s*[,/;|·•]\s*|\s+&\s+|\s+and\s+|\(/)[0].trim().replace(/\s+/g, " ");
+  const industry = lc(_first(source.industry) || _first(source.category) || indFromKeywords(keywordThemes) || "service providers");
+  const subject = lc(_first(source.industry) || _first(source.category) || indFromKeywords(keywordThemes) || "services");
   const locationCtx = source.locationContext || { mode: source.locationMode || "country", country: source.location || "", country_name: source.location || "", label: source.location || "" };
   const locations = buildLocations(locationCtx, source.locations, keywordThemes);
   const serp = source.serp || {};
@@ -825,7 +873,12 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
   for (const it of GEO_INTENTS) distribution.by_intent[it] = 0;
   for (const p of prompts) { distribution.by_cluster[p.cluster] = (distribution.by_cluster[p.cluster] || 0) + 1; distribution.by_intent[p.intent] = (distribution.by_intent[p.intent] || 0) + 1; }
 
-  return { prompts, distribution, target, runMode: mode, planMode, usedClaude, analysisUsed };
+  // architect:false marks the deterministic template fallback (the ~11% path) so callers
+  // can log/flag it and prefer a regenerate rather than treating it as reference quality.
+  if (useClaude && String(process.env.ANTHROPIC_API_KEY || "").trim()) {
+    try { console.warn("[planGeoPrompts] architect unavailable after retry — shipped TEMPLATE fallback (lower quality); a regenerate is advised"); } catch { /* ignore */ }
+  }
+  return { prompts, distribution, target, runMode: mode, planMode, usedClaude, analysisUsed, architect: false };
 }
 
 export default planGeoPrompts;

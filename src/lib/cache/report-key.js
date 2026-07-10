@@ -5,8 +5,13 @@
 // the report: report type + business name + competitor set + mode + keyword + country.
 // negativeExclusions is part of the key: adding an exclusion must bust the cache, else a
 // post-exclusion regenerate is a false HIT that returns the stale, unfiltered report.
+import { CRAWL_ENGINE_VERSION } from "../crawl/engineVersion.js";
+
 export function reportCacheType({ reportType = "website", businessData, competitorData, reportMode, keyword, countryCode, negativeExclusions } = {}) {
   const sig = JSON.stringify({
+    // Fold in the crawl engine version so upgrading the crawler (new accuracy fixes, the
+    // rendered pass) busts the 30-day report cache instead of serving pre-upgrade data.
+    ce: CRAWL_ENGINE_VERSION,
     bn: businessData?.businessName || businessData?.name || "",
     // competitorData is normally the object { businessCompetitors, searchCompetitors }
     // (NOT an array) — flatten BOTH into the key, else the competitor set is dropped and

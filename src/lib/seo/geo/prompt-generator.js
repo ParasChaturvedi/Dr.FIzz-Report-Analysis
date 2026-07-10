@@ -244,7 +244,13 @@ function _canonCluster(raw) {
 // few per cluster — and is fully tagged so the return shape is identical to the
 // Claude path.
 function buildFallbackPrompts({ ind, loc, cat, keywordTerms, competitorNames }) {
-  const subject = cat || ind; // product/service phrasing where we have a category
+  // item 1 — the SUBJECT must be ONE clean phrase, never the raw multi-value category string
+  // ("search engine optimization (seo), social media marketing, web design, …"), which stuffed
+  // broken, repetitive noun phrases into every template. Prefer the INDUSTRY ("digital marketing
+  // agency") as the reviewer suggested; fall back to the FIRST clean category segment; lowercase
+  // it so it reads naturally mid-sentence ("best digital marketing agency in mumbai").
+  const _clean1 = (s) => String(s || "").split(/\s*[,/;|·]\s*|\s+&\s+|\s+and\s+|\(/)[0].trim().replace(/\s+/g, " ");
+  const subject = (_clean1(ind) || _clean1(cat) || "the service").toLowerCase();
   const kw = keywordTerms.slice(0, 12);
   const topKw = kw.slice(0, 6);
   const comps = competitorNames.slice(0, 4);
@@ -632,7 +638,12 @@ export async function generateGeoPrompts({
   const competitorNames = _competitorNames(competitors);
 
   const ind = lc(industry || category || _indFromKeywords(keywords) || "service providers");
-  const cat = lc(category || "");
+  // item 1 — anchor every prompt to ONE clean canonical business category (e.g. "digital
+  // marketing agency", "accounting outsourcing") instead of a messy multi-value string, which
+  // was making the prompts drift onto a single repetitive topic. Take the FIRST clear phrase;
+  // multi-word categories with no separator (the common case) pass through untouched.
+  const _firstCat = String(category || "").split(/\s*[,/|;•]\s*|\s+&\s+|\s+and\s+/i).map((s) => s.trim()).filter(Boolean)[0] || "";
+  const cat = lc(_firstCat);
   const loc = clean(location || "India");
 
   const fallbackArgs = { ind, loc, cat, keywordTerms, competitorNames };

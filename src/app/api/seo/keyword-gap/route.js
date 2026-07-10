@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { getCached, putCached } from "@/lib/cache/mongo";
 import { logUsage } from "@/lib/cache/usage";
 import { locationNameForCountry } from "@/lib/seo/market";
+import { extractGeography } from "@/lib/seo/doctor-fizz-logic";
 
 export const runtime    = "nodejs";
 export const maxDuration = 60;
@@ -76,6 +77,11 @@ async function getKeywordsForDomain(domain, auth, limit = 100, location = "India
 // ── Infer keyword intent from text ────────────────────────────────────────────
 function inferIntent(kw) {
   const k = String(kw).toLowerCase();
+  // Place-based LOCAL wins over the commercial signal: "<service> in <locality>" or "near me"
+  // is LOCAL even though it contains "agency"/"services" (e.g. "digital marketing agency in
+  // malad"). Country-scope ("... in india") is national commercial, so it is excluded here.
+  const _geo = extractGeography(k);
+  if ((/\bnear\s+me\b/.test(k) || _geo.place) && _geo.scope !== "country") return "local";
   // Service/commercial intent is tested FIRST. A money keyword like "seo agency" or
   // "web design services" must map to a Service/Landing page — never a blog. (These
   // previously fell through to the informational default and were mis-typed "Blog/Guide".)

@@ -7,7 +7,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 // §15 — supported engines (stable keys used everywhere) + their UI labels.
-export const GEO_ENGINES = ["chatgpt", "aioverviews", "gemini", "claude", "copilot", "perplexity"];
+// ChatGPT is scanned LOGGED-OUT via the Browserless stealth + CAPTCHA-solving path (clears its
+// Cloudflare "Just a moment" wall). Copilot stays out — it is still hard-blocked / needs a session.
+export const GEO_ENGINES = ["aioverviews", "claude", "gemini", "perplexity", "chatgpt"];
 export const GEO_ENGINE_LABELS = {
   chatgpt: "ChatGPT",
   aioverviews: "Google AI Overview",
@@ -16,9 +18,10 @@ export const GEO_ENGINE_LABELS = {
   copilot: "Copilot",
   perplexity: "Perplexity",
 };
-// Which engines need a logged-in browser session vs run without login.
-export const NO_LOGIN_ENGINES = ["aioverviews", "perplexity", "claude"];
-export const LOGIN_ENGINES = ["chatgpt", "gemini", "copilot"];
+// Which engines need a logged-in browser session vs run without login. ChatGPT now runs
+// LOGGED-OUT (no session) via the stealth path, so it moves to the no-login set.
+export const NO_LOGIN_ENGINES = ["aioverviews", "perplexity", "claude", "chatgpt"];
+export const LOGIN_ENGINES = ["gemini", "copilot"];
 
 // §17 — prompt clusters (semantic) + intents.
 export const GEO_CLUSTERS = [
@@ -161,7 +164,7 @@ export const RUN_MODE_PRESETS = {
   // that return real data reliably with zero maintenance — Google AI Overviews (search, no
   // login) + Claude (Anthropic API). The report shows these as measured and the rest as not
   // yet scanned. Re-add engines here once a residential-proxy/session path is in place.
-  fast:       { label: "Fast (pre-report)", prompt_limit: 30, concurrency_limit: 8, default_engines: ["aioverviews", "claude"], validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: false, cost_level: "medium", screenshot_mode: "off" },
+  fast:       { label: "Fast (pre-report)", prompt_limit: 30, concurrency_limit: 5, default_engines: ["aioverviews", "claude", "gemini", "perplexity", "chatgpt"], validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: true, cost_level: "medium", screenshot_mode: "off" },
   dev_smoke:  { label: "Dev / Smoke Test", prompt_limit: 25,  default_engines: ["aioverviews", "perplexity"], validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: false, cost_level: "low",    screenshot_mode: "on_error" },
   standard:   { label: "Standard GEO",     prompt_limit: 80,  default_engines: GEO_ENGINES,                    validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: false, cost_level: "medium", screenshot_mode: "on_error" },
   full:       { label: "Full GEO",         prompt_limit: 250, default_engines: GEO_ENGINES,                    validation_enabled: true,  validation_sample_percent: 15, residential_proxy_default: false, cost_level: "full",   screenshot_mode: "on_error" },

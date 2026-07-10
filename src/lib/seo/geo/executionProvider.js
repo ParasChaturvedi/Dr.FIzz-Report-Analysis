@@ -62,11 +62,19 @@ function disabled(reason) {
 export function applyExecutionEnv(plan, run = {}) {
   const prev = {};
   const set = (k, v) => { prev[k] = process.env[k]; if (v == null) delete process.env[k]; else process.env[k] = String(v); };
-  // residential proxy ONLY when the plan enabled it (cost guard)
-  set("BROWSERLESS_USE_RESIDENTIAL", plan.residentialProxy ? "1" : "0");
-  if (plan.proxyCountry) set("BROWSERLESS_PROXY_COUNTRY", plan.proxyCountry);
-  // concurrency limit from the run config (#7)
-  if (run.concurrency_limit) set("GEO_CONCURRENCY", Math.max(1, Math.min(12, Number(run.concurrency_limit) || 4)));
+  // The LOCAL pass (aioverviews/claude) uses NONE of the Browserless env, so it must NOT touch it —
+  // otherwise, when the local and Browserless passes run CONCURRENTLY (hybrid, for speed), the local
+  // pass would clobber the Browserless pass's residential=1 mid-scan. Only the Browserless pass owns
+  // the Browserless env. Shared timeouts/screenshot below carry identical values, so they never clash.
+  const isLocal = plan.transport === "local";
+  if (!isLocal) {
+    // residential proxy ONLY when the plan enabled it (cost guard)
+    set("BROWSERLESS_USE_RESIDENTIAL", plan.residentialProxy ? "1" : "0");
+    if (plan.proxyCountry) set("BROWSERLESS_PROXY_COUNTRY", plan.proxyCountry);
+    // concurrency limit from the run config (#7)
+    if (run.concurrency_limit) set("GEO_CONCURRENCY", Math.max(1, Math.min(12, Number(run.concurrency_limit) || 4)));
+    set("BROWSERLESS_TIMEOUT_MS", String(process.env.GEO_WORKER_QUERY_TIMEOUT_MS || 120000));    // 120s per query (slow answers render fully)
+  }
   // RETRIES — at least 3 attempts so transient Cloudflare/Browserless blips don't drop a
   // prompt (complete collection). max_retries can raise it further.
   set("GEO_QUERY_ATTEMPTS", Math.max(3, (Number(run.max_retries) || 0) + 1));
@@ -78,7 +86,7 @@ export function applyExecutionEnv(plan, run = {}) {
   // last-resort against a fully hung process. All overridable via GEO_WORKER_* env.
   set("GEO_SCAN_DEADLINE_MS", String(process.env.GEO_WORKER_SCAN_DEADLINE_MS || 21600000));   // 6h — don't stop taking tasks
   set("GEO_SCAN_HARD_MS", String(process.env.GEO_WORKER_SCAN_HARD_MS || 21900000));            // 6h05 — last-resort only
-  set("BROWSERLESS_TIMEOUT_MS", String(process.env.GEO_WORKER_QUERY_TIMEOUT_MS || 120000));    // 120s per query (slow answers render fully)
+  // (BROWSERLESS_TIMEOUT_MS is set above only for the Browserless pass — never from the local pass.)
   // screenshots only on error/debug (never "always" from a normal run)
   set("GEO_SCREENSHOT", run.screenshot_mode === "always" ? "1" : "0");
   return () => { for (const [k, v] of Object.entries(prev)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; } };

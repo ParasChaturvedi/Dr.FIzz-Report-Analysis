@@ -362,6 +362,7 @@ export function buildAiReadiness(crawlData = {}, gmbData = {}) {
   const napConsistent = napOnGmb && (hasLocalBiz || pages.some((p) => /\/contact/i.test(p.url || "")));
   const avgWords = Number(summary.avgWordCount || 0);
   const hasAuthor = pages.some((p) => p.eeat && (p.eeat.author || p.eeat.byline || p.eeat.hasAuthor));
+  const hasLlmsTxt = !!crawlData?.hasLlmsTxt;
 
   const signals = [
     { key: "structured_data", label: "Structured data (schema)", ok: hasOrg || hasLocalBiz, weight: 22,
@@ -378,8 +379,13 @@ export function buildAiReadiness(crawlData = {}, gmbData = {}) {
       detail: avgWords >= 600 ? `Avg ${Math.round(avgWords)} words/page — enough depth to be citation-worthy.` : `Avg ${Math.round(avgWords)} words/page — thin content is rarely cited by AI engines.` },
     { key: "author", label: "Author / E-E-A-T", ok: hasAuthor, weight: 8,
       detail: hasAuthor ? "Author/byline signals present." : "No author/byline signals — add named authors for E-E-A-T." },
+    { key: "llms_txt", label: "llms.txt (AI crawl guide)", ok: hasLlmsTxt, weight: 5,
+      detail: hasLlmsTxt ? "Publishes /llms.txt — a curated guide telling AI answer engines what the site is and which pages to read." : "No /llms.txt at the site root — add one so AI answer engines get a clean, curated map of your key pages (the emerging GEO standard)." },
   ];
-  const score = Math.round(signals.reduce((a, s) => a + (s.ok ? s.weight : 0), 0));
+  // Normalise to 0-100 against the actual weight sum, so signals can be added
+  // without the band thresholds (75/45) drifting.
+  const _totalW = signals.reduce((a, s) => a + s.weight, 0) || 1;
+  const score = Math.round((100 * signals.reduce((a, s) => a + (s.ok ? s.weight : 0), 0)) / _totalW);
   const band = score >= 75 ? "Strong" : score >= 45 ? "Developing" : "Weak";
   return { score, band, signals, schema_types: [...schemaTypes], available: pages.length > 0 };
 }

@@ -11,13 +11,16 @@
 // completed run exists within the 30-day cache window, it returns that — it does NOT
 // re-queue. Only a missing or >30-day-stale collection generates + queues a fresh run.
 // So a domain costs at most one collection per 30 days, no matter how many report views.
-// Prompts are generated token-free (useClaude:false). No GEO data is faked.
+// Prompts are authored by the seo-geo-prompt-set-architect skill (one Claude call per fresh
+// collection, cached 30 days by the same idempotency guard). No GEO data is faked.
 // ─────────────────────────────────────────────────────────────────────────────
 import { generateGeoPromptsForProject } from "@/lib/seo/geo/promptService";
 import { getGeoProjectByDomain, getLatestRun, setPromptsStatus, updateGeoRun } from "@/lib/seo/geo/model/geoStore";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 300s: generating the prompt set now runs the seo-geo-prompt-set-architect skill via
+// Claude (a large pinned-bundle call), so the generation step needs Vercel Pro headroom.
+export const maxDuration = 300;
 
 const REFRESH_DAYS = Number(process.env.GEO_CACHE_REFRESH_DAYS || 30);
 const cleanDomain = (s) => String(s || "").trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/.*$/, "").toLowerCase();
@@ -57,7 +60,7 @@ export async function POST(req) {
       projectId: project?.project_id, source,
       runMode: body.runMode || process.env.GEO_RUN_MODE || "standard",   // GEO_RUN_MODE=full → 150-250 prompts
       geoPlanMode: planMode,
-      useClaude: false,          // token-free template generation
+      useClaude: true,           // run the seo-geo-prompt-set-architect skill (Claude) to author the set
       regenerate: true,          // fresh prompt set for this collection
     });
     if (!gen.ok) return Response.json({ ok: false, error: gen.error || "could not generate prompts" }, { status: 503 });

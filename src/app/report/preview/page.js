@@ -46,6 +46,23 @@ const FIX = {
     gbp_completeness: { value: 67 }, gbp_review_count: { value: 8 }, gbp_rating: { value: 5 }, errors_404: { value: 5 },
   },
   doctorFizz: {
+    technical_evaluation: {
+      engine: "playwright-technical-evaluator",
+      html_pages: 8,
+      grade: "Accurate but incomplete",
+      accuracy_pct: 100,
+      summary: "A live audit of 8 rendered pages confirmed 2 of 2 on-page issue types the report claims and found 6 further issue types the report did not list (2 high priority).",
+      confirmed: [{ key: "missing_meta_desc", label: "Missing meta descriptions" }, { key: "missing_alt", label: "Images missing alt text" }],
+      unconfirmed: [],
+      out_of_scope: [{ key: "lcp", label: "Page speed / Core Web Vitals" }],
+      additional: [
+        { key: "missing_h1", label: "Missing H1", count: 3, priority: "high" },
+        { key: "noindex", label: "Noindex directives", count: 1, priority: "high" },
+        { key: "title_length", label: "Title length / pixel width", count: 9, priority: "medium" },
+        { key: "canonical", label: "Canonical tags", count: 2, priority: "medium" },
+        { key: "duplicate_content", label: "Duplicate / near-duplicate content", count: 2, priority: "medium" },
+      ],
+    },
     story: {
       the_situation: ["Acenteus has zero organic traffic and zero ranking keywords, on a Domain Rating of 10 — effectively invisible to Google."],
       whats_blocking_growth: ["Broken pages and redirect chains make the site hard to crawl, so it stays invisible; weak signals stack up — DR 10, 43 referring domains, a 21.8s load, 8 reviews vs 253."],
@@ -61,7 +78,19 @@ const FIX = {
       { key: "about", label: "About / entity page", ok: true, detail: "present" },
       { key: "depth", label: "Content depth", ok: true, detail: "avg 1074 words/page" },
       { key: "author", label: "Author / E-E-A-T", ok: false, detail: "no named authors" },
+      { key: "llms_txt", label: "llms.txt (AI crawl guide)", ok: false, detail: "no /llms.txt at the site root" },
     ] },
+    site_validation: {
+      eligible_for_audit: true,
+      final_url: "https://acenteus-cca.com/",
+      signals: [
+        { label: "HTTPS / SSL secure", ok: true, detail: "valid certificate, HTTPS enforced" },
+        { label: "Clean redirects (resolves in one hop)", ok: true, detail: "http to https, 1 hop" },
+        { label: "Canonical host set", ok: true, detail: "https://acenteus-cca.com" },
+        { label: "Homepage live and crawlable", ok: true, detail: "responds with a live page" },
+      ],
+      issues: [],
+    },
     gbp_comparison: {
       has_competitor_data: true,
       client: { name: "Acenteus", review_count: 8, rating: 5 },
@@ -74,6 +103,20 @@ const FIX = {
       ],
       review_intel: { review_gap: 245 },
     },
+    priority_action_plan: [
+      { tier: "Foundation Fixes", actions: [
+        { description: "Remove the duplicate <head> tags so each page has one", why: "Duplicate heads scramble canonical, robots and title metadata.", priority: "HIGH", channel: "SEO", effort: "≈3 hours" },
+        { description: "Add one keyword-rich H1 to the homepage", why: "Google cannot tell what the page is about without it.", priority: "HIGH", channel: "SEO", effort: "≈1 hour" },
+        { description: "Repair 5 broken links and connect 2 orphan pages", why: "Crawlers waste budget on dead ends and cannot reach orphans.", priority: "MEDIUM", channel: "SEO", effort: "≈2 hours" },
+      ] },
+      { tier: "Content & On-Page Work", actions: [
+        { description: "Build the Outsourced Tax Prep commercial page", why: "Fastest win, a term owned only by QX today.", priority: "MEDIUM", channel: "SEO", effort: "≈1 week" },
+      ] },
+      { tier: "Authority & GEO Work", actions: [
+        { description: "Implement LocalBusiness + FAQPage JSON-LD", why: "Makes the pages eligible for AI Overview citation.", priority: "HIGH", channel: "SEO+GEO", effort: "≈3 hours" },
+        { description: "Claim 5 missing citation listings", why: "Competitors are already listed, so this is fast local authority.", priority: "QUICK WIN", channel: "SEO", effort: "≈3 hours" },
+      ] },
+    ],
   },
   competitorLandscape: {
     localCompetitors: [
@@ -100,10 +143,11 @@ const FIX = {
     pagesExistingFlagged: 2,
   },
   technicalPriorities: [
-    { priority: "HIGH", issue: "A 21.8-second load time", recommended_action: "Compress hero images and lazy-load to break the 21.8s barrier.", affected_count: 1, why_it_matters: "Visitors and Google leave before the page renders.", expected_unlock: "Indexing", estimated_effort: "≈1 week" },
-    { priority: "HIGH", issue: "No H1 on the homepage", recommended_action: "Add one keyword-rich H1.", affected_count: 3, why_it_matters: "Google can't tell what the page is about.", expected_unlock: "Rankable", estimated_effort: "≈1 hour" },
-    { priority: "MEDIUM", issue: "5 broken links, 2 orphan pages", recommended_action: "301-redirect broken URLs; connect orphan pages.", affected_count: 5, why_it_matters: "Crawlers can't reach or trust the site.", expected_unlock: "Health 77→90", estimated_effort: "≈2 hours" },
-    { priority: "MEDIUM", issue: "101 images missing alt text", recommended_action: "Add descriptive alt text to every image.", affected_count: 101, why_it_matters: "Affects accessibility and image search.", expected_unlock: "Crawlability", estimated_effort: "≈3 hours" },
+    { priority: "HIGH", issue: "170 pages with duplicate <head> tags", plain: "A template bug puts two page-setup sections in the code, which can scramble the title and canonical instructions Google reads.", recommended_action: "Fix the template so there is one valid <head> as the first element in <html>.", affected_count: 170, why_it_matters: "Duplicate <head> elements scramble canonical, robots and title metadata for crawlers.", expected_unlock: "Metadata crawlers read reliably", estimated_effort: "≈3 hours", cms_cause: "Your site runs on WordPress, and the most common cause here is the Yoast plugin emitting a tag while the theme also renders one, so configure the theme to defer that tag to Yoast." },
+    { priority: "HIGH", issue: "A 21.8-second load time", plain: "This is how long your main content takes to appear. A slow load makes visitors leave and Google rank the page lower on mobile.", recommended_action: "Compress hero images and lazy-load to break the 21.8s barrier.", affected_count: 1, why_it_matters: "Visitors and Google leave before the page renders.", expected_unlock: "Indexing", estimated_effort: "≈1 week" },
+    { priority: "HIGH", issue: "No H1 on the homepage", plain: "The H1 is the big headline a visitor reads at the top of the page, telling Google what the page is about at a glance.", recommended_action: "Add one keyword-rich H1.", affected_count: 3, why_it_matters: "Google can't tell what the page is about.", expected_unlock: "Rankable", estimated_effort: "≈1 hour" },
+    { priority: "MEDIUM", issue: "5 broken links, 2 orphan pages", plain: "Links pointing to pages that no longer exist waste crawl time and send visitors to dead ends.", recommended_action: "301-redirect broken URLs; connect orphan pages.", affected_count: 5, why_it_matters: "Crawlers can't reach or trust the site.", expected_unlock: "Health 77→90", estimated_effort: "≈2 hours" },
+    { priority: "MEDIUM", issue: "101 images missing alt text", plain: "Alt text is the written description of an image. Without it, images cannot show in Google Images and the site is harder to use.", recommended_action: "Add descriptive alt text to every image.", affected_count: 101, why_it_matters: "Affects accessibility and image search.", expected_unlock: "Crawlability", estimated_effort: "≈3 hours" },
   ],
   linkBuilding: { citation_links: [
     { platform: "Google Business", client_listed: false }, { platform: "Yelp UK", client_listed: false }, { platform: "ICAEW", client_listed: false },

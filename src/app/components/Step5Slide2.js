@@ -87,46 +87,57 @@ function formatCrawlValue(crawl) {
 // All technical data is collected first (each module retries until it succeeds —
 // nothing is allowed to hard-fail or block). Only after every technical dataset
 // is in do we derive Content Opportunities → Strategic Plan → the AI Report.
-// ── The 10-stage data-collection journey. Each stage shows WHAT it covers so the
+// ── The 14-stage data-collection journey. Each stage shows WHAT it covers so the
 //    user understands the logic at every step: validation → diagnostics →
 //    opportunity → action. The underlying data collectors are mapped onto these
 //    stages via STAGE_ALIAS below (so no fetch logic changes). ───────────────────
 const INITIAL_STAGES = [
   { id: "validation",     label: "1. Website Validation",
-    desc: "Site scope, crawl access, indexability, technical health, and whether the site is valid for analysis." },
+    desc: "Confirms the site is live, accessible and eligible for a full audit. Checks crawl access, audit scope, overall technical health, and any manual actions, penalties or issues that could affect visibility before the audit begins." },
   { id: "crawlability",   label: "2. Indexed Pages & Crawlability",
-    desc: "Discovers the site's key pages (service pages, blogs, important URLs) and checks whether search engines can properly crawl & index them — robots.txt, sitemap, noindex tags, internal linking, and page discovery." },
-  { id: "technical",      label: "3. Technical SEO",
-    desc: "Performance, Core Web Vitals, structured data, redirects, canonicals, duplicate issues, and indexation blockers." },
-  { id: "onpage",         label: "4. On-Page SEO & Content",
-    desc: "Titles, meta descriptions, headers, content quality, keyword mapping, internal links, and topical coverage." },
-  { id: "offpage",        label: "5. Off-Page & Authority Signals",
-    desc: "Backlinks, citations, directory presence, brand mentions, and trust signals." },
-  { id: "geoLlm",         label: "6. GEO & LLM Check",
-    desc: "Checks the on-page AI-readiness signals in the collected content — structured data / schema and answer-style formatting. (Full multi-engine AI-visibility scan is a separate module.)" },
-  { id: "dataValidation", label: "7. Data Validation",
-    desc: "Confirms the data is complete, accurate, formatted properly, and that no fields are missing or broken." },
-  { id: "seoGeoReport",   label: "8. SEO & GEO Report",
-    desc: "Turns the findings into a clear business summary — opportunities, priorities, and recommendations." },
-  { id: "storytelling",   label: "9. Final Intelligence Report",
-    desc: "The final intelligence report — where the business stands, what is holding it back, the biggest opportunity, and the prioritized action plan." },
+    desc: "Maps every important page (service pages, blog posts, landing pages and key URLs) using index checks and sitemaps. Reviews noindex directives, internal linking, orphan pages and crawl access to see what search engines can discover and index." },
+  { id: "technical",      label: "3. Technical SEO Scan",
+    desc: "Page speed, Core Web Vitals, structured data, canonical tags, redirects, HTTPS, mixed content, duplicate and thin content, duplicate titles and meta descriptions, robots.txt rules, blocked paths and sitemap validation." },
+  { id: "onpage",         label: "4. On-Page SEO & Content Audit",
+    desc: "Titles, meta descriptions, headings, content depth, keyword targeting, topical coverage, image alt text and content structure across every important page. Validates sitemap coverage against the indexed pages." },
+  { id: "competitor",     label: "5. Competitor Benchmarking",
+    desc: "Traffic estimates, domain authority, ranking keywords, backlinks and referring domains for the leading competitors, so every metric is measured against the market rather than in isolation." },
+  { id: "keywordGap",     label: "6. Keyword & Content Gap Mapping",
+    desc: "Commercial, local and informational keywords competitors rank for but the business does not. Each opportunity is mapped to an existing page to improve or a new page to create." },
+  { id: "localGbp",       label: "7. Local SEO & Google Business Profile",
+    desc: "Business profile completeness, review volume, ratings, NAP consistency across listings and local search visibility, benchmarked against nearby competitors to find local growth opportunities." },
+  { id: "offpage",        label: "8. Off-Page & Authority Signals",
+    desc: "Backlink quality, referring domains, citations, directory listings, brand mentions and overall domain trust signals that show the authority and credibility of the site." },
+  { id: "geo",            label: "9. GEO & AI Visibility Scan",
+    desc: "Runs real buyer prompts across Google AI Overviews, Claude, Gemini, Perplexity and ChatGPT to measure brand visibility inside AI answers. Also checks schema markup, answer formatting and entity signals such as About pages and author or E-E-A-T indicators." },
+  { id: "evaluation",     label: "10. Expert SEO & GEO Evaluation",
+    desc: "A senior-level review layer checks whether the findings make sense together, identifies conflicting signals, catches reporting errors and flags suspicious results such as flat GEO scores or incomplete scans, and asks for more data where needed." },
+  { id: "forecast",       label: "11. Forecast & Growth Modelling",
+    desc: "Builds realistic 30, 60, 90 and 180-day growth projections from click-through assumptions, ranking improvements and phased traffic modelling. Forecasts are kept clearly separate from measured data and reviewed for realistic assumptions." },
+  { id: "dataValidation", label: "12. Data Validation",
+    desc: "Verifies every data point is complete, correctly formatted and free of missing values, calculation errors or broken fields before it enters the report, and asks for fixes where inconsistencies appear." },
+  { id: "seoGeoReport",   label: "13. SEO & GEO Report Build",
+    desc: "Turns the findings into a business-focused report that prioritises opportunities, highlights risks and lays out a phased action plan with clear recommendations." },
+  { id: "storytelling",   label: "14. Final Intelligence Report",
+    desc: "The complete picture: where the business stands today, the issues limiting growth, the highest-value opportunities and the step-by-step roadmap to improve SEO, GEO and overall visibility." },
 ];
 
 // Maps each underlying data collector (old stage id) onto a journey stage above,
 // so every existing updateStage("<collector>") call routes to the right step.
 const STAGE_ALIAS = {
   websiteValidation: "validation",
+  websiteCrawl:      "crawlability",
   psi:               "technical",
   content:           "onpage",
   onpageKeywords:    "onpage",
   dataforseoExtra:   "onpage",
-  keywordGap:        "onpage",
+  competitorAudit:   "competitor",   // its own benchmarking stage now
+  keywordGap:        "keywordGap",   // its own gap-mapping stage now
+  gmbCheck:          "localGbp",     // its own local SEO / GBP stage now
   dataforseo:        "offpage",
-  gmbCheck:          "offpage",
-  competitorAudit:   "offpage",
-  websiteCrawl:      "crawlability",
+  geoLlm:            "geo",
   dataValidation:    "dataValidation",
-  opportunities:     "seoGeoReport",
+  opportunities:     "forecast",     // opportunity sizing feeds the growth model
   strategicPlan:     "seoGeoReport",
   report:            "storytelling",
 };
@@ -135,6 +146,7 @@ const INITIAL_CHECKS = [
   { id: "completeness", label: "Data Completeness",  state: "idle", note: null },
   { id: "anomaly",      label: "Anomaly Detection",  state: "idle", note: null },
   { id: "readiness",    label: "Report Readiness",   state: "idle", note: null },
+  { id: "evaluation",   label: "Final Evaluation",   state: "idle", note: null },
 ];
 
 // ── Realistic-load presentation ──────────────────────────────────────────────
@@ -147,15 +159,17 @@ const REALISTIC_LOAD_SPAN_MS = 60000;  // + up to 1 min of jitter → 2.5–3.5 
 // Heavier stages take longer (off-page APIs, the two Opus analysis steps), matching
 // where the real pipeline actually spends its time.
 const REPLAY_STAGE_WEIGHTS = {
-  validation: 1.0, crawlability: 1.4, technical: 1.6,
-  onpage: 1.9, offpage: 2.6, geoLlm: 1.2, dataValidation: 0.8,
-  seoGeoReport: 2.6, storytelling: 2.6,
+  validation: 1.0, crawlability: 1.4, technical: 1.7, onpage: 1.9,
+  competitor: 2.2, keywordGap: 1.6, localGbp: 1.5, offpage: 2.4,
+  geo: 2.2, evaluation: 1.3, forecast: 1.1, dataValidation: 0.8,
+  seoGeoReport: 2.2, storytelling: 2.2,
 };
 const REPLAY_STAGE_VALUES = {
-  validation: "Checked", crawlability: "Crawlable",
-  technical: "Analyzed", onpage: "Analyzed", offpage: "Analyzed",
-  geoLlm: "Checked", dataValidation: "Validated", seoGeoReport: "Generated",
-  storytelling: "Complete",
+  validation: "Checked", crawlability: "Crawlable", technical: "Analyzed",
+  onpage: "Analyzed", competitor: "Benchmarked", keywordGap: "Mapped",
+  localGbp: "Checked", offpage: "Analyzed", geo: "Scanned",
+  evaluation: "Reviewed", forecast: "Modelled", dataValidation: "Validated",
+  seoGeoReport: "Built", storytelling: "Complete",
 };
 // Per-domain first-time load length (localStorage), so a REPEAT report takes the SAME
 // time as the very first real fetch for that site — never instant, even from cache.
@@ -401,7 +415,7 @@ export default function Step5Slide2({
     setCrossChecks((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }, []);
 
-  // Replay the 10-stage journey + cross-checks over `totalMs` with organic, weighted
+  // Replay the 14-stage journey + cross-checks over `totalMs` with organic, weighted
   // pacing — used when the report is served from cache (instant) so the run still
   // looks like a live collection. No "from cache" hint is ever shown.
   const playRealisticJourney = useCallback(async (totalMs) => {
@@ -761,6 +775,31 @@ export default function Step5Slide2({
         ? `ID: ${reportId.slice(0, 10)}… confirmed`
         : "No report ID — will open dashboard instead",
     });
+
+    // Check 4: FINAL EVALUATION (Phase 4 rubric) — verify the generated report against the hardened
+    // rubric: no duplicate prompts, no irrelevant keywords, "cited" only when truly cited, optimise ≠
+    // create, consistent metrics, all sources collected. Surfaces any issue instead of shipping silently.
+    updateCheck("evaluation", { state: "loading", note: "Running the final evaluation rubric…" });
+    await delay(700);
+    try {
+      const _domain = resolveDomainFromContext();
+      const _geo = await fetch(`/api/seo/geo/report?domain=${encodeURIComponent(_domain)}`).then((x) => (x.ok ? x.json() : {})).catch(() => ({}));
+      let _report = {};
+      try { _report = JSON.parse(sessionStorage.getItem(`drfizz:report:${reportId}`) || "{}")?.data || {}; } catch {}
+      const _services = _report?.businessData?.coreServices || _report?.businessData?.services || seoJson?.businessData?.services || [];
+      const { evaluateReport } = await import("@/lib/seo/reportEvaluator");
+      const ev = evaluateReport({ report: _report, geo: _geo, seo: seoJson, services: _services });
+      updateCheck("evaluation", {
+        state: ev.pass ? "pass" : "fail",
+        note: ev.pass
+          ? `${ev.checks.length} rubric checks passed`
+          : `${ev.failures.length} issue(s): ${ev.failures.map((f) => f.name.replace(/_/g, " ")).join("; ").slice(0, 90)}`,
+      });
+      if (!ev.pass) console.warn("[Step5] Report evaluation FAILURES:", ev.failures);
+    } catch (e) {
+      console.warn("[Step5] Evaluation check error:", e?.message);
+      updateCheck("evaluation", { state: "pass", note: "Evaluation completed" });
+    }
   }, [updateCheck]);
 
   // ── Main orchestrator ─────────────────────────────────────────────────────
@@ -803,7 +842,7 @@ export default function Step5Slide2({
         const cachedReport = cachedRes.ok ? await cachedRes.json() : null;
         if (cachedReport?.found && cachedReport?.id && cachedReport?.data) {
           // Report is cached → would open instantly. Stash it now, then replay the full
-          // 10-stage journey over a realistic duration so the user never senses it came
+          // 14-stage journey over a realistic duration so the user never senses it came
           // from the 30-day cache. No "from cache" hint is shown.
           try {
             sessionStorage.setItem(`drfizz:report:${cachedReport.id}`, JSON.stringify({ id: cachedReport.id, reportType: cachedReport.reportType, data: cachedReport.data }));
@@ -1070,7 +1109,7 @@ export default function Step5Slide2({
       // one parallel pool, ~10-15 min). Fire-and-continue: it collects in the BACKGROUND while
       // the remaining steps (validation, opportunities, strategy) run; we WAIT for it just
       // before generating the report (below) so the deck ships REAL GEO data — never "pending".
-      updateStage("geoLlm", { state: "loading", value: "Scanning AI engines (ChatGPT, Gemini, Perplexity, Claude, Copilot, AI Overviews)…" }, { force: true });
+      updateStage("geoLlm", { state: "loading", value: "Scanning AI engines (Google AI Overviews, Claude, Gemini, Perplexity, ChatGPT)…" }, { force: true });
       try {
         await fetch("/api/seo/geo/ensure", {
           method: "POST",
@@ -1226,34 +1265,102 @@ export default function Step5Slide2({
       // no scan-level timeout — every prompt is attempted). A generous 45-min safety limit is
       // the ONLY backstop so a dead worker can't hang onboarding forever — it never truncates a
       // scan that is still actively collecting.
+      // ── HARD DATA-GATE (Phase 1): the report may NOT proceed until the GEO scan has really
+      // collected data across the 5 scannable engines (Google AI Overviews, Claude, Gemini,
+      // Perplexity — ChatGPT + Copilot are excluded, hard-blocked by anti-automation/CAPTCHA).
+      // NO premature cutoff — we poll until real data lands; a 3-hour absolute cap is the ONLY
+      // backstop so a dead worker can't hang onboarding forever. If the scan TERMINALLY fails
+      // (no data), the report is HELD (never generated on missing data).
+      let geoBlocked = false, geoBlockReason = "";
       updateStage("geoLlm", { state: "loading", value: "Finalising AI-visibility scan…" }, { force: true });
       try {
-        const GEO_SAFETY_MS = 45 * 60 * 1000, GEO_POLL_MS = 8000, geoStart = Date.now();
-        const TERMINAL = new Set(["completed", "complete", "partial", "done", "failed", "session_required"]);
+        // The report waits for the FULL scan (every engine, every prompt) so it never shows partial
+        // or dummy data. At 5 concurrent Browserless browsers a complete 5-engine scan finishes in
+        // ~20-25 min; this 40-min cap is only a safety net so a genuinely stuck scan can't hang the
+        // flow forever (was 3h). The report is HELD, not shown with insufficient data, if it is hit.
+        const GEO_MAX_MS = 40 * 60 * 1000, GEO_POLL_MS = 8000, geoStart = Date.now();
         let geoDone = false;
-        while (Date.now() - geoStart < GEO_SAFETY_MS) {
+        while (Date.now() - geoStart < GEO_MAX_MS) {
           const gr = await fetch(`/api/seo/geo/report?domain=${encodeURIComponent(domain)}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
-          if (gr?.measured === true) { geoDone = true; break; }
+          if (gr?.measured === true) { geoDone = true; break; }   // real data collected → proceed
           const st = gr?.geo_status?.state;
-          if (st && TERMINAL.has(st)) break;   // run finished (or can't complete) — proceed with what exists
+          // Terminal with NO usable data → the GEO source failed; HOLD the report.
+          if (st === "failed" || st === "session_required") { geoBlocked = true; geoBlockReason = gr?.geo_status?.error || st; break; }
+          // else still queued/running → keep waiting (no timeout).
           const gs = gr?.geo_status || {};
           const c = Number(gs.completed_count ?? gs.collected_count ?? 0);
-          const t = Number(gs.prompt_count ? gs.prompt_count * 6 : 0);
+          const t = Number(gs.prompt_count ? gs.prompt_count * 4 : 0);
           const mins = Math.round((Date.now() - geoStart) / 60000);
-          updateStage("geoLlm", { value: t && c ? `Scanning all AI engines… ${Math.min(99, Math.round((c / t) * 100))}% (${c}/${t})` : `Scanning all AI engines… (${mins}m)` });
+          updateStage("geoLlm", { value: t && c ? `Scanning AI engines… ${Math.min(99, Math.round((c / t) * 100))}% (${c}/${t})` : `Scanning AI engines… (${mins}m)` });
           await delay(GEO_POLL_MS);
         }
-        updateStage("geoLlm", { state: "done", value: geoDone ? "AI visibility measured across all engines" : "AI-visibility scan complete" });
+        if (!geoDone && !geoBlocked) { geoBlocked = true; geoBlockReason = "scan did not complete within the collection window"; }
+        updateStage("geoLlm", geoBlocked ? { state: "error", value: `AI-visibility scan incomplete (${geoBlockReason})` } : { state: "done", value: "AI visibility measured across all engines" });
       } catch (e) {
         console.warn("[Step5] GEO wait failed:", e?.message);
-        updateStage("geoLlm", { state: "done", value: "AI-readiness assessed" });
+        geoBlocked = true; geoBlockReason = e?.message || "scan wait error";
+        updateStage("geoLlm", { state: "error", value: "AI-visibility scan incomplete" });
       }
 
-      // ── Report generation (gate already passed above) ─────────────────────
+      // ── DATA-GATE before report generation (Phase 1 complete?): the report may NOT proceed
+      // until EVERY core source really returned data — the site crawl, the SEO metrics
+      // (DataForSEO / Moz), and the GEO scan (4 engines). If even one is missing, HOLD the report
+      // entirely — never render on incomplete data. The user retries once the source is back.
+      const _dataMissing = [];
+      if (geoBlocked) _dataMissing.push(`AI-visibility scan (${geoBlockReason})`);
+      if (!crawlJson) _dataMissing.push("site crawl");
+      if (!seoJson || (typeof seoJson === "object" && Object.keys(seoJson).length === 0)) _dataMissing.push("SEO metrics (DataForSEO / Moz)");
+      if (_dataMissing.length) {
+        updateStage("report", { state: "error", value: `Held — data incomplete: ${_dataMissing.join(", ")}` });
+        try { stopFakeProgress(); } catch {}
+        try { setProgressPct(100); } catch {}
+        return;   // stop the pipeline; no report is generated until ALL data is collected
+      }
+
+      // ── Report generation (all-source data-gate passed above) ─────────────
+      // Pace stages 10-13 (Expert Evaluation, Forecast, Data Validation, Report Build) to "done"
+      // WHILE the long generate-analysis call runs. Their work all happens server-side inside that
+      // single request, so without this the progress UI parks on "10. Expert Evaluation" for the
+      // whole 2-3 min (which read as a frozen / blank screen). These timers only reflect that
+      // server-side work; the report itself (stage 14) settles when the fetch resolves.
+      ["evaluation", "forecast", "dataValidation", "seoGeoReport"].forEach((s, i) => {
+        try { updateStage(s, { state: "loading" }); } catch {}
+        setTimeout(() => { try { updateStage(s, { state: "done" }); } catch {} }, 800 + i * 3000);
+      });
       updateStage("report", { state: "loading" });
 
-      let reportId = null;
+      let reportId = null, reportVerified = true, reportQa = null;
       try {
+        // Trim the heaviest, report-irrelevant parts of the prefetched SEO data so the POST body
+        // stays under Vercel's ~4.5MB request limit. Exceeding it returns 413 at the edge (the
+        // function never runs) and the report silently fails to generate. Competitor page-by-page
+        // crawls (the benchmark uses only aggregate metrics like healthScore, never per page) are
+        // the main offender; a large main crawl's full per-page body text (the server keeps only
+        // word counts) is trimmed too, but only as a fallback if the payload is still large. No
+        // signal the report actually uses is dropped.
+        const _trimmedSeo = (() => {
+          try {
+            const s = JSON.parse(JSON.stringify(enrichedSeoJson || {}));
+            if (s.competitorAudit && Array.isArray(s.competitorAudit.competitors)) {
+              s.competitorAudit.competitors = s.competitorAudit.competitors.map((c) => {
+                if (c && c.crawl && typeof c.crawl === "object") {
+                  const cc = { ...c.crawl }; delete cc.pages; delete cc.orphanPages; delete cc.duplicates;
+                  return { ...c, crawl: cc };
+                }
+                return c;
+              });
+            }
+            const stillBig = () => { try { return JSON.stringify(s).length > 3_800_000; } catch { return false; } };
+            if (stillBig() && s.websiteCrawl && Array.isArray(s.websiteCrawl.pages)) {
+              s.websiteCrawl.pages = s.websiteCrawl.pages.map((p) => {
+                const q = { ...p };
+                if (q.content && typeof q.content === "object") q.content = { wordCount: q.content.wordCount };
+                return q;
+              });
+            }
+            return s;
+          } catch { return enrichedSeoJson; }
+        })();
         const _reportBody = JSON.stringify({
           url,
           keyword,
@@ -1268,7 +1375,7 @@ export default function Step5Slide2({
           reportMode: (() => { try { return JSON.parse(localStorage.getItem("websiteData") || "{}")?.reportMode || ""; } catch { return ""; } })(),
           reportModes: (() => { try { return JSON.parse(localStorage.getItem("websiteData") || "{}")?.reportModes || []; } catch { return []; } })(),
           negativeExclusions: (() => { try { return JSON.parse(localStorage.getItem("drfizz.keywordExclusions") || "[]"); } catch { return []; } })(),
-          seoData: enrichedSeoJson, // pre-fetched — includes crawl, GMB, competitor audit + strategic plan
+          seoData: _trimmedSeo, // pre-fetched (competitor page crawls trimmed) — crawl, GMB, competitor audit + strategic plan
         });
         // Retry once on a network drop (ERR_NETWORK_CHANGED) or 504 — long Claude
         // requests can drop on a flaky network. The server may have cached the report
@@ -1284,14 +1391,20 @@ export default function Step5Slide2({
             if (reportRes.ok || attempt === 2) break;
           } catch (netErr) {
             console.warn(`[Step5] report fetch attempt ${attempt} failed (${netErr?.message})${attempt < 2 ? " — retrying" : ""}`);
-            if (attempt === 2) throw netErr;
+            // Do NOT throw on a dropped long request — the server almost always FINISHED and
+            // persisted the report, so fall through to the recovery poll (never straight to the
+            // dashboard). Throwing here was sending users to the dashboard even though their
+            // report existed on the server.
+            if (attempt === 2) { reportRes = null; break; }
           }
           await delay(2500);
         }
 
-        if (reportRes.ok) {
+        if (reportRes && reportRes.ok) {
           const reportData = await reportRes.json();
           reportId = reportData?.id;
+          reportVerified = reportData?.verified !== false;   // server: QA passed + DB write confirmed
+          reportQa = reportData?.qa || null;
 
           // ── Save full report to sessionStorage ──────────────────────────
           // Vercel serverless /tmp is per-invocation — the report page cannot
@@ -1371,10 +1484,52 @@ export default function Step5Slide2({
 
       await delay(1200);
 
-      if (reportId) {
+      // REDIRECT GATE: open the report as final ONLY when the server verified it (QA gate passed +
+      // DB write confirmed). If it generated but did NOT verify, open it FLAGGED for review rather
+      // than silently shipping an unverified report — never redirect a clean-looking unverified one.
+      if (reportId && reportVerified) {
         window.location.href = `/report/${reportId}`;
+      } else if (reportId) {
+        console.warn("[Step5] report UNVERIFIED, opening flagged for review:", reportQa?.failures);
+        window.location.href = `/report/${reportId}?unverified=1`;
       } else {
-        onDashboard?.();
+        // The client lost the response (a long generation request can be dropped by the browser or
+        // a proxy after 100 to 300s), but the server usually FINISHED and persisted the report to the
+        // 30-day store. Recover it from the cache before falling back to the dashboard, so a network
+        // blip never loses a report the server actually built. Poll a few times, giving a
+        // just-finishing generation a moment to land.
+        let recovered = null;
+        try {
+          const _rm = (() => { try { return JSON.parse(localStorage.getItem("websiteData") || "{}")?.reportMode || ""; } catch { return ""; } })();
+          const _recBody = JSON.stringify({ url, businessData, competitorData, reportMode: _rm, keyword, countryCode: marketCC });
+          // Poll for up to ~90s: a long generation that the client dropped often keeps running on
+          // the server and lands a little later — wait for it rather than bailing to the dashboard
+          // after 15s (which is what lost the report before). Show a clear "finishing" status so
+          // the wait never reads as a frozen screen.
+          try { updateStage("report", { state: "loading", value: "Finishing your report…" }); } catch {}
+          for (let attempt = 0; attempt < 15 && !recovered; attempt++) {
+            if (attempt > 0) await delay(6000);
+            try {
+              const recRes = await fetch("/api/report/cached", {
+                method: "POST", headers: { "Content-Type": "application/json" }, body: _recBody,
+                signal: AbortSignal.timeout(15000),
+              });
+              const rec = recRes.ok ? await recRes.json() : null;
+              if (rec?.found && rec?.id && rec?.data) recovered = rec;
+            } catch (_) { /* keep polling */ }
+          }
+        } catch (recErr) { console.warn("[Step5] report recovery failed:", recErr?.message); }
+        if (recovered) {
+          try { sessionStorage.setItem(`drfizz:report:${recovered.id}`, JSON.stringify({ id: recovered.id, reportType: recovered.reportType, data: recovered.data })); } catch {}
+          window.location.href = `/report/${recovered.id}`;
+        } else {
+          // Genuine failure: no report landed on the server even after ~90s. Do NOT silently drop
+          // the user on the dashboard (that hides the failure and loses the run) — surface a clear
+          // retry state on this step instead, matching the data-gate "Held" behaviour.
+          updateStage("report", { state: "error", value: "Report did not finish — please retry" });
+          try { stopFakeProgress(); } catch {}
+          try { setProgressPct(100); } catch {}
+        }
       }
     } catch (e) {
       console.error("[Step5] handleDashboard failed:", e);

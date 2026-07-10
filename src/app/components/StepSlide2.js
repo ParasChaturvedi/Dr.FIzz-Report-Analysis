@@ -139,14 +139,16 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
       if (Array.isArray(data.offerings) && data.offerings.length) setOfferingOptions(withOther(data.offerings, FALLBACK_OFFERINGS));
       if (Array.isArray(data.categories) && data.categories.length) setCategoryOptions(withOther(data.categories, FALLBACK_CATEGORIES));
       if (data.detected) { setDetected(data.detected); detectedRef.current = data.detected; }
-      taxoContextRef.current = [data.detected?.primary_offering, (data.core_services || []).join(", ")].filter(Boolean).join(" — ");
+      taxoContextRef.current = [data.detected?.primary_offering, (data.core_services || []).join(", ")].filter(Boolean).join(", ");
       // pre-fill optional fields ONLY if the user hasn't typed anything
       if (Array.isArray(data.core_services) && data.core_services.length) setCoreServices((prev) => prev || data.core_services.join(", "));
       if (data.detected?.business_scope) setBusinessScopes((prev) => (prev.length ? prev : [data.detected.business_scope]));
-      // auto-select a confident detection so the Offering list (already loaded) is ready —
-      // fully changeable by the user.
+      // auto-select a confident detection so the Category list (already loaded) is ready, fully
+      // changeable by the user. Offering type is derived silently (no dropdown) from the detection
+      // so the downstream report still gets it, and the specific-categories list can load.
       if (data.detected?.industry && (data.detected.confidence ?? 0) >= 0.6) {
         setSelectedIndustry((prev) => prev || data.detected.industry);
+        setSelectedOfferings((prev) => (prev.length ? prev : [data.detected.offering || "Services"]));
       }
     };
 
@@ -229,7 +231,9 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
     const categoryValues = selectedCategories.map((c) => (c === "Others" ? customCategory : c)).filter(Boolean);
 
     if (industryValue && offeringValues.length && categoryValues.length) {
-      setShowSummary(true);
+      // Collapse to the summary ONLY when no dropdown is open, so the user can keep multi-selecting
+      // categories with the dropdown open; the data is still submitted below either way.
+      setShowSummary(openDropdown === null);
       const offeringStr = offeringValues.join(", ");
       const categoryStr = categoryValues.join(", ");
       const scopeStr = businessScopes.join(", ");
@@ -276,6 +280,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
     revenueOffers,
     buyerType,
     businessScopes,
+    openDropdown,
     onBusinessDataSubmit,
   ]);
 
@@ -319,20 +324,24 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
   const handleDropdownToggle = (name) =>
     setOpenDropdown((prev) => (prev === name ? null : name));
 
-  // Industry is single-select and resets the dependent multi-selects below it.
+  // Industry is single-select and drives the Specific Categories list. Offering type is no
+  // longer a visible dropdown: it is derived silently (from the detection, else "Services") so
+  // the downstream report still records it and the category list can be fetched.
   const handleIndustrySelect = (industry) => {
     setSelectedIndustry(industry);
-    setSelectedOfferings([]);
     setSelectedCategories([]);
-    setCustomOffering("");
     setCustomCategory("");
-    setCategoryOptions(withOther(FALLBACK_CATEGORIES));
     if (industry !== "Others") setCustomIndustry("");
     setOpenDropdown(null);
-    if (industry === "Others") { setOfferingOptions(withOther(FALLBACK_OFFERINGS)); return; }
-    // detected industry already has its offerings loaded; otherwise fetch fresh ones
-    if (detectedRef.current && industry === detectedRef.current.industry) return;
-    fetchOfferings(industry);
+    const isDetected = detectedRef.current && industry === detectedRef.current.industry;
+    const offering = (isDetected && detectedRef.current.offering) || "Services";
+    setSelectedOfferings([offering]);   // silent, feeds businessData + the category fetch
+    if (industry === "Others") { setCategoryOptions(withOther(FALLBACK_CATEGORIES)); return; }
+    // the detected industry already loaded its category list with the industry call; for any
+    // other industry, fetch categories fresh using the derived offering.
+    if (isDetected) return;
+    setCategoryOptions(withOther(FALLBACK_CATEGORIES));
+    fetchCategories(industry, offering);
   };
   // Offering is MULTI-SELECT. Toggling one ON pulls in that offering's categories
   // (merged); the dropdown stays open so several can be picked.
@@ -536,18 +545,16 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                       {selectedIndustry === "Others" ? customIndustry : selectedIndustry}
                     </div>
                     <div className="text-[var(--text)]">
-                      <span className="font-semibold">Offering Type:</span>{" "}
-                      {selectedOfferings.map((o) => (o === "Others" ? customOffering : o)).filter(Boolean).join(", ")}
-                    </div>
-                    <div className="text-[var(--text)]">
-                      <span className="font-semibold">Category:</span>{" "}
+                      <span className="font-semibold">Categories:</span>{" "}
                       {selectedCategories.map((c) => (c === "Others" ? customCategory : c)).filter(Boolean).join(", ")}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Dropdown grid */}
+              {/* Dropdown grid. Stays visible while any dropdown is OPEN so Categories can be
+                  MULTI-selected; it only collapses to the summary once the dropdown is closed
+                  (previously it collapsed after the very first category, blocking multi-select). */}
               {!showSummary && (
                 <div className="w-full max-w-[880px] flex flex-col gap-2">
                   {/* Detection hint */}
@@ -563,13 +570,13 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                           Detected from your site:&nbsp;
                           <span className="text-[#d45427] font-semibold">{detected.industry}</span>
                           {typeof detected.confidence === "number" ? <span className="text-[var(--muted)]">({Math.round(detected.confidence * 100)}% match)</span> : null}
-                          <span>— change any selection below.</span>
+                          <span>. Change any selection below.</span>
                         </span>
                       ) : null}
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 w-full relative pb-10 sm:pb-12 lg:pb-0">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 w-full relative pb-10 sm:pb-12 lg:pb-0">
                   {/* Industry */}
                   <div
                     className="relative dropdown-container overflow-visible"
@@ -610,64 +617,17 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                     )}
                   </div>
 
-                  {/* Offering */}
-                  <div
-                    className="relative dropdown-container overflow-visible"
-                    style={{ zIndex: openDropdown === "offering" ? 1000 : 1 }}
-                  >
-                    <button
-                      onClick={() => (selectedIndustry ? handleDropdownToggle("offering") : null)}
-                      disabled={!selectedIndustry}
-                      type="button"
-                      className={`w-full bg-[var(--input)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-left flex items-center justify-between focus:outline-none transition-colors ${
-                        selectedIndustry
-                          ? "hover:border-[var(--border)] cursor-pointer focus:border-[var(--border)]"
-                          : "opacity-50 cursor-not-allowed"
-                      }`}
-                    >
-                      <span
-                        className={`${
-                          selectedOfferings.length ? "text-[var(--text)]" : "text-[var(--muted)]"
-                        } text-[12px] sm:text-[13px] md:text-[14px]`}
-                      >
-                        {selectedOfferings.length
-                          ? (selectedOfferings.length === 1 ? selectedOfferings[0] : `${selectedOfferings.length} selected`)
-                          : "Offering Type"}
-                      </span>
-                      {taxoLoading.offering && !selectedOfferings.length ? (
-                        <Loader2 size={18} className="animate-spin text-[var(--muted)]" />
-                      ) : (
-                        <ChevronDown
-                          size={20}
-                          className={`transition-transform ${openDropdown === "offering" ? "rotate-180" : ""}`}
-                        />
-                      )}
-                    </button>
-
-                    {openDropdown === "offering" && selectedIndustry && renderMultiMenu(offeringOptions, selectedOfferings, handleOfferingToggle, taxoLoading.offering)}
-
-                    {selectedOfferings.includes("Others") && (
-                      <input
-                        type="text"
-                        placeholder="Describe your offering type"
-                        value={customOffering}
-                        onChange={(e) => setCustomOffering(e.target.value)}
-                        className="w-full mt-2 bg-[var(--input)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--border)]"
-                      />
-                    )}
-                  </div>
-
                   {/* Category */}
                   <div
                     className="relative dropdown-container overflow-visible"
                     style={{ zIndex: openDropdown === "category" ? 1000 : 1 }}
                   >
                     <button
-                      onClick={() => (selectedOfferings.length ? handleDropdownToggle("category") : null)}
-                      disabled={!selectedOfferings.length}
+                      onClick={() => (selectedIndustry ? handleDropdownToggle("category") : null)}
+                      disabled={!selectedIndustry}
                       type="button"
                       className={`w-full bg-[var(--input)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-left flex items-center justify-between focus:outline-none transition-colors ${
-                        selectedOfferings.length
+                        selectedIndustry
                           ? "hover:border-[var(--border)] cursor-pointer focus:border-[var(--border)]"
                           : "opacity-50 cursor-not-allowed"
                       }`}
@@ -691,7 +651,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                       )}
                     </button>
 
-                    {openDropdown === "category" && selectedOfferings.length > 0 && renderMultiMenu(categoryOptions, selectedCategories, handleCategoryToggle, taxoLoading.category)}
+                    {openDropdown === "category" && selectedIndustry && renderMultiMenu(categoryOptions, selectedCategories, handleCategoryToggle, taxoLoading.category)}
 
                     {selectedCategories.includes("Others") && (
                       <input
@@ -711,7 +671,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
               {showSummary && (
                 <div className="mt-5 self-start">
                   <h3 className="text-[15px] sm:text-[16px] md:text-[18px] font-bold text-[var(--text)] mb-2.5 sm:mb-3">
-                    Here’s your site report — take a quick look on the
+                    Here’s your site report. Take a quick look on the
                     <br /> Info Tab.
                   </h3>
                   <p className="text-[12px] sm:text-[13px] md:text-[15px] text-[var(--muted)]">

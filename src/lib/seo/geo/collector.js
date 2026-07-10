@@ -25,8 +25,15 @@ export const ENGINES = {
   // use Temporary Chat so the query never enters chat history or updates memory —
   // keeps every answer unbiased + repeatable (no personalisation drift).
   chatgpt: {
-    name: "ChatGPT", url: "https://chatgpt.com/", ephemeralUrl: "https://chatgpt.com/?temporary-chat=true",
-    needsSession: true, type: "chat",
+    // NOTE: temporary-chat (?temporary-chat=true) triggers a persistent "Continue" modal
+    // that keeps re-rendering over the composer and destabilises generation on an automated
+    // residential session. Each query already runs in a FRESH Browserless context, so we use
+    // the plain URL for stable generation (history isolation comes from the throwaway context).
+    name: "ChatGPT", url: "https://chatgpt.com/",
+    // Scanned LOGGED-OUT (no session): chatgpt.com answers questions without an account, and the
+    // Browserless stealth path clears its Cloudflare wall. `cdpStealth` routes this engine to
+    // connectBrowserlessCDP() (the /chromium CDP endpoint that accepts &stealth&solveCaptchas).
+    needsSession: false, cdpStealth: true, type: "chat",
     composerSel: '#prompt-textarea, div[contenteditable="true"]',
     sendSel: '[data-testid="send-button"], button[aria-label*="Send" i]',
     answerSel: '[data-message-author-role="assistant"]',
@@ -104,11 +111,11 @@ async function connectBrowserless(proxyCountry = "") {
   // (verified: &proxy=residential&proxyCountry=in → an India IP).
   const country = global ? "" : String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "").toLowerCase();
   const proxyQs = (residential && !global) ? `&proxy=residential${country ? `&proxyCountry=${country}` : ""}` : "";
-  // Browserless kills the session after `timeout` (default ~30s) — too short for a
-  // streamed AI answer. Default 60,000 (the free-plan max) covers one query; a paid
-  // plan can raise it via BROWSERLESS_TIMEOUT_MS for slow engines. A fresh connection
-  // is made per query, so the whole scan never needs one long session.
-  const timeoutMs = Number(process.env.BROWSERLESS_TIMEOUT_MS || 60000);
+  // Browserless kills the session after `timeout` — too short for a streamed AI answer. A fresh
+  // connection is made per query, so the whole scan never needs one long session.
+  // NOTE: stealth + solveCaptchas are NOT valid on the /chromium/playwright endpoint (it 400s on
+  // unknown params). CAPTCHA-solving for chatgpt/copilot goes through connectBrowserlessCDP() below.
+  const timeoutMs = Number(process.env.BROWSERLESS_TIMEOUT_MS || 120000);
   const ws = `${base}/chromium/playwright?token=${encodeURIComponent(token)}${proxyQs}&timeout=${timeoutMs}`;
   // Dynamic import so build/serverless bundles never pull Playwright unless a
   // live scan actually runs (the browser itself is hosted on Browserless).
@@ -117,7 +124,55 @@ async function connectBrowserless(proxyCountry = "") {
   catch { throw new Error("playwright-core is not installed — run `npm i playwright-core` to enable the live GEO scan."); }
   // Browserless `/chromium/playwright` endpoint uses the Playwright protocol →
   // chromium.connect() (NOT connectOverCDP, which is for the /chromium CDP endpoint).
-  return chromium.connect(ws);
+  // Browserless plans cap CONCURRENT sessions — a burst returns HTTP 429. Retry the CONNECT
+  // with exponential backoff + jitter so a rate-limited query WAITS for a free slot instead
+  // of dropping the prompt. This is what lets a 30-prompt engine complete on a low-concurrency
+  // plan (each query eventually gets a session). Only 429/rate-limit/concurrency errors retry.
+  const attempts = Math.max(1, Number(process.env.BROWSERLESS_CONNECT_ATTEMPTS) || 6);
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try { return await chromium.connect(ws); }
+    catch (e) {
+      lastErr = e;
+      const rateLimited = /\b429\b|too many requests|rate.?limit|session limit|concurrent|max.*sessions/i.test(String(e?.message || ""));
+      if (!rateLimited || i === attempts - 1) throw e;
+      const backoff = Math.min(25000, 3000 * Math.pow(1.7, i)) + Math.floor(Math.random() * 2000);
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  throw lastErr;
+}
+
+// Stealth + CAPTCHA-solving connection for Cloudflare-gated engines (ChatGPT). The plain
+// /chromium/playwright endpoint 400s on &stealth; the /chromium CDP endpoint accepts &stealth
+// &solveCaptchas=true and is reached with connectOverCDP (NOT chromium.connect). Logged-out
+// ChatGPT clears its "Just a moment" wall here, so no login session is needed.
+async function connectBrowserlessCDP(proxyCountry = "") {
+  const token = process.env.BROWSERLESS_TOKEN;
+  if (!token) throw new Error("BROWSERLESS_TOKEN is not set — required for the live GEO scan.");
+  const base = (process.env.BROWSERLESS_ENDPOINT_BASE || "https://production-sfo.browserless.io").replace(/^http/i, "ws");
+  const residential = String(process.env.BROWSERLESS_USE_RESIDENTIAL || "").trim() === "1";
+  const global = _isGlobal(proxyCountry);
+  const country = global ? "" : String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "").toLowerCase();
+  const proxyQs = (residential && !global) ? `&proxy=residential${country ? `&proxyCountry=${country}` : ""}` : "";
+  const timeoutMs = Number(process.env.BROWSERLESS_TIMEOUT_MS || 120000);
+  const ws = `${base}/chromium?token=${encodeURIComponent(token)}${proxyQs}&stealth&solveCaptchas=true&timeout=${timeoutMs}`;
+  let chromium;
+  try { ({ chromium } = await import("playwright-core")); }
+  catch { throw new Error("playwright-core is not installed — run `npm i playwright-core` to enable the live GEO scan."); }
+  const attempts = Math.max(1, Number(process.env.BROWSERLESS_CONNECT_ATTEMPTS) || 6);
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try { return await chromium.connectOverCDP(ws); }
+    catch (e) {
+      lastErr = e;
+      const rateLimited = /\b429\b|too many requests|rate.?limit|session limit|concurrent|max.*sessions/i.test(String(e?.message || ""));
+      if (!rateLimited || i === attempts - 1) throw e;
+      const backoff = Math.min(25000, 3000 * Math.pow(1.7, i)) + Math.floor(Math.random() * 2000);
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  throw lastErr;
 }
 
 // ── Per-engine adapter (live) ────────────────────────────────────────────────
@@ -145,7 +200,12 @@ async function waitForStableAnswer(page, cfg) {
         walk(document);
       }
       if (!nodes.length) return "";
-      const el = nodes[nodes.length - 1];
+      // Pick the node with the MOST text, not the last one. Perplexity's `.prose` matches
+      // both the full answer container AND its inner <p> fragments — the last match is a
+      // sub-paragraph. The longest match is the complete answer. (Single-query fresh context
+      // → one assistant turn, so this never grabs a stale earlier turn.)
+      let el = nodes[0];
+      for (const n of nodes) { if (String(n.innerText || n.textContent || "").length > String(el.innerText || el.textContent || "").length) el = n; }
       return String(el.innerText || el.textContent || "").trim();
     }, cfg.answerSel);
     if (txt && txt.length > 40) {
@@ -170,6 +230,39 @@ async function _maybeScreenshot(page) {
     const buf = await page.screenshot({ type: "jpeg", quality: 40 });
     return Buffer.from(buf).toString("base64");
   } catch { return undefined; }
+}
+
+// Consumer AI apps gate the composer behind interstitials: ChatGPT's "Continue"
+// Temporary-Chat confirmation, "Stay logged out", region notices, cookie banners.
+// Click the first matching DISMISS/CONTINUE-past CTA by visible text so the composer
+// becomes reachable. PRIVACY-SAFE: we never click "Accept all"/"I agree" (accepting
+// terms/tracking is out of scope) — only reject/decline/close/continue-past controls.
+// Best-effort + fast — never throws into the ask flow.
+const _OVERLAY_CTAS = [
+  /^continue$/i, /continue temporary chat/i, /^start( new)? chat/i, /stay logged out/i,
+  /^reject all/i, /necessary (cookies )?only/i, /^decline/i, /^no thanks/i, /^not now/i,
+  /^got it$/i, /^dismiss$/i, /^close$/i, /^skip$/i, /^maybe later/i, /^ok$/i,
+];
+async function dismissOverlays(page, budgetMs = 6000) {
+  // POLL: these interstitials render async (ChatGPT's Temporary-Chat "Continue" modal
+  // appears ~2s AFTER load), so we keep watching until the budget runs out, clicking any
+  // CTA the moment it appears. Stop after two idle rounds (nothing left to dismiss).
+  const deadline = Date.now() + budgetMs;
+  let idle = 0;
+  while (Date.now() < deadline) {
+    let clicked = false;
+    for (const rx of _OVERLAY_CTAS) {
+      try {
+        const btn = page.getByRole("button", { name: rx }).first();
+        if (await btn.isVisible({ timeout: 250 }).catch(() => false)) {
+          await btn.click({ timeout: 1500, force: true }).catch(() => {});
+          clicked = true; await page.waitForTimeout(500); break;
+        }
+      } catch { /* selector unsupported — keep scanning */ }
+    }
+    if (clicked) { idle = 0; }
+    else { if (++idle >= 2) break; await page.waitForTimeout(500); }
+  }
 }
 
 // Page-level ask flow. Works with ANY Playwright context — a Browserless
@@ -237,6 +330,7 @@ async function askInContext(context, cfg, prompt, proxyCountry = "", regionLabel
     // Ephemeral entry point (ChatGPT Temporary Chat etc.) → no history / no memory.
     await page.goto(cfg.ephemeralUrl || cfg.url, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(1200); // brief SPA hydration; composer.waitFor handles readiness
+    await dismissOverlays(page);     // clear ChatGPT "Continue" / "stay logged out" / consent gates
 
     // Login-wall detection (calibration point): if the composer never appears,
     // the session has expired → caller should refresh that engine's storageState.
@@ -244,15 +338,48 @@ async function askInContext(context, cfg, prompt, proxyCountry = "", regionLabel
     const composerSel = cfg.composerSel
       ? `${cfg.composerSel}, textarea, div[role="textbox"]`
       : 'textarea, [contenteditable="true"], div[role="textbox"]';
-    const composer = page.locator(composerSel).first();
-    await composer.waitFor({ state: "visible", timeout: 35000 });
-    await composer.click();
+    // Pick the first VISIBLE composer. ChatGPT (and others) ship a HIDDEN fallback
+    // <textarea> alongside the real ProseMirror/contenteditable div — a plain .first()
+    // grabs the hidden one and waitFor(visible) then times out forever. Loop to the
+    // first actually-visible match (version-agnostic; no .filter({visible}) dependency).
+    const firstVisible = async (timeoutMs) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const all = page.locator(composerSel);
+        const n = await all.count().catch(() => 0);
+        for (let i = 0; i < n; i++) {
+          const c = all.nth(i);
+          if (await c.isVisible().catch(() => false)) return c;
+        }
+        await page.waitForTimeout(600);
+      }
+      return null;
+    };
+    let composer = await firstVisible(35000);
+    if (!composer) {
+      // an interstitial may have rendered late (SPA) — dismiss again and retry once
+      await dismissOverlays(page);
+      composer = await firstVisible(15000);
+    }
+    if (!composer) throw new Error(`${cfg.name}: composer never became visible (login wall or DOM drift).`);
+    // Normal click first; if a residual backdrop intercepts pointer events, force it,
+    // then fall back to focus() — all we need is the composer focused so insertText lands.
+    await composer.click({ timeout: 6000 })
+      .catch(() => composer.click({ timeout: 4000, force: true }))
+      .catch(() => composer.focus().catch(() => {}));
 
     // insertText pastes the whole prompt at once (no per-key Enter) so a multi-line
     // prompt never submits early. Then submit via the SEND BUTTON (Enter often just
     // inserts a newline in these rich composers); fall back to Enter.
     await page.keyboard.insertText(prompt);
     await page.waitForTimeout(400);
+    // A late interstitial (ChatGPT temp-chat "Continue") can render over the composer
+    // between focus and submit — clear it, re-focus, and re-type if the dismissal wiped
+    // the field, so the send always lands on a composer that actually holds the prompt.
+    await dismissOverlays(page, 3000);
+    await composer.click({ timeout: 3000 }).catch(() => composer.focus().catch(() => {}));
+    const hasText = await composer.evaluate((el) => ((el.innerText || el.value || "").trim().length > 0)).catch(() => true);
+    if (!hasText) { await page.keyboard.insertText(prompt); await page.waitForTimeout(300); }
     let sent = false;
     if (cfg.sendSel) {
       try {
@@ -278,7 +405,19 @@ async function askInContext(context, cfg, prompt, proxyCountry = "", regionLabel
 
     // Wait for the assistant turn to APPEAR and stop growing (stream settled),
     // reading only the answer node — never the page chrome or the prompt echo.
-    const answerText = await waitForStableAnswer(page, cfg);
+    let answerText = await waitForStableAnswer(page, cfg);
+    // One retry for a transient generation error (ChatGPT "Something went wrong … Retry",
+    // Gemini "Something went wrong"). Only when the answer is an error stub, not a real answer.
+    if (answerText.length < 400 && /something went wrong|an error occurred|try again|network error|please try again/i.test(answerText)) {
+      try {
+        const retry = page.getByRole("button", { name: /^(retry|try again|regenerate)/i }).first();
+        if (await retry.isVisible({ timeout: 2500 }).catch(() => false)) {
+          await retry.click({ force: true }).catch(() => {});
+          await page.waitForTimeout(1500);
+          answerText = await waitForStableAnswer(page, cfg);
+        }
+      } catch { /* no retry control — keep the original text */ }
+    }
     // §16 raw_html: the answer node's innerHTML (capped). `nodeMatched` tells us the
     // configured answerSel actually matched (so we know whether the text above came
     // cleanly from the answer node or from the body-tail fallback) → feeds confidence.
@@ -293,14 +432,21 @@ async function askInContext(context, cfg, prompt, proxyCountry = "", regionLabel
         walk(document);
       }
       if (!nodes.length) return { raw_html: "", nodeMatched: false };
-      const el = nodes[nodes.length - 1];
+      let el = nodes[0];
+      for (const n of nodes) { if (String(n.innerText || n.textContent || "").length > String(el.innerText || el.textContent || "").length) el = n; }
       return { raw_html: String(el.innerHTML || el.outerHTML || "").slice(0, 20000), nodeMatched: true };
     }, cfg.answerSel);
     const citationsRaw = await page.evaluate((sel) => {
-      let root = document.body;
-      if (sel) { const n = document.querySelectorAll(sel); if (n.length) root = n[n.length - 1]; }
-      return Array.from(root.querySelectorAll('a[href^="http"]')).map((a) => a.href)
-        .filter((h) => !/(chatgpt|openai|google\.com|gemini|accounts\.|perplexity\.ai\/?$|microsoft\.com|bing\.com|copilot|claude\.ai|anthropic|gstatic)/i.test(h));
+      const links = new Set();
+      const collect = (root) => { if (root) root.querySelectorAll('a[href^="http"]').forEach((a) => links.add(a.href)); };
+      // 1) inline citations INSIDE the answer node (superscript/numbered links).
+      if (sel) { const n = document.querySelectorAll(sel); if (n.length) { let root = n[0]; for (const e of n) { if (String(e.innerText || e.textContent || "").length > String(root.innerText || root.textContent || "").length) root = e; } collect(root); } }
+      // 2) the engine's DEDICATED sources region — Perplexity "Sources", Gemini "Sources and
+      //    related content", ChatGPT source pills, Copilot footnotes — matched generically by
+      //    class/aria so we capture WHO WAS CITED wherever it renders, not just the answer body.
+      document.querySelectorAll('[class*="source" i],[class*="citation" i],[class*="reference" i],[class*="footnote" i],[aria-label*="source" i],[aria-label*="citation" i],a[class*="citation" i]').forEach(collect);
+      // Keep only EXTERNAL cited domains (drop the engine's own UI/nav hosts).
+      return [...links].filter((h) => !/(chatgpt|openai|google\.com|gemini\.google|accounts\.|perplexity\.ai\/?$|microsoft\.com|bing\.com|copilot|claude\.ai|anthropic|gstatic)/i.test(h));
     }, cfg.answerSel);
     const citations = [...new Set(citationsRaw)].slice(0, 30);
     // §16 parse_confidence: high (0.9) when the answer node matched cleanly AND
@@ -448,6 +594,8 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry, re
   // limit — sequentially this would take 10-20 min. Each query still uses a FRESH,
   // ephemeral Browserless connection (no state bleed). Concurrency is capped to the
   // Browserless plan's parallel-session limit via GEO_CONCURRENCY (default 6).
+  // EVERY engine runs EVERY prompt — no sampling, no dummy data. Speed comes from the concurrency
+  // pool below (up to 10 parallel Browserless browsers), not from cutting the workload.
   const tasks = [];
   for (const ek of engineKeys) for (const p of prompts) tasks.push({ ek, p });
 
@@ -458,7 +606,9 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry, re
     for (let a = 0; a < attempts; a++) {
       let browser;
       try {
-        browser = await connectBrowserless(proxyCountry);
+        // Cloudflare-gated engines (ChatGPT) connect through the stealth + CAPTCHA-solving CDP
+        // endpoint; everything else uses the plain Playwright endpoint.
+        browser = cfg?.cdpStealth ? await connectBrowserlessCDP(proxyCountry) : await connectBrowserless(proxyCountry);
         const _r = await askEngine(browser, ek, p.prompt, sessions[ek], proxyCountry, regionLabel);
         // §16 — capture per-run metadata; raw_html/parse_confidence/screenshot ride along via the spread.
         return {
@@ -475,7 +625,15 @@ async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry, re
     return { engine: cfg?.name || ek, prompt: p.prompt, ...tag, error: String(lastErr?.message || lastErr) };
   };
 
-  const CONCURRENCY = Math.max(1, Number(process.env.GEO_CONCURRENCY) || 6);
+  // Hosted Browserless caps CONCURRENT sessions per plan — too many parallel connects → 429.
+  // Cap the browserless pass at a safe residential-session concurrency (default 2; override via
+  // BROWSERLESS_MAX_CONCURRENCY) so we stay under the plan limit. The connect-retry handles any
+  // residual bursts. Local transport ignores this cap (no hosted-session limit).
+  // Browserless plan allows ~5 concurrent sessions (live-tested: 10 parallel connects → 5 succeed,
+  // 5 return 429). Run the pool at 5 so every query gets a real slot with no 429 churn; the
+  // connect-retry below still absorbs the occasional burst. Bump both if the plan is upgraded.
+  const _bMax = Math.max(1, Number(process.env.BROWSERLESS_MAX_CONCURRENCY) || 5);
+  const CONCURRENCY = Math.max(1, Math.min(Number(process.env.GEO_CONCURRENCY) || 5, _bMax));
   // TIME GUARD: stop launching NEW queries past this deadline so the scan always returns
   // within the 300s function limit. The report then shows REAL (partial) Share-of-Voice
   // from whatever completed — never a perpetual "Pending live scan" caused by a timeout.
