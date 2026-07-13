@@ -1138,8 +1138,11 @@ export default function DeckReport({ data, live }) {
     const s = lc(p.url_slug || "").replace(/^\/+|\/+$/g, ""); if (s) _realSlugs.add(s);
   }
   for (const cp of (d.websiteCrawl?.pages || [])) { try { const s = new URL(cp.url).pathname.replace(/^\/+|\/+$/g, "").toLowerCase(); if (s) _realSlugs.add(s); } catch { /* ignore */ } }
+  // Only scrub PATH-like slugs (slash at a word boundary — preceded by whitespace or start), so inline
+  // slash phrases such as "on-page/off-page" or "A/B-testing" are left intact. An invented slug is
+  // removed but its leading whitespace is preserved via the captured group.
   const _scrubPlanSlugs = (t) => String(t || "")
-    .replace(/\s*\/[a-z][a-z0-9]*(?:-[a-z0-9]+){1,}/gi, (m) => (_realSlugs.has(m.trim().replace(/^\/+/, "").toLowerCase()) ? m : ""))
+    .replace(/(^|\s)\/([a-z][a-z0-9]*(?:-[a-z0-9]+)+)/gi, (m, pre, slug) => (_realSlugs.has(slug.toLowerCase()) ? m : pre))
     .replace(/\s{2,}/g, " ").replace(/\s+([.,])/g, "$1").trim();
   slides.push(
     <Slide key="plan" n="20" kicker="The Plan" title="One job per phase. Move on when it's done." foot={foot("20 · THE 30/60/90/180 PLAN")}>

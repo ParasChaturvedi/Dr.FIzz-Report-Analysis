@@ -91,11 +91,14 @@ export function checkExistingPage(page = {}, crawlPages = []) {
     else if (title && ctitle && tokenOverlap(title, ctitle) >= 0.6) matched = true;
     else if (kw && kw.length >= 4 && ctitle && tokenOverlap(kw, ctitle) >= 0.7) matched = true;
     if (!matched) continue;
-    // Intent guard: a commercial candidate must not count as existing via an INFORMATIONAL page. But a
-    // strong exact-slug/URL hit means the page's OWN commercial slug matched, so only the URL itself can
-    // signal info there; the crawled-title heuristic applies only to looser title/keyword matches
-    // (else "SEO Audit Services — How To Rank #1" at /seo-audit-services would be falsely dropped).
-    if (_pageCommercial && (_isInfoUrlPath(url) || (!matchedBySlug && _isInfoTitle(ctitle)))) continue;
+    // Intent guard: a commercial candidate must not count as existing via an INFORMATIONAL page — but
+    // ONLY when the match was a loose title/keyword overlap. An exact slug/URL hit means the page's OWN
+    // commercial slug matched a live URL, which is a trustworthy existence hit; we must not reject it just
+    // because that slug or URL happens to contain an info-ish token (e.g. a real "/tour-guide-services"
+    // commercial page has "-guide-" in it). So the whole info-check is gated on `!matchedBySlug`. The
+    // motivating 4b case ("SEO Company In India" → "/seo/what-is-seo") is a title/keyword match
+    // (matchedBySlug=false) and is still correctly rejected.
+    if (_pageCommercial && !matchedBySlug && (_isInfoUrlPath(url) || _isInfoTitle(ctitle))) continue;
     return hit(cp);
   }
   return { exists: false };

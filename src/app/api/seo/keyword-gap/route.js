@@ -389,7 +389,15 @@ export async function POST(request) {
   ]);
   // Build the place-based candidates from the (now-resolved) parallel volume fetch — demand-gated.
   const placeBasedKeywords = locCandidates
-    .map(kw => { const v = placeVolMap[kw.toLowerCase()] || {}; return { keyword: kw, volume: Number(v.volume) || 0, difficulty: v.competition != null ? Number(v.competition) / 100 : 0, cpc: Number(v.cpc) || 0, intent: "local", generated: true, opportunity: opportunityScore(Number(v.volume) || 0, v.competition != null ? Number(v.competition) / 100 : 0) }; })
+    .map(kw => {
+      const v = placeVolMap[kw.toLowerCase()] || {};
+      const vol = Number(v.volume) || 0;
+      // competition may be a numeric index (0-100) OR a string enum (LOW/MEDIUM/HIGH) — guard NaN so a
+      // real-volume candidate never carries difficulty:NaN into the classifier / a "NaN KD" on the page.
+      const _ci = Number(v.competition);
+      const diff = Number.isFinite(_ci) ? _ci / 100 : 0;
+      return { keyword: kw, volume: vol, difficulty: diff, cpc: Number(v.cpc) || 0, intent: "local", generated: true, opportunity: opportunityScore(vol, diff) };
+    })
     .filter(k => k.volume > 0 && !targetKws.has(k.keyword))   // demand-gate + not already ranked
     .sort((a, b) => b.opportunity - a.opportunity)
     .slice(0, 20);
