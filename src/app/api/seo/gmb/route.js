@@ -299,12 +299,18 @@ async function checkDirectoryListings(domain, auth, businessName = "") {
         // Accept if result URL contains the directory domain AND
         // title/description/url mentions the business name or domain
         const urlMatchesDir  = resultUrl.includes(siteRoot.split(".")[0]);
+        // item 10b — a bare first-word match ("SEO" for "SEO Company") over-reported nearly every
+        // directory as listed, turning the whole slide green. Require the FULL business name, the site
+        // host, or the DISTINCTIVE core name (legal/industry suffixes stripped) — never a lone generic
+        // first word. A generic-named business whose core is too short/generic then honestly shows as
+        // unlisted rather than a false green.
+        const coreName = nameLC
+          .replace(/\b(pvt|private|ltd|limited|llp|inc|incorporated|llc|co|company|companies|solutions?|technologies?|technology|digital|media|marketing|advertising|agency|agencies|services|service|group|studios?|labs?|india|global|the|and)\b/g, " ")
+          .replace(/[^a-z0-9]+/g, " ").trim();
         const mentionsBiz    = resultTitle.includes(nameLC) ||
                                resultDesc.includes(nameLC)  ||
                                resultUrl.includes(hostLC)   ||
-                               // also try short name (first word)
-                               resultTitle.includes(nameLC.split(" ")[0]) ||
-                               resultDesc.includes(nameLC.split(" ")[0]);
+                               (coreName.length >= 4 && (resultTitle.includes(coreName) || resultDesc.includes(coreName) || resultUrl.includes(coreName.replace(/\s+/g, ""))));
 
         if (urlMatchesDir && mentionsBiz) {
           return {

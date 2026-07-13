@@ -65,13 +65,13 @@ linkedin twitter youtube tiktok pinterest shopify wordpress wix webflow squaresp
 zoho magento woocommerce wordpress ai llm gpt overview overviews
 profile profiles maps map engine engines search graphic page pages listing listings review reviews rating ratings
 post posts vitals core experience voice keyword keywords backlink backlinks ranking rankings score scores sitemap
-robots schema canonical redirect redirects title titles tag tags heading headings snippet snippets citation citations
+technical robots schema canonical redirect redirects title titles tag tags heading headings snippet snippets citation citations
 generative discovery presence visibility awareness reputation positioning outreach funnel pipeline dashboard report reports
 january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday
 india indian usa uk us united states america american europe european asia asian australia canada uae dubai singapore mumbai delhi gurgaon bangalore bengaluru chennai pune kolkata hyderabad noida`.split(/\s+/).filter(Boolean)]);
 
 // Generic industry acronyms that survive the "all-caps prefix" brand test but are NOT company names.
-const _GEN_ACRONYMS = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux ui api cms crm saas faq kpi aov b2b b2c ai llm gpt serp url gmb nap eeat eat".split(/\s+/));
+const _GEN_ACRONYMS = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux ui api cms crm saas faq kpi aov b2b b2c ai llm gpt serp url gmb nap eeat eat sme smb".split(/\s+/));
 
 function discoverBrands(text, { known = new Set(), location = "" } = {}) {
   const t = String(text || "");
@@ -109,6 +109,21 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
     counts[name] = (counts[name] || 0) + 1;
   }
   return Object.entries(counts).map(([name, count]) => ({ name, count }));
+}
+
+// Report-build-time guard: true when a discovered "brand" is actually a generic/topic term, not a
+// company (e.g. "Technical SEO", "Google Business Profile", "KPIs", "SMEs"). Mirrors the discoverBrands
+// drop rules so it also cleans ALREADY-STORED runs whose discoveredBrands predate a stoplist change.
+export function isBrandNoise(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  if (words.every((w) => _GENERIC.has(w.toLowerCase()))) return true;   // every word generic → topic
+  if (words.length === 1) {
+    const w = words[0];
+    if (_GEN_ACRONYMS.has(w.toLowerCase().replace(/s$/, ""))) return true;  // KPIs, SMEs, ROI…
+    if (!(/[a-z][A-Z]/.test(w) || /^[A-Z]{2,}[a-z]/.test(w))) return true;  // not a brandy single word
+  }
+  return false;
 }
 
 // Sentiment toward the brand, ONLY when detectable from language NEAR the brand mention.

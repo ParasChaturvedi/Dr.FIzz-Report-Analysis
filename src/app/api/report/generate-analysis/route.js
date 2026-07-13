@@ -1037,6 +1037,10 @@ export async function POST(request) {
       performanceDesktop: desktopScore,  // integer 0-100 or null
       lcp: (cwvLab?.lcp ?? cwvLab?.LCP) != null ? Math.round(cwvLab?.lcp ?? cwvLab?.LCP) : null, // ms, whole number
       cls: (cwvLab?.cls ?? cwvLab?.CLS) != null ? Math.round((cwvLab?.cls ?? cwvLab?.CLS) * 100) / 100 : null, // 2 decimals
+      // item 7 — a CWV number must carry its evidence: WHICH url was measured and whether it is lab
+      // (Lighthouse) or field (CrUX) data. We read coreWebVitalsLab, so this is lab data for safeUrl.
+      cwvUrl:    ((cwvLab?.lcp ?? cwvLab?.LCP) != null || (cwvLab?.cls ?? cwvLab?.CLS) != null) ? safeUrl : null,
+      cwvSource: ((cwvLab?.lcp ?? cwvLab?.LCP) != null || (cwvLab?.cls ?? cwvLab?.CLS) != null) ? "lab" : null,
     };
 
     // ── Compute real-data sections (no AI needed, derived from collected metrics) ──
@@ -1078,6 +1082,10 @@ export async function POST(request) {
       ...(kwGapRaw?.newOpportunities || []),
       ...(kwGapRaw?.easyWins || []),
       ...(kwGapRaw?.targetRanked || []),
+      // item 1.2 — generated place-based candidates (service × city/region) with REAL measured volume.
+      // They flow through the same classifier (extractGeography → local-commercial) and demand-gate,
+      // so the local tier + geography_pages populate even when rivals rank only nationally.
+      ...(kwGapRaw?.placeBasedKeywords || []),
       ...(kwGapRaw?.paaQuestions || []).map(q => ({ keyword: q.question, volume: 0, difficulty: 0.2 })),
     ];
 

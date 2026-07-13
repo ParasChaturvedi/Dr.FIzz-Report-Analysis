@@ -10,7 +10,7 @@ import { locationNameForCountry } from "@/lib/seo/market";
 import { extractGeography } from "@/lib/seo/doctor-fizz-logic";
 
 export const runtime    = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;   // several sequential DataForSEO calls (+ place-based volume); headroom so a slow chain still reaches putCached
 
 function getAuth() {
   const login    = process.env.DATAFORSEO_LOGIN    || "";
@@ -232,6 +232,54 @@ async function getKeywordSuggestions(domain, auth, limit = 100, location = "Indi
   } catch { return []; }
 }
 
+// ── Real search volume for an arbitrary keyword LIST (Google Ads) ─────────────
+// Used to VALIDATE generated place-based candidates. We never fabricate volume — a candidate is
+// kept only if DataForSEO returns measured demand for it.
+async function getSearchVolume(keywords, auth, location = "India") {
+  const kws = [...new Set((keywords || []).map(k => String(k || "").trim().toLowerCase()).filter(Boolean))].slice(0, 700);
+  if (!kws.length) return {};
+  try {
+    const data = await dfsPost("keywords_data/google_ads/search_volume/live",
+      [{ keywords: kws, location_name: location, language_code: "en" }], auth);
+    const items = data?.tasks?.[0]?.result?.[0]?.items || data?.tasks?.[0]?.result || [];
+    const out = {};
+    for (const it of items) {
+      const k = String(it?.keyword || "").toLowerCase(); if (!k) continue;
+      out[k] = { volume: it?.search_volume ?? null, cpc: it?.cpc ?? null, competition: it?.competition_index ?? it?.competition ?? null };
+    }
+    return out;
+  } catch (e) { console.warn("[keyword-gap] search_volume failed:", e?.message); return {}; }
+}
+
+// ── Place-based candidate GENERATION (item 1.2) ───────────────────────────────
+// The pipeline previously only HARVESTED local keywords a competitor happened to rank for, so a
+// client whose rivals rank nationally got an empty local tier. Here we GENERATE service × location
+// candidates (city, country, "near me"); the caller then validates each with real DataForSEO volume.
+const CITIES_BY_CC = {
+  in: ["mumbai", "delhi", "bangalore", "gurgaon", "chennai", "pune", "hyderabad", "kolkata", "noida", "ahmedabad"],
+  us: ["new york", "los angeles", "chicago", "houston", "miami", "dallas", "atlanta", "seattle"],
+  gb: ["london", "manchester", "birmingham", "leeds", "glasgow", "bristol"],
+  ae: ["dubai", "abu dhabi", "sharjah"],
+  au: ["sydney", "melbourne", "brisbane", "perth"],
+  ca: ["toronto", "vancouver", "calgary", "montreal"],
+  sg: ["singapore"],
+};
+function buildLocationCandidates(seeds, locationName, countryCode) {
+  // service seeds = short commercial phrases that DON'T already carry a location token.
+  const svc = [...new Set((seeds || [])
+    .map(s => String(s || "").toLowerCase().trim())
+    .filter(s => s.length >= 4 && s.split(/\s+/).length <= 5 && !extractGeography(s).place))].slice(0, 8);
+  if (!svc.length) return [];
+  const cc = String(countryCode || "in").toLowerCase();
+  const country = String(locationName || "").toLowerCase();
+  const mods = [...(CITIES_BY_CC[cc] || []).map(c => `in ${c}`)];
+  if (country) mods.push(`in ${country}`);
+  mods.push("near me");
+  const out = new Set();
+  for (const s of svc) for (const m of mods) out.add(`${s} ${m}`);
+  return [...out].slice(0, 150);   // cap to bound the DataForSEO volume call
+}
+
 // ── Main keyword gap analysis ─────────────────────────────────────────────────
 export async function POST(request) {
   const auth = getAuth();
@@ -313,6 +361,20 @@ export async function POST(request) {
     .sort((a, b) => opportunityScore(b.volume, b.difficulty) - opportunityScore(a.volume, a.difficulty))
     .slice(0, 20);
 
+  // ── Place-based candidates (item 1.2): GENERATE service × location terms, then keep ONLY those with
+  // measured DataForSEO volume (never fabricated). Seeds = user service keywords + top commercial
+  // gap/ranked terms. Result rides this route's 30-day getOrFetch cache, so no repeat DataForSEO cost.
+  const placeSeeds = [
+    ...keywords,
+    ...gapKeywords.filter(k => ["transactional", "commercial", "local"].includes(k.intent)).slice(0, 4).map(k => k.keyword),
+    ...targetRanked.filter(k => ["transactional", "commercial"].includes(k.intent)).slice(0, 3).map(k => k.keyword),
+  ];
+  const locCandidates = buildLocationCandidates(placeSeeds, locationName, countryCode);
+  // Kick off the volume validation now but DON'T await here — resolve it in parallel with getSerpIntel
+  // below. A serial await would push the cache-cold DataForSEO chain past maxDuration, killing the
+  // function before putCached and losing the WHOLE payload (incl. placeBasedKeywords).
+  const placeVolPromise = locCandidates.length ? getSearchVolume(locCandidates, auth, locationName) : Promise.resolve({});
+
   // ── Rich SERP intelligence (real top-10 + SERP features + AI Overview) for the priority
   // keywords; PAA is derived from the SAME calls. Priority = user keywords + easy wins +
   // commercial-intent gap keywords, deduped + capped inside getSerpIntel.
@@ -321,7 +383,16 @@ export async function POST(request) {
     ...easyWins.map(k => k.keyword),
     ...gapKeywords.filter(k => ["transactional", "local", "commercial"].includes(k.intent)).map(k => k.keyword),
   ].filter(Boolean);
-  const { serpIntel, paaQuestions } = await getSerpIntel(priorityKws, auth, undefined, locationName);
+  const [{ serpIntel, paaQuestions }, placeVolMap] = await Promise.all([
+    getSerpIntel(priorityKws, auth, undefined, locationName),
+    placeVolPromise,
+  ]);
+  // Build the place-based candidates from the (now-resolved) parallel volume fetch — demand-gated.
+  const placeBasedKeywords = locCandidates
+    .map(kw => { const v = placeVolMap[kw.toLowerCase()] || {}; return { keyword: kw, volume: Number(v.volume) || 0, difficulty: v.competition != null ? Number(v.competition) / 100 : 0, cpc: Number(v.cpc) || 0, intent: "local", generated: true, opportunity: opportunityScore(Number(v.volume) || 0, v.competition != null ? Number(v.competition) / 100 : 0) }; })
+    .filter(k => k.volume > 0 && !targetKws.has(k.keyword))   // demand-gate + not already ranked
+    .sort((a, b) => b.opportunity - a.opportunity)
+    .slice(0, 20);
 
   // ── Real Keyword Difficulty (0-100) attached to the gap + new-opportunity keywords.
   const kdMap = await getBulkKeywordDifficulty([...gapKeywords, ...newOpps].map(k => k.keyword), auth, locationName);
@@ -340,6 +411,9 @@ export async function POST(request) {
     gapByIntent:  byIntent,
     easyWins,
     newOpportunities: newOpps,
+    // item 1.2 — generated service × location candidates, each validated with REAL DataForSEO volume
+    // (demand-gated, never fabricated). Cached with this payload for 30 days.
+    placeBasedKeywords,
     paaQuestions,
     // #3 — real SERP intelligence per priority keyword (top-10 + features + AI Overview).
     serpIntel,
@@ -358,8 +432,9 @@ export async function POST(request) {
   };
   try { await putCached({ domain: target, dataType: cacheType, payload: out, source: "keyword-gap" }); } catch {}
   // Cost: ranked_keywords (target + competitors) + keywords_for_site + ~15 SERP-advanced
-  // (AI Overview, ~$0.004 ea) + bulk_keyword_difficulty + 1 backlink domain_intersection.
-  // ~$0.18 cache-cold. Competitor top pages are derived from data already fetched (free).
-  await logUsage({ domain: target, api: "keyword-gap", costUSD: 0.18, cached: false });
+  // (AI Overview, ~$0.004 ea) + bulk_keyword_difficulty + 1 backlink domain_intersection +
+  // 1 google_ads search_volume for the generated place-based candidates (item 1.2). ~$0.23
+  // cache-cold, then $0 for 30 days. Competitor top pages are derived from data already fetched.
+  await logUsage({ domain: target, api: "keyword-gap", costUSD: 0.23, cached: false });
   return NextResponse.json(out);
 }

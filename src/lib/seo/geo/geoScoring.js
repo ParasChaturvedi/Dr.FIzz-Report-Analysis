@@ -10,6 +10,7 @@
 // answers; nothing here fabricates SoV / citations / mentions.
 // ─────────────────────────────────────────────────────────────────────────────
 import { GEO_SCORE_WEIGHTS, citationPositionScore } from "./model/constants.js";
+import { isBrandNoise } from "./geoParser.js";
 
 const pct = (n, d) => (d > 0 ? Math.round((n / d) * 1000) / 10 : 0);
 const r0 = (n) => Math.round(n);
@@ -119,7 +120,10 @@ function shareOfVoice(byEngine, ctx) {
     for (const d of (r.discoveredBrands || [])) { const nm = String(d?.name || "").trim(); if (nm) (discPrompts[nm] ||= new Set()).add(pid); }
   }
   const discSet = new Set(
-    Object.entries(discPrompts).filter(([, s]) => s.size >= 2).sort((a, b) => b[1].size - a[1].size).slice(0, 5).map(([n]) => n)
+    Object.entries(discPrompts)
+      .filter(([, s]) => s.size >= 2)
+      .filter(([n]) => !isBrandNoise(n))   // drop topic/generic terms (Technical SEO, KPIs, SMEs, GBP…)
+      .sort((a, b) => b[1].size - a[1].size).slice(0, 5).map(([n]) => n)
   );
   for (const n of discSet) tally[n] ||= { brand: n, is_client: false, discovered: true, per_engine: {} };
 

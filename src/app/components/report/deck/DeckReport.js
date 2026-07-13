@@ -20,8 +20,8 @@ import { buildIllustrativeGeo, buildIllustrativeBenchmark } from "./illustrative
 import DeckAutoFit from "./DeckAutoFit";
 import { semanticSig } from "@/lib/seo/geo/semanticSig";
 
-// DoctorFizz partner brands (static clientele wall, matches the reference deck).
-const CLIENT_BRANDS = ["ACENTEUS", "AXXONET", "VINE PROJECTS", "LOYORA", "DexWin", "AVIA", "WATERSTONE", "tipplr", "CONTENT WHALE", "SHIVA MANVI", "VASAL IMPEX", "SCRIBBLE NATION"];
+// item 12a — the fabricated placeholder clientele wall was removed. The closing slide now shows REAL
+// competitor brands from the analysis (business + API competitors + AI-named GEO brands); see slide 25.
 
 /* ── small data helpers ────────────────────────────────────────────────── */
 const mv = (bm, key, legacy) => {
@@ -375,10 +375,19 @@ export default function DeckReport({ data, live }) {
   const techCrit = lcpMs != null && Number(lcpMs) >= 6000;
   const techWarn = lcpMs != null && Number(lcpMs) >= 2500;
   const onpageHigh = tp.some((x) => /high|crit/i.test(x.priority));
+  // item 8a — the off-page line must read the REAL rival referring-domain counts, not a fixed
+  // "rivals' hundreds" string. Rivals are usually in the thousands and the client (e.g. 429) is the
+  // one in the hundreds, so the old copy inverted its own evidence table.
+  const _rivalRd = benchRows.map((c) => Number(c && c.refDomains)).filter((n) => n > 0);
+  const _rivalRdMax = _rivalRd.length ? Math.max(..._rivalRd) : null;
+  const _rdBucket = (n) => (n == null ? null : n >= 1000 ? "the thousands" : n >= 100 ? "the hundreds" : "double digits");
+  const _offpageLine = _rivalRdMax != null
+    ? `${dash(rd)} referring domains, ${Number(rd) < _rivalRdMax ? `behind rivals in ${_rdBucket(_rivalRdMax)}` : "ahead of most rivals"}. Trust must be earned.`
+    : `${dash(rd)} referring domains. Trust must be earned.`;
   const pillars = [
     { k: "On-Page SEO", pk: "onpage", head: "Pages exist, signals don't", word: onpageHigh ? "Needs work" : "Solid", kind: onpageHigh ? "med" : "low", line: "Missing H1s, thin content, no commercial pages for buyer terms.", first: "Fix in Phase 1 to 2" },
     { k: "Technical SEO", pk: "tech", head: lcpMs != null ? `A ${lcpSeconds(lcpMs)} load blocks everything` : "Crawl & speed need work", word: techCrit ? "Critical" : techWarn ? "Needs work" : "Solid", kind: techCrit ? "high" : techWarn ? "med" : "low", line: "Speed, broken links and crawl issues keep the site near-invisible.", first: "Fix first" },
-    { k: "Off-Page / Authority", pk: "offpage", head: `Domain Rating just ${dash(dr)}`, word: dr != null && Number(dr) >= 30 ? "Building" : "Weak", kind: dr != null && Number(dr) >= 30 ? "med" : "high", line: `${dash(rd)} referring domains vs rivals' hundreds. Trust must be earned.`, first: "Build over months" },
+    { k: "Off-Page / Authority", pk: "offpage", head: `Domain Rating just ${dash(dr)}`, word: dr != null && Number(dr) >= 30 ? "Building" : "Weak", kind: dr != null && Number(dr) >= 30 ? "med" : "high", line: _offpageLine, first: "Build over months" },
     { k: "Local SEO / GBP", pk: "local", head: `${rating ? `${rating}★` : "N/A"} rating, thin profile`, word: rating != null && Number(rating) >= 4.5 ? "Quick win" : "Needs work", kind: rating != null && Number(rating) >= 4.5 ? "low" : "med", line: `Real review quality, but only ${dash(reviews)} reviews and a ${dash(mv(bm, "gbp_completeness", "gmbCompletenessScore"))}% complete profile.`, first: "Phase 1 to 2" },
     { k: "GEO / AEO", pk: "geo", head: "Invisible in AI answers", word: Number(geo.overall?.sov) >= 15 ? "On track" : "Open field", kind: Number(geo.overall?.sov) >= 15 ? "low" : "med", line: aioMeasured ? `Cited in ${aio.brand_cited_count ?? 0} of ${aio.total_citations} Google AI Overview sources. Ready to be quoted, not chosen.` : `${pctStr(geo.overall?.sov)} share of voice, ${pctStr(geo.overall?.citation_rate)} citation rate${isIllus ? " (illustrative)" : ""}. Ready to be quoted, not chosen.`, first: "Phase 2 to 3" },
   ];
@@ -458,6 +467,10 @@ export default function DeckReport({ data, live }) {
       </>
     ) };
   };
+  // item 7 — a CWV number must carry its evidence: the measured URL + whether it is lab (Lighthouse)
+  // or field (CrUX) data. (Null metrics already render "N/A", never a fake 0.)
+  const _cwvUrl = mv(bm, "cwvUrl", "cwv_url");
+  const _cwvSrc = mv(bm, "cwvSource", "cwv_source");
   const cwv = [
     { n: lcpMs != null ? lcpSeconds(lcpMs) : "N/A", l: "Largest paint · target <2.5s", flag: lcpMs != null && Number(lcpMs) >= 2500 },
     { n: dash(mv(bm, "cls")), l: "Layout shift · good <0.1", flag: mv(bm, "cls") != null && Number(mv(bm, "cls")) >= 0.1 },
@@ -479,7 +492,8 @@ export default function DeckReport({ data, live }) {
           ) : null}
         </div>
         <div>
-          <h3 className="mini">Core Web Vitals, measured today</h3>
+          <h3 className="mini">Core Web Vitals{_cwvSrc ? ` · ${_cwvSrc === "field" ? "Field (CrUX)" : "Lab (Lighthouse)"}` : ", measured today"}</h3>
+          {_cwvUrl ? <div style={{ fontFamily: "var(--mono)", fontSize: 8.5, color: C.muted, margin: "1px 0 5px", wordBreak: "break-all" }}>Measured on {String(_cwvUrl).replace(/^https?:\/\//, "").replace(/\/$/, "")}</div> : null}
           <Tiles cols={2} style={{ margin: "8px 0 14px" }}>
             {cwv.map((c, i) => <Tile key={i} flag={c.flag} n={c.n} label={c.l} />)}
           </Tiles>
@@ -565,10 +579,13 @@ export default function DeckReport({ data, live }) {
         {tierCard("Tier 3 · Learning", "ghost", "Informational intent", "Answer content that feeds AI engines and builds topical authority.", ca.blog_and_guides, false)}
       </Row>
       <Tiles cols={4} style={{ marginTop: 24 }}>
-        <Tile n={opp.total_monthly_search_volume ? fmtNum(opp.total_monthly_search_volume) : "N/A"} label="Monthly searches in play" />
-        <Tile n={opp.commercial_keyword_count ? fmtNum(opp.commercial_keyword_count) : dash((ca.commercial_pages || []).length)} label="Commercial terms mapped" />
-        <Tile n={dash((ca.geography_pages || ca.city_pages || []).length)} label="Local pages to own" />
-        <Tile flag n="0" label="Commercial terms defended" />
+        {/* item 3c — the headline total must reconcile with the tier rows. primary_volume === the
+            keyword's global_volume, so the only gap was that the old total summed ALL accepted keywords
+            while the tiers show the mapped pages. Sum the SAME mapped set the three tiers render. */}
+        <Tile n={(() => { const _mv = [...(ca.commercial_pages || []), ...(ca.geography_pages || ca.city_pages || []), ...(ca.blog_and_guides || [])].reduce((s, p) => s + (Number(p.primary_volume) || 0), 0); return _mv > 0 ? fmtNum(_mv) : (opp.total_monthly_search_volume ? fmtNum(opp.total_monthly_search_volume) : "N/A"); })()} label="Monthly searches in play" />
+        <Tile n={dash((ca.commercial_pages || []).length)} label="Commercial terms mapped" />
+        <Tile n={dash((ca.geography_pages || ca.city_pages || []).filter((p) => (p.action || "create-new") !== "optimise-existing").length)} label="Local pages to own" />
+        <Tile flag n={dash((ca.commercial_pages || []).filter((p) => p.action === "optimise-existing").length)} label="Commercial terms defended" />
       </Tiles>
     </Slide>
   );
@@ -820,7 +837,7 @@ export default function DeckReport({ data, live }) {
     slides.push(_campaignSlide("13a", "geo-prompts-mentions",
       "Mentions: where AI names brands, and who gets picked",
       "Best and top style questions. AI answers these from third-party listicles (Clutch, DesignRush, Reddit, publisher round-ups), naming the brands it trusts. You do not win these with your own page, you earn the mention.",
-      GROUPS.mentions, "Who it named", (p) => { const b = _namedOf(p); const s = _srcsOf(p); return b.length ? b.join(", ") : (s.length ? s.slice(0, 3).join(", ") : (Number(p.answer_length) > 0 ? "answered" : "no answer")); },
+      GROUPS.mentions, "Who it named", (p) => { const b = _namedOf(p); return b.length ? b.join(", ") : "—"; },
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern">On these listicle questions AI names <b>rivals from directories and round-ups</b>{name ? <>, rarely {name}</> : null}.</Tc>
         <Tc kind="cost" label="What it costs you">Buyers act on the <b>names AI returns</b>, so every un-listed prompt is a lead that never hears of you.</Tc>
@@ -831,7 +848,7 @@ export default function DeckReport({ data, live }) {
     slides.push(_campaignSlide("13b", "geo-prompts-commercial",
       "Citation, commercial: questions a page on your site can win",
       "Buying-intent questions (compare, pricing, how to choose) where AI cites a WEBSITE as the source. Build the answer-first page and you become the cited answer, which drives the lead. This is what competitors are already doing.",
-      GROUPS.commercial, "Source it cited", (p) => { const s = _srcsOf(p); const b = _namedOf(p); return s.length ? s.slice(0, 3).join(", ") : (b.length ? b.join(", ") : (Number(p.answer_length) > 0 ? "answered" : "no answer")); },
+      GROUPS.commercial, "Source it cited", (p) => { const s = _srcsOf(p); return s.length ? s.slice(0, 3).join(", ") : "—"; },
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern"><b>Competitor pages</b> win these citations today, so their site is the answer, not yours.</Tc>
         <Tc kind="cost" label="What it costs you">The buyer reads the <b>cited page and its brand</b>, at the exact moment of intent.</Tc>
@@ -842,7 +859,7 @@ export default function DeckReport({ data, live }) {
     slides.push(_campaignSlide("13c", "geo-prompts-info",
       "Citation, informational: blogs to write for AI visibility",
       "Learning-stage questions where AI cites explainer content. Publish these and AI starts citing you, building the topical authority that feeds the commercial wins. This is where competitors are actively writing blogs.",
-      GROUPS.informational, "Source it cited", (p) => { const s = _srcsOf(p); const b = _namedOf(p); return s.length ? s.slice(0, 3).join(", ") : (b.length ? b.join(", ") : (Number(p.answer_length) > 0 ? "answered" : "no answer")); },
+      GROUPS.informational, "Source it cited", (p) => { const s = _srcsOf(p); return s.length ? s.slice(0, 3).join(", ") : "—"; },
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern"><b>Competitors are writing these explainers</b>, so AI learns the topic from them.</Tc>
         <Tc kind="cost" label="What it costs you">They build <b>topical authority and entity trust</b> with AI while you stay invisible.</Tc>
@@ -907,11 +924,27 @@ export default function DeckReport({ data, live }) {
       the reader understands how the 0–100 score is weighted BEFORE seeing the 0% numbers.) */
 
   /* 17 · What we build */
-  const buildCards = [...(ca.commercial_pages || []).slice(0, 3), ...(ca.geography_pages || ca.city_pages || []).slice(0, 1)];
+  // item 4a — slide 15 shows only pages to BUILD (create-new), the same partition slide 16 uses, so a
+  // page never appears as both "build" here and "optimise" there. item 3d — title/subtitle numbers
+  // derive from what is actually built, never a fixed "Four".
+  // P5 guard — a page must never appear as BUILD here and OPTIMISE on slide 16. Exclude both
+  // action==="optimise-existing" AND anything whose keyword is in the optimise set (covers the rare
+  // AI-fallback path where deterministic action tags are absent).
+  const _optKeys15 = new Set((ca.pagesToOptimise || []).flatMap((p) => [lc(p.keyword || "").replace(/[^a-z0-9]+/g, " ").trim(), lc(p.page || "").replace(/[^a-z0-9]+/g, " ").trim()]).filter(Boolean));
+  const _bkey = (p) => lc(p.keyword_cluster || p.page_name || p.keyword || "").replace(/[^a-z0-9]+/g, " ").trim();
+  const _toBuild = (arr) => (arr || []).filter((p) => (p.action || "create-new") !== "optimise-existing" && !_optKeys15.has(_bkey(p)));
+  const _bcComm = _toBuild(ca.commercial_pages).slice(0, 3);
+  const _bcLocal = _toBuild(ca.geography_pages || ca.city_pages).slice(0, 1);
+  const buildCards = [..._bcComm, ..._bcLocal];
+  const _numCap = (n) => (["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"][n] || String(n));
+  const _buildTitle = buildCards.length
+    ? `${_numCap(buildCards.length)} page${buildCards.length === 1 ? " does" : "s do"} most of the work`
+    : "Optimise what exists before building new";
+  const _buildSub = `Only pages with real, measured demand. ${_numCap(_bcComm.length)} commercial${_bcLocal.length ? `, ${_numCap(_bcLocal.length).toLowerCase()} local` : ""}. Each has a job and a target.`;
   const shipWith = ["Exact-intent H1 and meta", "800 to 1,500 unique words", "5 to 8 FAQs plus schema", "Strong CTA above the fold", "Internal links and alt text", "Sub-2.5s load time"];
   slides.push(
-    <Slide key="build" variant="cream" n="15" kicker="What We Build" title="Four pages do most of the work"
-      sub={<>{ds.build_sub || "Only pages with real, measured demand. Three commercial, one local. Each has a job and a target."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("15 · WHAT TO BUILD")}>
+    <Slide key="build" variant="cream" n="15" kicker="What We Build" title={_buildTitle}
+      sub={<>{ds.build_sub || _buildSub} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("15 · WHAT TO BUILD")}>
       {buildCards.length ? (
         <Row cols={buildCards.length >= 4 ? 4 : 3} style={{ gap: 16 }}>
           {buildCards.map((p, i) => (
@@ -987,8 +1020,16 @@ export default function DeckReport({ data, live }) {
 
   /* 19 · Google Business Profile */
   const gbpScore = mv(bm, "gbp_completeness", "gmbCompletenessScore") ?? gmb.completeness?.score;
-  const reviewCompetitors = (gbp.competitors || []).filter((c) => c.review_count != null).slice(0, 3);
+  // items 3e/10a — the bars and the "review gap" callout must read ONE source. Sort competitors by
+  // review_count so the TRUE leader is shown, and measure the gap against that same leader using the
+  // same client review count the bar shows. (The old code took the first-3 UNSORTED for the bars but
+  // computed the gap over the full set with a different client count, so the two never reconciled —
+  // e.g. "139 behind" printed next to bars implying 90.)
+  const reviewCompetitors = (gbp.competitors || []).filter((c) => c.review_count != null)
+    .sort((a, b) => (b.review_count || 0) - (a.review_count || 0)).slice(0, 3);
   const maxRev = Math.max(reviews || 0, ...reviewCompetitors.map((c) => c.review_count || 0), 1);
+  const _reviewLeader = reviewCompetitors[0];
+  const _reviewGap = _reviewLeader ? Math.max(0, (Number(_reviewLeader.review_count) || 0) - (Number(reviews) || 0)) : null;
   slides.push(
     <Slide key="gbp" n="17" kicker="Google Business Profile" title="Your fastest path into local results"
       sub={<>{ds.gbp_sub || "The map pack drives most local enquiries. Your reviews already beat rivals; the profile just needs completing."} <Pillar kind="local" label="Local SEO" /></>} foot={foot("17 · GOOGLE BUSINESS PROFILE")}>
@@ -1007,7 +1048,7 @@ export default function DeckReport({ data, live }) {
             {reviewCompetitors.map((c, i) => <CBar key={i} name={c.name} pct={((c.review_count || 0) / maxRev) * 100} value={dash(c.review_count)} />)}
           </>
         ) : null}
-        <Callout mark="→" className={gbp.has_competitor_data && reviewCompetitors.length > 0 ? "mt2" : ""}><b>Goal:</b> lift completeness from {dash(gbpScore)} → 95, and {gbp.review_intel?.review_gap ? `close the review gap (${gbp.review_intel.review_gap} behind the local leader)` : `grow reviews from ${dash(reviews)} → 100+`} in 6 months. Set hours, post weekly, reply to every review, and WhatsApp a review link after each job.</Callout>
+        <Callout mark="→" className={gbp.has_competitor_data && reviewCompetitors.length > 0 ? "mt2" : ""}><b>Goal:</b> lift completeness from {dash(gbpScore)} → 95, and {_reviewGap ? `close the review gap (${_reviewGap} behind ${_reviewLeader.name || "the local leader"})` : `grow reviews from ${dash(reviews)} → 100+`} in 6 months. Set hours, post weekly, reply to every review, and WhatsApp a review link after each job.</Callout>
       </div>
     </Slide>
   );
@@ -1089,12 +1130,23 @@ export default function DeckReport({ data, live }) {
     { badge: "90", duration: "Days 61 to 90", title: "Authority", mission: "Own the local ground and earn the first AI citations.", goal: { label: "Target", text: "In the local map pack" } },
     { badge: "180", duration: "Days 91 to 180", title: "Compound", mission: "Turn early wins into a widening lead with content and press.", goal: { label: "Target", text: proj.dr12 != null ? `DR ${proj.dr12}, traffic compounding` : "Compounding" } },
   ];
+  // item 11 — the plan must not name page slugs that never appear in the keyword/content stages. Build
+  // the set of REAL slugs (mapped pages + crawled URLs) and strip any invented multi-word "/slug" the
+  // free-text roadmap references, so every page the plan names traces back to the strategy.
+  const _realSlugs = new Set();
+  for (const p of [...(ca.commercial_pages || []), ...(ca.geography_pages || ca.city_pages || []), ...(ca.blog_and_guides || [])]) {
+    const s = lc(p.url_slug || "").replace(/^\/+|\/+$/g, ""); if (s) _realSlugs.add(s);
+  }
+  for (const cp of (d.websiteCrawl?.pages || [])) { try { const s = new URL(cp.url).pathname.replace(/^\/+|\/+$/g, "").toLowerCase(); if (s) _realSlugs.add(s); } catch { /* ignore */ } }
+  const _scrubPlanSlugs = (t) => String(t || "")
+    .replace(/\s*\/[a-z][a-z0-9]*(?:-[a-z0-9]+){1,}/gi, (m) => (_realSlugs.has(m.trim().replace(/^\/+/, "").toLowerCase()) ? m : ""))
+    .replace(/\s{2,}/g, " ").replace(/\s+([.,])/g, "$1").trim();
   slides.push(
     <Slide key="plan" n="20" kicker="The Plan" title="One job per phase. Move on when it's done." foot={foot("20 · THE 30/60/90/180 PLAN")}>
       <PhaseRow>
         {phaseDefs.map((ph, i) => {
           const r = rm[i];
-          const items = (r?.actions || []).slice(0, 3).map((a) => { const t = typeof a === "string" ? a : (a.title || a.description || ""); return { text: clamp(t, 54), color: workColor(t) }; });
+          const items = (r?.actions || []).slice(0, 3).map((a) => { const t = _scrubPlanSlugs(typeof a === "string" ? a : (a.title || a.description || "")); return { text: clamp(t, 54), color: workColor(t) }; });
           return <PhaseCol key={i} badge={ph.badge} duration={r?.duration || ph.duration} title={r?.title || ph.title}
             mission={ph.mission} items={items.length ? items : [{ text: "N/A" }]} goal={ph.goal} />;
         })}
@@ -1104,7 +1156,13 @@ export default function DeckReport({ data, live }) {
 
   /* 23 · How we prove it */
   const kpiRow = (k) => ksRows.find((r) => r.key === k || lc(r.metric).includes(k.replace("_", " ")));
-  const seoBoard = [["Domain Rating", kpiRow("domain_rating")], ["Organic traffic / month", kpiRow("organic_traffic")], ["Keywords ranking", kpiRow("organic_keywords")], ["Referring domains", kpiRow("referring_domains")]];
+  // item 3a — the Domain Rating target must be ONE modelled value across the deck. Slides 02, 18 and 20
+  // all drive DR off proj.dr12 (the capped-60 model); the KPI board used a different formula
+  // (min(100, DR+30) → 82) and disagreed. Reconcile the board's DR target to proj.dr12 so every slide
+  // shows the same modelled DR.
+  const _drKpi = kpiRow("domain_rating");
+  const _drRow = _drKpi && proj.dr12 != null ? { ..._drKpi, target_12_months: proj.dr12, target_6_months: proj.dr6 ?? _drKpi.target_6_months } : _drKpi;
+  const seoBoard = [["Domain Rating", _drRow], ["Organic traffic / month", kpiRow("organic_traffic")], ["Keywords ranking", kpiRow("organic_keywords")], ["Referring domains", kpiRow("referring_domains")]];
   slides.push(
     <Slide key="prove" variant="cream" n="21" kicker="How We Prove It" title="Two scoreboards, reported every month"
       sub={ds.prove_sub || "Current is measured today. Targets are rounded estimates that assume the plan is implemented."} foot={foot("21 · MEASURING SUCCESS")}>
@@ -1148,10 +1206,29 @@ export default function DeckReport({ data, live }) {
     </Slide>
   );
 
-  /* 25 · Clientele & next steps, brand wall + 4 steps + CTA */
+  /* 25 · Competitive field & next steps — REAL competitor brands (business + API), 4 steps + CTA */
+  // item 12a — the closing brand wall must show REAL brands, never a fabricated "clients" list. Build it
+  // from the BUSINESS + API-analysis competitors (the benchmark set `comps`, which EXCLUDES search
+  // competitors) plus the AI-named brands from the GEO share of voice (topic noise already filtered).
+  // If no real brands surfaced, the wall is hidden rather than showing invented names.
+  const _cleanBrand = (c) => {
+    let n = String(c?.name || "").trim();
+    if (!n && c?.domain) n = titleCase(String(c.domain).replace(/^www\./, "").replace(/\.(com|co\.uk|io|net|org|in|us|ai|digital)$/i, "").split(".")[0].replace(/-/g, " "));
+    return n;
+  };
+  const _wallBrands = (() => {
+    const seen = new Set(); const out = [];
+    const add = (nm) => { const n = String(nm || "").trim(); if (!n) return;
+      const k = lc(n).replace(/\s+(pvt|private|ltd|limited|llp|inc|llc|global|services?|digital|media|marketing|agency|technologies?)\b/g, "").replace(/[^a-z0-9]/g, "");
+      if (!k || k.length < 2 || seen.has(k)) return; seen.add(k); out.push(n); };
+    for (const c of comps) add(_cleanBrand(c));                        // business + API competitors (not search)
+    for (const b of (sov || [])) if (b && !b.is_client) add(b.brand);  // real AI-named brands from GEO SoV
+    return out.slice(0, 12);
+  })();
+  const _hasWall = _wallBrands.length >= 4;
   slides.push(
-    <Slide key="close" variant="dark" n={null} kicker="Trusted & Ready When You Are" title="Brands we have partnered with" contentTop foot={{ left: "DOCTOR FIZZ · doctorfizz.com", mid: `Confidential, data as of ${dateGB(d.generatedAt)}`, pg: pg() }}>
-      <CLGrid names={CLIENT_BRANDS} />
+    <Slide key="close" variant="dark" n={null} kicker={_hasWall ? "The Competitive Field" : "Ready When You Are"} title={_hasWall ? "The brands competing for your market" : `Let's make ${name} visible`} contentTop foot={{ left: "DOCTOR FIZZ · doctorfizz.com", mid: `Confidential, data as of ${dateGB(d.generatedAt)}`, pg: pg() }}>
+      {_hasWall ? <CLGrid names={_wallBrands} /> : null}
       <div className="close-band">
         <div className="close-steps">
           <div className="eyebrow-sm" style={{ marginBottom: 12 }}>Four steps to launch</div>

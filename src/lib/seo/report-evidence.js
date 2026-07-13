@@ -73,13 +73,30 @@ export function checkExistingPage(page = {}, crawlPages = []) {
   const slug = lc(page.url_slug || "").replace(/^\/+|\/+$/g, "");
   const title = clean(page.page_name || page.proposed_title || page.keyword_cluster || "");
   const kw = clean(page.keyword_cluster || page.geo_target || "");
+  // item 4b — the join must key on INTENT as well as URL. A COMMERCIAL/transactional/local-commercial
+  // page must NOT count as "existing" when the only crawl match is an INFORMATIONAL URL (an explainer
+  // or blog, e.g. a "SEO Company In India" keyword matched to "/seo/what-is-seo"). That is a false
+  // existence hit — it reports a commercial page as present when the right page does not exist, and it
+  // lets two different-intent keywords claim the same explainer URL. Guard fires only when the
+  // candidate is explicitly commercial, so nothing regresses for informational/blog candidates.
+  const _pageCommercial = /commercial|transactional/.test(lc(page.intent_class || page.intent || ""));
+  const _isInfoUrlPath = (u) => /(?:^|\/)(?:blog|guides?|learn|resources?|articles?|news|faqs?|glossary|academy|wiki)(?:\/|$)|what-is|what-are|how-to|how-do|-guide(?:\/|-|$)|-tips|-examples|difference-between/.test(u);
+  const _isInfoTitle = (t) => /\b(what is|what are|how to|how do|guide to|introduction to|complete guide|beginner)\b/.test(lc(t));
   for (const cp of (Array.isArray(crawlPages) ? crawlPages : [])) {
     const url = lc(cp.url || "");
     const ctitle = clean(cp.metaTitle || cp.title || "");
     if (!url) continue;
-    if (slug && slug.length >= 3 && url.includes(slug)) return hit(cp);
-    if (title && ctitle && tokenOverlap(title, ctitle) >= 0.6) return hit(cp);
-    if (kw && kw.length >= 4 && ctitle && tokenOverlap(kw, ctitle) >= 0.7) return hit(cp);
+    let matched = false, matchedBySlug = false;
+    if (slug && slug.length >= 3 && url.includes(slug)) { matched = true; matchedBySlug = true; }
+    else if (title && ctitle && tokenOverlap(title, ctitle) >= 0.6) matched = true;
+    else if (kw && kw.length >= 4 && ctitle && tokenOverlap(kw, ctitle) >= 0.7) matched = true;
+    if (!matched) continue;
+    // Intent guard: a commercial candidate must not count as existing via an INFORMATIONAL page. But a
+    // strong exact-slug/URL hit means the page's OWN commercial slug matched, so only the URL itself can
+    // signal info there; the crawled-title heuristic applies only to looser title/keyword matches
+    // (else "SEO Audit Services — How To Rank #1" at /seo-audit-services would be falsely dropped).
+    if (_pageCommercial && (_isInfoUrlPath(url) || (!matchedBySlug && _isInfoTitle(ctitle)))) continue;
+    return hit(cp);
   }
   return { exists: false };
   function hit(cp) { return { exists: true, url: cp.url, indexed: !cp.isNoindex, title: cp.metaTitle || cp.title || "" }; }
@@ -375,8 +392,8 @@ export function buildAiReadiness(crawlData = {}, gmbData = {}) {
       detail: napConsistent ? "Name/Address/Phone present across GMB + site." : "NAP not consistently present across GMB + site — a core local-entity signal." },
     { key: "about", label: "About / entity page", ok: aboutPage, weight: 10,
       detail: aboutPage ? "About page present — grounds the entity for AI." : "No clear About page — add one describing who the business is." },
-    { key: "depth", label: "Content depth (citation-worthy)", ok: avgWords >= 600, weight: 12,
-      detail: avgWords >= 600 ? `Avg ${Math.round(avgWords)} words/page — enough depth to be citation-worthy.` : `Avg ${Math.round(avgWords)} words/page — thin content is rarely cited by AI engines.` },
+    { key: "depth", label: "Content depth", ok: avgWords >= 600, weight: 12,
+      detail: avgWords >= 600 ? `Avg ${Math.round(avgWords)} words/page — solid page depth, which correlates with (but does not guarantee) AI citation.` : `Avg ${Math.round(avgWords)} words/page — thin content is rarely cited by AI engines.` },
     { key: "author", label: "Author / E-E-A-T", ok: hasAuthor, weight: 8,
       detail: hasAuthor ? "Author/byline signals present." : "No author/byline signals — add named authors for E-E-A-T." },
     { key: "llms_txt", label: "llms.txt (AI crawl guide)", ok: hasLlmsTxt, weight: 5,

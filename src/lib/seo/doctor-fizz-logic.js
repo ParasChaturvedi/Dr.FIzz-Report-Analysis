@@ -96,6 +96,10 @@ const KNOWN_LOCATIONS = [
   "bhopal", "patna", "vadodara", "ghaziabad", "ludhiana", "agra", "nashik", "faridabad",
   "new york", "london", "dubai", "singapore", "toronto", "sydney", "los angeles",
   "chicago", "san francisco", "boston", "seattle", "austin", "miami", "dallas",
+  // item 1.2 — every city the place-based generator (CITIES_BY_CC in keyword-gap) emits must resolve
+  // here, else non-India candidates fall back to national scope and the local tier stays empty.
+  "houston", "atlanta", "manchester", "birmingham", "leeds", "glasgow", "bristol",
+  "abu dhabi", "sharjah", "melbourne", "brisbane", "perth", "vancouver", "calgary", "montreal",
   // Metro neighbourhoods / localities (so "<service> in Malad" resolves as a local, city-scope
   // keyword instead of a national commercial one).
   "malad", "andheri", "borivali", "goregaon", "kandivali", "dahisar", "bandra", "powai",
@@ -838,14 +842,31 @@ export function categorizeBacklinks(input = {}) {
   });
 
   // ── Category 3: Competitor link gap ──
-  const competitor_gap = (competitorBacklinks || []).slice(0, 15).map(b => ({
-    referring_domain:  b.domain_from || b.domain || b.referring_domain || "",
-    links_to:          b.competitor || b.links_to || "competitor",
-    link_type:         b.link_type || (b.dofollow === false ? "nofollow mention" : "editorial link"),
-    domain_rating:     b.rank ?? b.domain_rating ?? null,
-    approach:          `The source already links to ${b.competitor || "a competitor"} — pitch equivalent value (data, quote, or resource) to earn the same link.`,
-    category:          "competitor_gap",
-  }));
+  // item 11 — pitch targets must be authoritative. The raw competitor backlink profile contains junk
+  // referrers (link directories, spam TLDs, auto-scraped low-value domains). Pitching to those wastes
+  // outreach and can hurt the profile. Drop pattern-junk + spam TLDs + measured low-authority (DR<10),
+  // then rank the survivors by DR so the best sources surface first.
+  const _junkPitch = /(^|\.)(companies?[-.]?related|business[-.]?(list|directory|near|info)|companies?[-.]?(list|directory|info|near)|find[-.]?compan|local[-.]?(search|list)|free[-.]?list|add[-.]?(business|url|site)|submit[-.]?url|(link|web|seo)[-.]?director|bookmark|classified|yellow[-.]?pages?)/i;
+  const _junkTld = /\.(xyz|top|club|online|site|website|space|click|link|buzz|work|fit|gq|cf|ml|tk|icu|rest|monster)$/i;
+  const _pitchWorthy = (dom, dr) => {
+    const d = String(dom || "").toLowerCase().replace(/^www\./, "");
+    if (!d || !d.includes(".")) return false;
+    if (_junkPitch.test(d) || _junkTld.test(d)) return false;
+    if (dr != null && Number(dr) < 10) return false;   // measured low-authority → not worth pitching
+    return true;
+  };
+  const competitor_gap = (competitorBacklinks || [])
+    .map(b => ({
+      referring_domain:  b.domain_from || b.domain || b.referring_domain || "",
+      links_to:          b.competitor || b.links_to || "competitor",
+      link_type:         b.link_type || (b.dofollow === false ? "nofollow mention" : "editorial link"),
+      domain_rating:     b.rank ?? b.domain_rating ?? null,
+      approach:          `The source already links to ${b.competitor || "a competitor"} — pitch equivalent value (data, quote, or resource) to earn the same link.`,
+      category:          "competitor_gap",
+    }))
+    .filter(x => _pitchWorthy(x.referring_domain, x.domain_rating))
+    .sort((a, b) => (Number(b.domain_rating) || 0) - (Number(a.domain_rating) || 0))
+    .slice(0, 15);
 
   // ── Category 2: Editorial and content-earned links (template opportunities) ──
   const editorial_links = buildEditorialOpportunities(industry);
@@ -1602,27 +1623,27 @@ export function buildTechnicalIssues(crawlData, siteValidation = null) {
     issues.push({ priority: "MEDIUM", issue: `${pl(s.pagesMultipleBody, "page")} with multiple <body> tags`, affected_count: s.pagesMultipleBody, why_it_matters: "Duplicate <body> elements are invalid HTML and can cause content to be parsed or rendered inconsistently.", recommended_action: "Fix the template so each page has a single <body> element.", estimated_effort: "≈3 hours", expected_unlock: "Consistent rendering and parsing." });
 
   if ((s.pagesWithMixedContent || 0) > 0)
-    issues.push({ priority: "MEDIUM", issue: `${pl(s.pagesWithMixedContent, "page")} loading insecure HTTP resources`, affected_count: s.pagesWithMixedContent, why_it_matters: "Mixed content (http:// assets on an https page) triggers 'Not Secure' warnings and can block the resource from loading.", recommended_action: "Update all internal links and asset URLs to https:// (or protocol-relative).", estimated_effort: "≈2 hours", expected_unlock: "A fully secure page with no browser warnings." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(s.pagesWithMixedContent, "page")} loading insecure HTTP resources`, affected_count: s.pagesWithMixedContent, why_it_matters: "Mixed content (http:// assets on an https page) triggers 'Not Secure' warnings and can block the resource from loading.", recommended_action: "Update all internal links and asset URLs to https:// (or protocol-relative).", estimated_effort: effortFromCount(s.pagesWithMixedContent, 8), expected_unlock: "A fully secure page with no browser warnings." });
 
   const lcpVal = crawlData.coreWebVitals?.lcp ?? crawlData.coreWebVitals?.LCP;
   if (lcpVal && Number(lcpVal) > 2500)
     issues.push({ priority: "HIGH", issue: `Mobile LCP at ${lcpVal}ms (target <2500ms)`, affected_count: crawlData.pageCount || null, why_it_matters: "Core Web Vitals are a mobile ranking signal; a slow LCP suppresses the majority of mobile searches regardless of content quality.", recommended_action: "Compress hero images to WebP, preload the LCP element, and defer non-critical JS.", estimated_effort: "≈1 week", expected_unlock: "Moves pages out of the speed-penalty tier into the eligible ranking band." });
 
   if ((s.pagesMissingMetaDesc || 0) > 0)
-    issues.push({ priority: "MEDIUM", issue: `${pl(s.pagesMissingMetaDesc, "page")} missing a meta description`, affected_count: s.pagesMissingMetaDesc, why_it_matters: "The description is the snippet that wins or loses the click on impressions the site already earns.", recommended_action: "Write 150–160 char descriptions with a clear CTA.", estimated_effort: "≈2 hours", expected_unlock: "5–10% more clicks from rankings already held." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(s.pagesMissingMetaDesc, "page")} missing a meta description`, affected_count: s.pagesMissingMetaDesc, why_it_matters: "The description is the snippet that wins or loses the click on impressions the site already earns.", recommended_action: "Write 150–160 char descriptions with a clear CTA.", estimated_effort: effortFromCount(s.pagesMissingMetaDesc, 6), expected_unlock: "5–10% more clicks from rankings already held." });
 
   const dupTitles = (crawlData.duplicates || []).filter(d => d.type === "title").length;
   if (dupTitles > 0)
-    issues.push({ priority: "MEDIUM", issue: `${pl(dupTitles, "set")} of duplicate meta titles`, affected_count: dupTitles, why_it_matters: "Duplicate titles force Google to pick a ranking URL arbitrarily, splitting relevance across competing pages.", recommended_action: "Make every title unique to its page and intent.", estimated_effort: "≈2 hours", expected_unlock: "Consolidated ranking signal per page." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(dupTitles, "set")} of duplicate meta titles`, affected_count: dupTitles, why_it_matters: "Duplicate titles force Google to pick a ranking URL arbitrarily, splitting relevance across competing pages.", recommended_action: "Make every title unique to its page and intent.", estimated_effort: effortFromCount(dupTitles, 8), expected_unlock: "Consolidated ranking signal per page." });
 
   if ((crawlData.brokenLinks || []).length > 0)
-    issues.push({ priority: "MEDIUM", issue: `${pl(crawlData.brokenLinks.length, "broken internal link")}`, affected_count: crawlData.brokenLinks.length, why_it_matters: "Broken internal links waste crawl budget and leak link equity into dead ends.", recommended_action: `Fix or 301-redirect each. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}`, estimated_effort: "≈2 hours", expected_unlock: "Recovered crawl efficiency and internal link equity." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(crawlData.brokenLinks.length, "broken internal link")}`, affected_count: crawlData.brokenLinks.length, why_it_matters: "Broken internal links waste crawl budget and leak link equity into dead ends.", recommended_action: `Fix or 301-redirect each. First: ${crawlData.brokenLinks.slice(0, 2).map(b => b.url).join(", ")}`, estimated_effort: effortFromCount(crawlData.brokenLinks.length, 6), expected_unlock: "Recovered crawl efficiency and internal link equity." });
 
   if ((s.thinContentCount || 0) > 0)
-    issues.push({ priority: "MEDIUM", issue: `${pl(s.thinContentCount, "thin-content page")} (<200 words)`, affected_count: s.thinContentCount, why_it_matters: "Thin pages drag down the sitewide quality signal Google applies to the whole domain.", recommended_action: "Expand to 600+ words with FAQs and local context.", estimated_effort: "≈1 week", expected_unlock: "A stronger sitewide quality signal lifting all pages." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(s.thinContentCount, "thin-content page")} (<200 words)`, affected_count: s.thinContentCount, why_it_matters: "Thin pages drag down the sitewide quality signal Google applies to the whole domain.", recommended_action: "Expand to 600+ words with FAQs and local context.", estimated_effort: effortFromCount(s.thinContentCount, 45), expected_unlock: "A stronger sitewide quality signal lifting all pages." });
 
   if ((s.totalImgsWithoutAlt || 0) > 5)
-    issues.push({ priority: "MEDIUM", issue: `${pl(s.totalImgsWithoutAlt, "image")} without alt text`, affected_count: s.totalImgsWithoutAlt, why_it_matters: "Missing alt text costs image-search visibility and lowers the accessibility score.", recommended_action: "Add descriptive, keyword-natural alt text.", estimated_effort: "≈2 hours", expected_unlock: "Image-search traffic and a cleaner accessibility profile." });
+    issues.push({ priority: "MEDIUM", issue: `${pl(s.totalImgsWithoutAlt, "image")} without alt text`, affected_count: s.totalImgsWithoutAlt, why_it_matters: "Missing alt text costs image-search visibility and lowers the accessibility score.", recommended_action: "Add descriptive, keyword-natural alt text.", estimated_effort: effortFromCount(s.totalImgsWithoutAlt, 0.5), expected_unlock: "Image-search traffic and a cleaner accessibility profile." });
 
   if ((s.pagesMultipleH1 || 0) > 0)
     issues.push({ priority: "LOW", issue: `${pl(s.pagesMultipleH1, "page")} with multiple H1s`, affected_count: s.pagesMultipleH1, why_it_matters: "Multiple H1s dilute the single clear topic signal per page.", recommended_action: "Demote extra H1s to H2/H3 — one H1 per page.", estimated_effort: "≈1 hour", expected_unlock: "A single unambiguous topic signal per page." });
@@ -2545,6 +2566,22 @@ function effortToHours(e) {
   if (!m) return 4;
   const n = parseFloat(m[1]); const u = m[2].toLowerCase();
   return u.startsWith("min") ? n / 60 : u.startsWith("hour") ? n : u.startsWith("day") ? n * 8 : n * 40;
+}
+
+// item 9 — effort must scale with the WORK, not be a constant. A per-unit issue (N images, N pages,
+// N links) gets its estimate from count × a per-unit minute rate, bucketed into a parseable range
+// (effortToHours still reads "≈N hours/days/weeks", so the impact-to-effort ranking keeps working).
+// One-off/template fixes keep their fixed estimate. This is why 2547 images reads "≈3 days", not "≈2 hours".
+function effortFromCount(count, perUnitMin, floor = "≈30 min") {
+  const n = Number(count) || 0;
+  if (n <= 0) return floor;
+  const mins = n * perUnitMin;
+  if (mins <= 45) return floor;
+  const hrs = mins / 60;
+  if (hrs <= 8) return `≈${Math.max(1, Math.round(hrs))} hours`;
+  const days = hrs / 8;
+  if (days <= 10) return `≈${Math.max(1, Math.round(days))} days`;
+  return `≈${Math.max(1, Math.round(days / 5))} weeks`;
 }
 const PRIORITY_IMPACT = { CRITICAL: 5, HIGH: 4, MEDIUM: 2.5, "QUICK WIN": 2, LOW: 1 };
 
@@ -3597,6 +3634,11 @@ function buildBaseline(raw) {
     }
   }
   baseline.missing_fields = missing_fields;
+  // item 7 — carry the measured Core Web Vitals url + lab/field source straight through to df.baseline
+  // (they are strings, not scored numeric fields, so they bypass the resolveField loop above). Without
+  // this the deck reads bm = df.baseline on the normal path and the CWV evidence line never renders.
+  if (raw.cwvUrl)    baseline.cwvUrl    = { value: raw.cwvUrl, label: null };
+  if (raw.cwvSource) baseline.cwvSource = { value: raw.cwvSource, label: null };
   return { baseline, missing_fields };
 }
 
