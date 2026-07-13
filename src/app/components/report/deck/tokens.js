@@ -7,6 +7,7 @@
 // the reference deck markup.
 // ─────────────────────────────────────────────────────────────────────────────
 import { DECK_CSS } from "./deckCss";
+import { DECK_A11Y_CSS } from "./deckA11y";
 
 export const C = {
   rust: "#C95322", rustDeep: "#A8401A", rustSoft: "#E07A4F",
@@ -34,7 +35,9 @@ export function accentFor(channel = "") {
 
 // Injects the deck's complete CSS (incl. embedded fonts) — render ONCE at the root.
 export function DeckStyle() {
-  return <style data-deck-style dangerouslySetInnerHTML={{ __html: DECK_CSS }} />;
+  // DECK_A11Y_CSS is appended so its equal-specificity rules win the cascade,
+  // adopting the DESIGN.md WCAG-AA "-accessible" colours for small text. Additive only.
+  return <style data-deck-style dangerouslySetInnerHTML={{ __html: DECK_CSS + DECK_A11Y_CSS }} />;
 }
 
 // ── tiny formatting helpers (shared by slide builders) ──────────────────────
