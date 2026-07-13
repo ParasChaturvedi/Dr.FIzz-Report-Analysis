@@ -94,6 +94,7 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
     if (name.length < 3 || known.has(low) || loc.has(low)) continue;
     // DROP when every word is generic/opener/location (e.g. "Email Marketing", "Digital Media").
     if (words.every((w) => _GENERIC.has(w.toLowerCase()) || loc.has(w.toLowerCase()))) continue;
+    if (words.some((w) => /^opens?$/i.test(w))) continue;   // scraped UI-chrome ("… Opens in a new tab")
     if (words.length === 1) {
       // A single-word brand must LOOK like a real product name: camelCase (PageTraffic, WordStream)
       // or an all-caps prefix then lowercase (WATConsult). Plain Title-case single words (Branding,
@@ -114,13 +115,28 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
 // Report-build-time guard: true when a discovered "brand" is actually a generic/topic term, not a
 // company (e.g. "Technical SEO", "Google Business Profile", "KPIs", "SMEs"). Mirrors the discoverBrands
 // drop rules so it also cleans ALREADY-STORED runs whose discoveredBrands predate a stoplist change.
-export function isBrandNoise(name) {
+// TOPIC / UI noise: a term that is never a company — an all-generic phrase ("Google Business Profile",
+// "Technical SEO"), a generic industry acronym ("KPIs", "SMEs", "ROI"), or scraped UI-chrome ("About
+// Gemini Opens", "… Opens in a new tab"). Deliberately does NOT reject a plain lowercase/Title single
+// word: real competitor tokens the collector lowercases (pagetraffic, techmagnate, webchutney, rankz)
+// are distinctive words, not topics — this is what cleans the SoV / competitor wall without nuking them.
+export function isTopicNoise(name) {
   const words = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return true;
-  if (words.every((w) => _GENERIC.has(w.toLowerCase()))) return true;   // every word generic → topic
+  if (words.some((w) => /^opens?$/i.test(w))) return true;                 // "… Opens in a new tab"
+  if (words.every((w) => _GENERIC.has(w.toLowerCase()))) return true;      // every word generic → topic
+  if (words.length === 1 && _GEN_ACRONYMS.has(words[0].toLowerCase().replace(/s$/, ""))) return true; // KPIs, SMEs, ROI…
+  return false;
+}
+
+// Stricter form used ONLY for DISCOVERED-brand extraction (discovery is noisier, so also reject a lone
+// Title-case word that does not look like a product name — "Branding", "Email"). Never use this to
+// filter matched competitors / the SoV board: it would drop real lowercase brands. Use isTopicNoise there.
+export function isBrandNoise(name) {
+  if (isTopicNoise(name)) return true;
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (words.length === 1) {
     const w = words[0];
-    if (_GEN_ACRONYMS.has(w.toLowerCase().replace(/s$/, ""))) return true;  // KPIs, SMEs, ROI…
     if (!(/[a-z][A-Z]/.test(w) || /^[A-Z]{2,}[a-z]/.test(w))) return true;  // not a brandy single word
   }
   return false;

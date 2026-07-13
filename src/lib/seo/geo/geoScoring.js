@@ -10,7 +10,7 @@
 // answers; nothing here fabricates SoV / citations / mentions.
 // ─────────────────────────────────────────────────────────────────────────────
 import { GEO_SCORE_WEIGHTS, citationPositionScore } from "./model/constants.js";
-import { isBrandNoise } from "./geoParser.js";
+import { isBrandNoise, isTopicNoise } from "./geoParser.js";
 
 const pct = (n, d) => (d > 0 ? Math.round((n / d) * 1000) / 10 : 0);
 const r0 = (n) => Math.round(n);
@@ -131,16 +131,24 @@ function shareOfVoice(byEngine, ctx) {
     const counts = {}; let total = 0;
     for (const r of byEngine[e]) {
       for (const m of (r.brandMentions || [])) { const k = brandName; const c = Number(m.mention_count) || 1; counts[k] = (counts[k] || 0) + c; total += c; }
-      for (const m of (r.competitorMentions || [])) { const k = (m.entity_name || "competitor").trim(); const c = Number(m.mention_count) || 1; ensure(k); counts[k] = (counts[k] || 0) + c; total += c; }
+      for (const m of (r.competitorMentions || [])) { const k = (m.entity_name || "competitor").trim();
+        // §5 — a competitorMention entity can be topic/UI noise the collector mis-tagged as a rival
+        // ("Google Business Profile", "KPIs", "…Opens"). DROP it here so it never enters counts OR the
+        // total: this keeps it off the SoV bars AND re-normalizes the real brands' percentages.
+        // isTopicNoise (NOT isBrandNoise) so real lowercase rivals — pagetraffic, webchutney — survive.
+        if (!k || isTopicNoise(k)) continue;
+        const c = Number(m.mention_count) || 1; ensure(k); counts[k] = (counts[k] || 0) + c; total += c; }
       for (const d of (r.discoveredBrands || [])) { const k = String(d?.name || "").trim(); if (!k || !discSet.has(k)) continue; const c = Number(d.count) || 1; counts[k] = (counts[k] || 0) + c; total += c; }
     }
     for (const name of Object.keys(tally)) tally[name].per_engine[e] = pct(counts[name] || 0, total);
   }
-  const by_brand = Object.values(tally).map((b) => {
-    const vals = engines.map((e) => b.per_engine[e] || 0);
-    b.avg = vals.length ? Math.round((vals.reduce((a, x) => a + x, 0) / vals.length) * 10) / 10 : 0;
-    return b;
-  }).sort((a, b) => b.avg - a.avg);
+  const by_brand = Object.values(tally)
+    .filter((b) => b.is_client || !isTopicNoise(b.brand))   // §5 belt: never surface a topic/noise "brand" on the SoV board / wall (keeps real lowercase rivals)
+    .map((b) => {
+      const vals = engines.map((e) => b.per_engine[e] || 0);
+      b.avg = vals.length ? Math.round((vals.reduce((a, x) => a + x, 0) / vals.length) * 10) / 10 : 0;
+      return b;
+    }).sort((a, b) => b.avg - a.avg);
   return { engines, by_brand };
 }
 
