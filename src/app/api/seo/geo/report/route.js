@@ -9,6 +9,7 @@
 //   GET /api/seo/geo/report?projectId=…[&answers=1]
 // ─────────────────────────────────────────────────────────────────────────────
 import { getGeoReportBundle, getGeoProjectByDomain, getGeoPrompts } from "@/lib/seo/geo/model/geoStore";
+import { parseAnswer, isTopicNoise } from "@/lib/seo/geo/geoParser";
 import { buildGeoStatus } from "@/lib/seo/report-evidence";
 import { getEngineAdapters } from "@/lib/seo/geo/engineAdapters";
 import { resolveExecutionProvider } from "@/lib/seo/geo/executionProvider";
@@ -84,12 +85,29 @@ export async function GET(req) {
       for (const p of (promptDocs || [])) if (p && p.prompt_id) clusterById[p.prompt_id] = p.cluster || "";
     } catch { clusterById = {}; }
 
+    // §6 RECALL — re-derive "who it named" from the STORED answer text with the CURRENT parser, so real
+    // agencies an older worker parse dropped (single-word Title-case names: Techmagnate, Uplers, Sparklin)
+    // are surfaced. ADDITIVE (union with the worker's list) + topic-noise filtered — it can only ADD real
+    // brands, never lose a stored one. No re-scan needed; runs on already-collected answers.
+    const _geoCtx = { brand: run?.target_brand || run?.brand_name || "", brandDomain: run?.brand_domain || "", competitors: Array.isArray(run?.competitors) ? run.competitors : [] };
+    const _deriveNamed = (r) => {
+      const worker = Array.isArray(r.brands_mentioned) ? r.brands_mentioned : [];
+      let derived = [];
+      try {
+        const p = parseAnswer({ visibleAnswerText: r.rendered_text || "", renderedText: r.rendered_text || "", engine: r.engine, rawPrompt: r.raw_prompt }, _geoCtx);
+        derived = Array.isArray(p.brandsMentioned) ? p.brandsMentioned : [];
+      } catch {}
+      const seen = new Set(); const out = [];
+      for (const n of [...worker, ...derived]) { const s = String(n || "").trim(); const k = s.toLowerCase(); if (!s || seen.has(k) || isTopicNoise(s)) continue; seen.add(k); out.push(s); if (out.length >= 6) break; }
+      return out;
+    };
+
     const prompts_executed = results.map((r) => ({
       prompt_id: r.prompt_id, prompt: r.raw_prompt, engine: r.engine,
       cluster: clusterById[r.prompt_id] || r.cluster || "",   // campaign tag for the deck's 3-way split
       executed_at: r.created_at, version: r.version,
       brand_mentioned: !!r.brand_mentioned, brand_mention_count: r.brand_mention_count || 0, competitor_mention_count: r.competitor_mention_count || 0,
-      brands_named: Array.isArray(r.brands_mentioned) ? r.brands_mentioned : [],   // real "who it named" column (deck slide 12)
+      brands_named: _deriveNamed(r),   // real "who it named" column (deck slide 12) — worker list ∪ re-parsed, noise-filtered
       brand_cited: !!r.brand_cited,   // citation-truth: brand's OWN domain was a real source (not just "answer had citations")
       answer_length: Number(r.answer_length) || 0,   // distinguishes "answered, none named" from "no answer" (deck dash clarity)
       citation_count: r.citation_count || 0, source_domains: r.source_domains || [],
