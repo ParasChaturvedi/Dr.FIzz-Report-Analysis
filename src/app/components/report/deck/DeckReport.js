@@ -847,9 +847,18 @@ export default function DeckReport({ data, live }) {
   // owned), classified independently of the mention. Colour-code it so a competitor's page winning the citation
   // reads differently from a neutral directory. Falls back to third_party for any untyped cited domain.
   const _srcTypeColor = (t) => (t === "competitor" ? C.rust : t === "owned" ? "#3C7D5A" : "var(--muted)");
+  // Deterministic provenance AT RENDER (works whichever pipeline produced the citations): owned = the
+  // client's own domain, competitor = a configured rival's domain, else third-party (directory/publisher/forum).
+  const _normDom = (u) => String(u || "").toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[\/?#]/)[0].trim();
+  const _brandDom = _normDom(domain);
+  const _compDoms = (comps || []).map((c) => _normDom(c?.domain)).filter((x) => x && x.includes("."));
+  const _classifySrc = (d) => { const nd = _normDom(d); if (!nd) return "third_party";
+    if (_brandDom && (nd === _brandDom || nd.endsWith("." + _brandDom))) return "owned";
+    if (_compDoms.some((cd) => nd === cd || nd.endsWith("." + cd) || cd.endsWith("." + nd))) return "competitor";
+    return "third_party"; };
   const _srcsTypedOf = (p) => (Array.isArray(p.cited_typed) && p.cited_typed.length
-    ? p.cited_typed.map((s) => ({ source: String(s.source || "").replace(/^www\./, ""), type: s.type || "third_party" })).filter((s) => s.source)
-    : _srcsOf(p).map((d) => ({ source: d, type: "third_party" })));
+    ? p.cited_typed.map((s) => ({ source: String(s.source || "").replace(/^www\./, ""), type: (s.type && s.type !== "third_party") ? s.type : _classifySrc(s.source) })).filter((s) => s.source)
+    : _srcsOf(p).map((d) => ({ source: d, type: _classifySrc(d) })));
   const _srcCell = (p) => { const list = _srcsTypedOf(p); if (!list.length) return "—";
     return <span>{list.slice(0, 3).map((s, i) => <span key={i} style={{ color: _srcTypeColor(s.type) }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > 3 ? <span style={{ color: "var(--muted)" }}> …</span> : null}</span>; };
   const _srcLegend = <div style={{ display: "flex", gap: 16, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>
