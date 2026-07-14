@@ -306,7 +306,9 @@ export async function saveRunResult({ runId, projectId, result }) {
       visible_answer_text: result.visibleAnswerText || result.renderedText || "",
       region_context: result.locationContext || null,
       location_mode: result.locationContext?.mode || "country",
-      answer_length: Number(result.answerLength) || String(result.renderedText || "").length,
+      // A NON-ANSWER (login wall / UI chrome) must persist length 0 so the deck reads "No answer", not
+      // "Not named" — never fall back to the chrome's char count. Only derive length for a real answer.
+      answer_length: result.nonAnswer ? 0 : (Number(result.answerLength) || String(result.renderedText || "").length),
       answer_structure: result.answerStructure || "unknown",
       sentiment: result.sentiment || null,
       brand_mentioned: Array.isArray(result.brandMentions) && result.brandMentions.length > 0,

@@ -287,8 +287,11 @@ export function parseAnswer(response = {}, ctx = {}) {
     locationContext: response.locationContext || (response.region ? { mode: "country", label: response.region } : null),
     rawPrompt: response.prompt || response.rawPrompt || "",
     rawHtml: html,
-    renderedText: text,
-    visibleAnswerText: text,
+    // On a NON-ANSWER, blank the captured text everywhere it flows: this is what makes the "No answer"
+    // sentinel stick — geoStore derives answer_length from renderedText.length, so leaving the chrome text
+    // here would clobber the 0 back to the chrome length and the row would wrongly read "Not named".
+    renderedText: _nonAnswer ? "" : text,
+    visibleAnswerText: _nonAnswer ? "" : text,
     answerStructure: _nonAnswer ? "no_answer" : detectStructure(text, html),
     answerLength: _nonAnswer ? 0 : text.length,   // explicit null: a UI/login-wall reads as "No answer", not "Not named"
     nonAnswer: _nonAnswer,

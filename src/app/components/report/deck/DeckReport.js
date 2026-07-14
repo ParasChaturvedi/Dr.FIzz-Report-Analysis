@@ -846,13 +846,13 @@ export default function DeckReport({ data, live }) {
   // §feedback (Mentions vs Citations) — each CITED SOURCE carries its own provenance (competitor / third-party /
   // owned), classified independently of the mention. Colour-code it so a competitor's page winning the citation
   // reads differently from a neutral directory. Falls back to third_party for any untyped cited domain.
-  const _srcTypeColor = (t) => (t === "competitor" ? C.rust : t === "owned" ? "#3C7D5A" : "var(--muted)");
+  const _srcTypeColor = (t) => (t === "competitor" ? C.rust : t === "owned" ? "#3C7D5A" : t === "unknown" ? "#B4ABA0" : "var(--muted)");
   // Deterministic provenance AT RENDER (works whichever pipeline produced the citations): owned = the
   // client's own domain, competitor = a configured rival's domain, else third-party (directory/publisher/forum).
   const _normDom = (u) => String(u || "").toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[\/?#]/)[0].trim();
   const _brandDom = _normDom(domain);
   const _compDoms = (comps || []).map((c) => _normDom(c?.domain)).filter((x) => x && x.includes("."));
-  const _classifySrc = (d) => { const nd = _normDom(d); if (!nd) return "third_party";
+  const _classifySrc = (d) => { const nd = _normDom(d); if (!nd || !nd.includes(".")) return "unknown";   // blank/malformed → explicit unknown (R2), never guessed
     if (_brandDom && (nd === _brandDom || nd.endsWith("." + _brandDom))) return "owned";
     if (_compDoms.some((cd) => nd === cd || nd.endsWith("." + cd) || cd.endsWith("." + nd))) return "competitor";
     return "third_party"; };
@@ -865,6 +865,7 @@ export default function DeckReport({ data, live }) {
     <span><span style={{ color: C.rust }}>●</span> Competitor source</span>
     <span><span style={{ color: "var(--muted)" }}>●</span> Third-party (directory / publisher / forum)</span>
     <span><span style={{ color: "#3C7D5A" }}>●</span> Owned</span>
+    <span><span style={{ color: "#B4ABA0" }}>●</span> Unknown</span>
   </div>;
 
   if (useAioPrompts) {

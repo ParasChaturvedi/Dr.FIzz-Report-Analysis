@@ -115,7 +115,17 @@ export async function GET(req) {
     const prompts_executed = results.map((r) => {
       const _named = _deriveNamed(r);                                         // answer entities (mentions) — separate axis
       const _typed = (Array.isArray(r.source_domains) ? r.source_domains : []) // citation sources — separate axis, typed
-        .map((d) => { const dom = String(d).replace(/^www\./, ""); return { source: dom, type: (_citeType[r.prompt_id] || {})[dom.toLowerCase()] || "third_party" }; });
+        .map((d) => {
+          const dom = String(d).replace(/^www\./, "");
+          // provenance: owned/competitor/third-party from the REAL flags; a blank/malformed domain → "unknown" (R2, never inferred)
+          const type = !dom ? "unknown" : ((_citeType[r.prompt_id] || {})[dom.toLowerCase()] || "third_party");
+          // support strength (R7): the source IS the entity (owned/competitor) = direct; a directory that lists it = indirect
+          const support_strength = type === "unknown" ? "unknown" : (type === "owned" || type === "competitor") ? "direct" : "indirect";
+          return { source: dom, type, support_strength };
+        });
+      const _len = Number(r.answer_length) || 0;
+      const _noAnswer = r.answer_structure === "no_answer" || (_len === 0 && !(r.source_domains || []).length && !r.brand_mentioned);
+      const _conf = Number(r.parse_confidence) || 0;
       return {
         prompt_id: r.prompt_id, prompt: r.raw_prompt, engine: r.engine,
         cluster: clusterById[r.prompt_id] || r.cluster || "",   // campaign tag for the deck's 3-way split
@@ -123,14 +133,18 @@ export async function GET(req) {
         brand_mentioned: !!r.brand_mentioned, brand_mention_count: r.brand_mention_count || 0, competitor_mention_count: r.competitor_mention_count || 0,
         brands_named: _named,   // real "who it named" column (deck slide 12) — worker list ∪ re-parsed, noise-filtered
         brand_cited: !!r.brand_cited,   // citation-truth: brand's OWN domain was a real source (not just "answer had citations")
-        answer_length: Number(r.answer_length) || 0,   // distinguishes "answered, none named" from "no answer" (deck dash clarity)
+        answer_length: _len,   // distinguishes "answered, none named" from "no answer" (deck dash clarity)
         citation_count: r.citation_count || 0, source_domains: r.source_domains || [],
         // §feedback — explicit, INDEPENDENT mention/citation schema (real derived data, no inference, no blanks):
-        cited_typed: _typed,                                          // [{source, type: owned|competitor|third_party}]
-        mention_status: _named.length ? "present" : "absent",        // was any entity NAMED in the answer
-        citation_status: _typed.length ? "present" : "absent",       // was any SOURCE cited (independent of mention)
-        result_status: r.brand_mentioned ? "named" : "not_named",    // brand's own visibility outcome
-        confidence: Number(r.parse_confidence) || 0,                 // real parser confidence for this result
+        cited_typed: _typed,                                          // [{source, type: owned|competitor|third_party|unknown, support_strength}]
+        mention_status: _noAnswer ? "no_answer" : (_named.length ? "present" : "absent"),   // was any entity NAMED (or the engine didn't answer)
+        citation_status: _noAnswer ? "no_answer" : (_typed.length ? "present" : "absent"),  // was any SOURCE cited (independent of mention)
+        result_status: r.brand_mentioned ? "named" : (_noAnswer ? "no_answer" : "not_named"),  // brand's visibility outcome (explicit no_answer)
+        confidence: _conf,                                           // real parser confidence for this result
+        needs_review: _conf > 0 && _conf < 0.5,                      // R8 — low-confidence result flagged for manual review
+        notes: _noAnswer ? "engine returned no answer (login wall / interface only)"
+          : (r.brand_mentioned ? "" : (_named.length || _typed.length) ? `brand absent; ${_named.length} rival(s) named, ${_typed.length} source(s) cited`
+          : "answered, but no brand named and no source cited"),   // R7 notes — deterministic reason, never blank on a null outcome
         answer_structure: r.answer_structure, sentiment: r.sentiment || null, parse_confidence: r.parse_confidence,
         ...(withAnswers ? { answer: String(r.rendered_text || "").slice(0, 4000) } : {}),
       };
