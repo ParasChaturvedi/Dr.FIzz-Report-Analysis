@@ -843,6 +843,20 @@ export default function DeckReport({ data, live }) {
   const _srcsOf = (p) => (Array.isArray(p.source_domains) ? p.source_domains : []).map((s) => String(s).replace(/^www\./, "")).filter(Boolean);
   const _namedOf = (p) => (Array.isArray(p.brands_named) ? p.brands_named : []).filter(Boolean).filter((n) => !_deckTopicNoise(n));
   const _resCell = (p) => <ResCell kind={resKind(p)}>{p.brand_cited ? "Cited" : p.brand_mentioned ? "Named" : ((Number(p.answer_length) > 0 || p.citation_count > 0) ? "Not named" : "No answer")}</ResCell>;
+  // §feedback (Mentions vs Citations) — each CITED SOURCE carries its own provenance (competitor / third-party /
+  // owned), classified independently of the mention. Colour-code it so a competitor's page winning the citation
+  // reads differently from a neutral directory. Falls back to third_party for any untyped cited domain.
+  const _srcTypeColor = (t) => (t === "competitor" ? C.rust : t === "owned" ? "#3C7D5A" : "var(--muted)");
+  const _srcsTypedOf = (p) => (Array.isArray(p.cited_typed) && p.cited_typed.length
+    ? p.cited_typed.map((s) => ({ source: String(s.source || "").replace(/^www\./, ""), type: s.type || "third_party" })).filter((s) => s.source)
+    : _srcsOf(p).map((d) => ({ source: d, type: "third_party" })));
+  const _srcCell = (p) => { const list = _srcsTypedOf(p); if (!list.length) return "—";
+    return <span>{list.slice(0, 3).map((s, i) => <span key={i} style={{ color: _srcTypeColor(s.type) }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > 3 ? <span style={{ color: "var(--muted)" }}> …</span> : null}</span>; };
+  const _srcLegend = <div style={{ display: "flex", gap: 16, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>
+    <span><span style={{ color: C.rust }}>●</span> Competitor source</span>
+    <span><span style={{ color: "var(--muted)" }}>●</span> Third-party (directory / publisher / forum)</span>
+    <span><span style={{ color: "#3C7D5A" }}>●</span> Owned</span>
+  </div>;
 
   if (useAioPrompts) {
     slides.push(
@@ -860,11 +874,12 @@ export default function DeckReport({ data, live }) {
     const GROUPS = { mentions: [], commercial: [], informational: [] };
     for (const p of geoPool) GROUPS[_campaignOf(p)].push(p);
     const _promptTag = isIllus ? IllusTag : <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".06em", textTransform: "uppercase", color: "#3C7D5A", background: "rgba(60,125,90,.14)", padding: "2px 8px", borderRadius: 5, marginLeft: 6, whiteSpace: "nowrap" }}>Measured · live AI engines</span>;
-    const _campaignSlide = (nLabel, key, title, sub, group, whoLabel, whoOf, triad) => (
+    const _campaignSlide = (nLabel, key, title, sub, group, whoLabel, whoOf, triad, legend) => (
       <Slide key={key} variant="cream" n={nLabel} kicker="The Prompts We Ran" title={title}
         sub={<>{sub} {_promptTag}</>} foot={foot(`${nLabel.toUpperCase()} · GEO · PROMPTS`)}>
         <DataTable compact head={[{ label: "Buyer prompt" }, { label: "Engine" }, { label: whoLabel }, { label: `${name} result`, align: "right" }]}
-          rows={group.slice(0, 8).map((p) => ({ cells: [clamp(p.prompt, 52), engName(p.engine), clamp(whoOf(p), 40), { align: "right", v: _resCell(p) }] }))} />
+          rows={group.slice(0, 8).map((p) => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 52), engName(p.engine), (typeof _who === "string" ? clamp(_who, 40) : { v: _who }), { align: "right", v: _resCell(p) }] }; })} />
+        {legend || null}
         {group.length ? triad : <p className="mt" style={{ fontSize: 11, color: "var(--muted)" }}>No prompts of this type surfaced in this run.</p>}
       </Slide>
     );
@@ -883,23 +898,23 @@ export default function DeckReport({ data, live }) {
     slides.push(_campaignSlide("13b", "geo-prompts-commercial",
       "Citation, commercial: questions a page on your site can win",
       "Buying-intent questions (compare, pricing, how to choose) where AI cites a WEBSITE as the source. Build the answer-first page and you become the cited answer, which drives the lead. This is what competitors are already doing.",
-      GROUPS.commercial, "Source it cited", (p) => { const s = _srcsOf(p); return s.length ? s.slice(0, 3).join(", ") : "—"; },
+      GROUPS.commercial, "Source it cited", _srcCell,
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern"><b>Competitor pages</b> win these citations today, so their site is the answer, not yours.</Tc>
         <Tc kind="cost" label="What it costs you">The buyer reads the <b>cited page and its brand</b>, at the exact moment of intent.</Tc>
         <Tc kind="action" label="Build these">Publish <b>answer-first comparison, pricing and selection pages</b> for these exact questions.</Tc>
-      </Triad>
+      </Triad>, _srcLegend
     ));
     // 13c — CITATION INFORMATION: learning questions, blogs to write.
     slides.push(_campaignSlide("13c", "geo-prompts-info",
       "Citation, informational: blogs to write for AI visibility",
       "Learning-stage questions where AI cites explainer content. Publish these and AI starts citing you, building the topical authority that feeds the commercial wins. This is where competitors are actively writing blogs.",
-      GROUPS.informational, "Source it cited", (p) => { const s = _srcsOf(p); return s.length ? s.slice(0, 3).join(", ") : "—"; },
+      GROUPS.informational, "Source it cited", _srcCell,
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern"><b>Competitors are writing these explainers</b>, so AI learns the topic from them.</Tc>
         <Tc kind="cost" label="What it costs you">They build <b>topical authority and entity trust</b> with AI while you stay invisible.</Tc>
         <Tc kind="action" label="Write these">Publish <b>answer-first blogs</b> on these questions, structured for AI to lift and cite.</Tc>
-      </Triad>
+      </Triad>, _srcLegend
     ));
   }
 

@@ -102,18 +102,39 @@ export async function GET(req) {
       return out;
     };
 
-    const prompts_executed = results.map((r) => ({
-      prompt_id: r.prompt_id, prompt: r.raw_prompt, engine: r.engine,
-      cluster: clusterById[r.prompt_id] || r.cluster || "",   // campaign tag for the deck's 3-way split
-      executed_at: r.created_at, version: r.version,
-      brand_mentioned: !!r.brand_mentioned, brand_mention_count: r.brand_mention_count || 0, competitor_mention_count: r.competitor_mention_count || 0,
-      brands_named: _deriveNamed(r),   // real "who it named" column (deck slide 12) — worker list ∪ re-parsed, noise-filtered
-      brand_cited: !!r.brand_cited,   // citation-truth: brand's OWN domain was a real source (not just "answer had citations")
-      answer_length: Number(r.answer_length) || 0,   // distinguishes "answered, none named" from "no answer" (deck dash clarity)
-      citation_count: r.citation_count || 0, source_domains: r.source_domains || [],
-      answer_structure: r.answer_structure, sentiment: r.sentiment || null, parse_confidence: r.parse_confidence,
-      ...(withAnswers ? { answer: String(r.rendered_text || "").slice(0, 4000) } : {}),
-    }));
+    // §feedback (Mentions vs Citations) — classify each cited SOURCE independently of the mention, using the
+    // REAL per-citation provenance the collector already stored. Deterministic, never inferred from the mention:
+    // owned (brand's domain) > competitor (a configured rival's domain) > third_party (directory/publisher/forum).
+    const _citeType = {};   // prompt_id -> { bareDomain -> "owned"|"competitor"|"third_party" }
+    for (const c of citationDocs) {
+      const pid = c.prompt_id; const dom = String(c.cited_domain || "").replace(/^www\./, "").toLowerCase();
+      if (!pid || !dom) continue;
+      (_citeType[pid] ||= {})[dom] = c.is_brand_domain ? "owned" : c.is_competitor_domain ? "competitor" : "third_party";
+    }
+
+    const prompts_executed = results.map((r) => {
+      const _named = _deriveNamed(r);                                         // answer entities (mentions) — separate axis
+      const _typed = (Array.isArray(r.source_domains) ? r.source_domains : []) // citation sources — separate axis, typed
+        .map((d) => { const dom = String(d).replace(/^www\./, ""); return { source: dom, type: (_citeType[r.prompt_id] || {})[dom.toLowerCase()] || "third_party" }; });
+      return {
+        prompt_id: r.prompt_id, prompt: r.raw_prompt, engine: r.engine,
+        cluster: clusterById[r.prompt_id] || r.cluster || "",   // campaign tag for the deck's 3-way split
+        executed_at: r.created_at, version: r.version,
+        brand_mentioned: !!r.brand_mentioned, brand_mention_count: r.brand_mention_count || 0, competitor_mention_count: r.competitor_mention_count || 0,
+        brands_named: _named,   // real "who it named" column (deck slide 12) — worker list ∪ re-parsed, noise-filtered
+        brand_cited: !!r.brand_cited,   // citation-truth: brand's OWN domain was a real source (not just "answer had citations")
+        answer_length: Number(r.answer_length) || 0,   // distinguishes "answered, none named" from "no answer" (deck dash clarity)
+        citation_count: r.citation_count || 0, source_domains: r.source_domains || [],
+        // §feedback — explicit, INDEPENDENT mention/citation schema (real derived data, no inference, no blanks):
+        cited_typed: _typed,                                          // [{source, type: owned|competitor|third_party}]
+        mention_status: _named.length ? "present" : "absent",        // was any entity NAMED in the answer
+        citation_status: _typed.length ? "present" : "absent",       // was any SOURCE cited (independent of mention)
+        result_status: r.brand_mentioned ? "named" : "not_named",    // brand's own visibility outcome
+        confidence: Number(r.parse_confidence) || 0,                 // real parser confidence for this result
+        answer_structure: r.answer_structure, sentiment: r.sentiment || null, parse_confidence: r.parse_confidence,
+        ...(withAnswers ? { answer: String(r.rendered_text || "").slice(0, 4000) } : {}),
+      };
+    });
 
     // citation analysis — brand vs competitor vs third-party + the most-cited domains (#9)
     const domainAgg = {};
