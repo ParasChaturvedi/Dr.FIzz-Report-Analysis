@@ -48,7 +48,8 @@ const _OPENERS = new Set(`the this that these those their there they them we you
 a an and or but for to of in on at by as is are was were be been being have has had do does did will would can could should may might must not no yes if then than so such more less least very much also just even still
 best top leading trusted popular great good better several some many most other others various overall however additionally furthermore moreover note consider choose look here below above first second third fourth fifth sixth finally including includes include based known offers offer provides provide offering try use using check explore discover recommended recommend see find get make
 meanwhile instead therefore hence whereas nonetheless regardless ultimately specifically notably importantly generally typically essentially basically actually certainly clearly obviously interestingly unfortunately fortunately similarly likewise conversely alternatively although though despite unlike according whether within without across throughout beyond upon each every any all none both few during about again
-because since unless until after before once why how ever never always often sometimes usually perhaps maybe likely probably almost nearly really simply only mostly indeed overall given rather quite either neither`.split(/\s+/).filter(Boolean));
+because since unless until after before once why how ever never always often sometimes usually perhaps maybe likely probably almost nearly really simply only mostly indeed overall given rather quite either neither
+evaluate evaluating compare comparing assess assessing considering ensure ensuring choosing selecting identifying determining reviewing researching exploring`.split(/\s+/).filter(Boolean));
 // GENERIC = business / marketing / platform words that ARE often capitalised in answers but are
 // NOT company names. A candidate is DROPPED when EVERY one of its words is generic (or an opener /
 // the client's location) — so "Email Marketing", "E-commerce", "Digital Marketing", "Branding",
@@ -100,8 +101,8 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
     let words = m[1].trim().split(/\s+/);
     // trim ONLY opener/connective tokens from the ends (keeps a distinctive word like "Social" in
     // "Social Panga", which a full-stoplist trim would have stripped down to just "Panga").
-    while (words.length && (_OPENERS.has(words[0].toLowerCase()) || _STOPWORDS.has(words[0].toLowerCase()) || loc.has(words[0].toLowerCase()))) words.shift();
-    while (words.length && (_OPENERS.has(words[words.length - 1].toLowerCase()) || _STOPWORDS.has(words[words.length - 1].toLowerCase()) || loc.has(words[words.length - 1].toLowerCase()))) words.pop();
+    while (words.length && (_OPENERS.has(words[0].toLowerCase()) || loc.has(words[0].toLowerCase()))) words.shift();
+    while (words.length && (_OPENERS.has(words[words.length - 1].toLowerCase()) || loc.has(words[words.length - 1].toLowerCase()))) words.pop();
     if (!words.length) continue;
     const name = words.join(" ");
     const low = name.toLowerCase();
