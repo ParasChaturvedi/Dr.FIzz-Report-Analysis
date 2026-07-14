@@ -30,7 +30,7 @@ const _DECK_NOISE_GEN = new Set("technical core web vitals google business profi
 const _deckTopicNoise = (name) => {
   const words = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return true;
-  if (words.some((w) => /^opens?$/i.test(w))) return true;                          // "… Opens in a new tab"
+  if (words.some((w) => /^opens$/i.test(w))) return true;                          // "… Opens in a new tab" (plural only, keeps "Open Influence")
   if (words.every((w) => _DECK_NOISE_GEN.has(w.toLowerCase()))) return true;        // every word generic → topic
   if (words.length === 1 && _DECK_NOISE_ACR.has(words[0].toLowerCase().replace(/s$/, ""))) return true; // KPIs, SMEs
   return false;
@@ -229,8 +229,11 @@ export default function DeckReport({ data, live }) {
   // KPIs, SMEs, "…Opens", "Google Business Profile"). Drop them here so EVERY render is clean — the chart,
   // the closing wall, and the "X leads share of voice" line all read this — then re-normalize the real
   // brands' shares so a rival that was sitting behind 47% of noise shows its true, larger slice.
+  const _sovCfgNames = new Set((comps || []).map((c) => lc(c?.name || c?.domain || "").trim()).filter(Boolean));
   const sov = (() => {
-    const kept = _sovAll.filter((b) => b && (b.is_client || !_deckTopicNoise(b.brand))).map((b) => ({ ...b }));
+    // Keep the client + every CONFIGURED competitor (even an all-generic name like "Digital Web Solutions"),
+    // drop only genuine topic/UI noise from the AI-discovered brands.
+    const kept = _sovAll.filter((b) => b && (b.is_client || _sovCfgNames.has(lc(b.brand).trim()) || !_deckTopicNoise(b.brand))).map((b) => ({ ...b }));
     const nonClient = kept.filter((b) => !b.is_client);
     const sum = nonClient.reduce((s, b) => s + (Number(b.avg) || 0), 0);
     if (sum > 0) for (const b of nonClient) b.avg = Math.round((Number(b.avg) / sum) * 1000) / 10;

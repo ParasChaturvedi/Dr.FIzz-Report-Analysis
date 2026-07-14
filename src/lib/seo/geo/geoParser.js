@@ -76,6 +76,17 @@ india indian usa uk us united states america american europe european asia asian
 // Generic industry acronyms that survive the "all-caps prefix" brand test but are NOT company names.
 const _GEN_ACRONYMS = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux ui api cms crm saas faq kpi aov b2b b2c ai llm gpt serp url gmb nap eeat eat sme smb".split(/\s+/));
 
+// Common English words (gerunds, verbs, plural nouns, adjectives, adverbs) that appear Title-cased at a
+// sentence start or as a list lead ("Choosing the right…", "Focus on…", "Experts recommend…") but are NOT
+// brands. Distinct from _OPENERS: these survived the end-trim yet must NOT be admitted as a lone-word
+// "brand" by the length≥4 recall gate below. Coined agency names (Techmagnate, Uplers, Sparklin) are NOT
+// here, so recall is preserved; only real dictionary words are rejected.
+const _STOPWORDS = new Set(`choosing selecting picking finding comparing evaluating considering assessing reviewing researching exploring identifying determining understanding looking starting building growing improving increasing boosting driving generating optimizing focusing ensuring including featuring offering providing delivering creating managing running leading helping ranking hiring partnering working
+choose select pick find compare evaluate consider assess review research explore identify determine understand start build grow improve increase boost drive generate optimize focus ensure include feature offer provide deliver create manage lead avoid remember want know think read visit contact trust prefer recommend suggest hire
+experts leaders options factors reasons ways tips steps things points areas aspects elements examples types kinds prices costs fees rates plans packages lists guides answers questions clients customers users teams professionals specialists consultants partners benefits features results reviews ratings brands names businesses markets industries sectors trends insights
+best top leading trusted popular great better various several many different essential important critical crucial vital useful helpful valuable effective efficient reliable reputable established experienced professional skilled talented creative innovative modern advanced comprehensive complete affordable premium quality
+overall additionally furthermore moreover meanwhile instead therefore finally ultimately importantly notably specifically generally typically usually often sometimes perhaps maybe likely probably certainly clearly obviously interestingly unfortunately fortunately similarly likewise conversely alternatively`.split(/\s+/).filter(Boolean));
+
 function discoverBrands(text, { known = new Set(), location = "" } = {}) {
   const t = String(text || "");
   if (t.length < 20) return [];
@@ -89,15 +100,15 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
     let words = m[1].trim().split(/\s+/);
     // trim ONLY opener/connective tokens from the ends (keeps a distinctive word like "Social" in
     // "Social Panga", which a full-stoplist trim would have stripped down to just "Panga").
-    while (words.length && (_OPENERS.has(words[0].toLowerCase()) || loc.has(words[0].toLowerCase()))) words.shift();
-    while (words.length && (_OPENERS.has(words[words.length - 1].toLowerCase()) || loc.has(words[words.length - 1].toLowerCase()))) words.pop();
+    while (words.length && (_OPENERS.has(words[0].toLowerCase()) || _STOPWORDS.has(words[0].toLowerCase()) || loc.has(words[0].toLowerCase()))) words.shift();
+    while (words.length && (_OPENERS.has(words[words.length - 1].toLowerCase()) || _STOPWORDS.has(words[words.length - 1].toLowerCase()) || loc.has(words[words.length - 1].toLowerCase()))) words.pop();
     if (!words.length) continue;
     const name = words.join(" ");
     const low = name.toLowerCase();
     if (name.length < 3 || known.has(low) || loc.has(low)) continue;
     // DROP when every word is generic/opener/location (e.g. "Email Marketing", "Digital Media").
     if (words.every((w) => _GENERIC.has(w.toLowerCase()) || loc.has(w.toLowerCase()))) continue;
-    if (words.some((w) => /^opens?$/i.test(w))) continue;   // scraped UI-chrome ("… Opens in a new tab")
+    if (words.some((w) => /^opens$/i.test(w))) continue;   // scraped UI-chrome ("… Opens in a new tab") — plural only, keeps "Open Influence"
     if (words.length === 1) {
       // A single-word brand must LOOK like a real product name: camelCase (PageTraffic, WordStream)
       // or an all-caps prefix then lowercase (WATConsult). Plain Title-case single words (Branding,
@@ -113,7 +124,10 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
       // UI-chrome are all filtered ABOVE, so a distinctive survivor of length ≥ 4 is almost always a
       // real brand. camelCase / all-caps-prefix (PageTraffic, WATConsult) always pass; short fragments drop.
       const brandy = /[a-z][A-Z]/.test(w) || /^[A-Z]{2,}[a-z]/.test(w);
-      if (!brandy && w.length < 4) continue;
+      // A lone plain Title-case word is admitted only if it's distinctive (≥4 chars) AND not a common
+      // English word — this is what keeps the recall (Techmagnate/Uplers) while rejecting sentence-lead
+      // gerunds/verbs/plural-nouns ("Choosing", "Building", "Experts", "Options", "Focus", "Evaluate").
+      if (!brandy && (w.length < 4 || _STOPWORDS.has(w.toLowerCase()) || _STOPWORDS.has(w.toLowerCase().replace(/s$/, "")))) continue;
     }
     counts[name] = (counts[name] || 0) + 1;
   }
@@ -131,7 +145,7 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
 export function isTopicNoise(name) {
   const words = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return true;
-  if (words.some((w) => /^opens?$/i.test(w))) return true;                 // "… Opens in a new tab"
+  if (words.some((w) => /^opens$/i.test(w))) return true;                 // "… Opens in a new tab" (plural only, keeps "Open Influence")
   if (words.every((w) => _GENERIC.has(w.toLowerCase()))) return true;      // every word generic → topic
   if (words.length === 1 && _GEN_ACRONYMS.has(words[0].toLowerCase().replace(/s$/, ""))) return true; // KPIs, SMEs, ROI…
   return false;

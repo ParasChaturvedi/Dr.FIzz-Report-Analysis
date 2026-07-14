@@ -109,7 +109,11 @@ function shareOfVoice(byEngine, ctx) {
   const tally = {}; // brand -> { per_engine }
   const ensure = (name) => (tally[name] ||= { brand: name, is_client: name === brandName, per_engine: {} });
   ensure(brandName);
-  for (const c of (ctx.competitors || [])) { const nm = (typeof c === "string" ? c : c?.name || c?.brand || "").trim(); if (nm) ensure(nm); }
+  // Configured competitors are ALWAYS legitimate (the user chose them) — even when their name is all-generic
+  // ("Digital Web Solutions", "First Page", "Web Solutions"). Track them so the topic-noise filter below
+  // NEVER strips a configured rival off the SoV board (item-9 guarantees every configured competitor shows).
+  const _configured = new Set();
+  for (const c of (ctx.competitors || [])) { const nm = (typeof c === "string" ? c : c?.name || c?.brand || "").trim(); if (nm) { ensure(nm); _configured.add(nm.toLowerCase()); } }
 
   // DISCOVERED competitors — brands the AI actually named that were NOT configured. Real market
   // intel worth showing. Noise guard: only keep a brand that surfaced in ≥2 DISTINCT prompts, then
@@ -136,14 +140,14 @@ function shareOfVoice(byEngine, ctx) {
         // ("Google Business Profile", "KPIs", "…Opens"). DROP it here so it never enters counts OR the
         // total: this keeps it off the SoV bars AND re-normalizes the real brands' percentages.
         // isTopicNoise (NOT isBrandNoise) so real lowercase rivals — pagetraffic, webchutney — survive.
-        if (!k || isTopicNoise(k)) continue;
+        if (!k || (isTopicNoise(k) && !_configured.has(k.toLowerCase()))) continue;
         const c = Number(m.mention_count) || 1; ensure(k); counts[k] = (counts[k] || 0) + c; total += c; }
       for (const d of (r.discoveredBrands || [])) { const k = String(d?.name || "").trim(); if (!k || !discSet.has(k)) continue; const c = Number(d.count) || 1; counts[k] = (counts[k] || 0) + c; total += c; }
     }
     for (const name of Object.keys(tally)) tally[name].per_engine[e] = pct(counts[name] || 0, total);
   }
   const by_brand = Object.values(tally)
-    .filter((b) => b.is_client || !isTopicNoise(b.brand))   // §5 belt: never surface a topic/noise "brand" on the SoV board / wall (keeps real lowercase rivals)
+    .filter((b) => b.is_client || _configured.has(String(b.brand).toLowerCase()) || !isTopicNoise(b.brand))   // §5 belt: drop topic/noise "brands" but NEVER a configured competitor (keeps every chosen rival, incl. all-generic-named ones, at ≥0%)
     .map((b) => {
       const vals = engines.map((e) => b.per_engine[e] || 0);
       b.avg = vals.length ? Math.round((vals.reduce((a, x) => a + x, 0) / vals.length) * 10) / 10 : 0;
