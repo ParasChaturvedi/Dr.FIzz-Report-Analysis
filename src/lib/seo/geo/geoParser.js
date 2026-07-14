@@ -219,7 +219,9 @@ export function looksLikeNonAnswer(text) {
   const t = String(text || "").trim();
   if (t.length < 20) return true;                                       // truly empty — not a real answer
   const low = t.toLowerCase();
-  if (t.length < 400 && /(stay logged out|log ?in to (continue|see|view)|sign ?up to|create (your |a |an )?(free )?account|to continue,?\s*(log|sign)|verify you are (human|not a robot)|just a moment|you'?ve reached( your)?|message limit|unlock with|upgrade to (continue|unlock))/i.test(low)) return true;
+  // Anchored login-wall / interstitial phrasing only — must be a clear GATE, not incidental words in a real
+  // answer ("sign up to their free plan" must NOT trip this; "sign up to continue" must).
+  if (t.length < 400 && /(stay logged out|log ?in to (continue|see|view|access)|sign ?up to (continue|view|see|access|unlock|chat)|create (your |a |an )?(free )?account to|to continue,?\s*(log ?in|sign ?up)|verify you are (human|not a robot)|just a moment\.?\.?\.?\s*$|you'?ve reached your (message|usage|daily|free)|message limit|unlock (with|this)|upgrade to (continue|unlock))/i.test(low)) return true;
   const words = t.split(/\s+/).filter(Boolean);
   if (words.length <= 30) {
     const nav = words.filter((w) => _NAV_TOKEN.test(w)).length;
@@ -287,13 +289,12 @@ export function parseAnswer(response = {}, ctx = {}) {
     locationContext: response.locationContext || (response.region ? { mode: "country", label: response.region } : null),
     rawPrompt: response.prompt || response.rawPrompt || "",
     rawHtml: html,
-    // On a NON-ANSWER, blank the captured text everywhere it flows: this is what makes the "No answer"
-    // sentinel stick — geoStore derives answer_length from renderedText.length, so leaving the chrome text
-    // here would clobber the 0 back to the chrome length and the row would wrongly read "Not named".
-    renderedText: _nonAnswer ? "" : text,
-    visibleAnswerText: _nonAnswer ? "" : text,
+    renderedText: text,               // keep the captured text for the audit snapshot (do NOT blank on a non-answer)
+    visibleAnswerText: text,
     answerStructure: _nonAnswer ? "no_answer" : detectStructure(text, html),
-    answerLength: _nonAnswer ? 0 : text.length,   // explicit null: a UI/login-wall reads as "No answer", not "Not named"
+    // The non-answer sentinel travels via nonAnswer + answerLength:0; geoStore honours nonAnswer when
+    // persisting answer_length (never falls back to the chrome char-count), so the deck reads "No answer".
+    answerLength: _nonAnswer ? 0 : text.length,
     nonAnswer: _nonAnswer,
     brandMentions,
     competitorMentions,
