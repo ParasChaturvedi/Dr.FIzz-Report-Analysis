@@ -859,7 +859,12 @@ export default function DeckReport({ data, live }) {
   const _srcsTypedOf = (p) => (Array.isArray(p.cited_typed) && p.cited_typed.length
     ? p.cited_typed.map((s) => ({ source: String(s.source || "").replace(/^www\./, ""), type: (s.type && s.type !== "third_party") ? s.type : _classifySrc(s.source) })).filter((s) => s.source)
     : _srcsOf(p).map((d) => ({ source: d, type: _classifySrc(d) })));
-  const _srcCell = (p) => { const list = _srcsTypedOf(p); if (!list.length) return "—";
+  // A row can have no external SOURCE (or no brand NAMED) yet still be a real answer — the AI answered from
+  // its OWN knowledge. Show the engine as the fallback attribution (muted italic) instead of a bare "—", so
+  // "ChatGPT / Gemini answered directly, no external page cited" reads clearly. A true NON-answer stays "—".
+  const _answeredRow = (p) => (Number(p.answer_length) > 0) || (Array.isArray(p.brands_named) && p.brands_named.length > 0) || (Array.isArray(p.source_domains) && p.source_domains.length > 0) || !!p.brand_mentioned;
+  const _engFallback = (p) => (_answeredRow(p) ? <span style={{ color: "var(--muted)", fontStyle: "italic" }}>{engName(p.engine)}</span> : "—");
+  const _srcCell = (p) => { const list = _srcsTypedOf(p); if (!list.length) return _engFallback(p);
     return <span>{list.slice(0, 3).map((s, i) => <span key={i} style={{ color: _srcTypeColor(s.type) }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > 3 ? <span style={{ color: "var(--muted)" }}> …</span> : null}</span>; };
   const _srcLegend = <div style={{ display: "flex", gap: 16, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>
     <span><span style={{ color: C.rust }}>●</span> Competitor source</span>
@@ -897,7 +902,7 @@ export default function DeckReport({ data, live }) {
     slides.push(_campaignSlide("13a", "geo-prompts-mentions",
       "Mentions: where AI names brands, and who gets picked",
       "Best and top style questions. AI answers these from third-party listicles (Clutch, DesignRush, Reddit, publisher round-ups), naming the brands it trusts. You do not win these with your own page, you earn the mention.",
-      GROUPS.mentions, "Who it named", (p) => { const b = _namedOf(p); return b.length ? b.join(", ") : "—"; },
+      GROUPS.mentions, "Who it named", (p) => { const b = _namedOf(p); return b.length ? b.join(", ") : _engFallback(p); },
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern">On these listicle questions AI names <b>rivals from directories and round-ups</b>{name ? <>, rarely {name}</> : null}.</Tc>
         <Tc kind="cost" label="What it costs you">Buyers act on the <b>names AI returns</b>, so every un-listed prompt is a lead that never hears of you.</Tc>
