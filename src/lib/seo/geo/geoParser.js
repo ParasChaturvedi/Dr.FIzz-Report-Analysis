@@ -46,7 +46,9 @@ function firstOccurrence(text, term) {
 // These are TRIMMED from the ends of a candidate (so "Consider WATConsult" -> "WATConsult").
 const _OPENERS = new Set(`the this that these those their there they them we you our your it its his her who whom whose what which where when while
 a an and or but for to of in on at by as is are was were be been being have has had do does did will would can could should may might must not no yes if then than so such more less least very much also just even still
-best top leading trusted popular great good better several some many most other others various overall however additionally furthermore moreover note consider choose look here below above first second third fourth fifth sixth finally including includes include based known offers offer provides provide offering try use using check explore discover recommended recommend see find get make`.split(/\s+/).filter(Boolean));
+best top leading trusted popular great good better several some many most other others various overall however additionally furthermore moreover note consider choose look here below above first second third fourth fifth sixth finally including includes include based known offers offer provides provide offering try use using check explore discover recommended recommend see find get make
+meanwhile instead therefore hence whereas nonetheless regardless ultimately specifically notably importantly generally typically essentially basically actually certainly clearly obviously interestingly unfortunately fortunately similarly likewise conversely alternatively although though despite unlike according whether within without across throughout beyond upon each every any all none both few during about again
+because since unless until after before once why how ever never always often sometimes usually perhaps maybe likely probably almost nearly really simply only mostly indeed overall given rather quite either neither`.split(/\s+/).filter(Boolean));
 // GENERIC = business / marketing / platform words that ARE often capitalised in answers but are
 // NOT company names. A candidate is DROPPED when EVERY one of its words is generic (or an opener /
 // the client's location) — so "Email Marketing", "E-commerce", "Digital Marketing", "Branding",
@@ -63,6 +65,7 @@ analytics automation optimization optimisation conversion engagement audience tr
 google chatgpt gemini perplexity claude copilot microsoft openai anthropic bing meta amazon apple facebook instagram
 linkedin twitter youtube tiktok pinterest shopify wordpress wix webflow squarespace hubspot mailchimp klaviyo salesforce
 zoho magento woocommerce wordpress ai llm gpt overview overviews
+clutch designrush goodfirms sortlist trustpilot capterra yelp glassdoor sitejabber ambitionbox reddit quora medium forbes wikipedia upwork fiverr sulekha justdial indiamart tradeindia g2 techtarget
 profile profiles maps map engine engines search graphic page pages listing listings review reviews rating ratings
 post posts vitals core experience voice keyword keywords backlink backlinks ranking rankings score scores sitemap
 technical robots schema canonical redirect redirects title titles tag tags heading headings snippet snippets citation citations
@@ -104,8 +107,13 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
       // NOT brands — drop them (they were leaking into the "AI-named competitors" list).
       const _acr = w.toLowerCase().replace(/s$/, "");
       if (_GEN_ACRONYMS.has(_acr)) continue;
+      // RECALL FIX (§6/p15): real agency names are frequently plain Title-case single words
+      // (Techmagnate, Uplers, Sparklin, Bonoboz) — the old gate required camelCase and dropped them,
+      // so the "who it named" column went to "—". Openers/connectives/generics/directories/acronyms/
+      // UI-chrome are all filtered ABOVE, so a distinctive survivor of length ≥ 4 is almost always a
+      // real brand. camelCase / all-caps-prefix (PageTraffic, WATConsult) always pass; short fragments drop.
       const brandy = /[a-z][A-Z]/.test(w) || /^[A-Z]{2,}[a-z]/.test(w);
-      if (!brandy) continue;
+      if (!brandy && w.length < 4) continue;
     }
     counts[name] = (counts[name] || 0) + 1;
   }

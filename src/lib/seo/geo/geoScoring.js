@@ -121,8 +121,8 @@ function shareOfVoice(byEngine, ctx) {
   }
   const discSet = new Set(
     Object.entries(discPrompts)
-      .filter(([, s]) => s.size >= 2)
-      .filter(([n]) => !isBrandNoise(n))   // drop topic/generic terms (Technical SEO, KPIs, SMEs, GBP…)
+      .filter(([, s]) => s.size >= 2)      // must recur across ≥2 distinct prompts (this guards one-off noise)
+      .filter(([n]) => !isTopicNoise(n))   // drop ONLY topic/UI noise (KPIs, GBP, "…Opens") — keep real single-word rivals (Techmagnate, Uplers) so SoV matches the p15 "who it named" column
       .sort((a, b) => b[1].size - a[1].size).slice(0, 5).map(([n]) => n)
   );
   for (const n of discSet) tally[n] ||= { brand: n, is_client: false, discovered: true, per_engine: {} };

@@ -583,9 +583,13 @@ export default function DeckReport({ data, live }) {
             keyword's global_volume, so the only gap was that the old total summed ALL accepted keywords
             while the tiers show the mapped pages. Sum the SAME mapped set the three tiers render. */}
         <Tile n={(() => { const _mv = [...(ca.commercial_pages || []), ...(ca.geography_pages || ca.city_pages || []), ...(ca.blog_and_guides || [])].reduce((s, p) => s + (Number(p.primary_volume) || 0), 0); return _mv > 0 ? fmtNum(_mv) : (opp.total_monthly_search_volume ? fmtNum(opp.total_monthly_search_volume) : "N/A"); })()} label="Monthly searches in play" />
-        <Tile n={dash((ca.commercial_pages || []).length)} label="Commercial terms mapped" />
+        {/* §3 — label the PAGE counts as pages: the subtitle's "58 commercial terms" is the KEYWORD
+            count (commercial_keyword_count); these tiles are the mapped pages (commercial_pages.length),
+            so a "terms" label read as a contradiction (58 vs 8). And the 4th tile counts EXISTING pages
+            to improve — "defended" (with alarm styling) wrongly implied itzfizz already holds them. */}
+        <Tile n={dash((ca.commercial_pages || []).length)} label="Commercial landing pages" />
         <Tile n={dash((ca.geography_pages || ca.city_pages || []).filter((p) => (p.action || "create-new") !== "optimise-existing").length)} label="Local pages to own" />
-        <Tile flag n={dash((ca.commercial_pages || []).filter((p) => p.action === "optimise-existing").length)} label="Commercial terms defended" />
+        <Tile n={dash((ca.commercial_pages || []).filter((p) => p.action === "optimise-existing").length)} label="Existing pages to optimise" />
       </Tiles>
     </Slide>
   );
@@ -1230,7 +1234,11 @@ export default function DeckReport({ data, live }) {
     const seen = new Set(); const out = [];
     const add = (nm) => { const n = String(nm || "").trim(); if (!n) return;
       const k = lc(n).replace(/\s+(pvt|private|ltd|limited|llp|inc|llc|global|services?|digital|media|marketing|agency|technologies?)\b/g, "").replace(/[^a-z0-9]/g, "");
-      if (!k || k.length < 2 || seen.has(k)) return; seen.add(k); out.push(n); };
+      if (!k || k.length < 2) return;
+      // §12 dedupe incl. containment: "webchutney" (from SoV) is the same rival as "Dentsu Webchutney"
+      // (from comps) — one normalized key is a substring of the other. Keep the first (fuller) name, drop the dup.
+      for (const s of seen) { if (s === k || (Math.min(s.length, k.length) >= 6 && (s.includes(k) || k.includes(s)))) return; }
+      seen.add(k); out.push(n); };
     for (const c of comps) add(_cleanBrand(c));                        // business + API competitors (not search)
     for (const b of (sov || [])) if (b && !b.is_client) add(b.brand);  // real AI-named brands from GEO SoV
     return out.slice(0, 12);
