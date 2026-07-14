@@ -74,7 +74,9 @@ generative discovery presence visibility awareness reputation positioning outrea
 january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday
 india indian usa uk us united states america american europe european asia asian australia canada uae dubai singapore mumbai delhi gurgaon bangalore bengaluru chennai pune kolkata hyderabad noida
 british dutch german french italian spanish portuguese russian chinese japanese korean canadian australian brazilian mexican swiss swedish norwegian danish irish scottish welsh
-specialization specializations deliverables deliverable expertise portfolio portfolios offerings offering capabilities capability methodology methodologies approach approaches process processes pricing packages package deliverable focused based driven oriented`.split(/\s+/).filter(Boolean)]);
+specialization specializations deliverables deliverable expertise portfolio portfolios offerings offering capabilities capability methodology methodologies approach approaches process processes pricing packages package deliverable focused based driven oriented
+return returns investment investments cost costs price prices fee fees rate rates budget spend spending
+skip chat images apps deep settings search menu tools sidebar temporary regenerate login logout signin signup account profile library explore attach upgrade share copy send stop model models version versions`.split(/\s+/).filter(Boolean)]);
 
 // Generic industry acronyms that survive the "all-caps prefix" brand test but are NOT company names.
 const _GEN_ACRONYMS = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux ui api cms crm saas faq kpi aov b2b b2c ai llm gpt serp url gmb nap eeat eat sme smb".split(/\s+/));
@@ -115,7 +117,7 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
     if (words.some((w) => /^opens$/i.test(w))) continue;   // scraped UI-chrome ("… Opens in a new tab") — plural only, keeps "Open Influence"
     // Descriptive compounds are attributes of a brand, not a brand ("India-based", "ROI-focused",
     // "results-driven", "AI-powered"). Drop any run containing such a token — it's a listicle qualifier.
-    if (words.some((w) => /-(based|focused|driven|led|oriented|centric|first|friendly|ready|grade|specific|related|powered|backed|approved|certified|rated|centered|minded|savvy)$/i.test(w))) continue;
+    if (words.some((w) => /-(based|focused|driven|led|oriented|centric|first|friendly|ready|grade|specific|related|powered|backed|approved|certified|rated|centered|minded|savvy|assisted|enabled|only|specialized|tailored|leading)$/i.test(w))) continue;
     if (words.length === 1) {
       // A single-word brand must LOOK like a real product name: camelCase (PageTraffic, WordStream)
       // or an all-caps prefix then lowercase (WATConsult). Plain Title-case single words (Branding,
