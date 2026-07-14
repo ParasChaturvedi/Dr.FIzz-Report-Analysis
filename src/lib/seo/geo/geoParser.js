@@ -72,7 +72,9 @@ post posts vitals core experience voice keyword keywords backlink backlinks rank
 technical robots schema canonical redirect redirects title titles tag tags heading headings snippet snippets citation citations
 generative discovery presence visibility awareness reputation positioning outreach funnel pipeline dashboard report reports
 january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday
-india indian usa uk us united states america american europe european asia asian australia canada uae dubai singapore mumbai delhi gurgaon bangalore bengaluru chennai pune kolkata hyderabad noida`.split(/\s+/).filter(Boolean)]);
+india indian usa uk us united states america american europe european asia asian australia canada uae dubai singapore mumbai delhi gurgaon bangalore bengaluru chennai pune kolkata hyderabad noida
+british dutch german french italian spanish portuguese russian chinese japanese korean canadian australian brazilian mexican swiss swedish norwegian danish irish scottish welsh
+specialization specializations deliverables deliverable expertise portfolio portfolios offerings offering capabilities capability methodology methodologies approach approaches process processes pricing packages package deliverable focused based driven oriented`.split(/\s+/).filter(Boolean)]);
 
 // Generic industry acronyms that survive the "all-caps prefix" brand test but are NOT company names.
 const _GEN_ACRONYMS = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux ui api cms crm saas faq kpi aov b2b b2c ai llm gpt serp url gmb nap eeat eat sme smb".split(/\s+/));
@@ -111,6 +113,9 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
     // DROP when every word is generic/opener/location (e.g. "Email Marketing", "Digital Media").
     if (words.every((w) => _GENERIC.has(w.toLowerCase()) || loc.has(w.toLowerCase()))) continue;
     if (words.some((w) => /^opens$/i.test(w))) continue;   // scraped UI-chrome ("… Opens in a new tab") — plural only, keeps "Open Influence"
+    // Descriptive compounds are attributes of a brand, not a brand ("India-based", "ROI-focused",
+    // "results-driven", "AI-powered"). Drop any run containing such a token — it's a listicle qualifier.
+    if (words.some((w) => /-(based|focused|driven|led|oriented|centric|first|friendly|ready|grade|specific|related|powered|backed|approved|certified|rated|centered|minded|savvy)$/i.test(w))) continue;
     if (words.length === 1) {
       // A single-word brand must LOOK like a real product name: camelCase (PageTraffic, WordStream)
       // or an all-caps prefix then lowercase (WATConsult). Plain Title-case single words (Branding,
@@ -120,6 +125,9 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
       // NOT brands — drop them (they were leaking into the "AI-named competitors" list).
       const _acr = w.toLowerCase().replace(/s$/, "");
       if (_GEN_ACRONYMS.has(_acr)) continue;
+      // Possessive of a location/generic ("India's", "India's,") is not a brand — strip the 's and re-test.
+      const _bare = w.toLowerCase().replace(/['’]s$/, "");
+      if (_bare !== w.toLowerCase() && (_GENERIC.has(_bare) || loc.has(_bare) || _STOPWORDS.has(_bare))) continue;
       // RECALL FIX (§6/p15): real agency names are frequently plain Title-case single words
       // (Techmagnate, Uplers, Sparklin, Bonoboz) — the old gate required camelCase and dropped them,
       // so the "who it named" column went to "—". Openers/connectives/generics/directories/acronyms/
