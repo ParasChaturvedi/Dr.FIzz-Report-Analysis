@@ -940,11 +940,18 @@ export default function DeckReport({ data, live }) {
   const _buildTitle = buildCards.length
     ? `${_numCap(buildCards.length)} page${buildCards.length === 1 ? " does" : "s do"} most of the work`
     : "Optimise what exists before building new";
-  const _buildSub = `Only pages with real, measured demand. ${_numCap(_bcComm.length)} commercial${_bcLocal.length ? `, ${_numCap(_bcLocal.length).toLowerCase()} local` : ""}. Each has a job and a target.`;
+  // §3 — subtitle must describe the pages ACTUALLY shown (buildCards), never the mapped-total. A stale
+  // logic-layer ds.build_sub said "8 service + 4 location" while the deck rendered 1 card → single-source it here.
+  const _bParts = [];
+  if (_bcComm.length) _bParts.push(`${_numCap(_bcComm.length).toLowerCase()} commercial`);
+  if (_bcLocal.length) _bParts.push(`${_numCap(_bcLocal.length).toLowerCase()} local`);
+  const _buildSub = _bParts.length
+    ? `Only pages with real, measured demand — ${_bParts.join(" and ")}. Each has a job and a target.`
+    : `Only pages with real, measured demand. Each has a job and a target.`;
   const shipWith = ["Exact-intent H1 and meta", "800 to 1,500 unique words", "5 to 8 FAQs plus schema", "Strong CTA above the fold", "Internal links and alt text", "Sub-2.5s load time"];
   slides.push(
     <Slide key="build" variant="cream" n="15" kicker="What We Build" title={_buildTitle}
-      sub={<>{ds.build_sub || _buildSub} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("15 · WHAT TO BUILD")}>
+      sub={<>{_buildSub} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("15 · WHAT TO BUILD")}>
       {buildCards.length ? (
         <Row cols={buildCards.length >= 4 ? 4 : 3} style={{ gap: 16 }}>
           {buildCards.map((p, i) => (
