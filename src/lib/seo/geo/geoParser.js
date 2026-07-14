@@ -210,8 +210,29 @@ function detectStructure(text, html) {
  * @param {object} ctx       { brand, brandDomain, competitors:[{name,domain}|string] }
  * @returns {object} NormalizedResult (the saveRunResult contract)
  */
+// A logged-out engine (esp. ChatGPT) can return its INTERFACE instead of an answer — a login wall or bare
+// nav ("Skip", "Chat", "Settings", "Log in", "Sign up"). That is a NON-ANSWER: we must extract NOTHING and
+// let the result read as an explicit null ("—" / "No answer"), never scrape the chrome as if it were brands.
+// Deterministic, conservative — only fires on clear login-wall phrasing or nav-token soup, never on real prose.
+const _NAV_TOKEN = /^(skip|chat|images?|apps?|deep|settings?|search|menu|tools?|sidebar|temporary|regenerate|login|logout|signin|signup|upgrade|share|copy|send|stop|library|explore|new|continue|home|account|profile|help|voice|model|version|attach)$/i;
+export function looksLikeNonAnswer(text) {
+  const t = String(text || "").trim();
+  if (t.length < 20) return true;                                       // truly empty — not a real answer
+  const low = t.toLowerCase();
+  if (t.length < 400 && /(stay logged out|log ?in to (continue|see|view)|sign ?up to|create (your |a |an )?(free )?account|to continue,?\s*(log|sign)|verify you are (human|not a robot)|just a moment|you'?ve reached( your)?|message limit|unlock with|upgrade to (continue|unlock))/i.test(low)) return true;
+  const words = t.split(/\s+/).filter(Boolean);
+  if (words.length <= 30) {
+    const nav = words.filter((w) => _NAV_TOKEN.test(w)).length;
+    const sentences = (t.match(/[.!?]["')]?(\s|$)/g) || []).length;
+    if (nav >= 3 && sentences <= 1) return true;                        // nav-token soup, no prose
+    if (words.length && nav / words.length > 0.4) return true;          // mostly interface tokens
+  }
+  return false;
+}
+
 export function parseAnswer(response = {}, ctx = {}) {
   const text = String(response.answerText || response.renderedText || "");
+  const _nonAnswer = looksLikeNonAnswer(text);   // engine returned its UI / login wall, not an answer
   const html = String(response.raw_html || response.rawHtml || "");
   const citeUrls = Array.isArray(response.citations) ? response.citations : [];
   const engine = ENGINE_KEY_BY_NAME[String(response.engine || "").toLowerCase()] || String(response.engine || "").toLowerCase();
@@ -224,8 +245,9 @@ export function parseAnswer(response = {}, ctx = {}) {
 
   // ── mentions (with first-appearance order) ──
   const entities = [];
-  if (brand) entities.push({ name: brand, type: "brand", domain: brandDomain, ...firstOccurrence(text, brand) });
-  for (const c of competitors) entities.push({ name: c.name, type: "competitor", domain: c.domain, ...firstOccurrence(text, c.name) });
+  const _occ = (name) => (_nonAnswer ? { count: 0, firstIndex: -1 } : firstOccurrence(text, name));   // non-answer → nothing counts as mentioned
+  if (brand) entities.push({ name: brand, type: "brand", domain: brandDomain, ..._occ(brand) });
+  for (const c of competitors) entities.push({ name: c.name, type: "competitor", domain: c.domain, ..._occ(c.name) });
   const present = entities.filter((e) => e.count > 0).sort((a, b) => a.firstIndex - b.firstIndex);
   present.forEach((e, i) => { e.position = i + 1; });
 
@@ -235,10 +257,10 @@ export function parseAnswer(response = {}, ctx = {}) {
 
   // discovered competitors — brands the AI named that are NOT the client or a configured rival.
   const _known = new Set([brand, ...competitors.map((c) => c.name)].filter(Boolean).map((s) => s.toLowerCase()));
-  const discoveredBrands = discoverBrands(text, { known: _known, location: clean(ctx.location || ctx.region || "") });
+  const discoveredBrands = _nonAnswer ? [] : discoverBrands(text, { known: _known, location: clean(ctx.location || ctx.region || "") });
 
   // ── citations (classified by domain) ──
-  const citations = citeUrls.map((url, i) => {
+  const citations = (_nonAnswer ? [] : citeUrls).map((url, i) => {
     const dom = domainOf(url); const root = rootDomain(dom);
     const isBrand = !!brandDomain && (root === brandDomain || dom.endsWith(brandDomain));
     const comp = competitors.find((c) => c.domain && (root === c.domain || dom.endsWith(c.domain)));
@@ -267,8 +289,9 @@ export function parseAnswer(response = {}, ctx = {}) {
     rawHtml: html,
     renderedText: text,
     visibleAnswerText: text,
-    answerStructure: detectStructure(text, html),
-    answerLength: text.length,
+    answerStructure: _nonAnswer ? "no_answer" : detectStructure(text, html),
+    answerLength: _nonAnswer ? 0 : text.length,   // explicit null: a UI/login-wall reads as "No answer", not "Not named"
+    nonAnswer: _nonAnswer,
     brandMentions,
     competitorMentions,
     discoveredBrands,   // brands AI named that weren't configured — surfaced as extra competitors
