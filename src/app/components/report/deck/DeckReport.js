@@ -20,6 +20,22 @@ import { buildIllustrativeGeo, buildIllustrativeBenchmark } from "./illustrative
 import DeckAutoFit from "./DeckAutoFit";
 import { semanticSig } from "@/lib/seo/geo/semanticSig";
 
+// Self-contained topic-noise check (mirrors geoParser.isTopicNoise) — inlined so this CLIENT bundle
+// never imports the server-side GEO parser (which pulls fs/mongodb/playwright). Drops the junk "brands"
+// a pre-filter GEO worker scan stored on the SoV board: all-generic phrases (Technical SEO, Core Web
+// Vitals, Google Business Profile, Digital Marketing), generic acronyms (KPIs, SMEs, GBP, ROI), and
+// scraped "…Opens" UI chrome — while keeping real rivals (PageTraffic, Social Panga, Dentsu Webchutney).
+const _DECK_NOISE_ACR = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux ui api cms crm saas faq kpi aov b2b b2c ai llm gpt serp url gmb gbp nap eeat eat sme smb".split(/\s+/));
+const _DECK_NOISE_GEN = new Set("technical core web vitals google business profile digital marketing content social media strategy strategies analytics conversion optimization optimisation branding design designs development seo sem services service agency agencies company companies page pages listing listings profile profiles map maps search engine engines score scores keyword keywords overview overviews ranking rankings backlink backlinks schema robots sitemap".split(/\s+/));
+const _deckTopicNoise = (name) => {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  if (words.some((w) => /^opens?$/i.test(w))) return true;                          // "… Opens in a new tab"
+  if (words.every((w) => _DECK_NOISE_GEN.has(w.toLowerCase()))) return true;        // every word generic → topic
+  if (words.length === 1 && _DECK_NOISE_ACR.has(words[0].toLowerCase().replace(/s$/, ""))) return true; // KPIs, SMEs
+  return false;
+};
+
 // item 12a — the fabricated placeholder clientele wall was removed. The closing slide now shows REAL
 // competitor brands from the analysis (business + API competitors + AI-named GEO brands); see slide 25.
 
@@ -207,7 +223,19 @@ export default function DeckReport({ data, live }) {
   // Normalise to an array so downstream .slice/[...spread]/.filter never crash (this dict
   // shape was the client-side exception on measured reports).
   const _sovRaw = geo && geo.share_of_voice;
-  const sov = Array.isArray(_sovRaw) ? _sovRaw : (Array.isArray(_sovRaw?.by_brand) ? _sovRaw.by_brand : []);
+  const _sovAll = Array.isArray(_sovRaw) ? _sovRaw : (Array.isArray(_sovRaw?.by_brand) ? _sovRaw.by_brand : []);
+  // §5 RENDER-TIME BELT — the SoV board is SCORED BY THE GEO WORKER and STORED in the bundle, so a scan
+  // run before the topic-noise filter existed still carries junk "brands" (Technical SEO, Core Web Vitals,
+  // KPIs, SMEs, "…Opens", "Google Business Profile"). Drop them here so EVERY render is clean — the chart,
+  // the closing wall, and the "X leads share of voice" line all read this — then re-normalize the real
+  // brands' shares so a rival that was sitting behind 47% of noise shows its true, larger slice.
+  const sov = (() => {
+    const kept = _sovAll.filter((b) => b && (b.is_client || !_deckTopicNoise(b.brand))).map((b) => ({ ...b }));
+    const nonClient = kept.filter((b) => !b.is_client);
+    const sum = nonClient.reduce((s, b) => s + (Number(b.avg) || 0), 0);
+    if (sum > 0) for (const b of nonClient) b.avg = Math.round((Number(b.avg) / sum) * 1000) / 10;
+    return kept.sort((a, b) => (Number(b.avg) || 0) - (Number(a.avg) || 0));
+  })();
   const leader = [...sov].filter((b) => !b.is_client).sort((a, b) => (b.avg || 0) - (a.avg || 0))[0] || null;
 
   // ── Canonical 5-engine framing. The by-platform panels always list all canonical engines:
@@ -810,7 +838,7 @@ export default function DeckReport({ data, live }) {
     return "commercial";
   };
   const _srcsOf = (p) => (Array.isArray(p.source_domains) ? p.source_domains : []).map((s) => String(s).replace(/^www\./, "")).filter(Boolean);
-  const _namedOf = (p) => (Array.isArray(p.brands_named) ? p.brands_named : []).filter(Boolean);
+  const _namedOf = (p) => (Array.isArray(p.brands_named) ? p.brands_named : []).filter(Boolean).filter((n) => !_deckTopicNoise(n));
   const _resCell = (p) => <ResCell kind={resKind(p)}>{p.brand_cited ? "Cited" : p.brand_mentioned ? "Named" : ((Number(p.answer_length) > 0 || p.citation_count > 0) ? "Not named" : "No answer")}</ResCell>;
 
   if (useAioPrompts) {
