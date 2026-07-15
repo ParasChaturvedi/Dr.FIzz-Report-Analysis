@@ -621,8 +621,12 @@ export default function DeckReport({ data, live }) {
             count (commercial_keyword_count); these tiles are the mapped pages (commercial_pages.length),
             so a "terms" label read as a contradiction (58 vs 8). And the 4th tile counts EXISTING pages
             to improve — "defended" (with alarm styling) wrongly implied itzfizz already holds them. */}
-        <Tile n={dash((ca.commercial_pages || []).length)} label="Commercial landing pages" />
-        <Tile n={dash((ca.geography_pages || ca.city_pages || []).filter((p) => (p.action || "create-new") !== "optimise-existing").length)} label="Local pages to own" />
+        {/* §1/§3 — the LOCAL tile must equal the local terms this same slide renders (Tier-2 shows N city
+            terms, so "Local pages to own" = the geography-page count, not just the create-new subset), and the
+            commercial tile is relabeled "mapped" so it no longer reads as a build count that duplicates the
+            "existing to optimise" figure below it. */}
+        <Tile n={dash((ca.commercial_pages || []).length)} label="Commercial pages mapped" />
+        <Tile n={dash((ca.geography_pages || ca.city_pages || []).length)} label="Local pages to own" />
         <Tile n={dash((ca.commercial_pages || []).filter((p) => p.action === "optimise-existing").length)} label="Existing pages to optimise" />
       </Tiles>
     </Slide>
