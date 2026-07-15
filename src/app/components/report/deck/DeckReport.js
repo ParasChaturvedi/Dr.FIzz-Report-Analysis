@@ -30,6 +30,7 @@ const _DECK_NOISE_GEN = new Set(`technical core web vitals google business profi
 model models version versions customize customise connectors connector skills skill sources source ask asked canvas prompt prompts thread threads assistant assistants question questions answer answers example examples reason reasons factor factors option options feature features benefit benefits use uses case cases level levels item items element elements aspect aspects part parts area areas field fields topic topics subject subjects step steps way ways tip tips point points thing things kind kinds type types
 compare choose select find learn discover manage improve grow increase boost provide deliver offer help support explore ensure evaluate consider assess review identify
 continue continues continued follow followup followed following related expand collapse next previous back forward submit cancel confirm close open apply reset clear done save saved read reading show hide view more less button link click tap here now today overview overviews summary details detail info information
+large small big huge tiny major minor focus focuses focused offers offering provides providing helps helping serves serving covers covering includes including features featuring targets targeting typical typically standard custom various multiple single dedicated specialized specialised known scale scales
 best top leading better great various several many most other some new latest popular common general specific main key major minor primary secondary basic advanced simple easy modern important trusted reliable professional expert quality affordable premium comprehensive complete full total leading proven established experienced`.split(/\s+/).filter(Boolean));
 const _deckTopicNoise = (name) => {
   const words = String(name || "").trim().split(/\s+/).filter(Boolean);
@@ -995,8 +996,13 @@ export default function DeckReport({ data, live }) {
         <Tc kind="evidence" label="Evidence">{topicMeasured
           ? <>Of the topics we tested across engines, {name} leads on <b>{topicChips.filter((c) => c.state === "strong").length}</b> and cedes <b>{topicChips.filter((c) => c.state !== "strong").length}</b> to rivals, the adjacent, local and specialist topics buyers also ask about.</>
           : <>AI associates {name} with your core service, but not the adjacent, local and specialist topics buyers also ask about.</>}</Tc>
-        <Tc kind="cost" label="What it costs you">You can only be recommended for one narrow topic, so the broader high-intent questions surface rivals instead.</Tc>
-        <Tc kind="action" label="Do this first">Build topic-deep pages plus schema so engines associate {name} with every topic in your market, not just one.</Tc>
+        {/* §8 — this copy must MATCH the evidence count above (topicChips "strong"). Hard-coding "one narrow
+            topic" contradicts a measured 0-recognised result; make it data-driven. */}
+        <Tc kind="cost" label="What it costs you">{(() => { const _r = topicChips.filter((c) => c.state === "strong").length;
+          return _r === 0 ? <>You are <b>not yet recommended for any topic</b>, so every high-intent question surfaces rivals instead.</>
+            : _r === 1 ? <>You can only be recommended for <b>one narrow topic</b>, so the broader high-intent questions surface rivals instead.</>
+            : <>You are recommended for only <b>{_r} topics</b>, so the broader high-intent questions surface rivals instead.</>; })()}</Tc>
+        <Tc kind="action" label="Do this first">Build topic-deep pages plus schema so engines associate {name} with <b>every topic</b> in your market{topicChips.filter((c) => c.state === "strong").length >= 1 ? ", not just one" : ""}.</Tc>
       </Triad>
     </Slide>
   );
