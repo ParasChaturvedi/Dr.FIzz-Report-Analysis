@@ -844,7 +844,15 @@ export default function DeckReport({ data, live }) {
     return "commercial";
   };
   const _srcsOf = (p) => (Array.isArray(p.source_domains) ? p.source_domains : []).map((s) => String(s).replace(/^www\./, "")).filter(Boolean);
-  const _namedOf = (p) => (Array.isArray(p.brands_named) ? p.brands_named : []).filter(Boolean).filter((n) => !_deckTopicNoise(n));
+  // Precision guard for "who it named": a one-off Title-case PROSE fragment ("Typical", "MVPs", "Large Scale",
+  // "Digital Heavyweights", "PR Agency") shows up in a SINGLE answer; a real rival the AI trusts RECURS across
+  // prompts. Keep a named entity only if it's a configured competitor OR it was named in ≥2 distinct prompts —
+  // this kills one-off extraction noise WITHOUT an endless word-list, while real recurring agencies survive.
+  const _namedCount = {};
+  for (const _p of geoPool) { const _s = new Set(); for (const _b of (Array.isArray(_p.brands_named) ? _p.brands_named : [])) { const _k = lc(String(_b).trim()); if (_k && !_s.has(_k)) { _s.add(_k); _namedCount[_k] = (_namedCount[_k] || 0) + 1; } } }
+  const _cfgNamedSet = new Set((comps || []).map((c) => lc(c?.name || c?.domain || "").trim()).filter(Boolean));
+  const _corroboratedName = (n) => { const k = lc(String(n).trim()); return _cfgNamedSet.has(k) || (_namedCount[k] || 0) >= 2; };
+  const _namedOf = (p) => (Array.isArray(p.brands_named) ? p.brands_named : []).filter(Boolean).filter((n) => !_deckTopicNoise(n)).filter(_corroboratedName);
   const _resCell = (p) => <ResCell kind={resKind(p)}>{p.brand_cited ? "Cited" : p.brand_mentioned ? "Named" : ((Number(p.answer_length) > 0 || p.citation_count > 0) ? "Not named" : "No answer")}</ResCell>;
   // §feedback (Mentions vs Citations) — each CITED SOURCE carries its own provenance (competitor / third-party /
   // owned), classified independently of the mention. Colour-code it so a competitor's page winning the citation
