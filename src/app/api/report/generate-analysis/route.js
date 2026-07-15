@@ -882,7 +882,12 @@ export async function POST(request) {
     const _cachedReport = await getCached({ domain, dataType: reportDataType, ttlDays: 30 });
     if (_cachedReport) {
       console.log(`[cache HIT] report:${domain}, returning saved report (no fetch, no Claude)`);
-      return NextResponse.json({ id: randomUUID(), reportType, data: _cachedReport });
+      const _hitId = randomUUID();
+      // DURABLE on the cache-hit path too: persist report-by-id under this fresh id so /report/{id} opens
+      // even when the per-tab sessionStorage is missing (a new tab / restored fullscreen tab). Without this
+      // a regenerated (cache-hit) report 404s "Report Not Found" the moment it's not the exact tab that made it.
+      try { await putCached({ domain: _hitId, dataType: "report-by-id", payload: { id: _hitId, reportType, data: _cachedReport }, source: "report-by-id", forClientDomain: domain }); } catch (e) { console.warn("[generate-analysis] cache-hit report-by-id persist failed:", e?.message); }
+      return NextResponse.json({ id: _hitId, reportType, data: _cachedReport });
     }
 
     // ── Authoritative industry from the LIVE site ────────────────────────────────
