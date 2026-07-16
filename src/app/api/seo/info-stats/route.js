@@ -7,7 +7,7 @@
 // returns infoPanel:null so the panel falls back to its placeholder.
 // ─────────────────────────────────────────────────────────────────────────────
 import { getOrFetch } from "@/lib/cache/mongo";
-import { fetchDomainRankOverview } from "@/lib/seo/dataforseo";
+import { fetchDomainRankOverview, fetchDataForSeoDomainRank } from "@/lib/seo/dataforseo";
 import { fetchMozMetrics } from "@/lib/seo/moz/client";
 
 export const runtime = "nodejs";
@@ -35,10 +35,18 @@ export async function POST(req) {
           fetchDomainRankOverview(domain).catch(() => null),
           fetchMozMetrics(domain, { withList: false }).catch(() => null),
         ]);
-        const domainAuthority =
+        // DA chain: Moz DA (best) → Moz backlinks rank. When Moz is unavailable (e.g. the
+        // 403 "insufficient-quota" that currently blanks DA everywhere), fall back to the
+        // DataForSEO backlinks-summary rank — the SAME authority source the report path uses,
+        // so the panel's DA matches the report's DR instead of showing a bare "--".
+        let domainAuthority =
           Number.isFinite(moz?.domainAuthority) ? Math.round(moz.domainAuthority)
           : Number.isFinite(moz?.backlinksSummary?.rank) ? Math.round(moz.backlinksSummary.rank)
           : null;
+        if (domainAuthority == null) {
+          const dfsRank = await fetchDataForSeoDomainRank(domain).catch(() => null);
+          if (Number.isFinite(dfsRank)) domainAuthority = dfsRank;
+        }
         const organicTraffic = Number.isFinite(rank?.organicTraffic) ? Math.round(rank.organicTraffic) : null;
         const organicKeyword = Number.isFinite(rank?.organicKeywords) ? Math.round(rank.organicKeywords) : null;
         // Derive the badge from the real DA / organic-traffic signals (was hardcoded "Good").

@@ -207,7 +207,9 @@ function WebsiteStatsCard({ website, stats }) {
                 ? it.growth
                 : null;
             const showRealGrowth = g !== null;
-            const arrowUp = showRealGrowth ? g >= 0 : hasValue ? it.value >= 70 : null;
+            // A trend arrow only means something with REAL growth data. Never guess a
+            // direction from the value itself (the old `value >= 70` heuristic was fake).
+            const arrowUp = showRealGrowth ? g >= 0 : null;
 
             return (
               <div key={idx} className="flex-1 px-5 text-center">
@@ -226,7 +228,7 @@ function WebsiteStatsCard({ website, stats }) {
                     )}
                   </div>
 
-                  {hasValue ? (
+                  {showRealGrowth ? (
                     arrowUp ? (
                       <span className="text-emerald-400 text-[14px]">↑</span>
                     ) : (
@@ -243,9 +245,9 @@ function WebsiteStatsCard({ website, stats }) {
                     `${Math.abs(g)}%`
                   ) : loading ? (
                     <span className="inline-block h-[10px] w-8 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
-                  ) : hasValue ? (
-                    Math.floor(Math.random() * (100 - 26 + 1)) + 26
                   ) : (
+                    // No historical/growth data → show nothing. Never fabricate a number here
+                    // (this slot used to render Math.random() 26–100, which read as real data).
                     ""
                   )}
                 </div>
@@ -575,18 +577,8 @@ export default function InfoPanel({
     return () => window.removeEventListener("dashboard:open", handleDashboardOpen);
   }, [onClose, setIsPinned]);
 
-  const generateRandomStats = (website) => {
-    if (!website) return { domainAuthority: 49, organicTraffic: 72, organicKeyword: 75 };
-    const seed = website.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    const r1 = (seed * 9301 + 49297) % 233280;
-    const r2 = (r1 * 9301 + 49297) % 233280;
-    const r3 = (r2 * 9301 + 49297) % 233280;
-    return {
-      domainAuthority: Math.floor((r1 / 233280) * 100) + 1,
-      organicTraffic: Math.floor((r2 / 233280) * 100) + 1,
-      organicKeyword: Math.floor((r3 / 233280) * 100) + 1,
-    };
-  };
+  // (removed generateRandomStats — it fabricated seeded DA/traffic/keyword numbers and had
+  //  no place in a data report. The panel only ever shows REAL cached stats or "--".)
 
   // Use the REAL cached stats (Moz DA + DataForSEO traffic/keywords) when loaded.
   // While loading or if unavailable, show "--" placeholders — never fabricated numbers.

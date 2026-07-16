@@ -1113,6 +1113,41 @@ export async function fetchDomainRankOverview(domain, options = {}) {
 }
 
 /* ============================================================================
+   Lightweight domain-authority proxy (DA fallback when Moz is unavailable)
+   DataForSEO backlinks-summary `rank` (0-1000) normalised to 0-100 — the same
+   authority source the full report path falls back to. Returns 0-100 or null.
+   Used by the Info panel so its DA degrades gracefully (e.g. Moz quota 403)
+   instead of showing a bare "--", matching the report's DR behaviour.
+============================================================================ */
+export async function fetchDataForSeoDomainRank(domain) {
+  const login = DATAFORSEO_LOGIN;
+  const password = DATAFORSEO_PASSWORD;
+  if (!login || !password) return null;
+  const target = String(domain || "")
+    .replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase().trim();
+  if (!target) return null;
+  try {
+    const auth = Buffer.from(`${login}:${password}`).toString("base64");
+    const res = await fetch("https://api.dataforseo.com/v3/backlinks/summary/live", {
+      method: "POST",
+      headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+      body: JSON.stringify([{ target, internal_list_limit: 1, include_subdomains: true, backlinks_status_type: "all" }]),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const task = Array.isArray(json?.tasks) ? json.tasks[0] : null;
+    if (task?.status_code && task.status_code !== 20000) return null;
+    const row = Array.isArray(task?.result) ? task.result[0] : null;
+    let rank = Number(row?.rank);
+    if (!Number.isFinite(rank)) return null;
+    if (rank > 100) rank = rank / 10;   // 0-1000 → 0-100 (same normalisation as the rest of the app)
+    return Math.max(0, Math.min(100, Math.round(rank)));
+  } catch {
+    return null;
+  }
+}
+
+/* ============================================================================
    NEW: Competitor Domains (top competing domains)
    TTL: 30 minutes
 ============================================================================ */
