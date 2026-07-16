@@ -472,8 +472,11 @@ export default function DeckReport({ data, live }) {
           ))}
         </div>
         <Card soft title="Already working in your favour">
+          {/* B15 — "No penalties. Clean history" is unprovable without a Search Console connection
+              (no manual-action data source). Replaced with a crawl-provable favourable fact: the site
+              was reached, validated and crawled, so the technical basics genuinely pass. */}
           <Checks items={[
-            { state: "ok", text: <><b>No penalties.</b> Clean history, nothing to undo.</> },
+            { state: "ok", text: <><b>Reachable &amp; crawlable.</b> Valid SSL and a live, indexable homepage — the technical basics pass.</> },
             { state: "ok", text: <><b>Schema in place.</b> {faqCount ? `${faqCount} FAQ blocks AI can lift.` : "Answer-shaped content AI can lift."}</> },
             { state: rating ? "ok" : "do", text: rating ? <><b>A genuine {rating}★ rating.</b> Real trust to build on.</> : <>Build first reviews for trust.</> },
             { state: "ok", text: <><b>An open field.</b> No one owns the commercial space.</> },
@@ -900,13 +903,18 @@ export default function DeckReport({ data, live }) {
   const _answeredRow = (p) => (Number(p.answer_length) > 0) || (Array.isArray(p.brands_named) && p.brands_named.length > 0) || (Array.isArray(p.source_domains) && p.source_domains.length > 0) || !!p.brand_mentioned;
   const _emptyCell = (p, label) => (_answeredRow(p) ? <span style={{ color: "var(--muted)" }}>{label}</span> : "—");
   const _srcCell = (p) => { const list = _srcsTypedOf(p); if (!list.length) return _emptyCell(p, "— no source shown");
-    return <span>{list.slice(0, 3).map((s, i) => <span key={i} style={{ color: _srcTypeColor(s.type) }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > 3 ? <span style={{ color: "var(--muted)" }}> …</span> : null}</span>; };
+    return <span>{list.slice(0, 5).map((s, i) => <span key={i} style={{ color: _srcTypeColor(s.type) }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > 5 ? <span style={{ color: "var(--muted)" }}> +{list.length - 5} more</span> : null}</span>; };
   const _srcLegend = <div style={{ display: "flex", gap: 16, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>
     <span><span style={{ color: C.rust }}>●</span> Competitor source</span>
     <span><span style={{ color: "var(--muted)" }}>●</span> Third-party (directory / publisher / forum)</span>
     <span><span style={{ color: "#3C7D5A" }}>●</span> Owned</span>
     <span><span style={{ color: "#B4ABA0" }}>●</span> Unknown</span>
   </div>;
+  // B20 — name the third-party sources AI ACTUALLY cited in this scan, not a generic hardcoded
+  // list (Clutch/DesignRush/G2/Reddit). Falls back to unnamed "directories and round-ups" if none.
+  const _citedDirs = Array.from(new Set(
+    (citedDomains || []).map((d) => _normDom(d.domain)).filter((d) => d && _classifySrc(d) === "third_party")
+  )).slice(0, 4);
 
   if (useAioPrompts) {
     slides.push(
@@ -927,21 +935,26 @@ export default function DeckReport({ data, live }) {
     const _campaignSlide = (nLabel, key, title, sub, group, whoLabel, whoOf, triad, legend) => (
       <Slide key={key} variant="cream" n={nLabel} kicker="The Prompts We Ran" title={title}
         sub={<>{sub} {_promptTag}</>} foot={foot(`${nLabel.toUpperCase()} · GEO · PROMPTS`)}>
+        {/* B17 — show the full prompt + more cited sources (was clamped to 52 / 3 with an ellipsis).
+            B18 — show more rows per campaign and state the count below. */}
         <DataTable compact head={[{ label: "Buyer prompt" }, { label: "Engine" }, { label: whoLabel }, { label: `${name} result`, align: "right" }]}
-          rows={group.slice(0, 8).map((p) => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 52), engName(p.engine), (typeof _who === "string" ? clamp(_who, 40) : { v: _who }), { align: "right", v: _resCell(p) }] }; })} />
+          rows={group.slice(0, 12).map((p) => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 96), engName(p.engine), (typeof _who === "string" ? clamp(_who, 72) : { v: _who }), { align: "right", v: _resCell(p) }] }; })} />
         {legend || null}
-        {group.length ? triad : <p className="mt" style={{ fontSize: 11, color: "var(--muted)" }}>No prompts of this type surfaced in this run.</p>}
+        {group.length
+          ? <p className="mt" style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>Showing {Math.min(12, group.length)} of {group.length} prompt{group.length > 1 ? "s" : ""} in this campaign{group.length > 12 ? " — full set in the live dashboard" : ""}</p>
+          : <p className="mt" style={{ fontSize: 11, color: "var(--muted)" }}>No prompts of this type surfaced in this run.</p>}
+        {group.length ? triad : null}
       </Slide>
     );
     // 13a — MENTIONS: best/top, AI names brands from third-party listicles.
     slides.push(_campaignSlide("13a", "geo-prompts-mentions",
       "Mentions: where AI names brands, and who gets picked",
-      "Best and top style questions. AI answers these from third-party listicles (Clutch, DesignRush, Reddit, publisher round-ups), naming the brands it trusts. You do not win these with your own page, you earn the mention.",
+      "Best and top style questions. AI answers these from third-party listicles and directories, naming the brands it trusts. You do not win these with your own page, you earn the mention.",
       GROUPS.mentions, "Who it named", (p) => { const b = _namedOf(p); return b.length ? b.join(", ") : _emptyCell(p, "— none named"); },
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern">On these listicle questions AI names <b>rivals from directories and round-ups</b>{name ? <>, rarely {name}</> : null}.</Tc>
         <Tc kind="cost" label="What it costs you">Buyers act on the <b>names AI returns</b>, so every un-listed prompt is a lead that never hears of you.</Tc>
-        <Tc kind="action" label="Do this first">Earn placement and genuine reviews on the <b>directories and listicles AI already cites</b> (Clutch, DesignRush, G2, Reddit).</Tc>
+        <Tc kind="action" label="Do this first">Earn placement and genuine reviews on {_citedDirs.length ? <>the <b>sources AI already cites here</b> ({_citedDirs.join(", ")})</> : <>the <b>directories and listicles AI already cites</b> for these questions</>}.</Tc>
       </Triad>
     ));
     // 13b — CITATION COMMERCIAL: buying questions where a website is the source.
@@ -1006,7 +1019,20 @@ export default function DeckReport({ data, live }) {
         </div>
         <div>
           <h3 className="mini">Trust signals: present vs missing</h3>
-          <Checks items={(air.signals || []).slice(0, 8).map((s) => ({ state: s.ok ? "ok" : "no", text: s.label + (s.detail ? `, ${clamp(s.detail, 50)}` : "") }))} />
+          {/* B16 — llms.txt (and other crawl-guide signals) being PRESENT is a readiness signal, not a
+              realized win. On a site measured at 0% citation + 0% mention, don't award it an unqualified
+              green tick that implies a benefit the report itself shows isn't landing yet — mark it "do". */}
+          <Checks items={(() => {
+            const _geoZero = Number(geo.overall?.citation_rate || 0) === 0 && Number(geo.overall?.mention_rate || 0) === 0;
+            return (air.signals || []).slice(0, 8).map((s) => {
+              const _isCrawlGuide = /llms\.txt/i.test(`${s.label || ""} ${s.key || ""}`);
+              const _base = s.label + (s.detail ? `, ${clamp(s.detail, 50)}` : "");
+              if (s.ok && _isCrawlGuide && _geoZero) {
+                return { state: "do", text: <>{s.label} — <span style={{ color: "var(--muted)" }}>present, but not yet earning citations</span></> };
+              }
+              return { state: s.ok ? "ok" : "no", text: _base };
+            });
+          })()} />
           {(!air.signals || air.signals.length === 0) && <p className="small">Readiness signals populate from the on-site crawl.</p>}
         </div>
       </Split>
@@ -1100,7 +1126,7 @@ export default function DeckReport({ data, live }) {
   const PbHead = ({ count, label }) => (<div className="pbhead"><span className="ct2">{count}</span><span className="cl2">{label}</span></div>);
   slides.push(
     <Slide key="contentmap" variant="cream" n="16" kicker="The Content Map" title="What to optimise, and what to create"
-      sub={<>{ds.contentmap_sub || "We audited every existing page and post. Some are rank-ready and need polish; the rest are gaps to fill."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("16 · THE CONTENT MAP")}>
+      sub={<>{ds.contentmap_sub || "We reviewed the pages we crawled. Some are rank-ready and need polish; the rest are gaps to fill."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("16 · THE CONTENT MAP")}>
       <Split>
         <div>
           <PbHead count={(ca.pagesToOptimise || []).length || (ca.pagesExistingFlagged ?? 0)} label="service pages you have · optimise" />

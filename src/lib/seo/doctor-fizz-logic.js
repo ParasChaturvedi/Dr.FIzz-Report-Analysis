@@ -3260,7 +3260,7 @@ export function buildStoryNarrative(input = {}) {
   // 01 — THE SITUATION  ·  OnIt "Key Takeaway" + "The Honest Assessment" (exact voice).
   story.the_situation = [
     `${name} has ${t} organic traffic and ${k} ranking keywords${has(dr) ? `, on a Domain Rating of ${dr}` : ""} — ${invisible ? "effectively invisible to Google, so the technical foundation must be rebuilt before any keyword strategy can take hold" : "barely visible, so the technical foundation needs rebuilding before a keyword strategy can take hold"}.`,
-    `Starting from near-zero is an advantage: no bad habits to undo, no penalty history, and an open field — nobody is dominating the commercial keyword space yet.`,
+    `Starting from near-zero is an advantage: a clean slate to build on and an open field — nobody is dominating the commercial keyword space yet.`,
   ];
 
   // 02 — THE OPPORTUNITY  ·  OnIt "The Pattern".
