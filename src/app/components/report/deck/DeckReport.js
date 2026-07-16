@@ -621,7 +621,14 @@ export default function DeckReport({ data, live }) {
       <h4 style={{ margin: "12px 0 2px", fontSize: 14 }}>{heading}</h4>
       <p className="small" style={{ margin: "0 0 12px" }}>{desc}</p>
       {(items || []).slice(0, 5).map((k, i) => (
-        <KV key={i} k={k.keyword_cluster || k.page_name || k.proposed_title || k.keyword} v={Number(k.primary_volume) > 0 ? fmtNum(k.primary_volume) : "—"} />
+        <div key={i}>
+          <KV k={k.keyword_cluster || k.page_name || k.proposed_title || k.keyword} v={Number(k.primary_volume) > 0 ? fmtNum(k.primary_volume) : "—"} />
+          {/* RC5/B4 — near-identical variants share ONE demand pool; list them so the reader sees the
+              single volume covers the whole cluster (not summed per variant). */}
+          {Array.isArray(k.variants) && k.variants.length
+            ? <div style={{ fontSize: 9, color: C.faint, margin: "-2px 0 7px", lineHeight: 1.45 }}>+ {k.variants.slice(0, 3).join(" · ")}{k.variants.length > 3 ? ` · +${k.variants.length - 3} more` : ""} <span style={{ fontStyle: "italic" }}>(same demand pool)</span></div>
+            : null}
+        </div>
       ))}
       {(!items || items.length === 0) && <p className="small">No measured demand in this tier yet.</p>}
     </Card>
@@ -1313,9 +1320,20 @@ export default function DeckReport({ data, live }) {
   // shows the same modelled DR.
   const _drKpi = kpiRow("domain_rating");
   const _drRow = _drKpi && proj.dr12 != null ? { ..._drKpi, target_12_months: proj.dr12, target_6_months: proj.dr6 ?? _drKpi.target_6_months } : _drKpi;
+  // B6 — the keywords-ranking target must reconcile with the plan. A plan that builds N commercial/local
+  // pages against the mapped terms cannot honestly target "1-2" ranking keywords. Floor the 12-month
+  // target at baseline + the pages the plan actually builds (each targets at least one head term).
+  const _kwKpi = kpiRow("organic_keywords");
+  const _kwPagesPlanned = (ca.commercial_pages || []).length + (ca.geography_pages || ca.city_pages || []).length;
+  const _kwRow = (() => {
+    if (!_kwKpi || _kwPagesPlanned <= 0) return _kwKpi;
+    const _base = Number(_kwKpi.baseline ?? _kwKpi.now) || 0;
+    const _rawT = Number(_kwKpi.target_12_months ?? _kwKpi.target_6_months ?? _kwKpi.s12 ?? _kwKpi.s6) || 0;
+    return { ..._kwKpi, target_12_months: Math.max(_rawT, _base + _kwPagesPlanned) };
+  })();
   // RC1 — a scoreboard row needs a REAL "now" to show a trend. When the provider did not return
   // Domain Rating / referring domains for this run, drop that row rather than render "N/A → N/A".
-  const seoBoard = [["Domain Rating", _drRow], ["Organic traffic / month", kpiRow("organic_traffic")], ["Keywords ranking", kpiRow("organic_keywords")], ["Referring domains", kpiRow("referring_domains")]]
+  const seoBoard = [["Domain Rating", _drRow], ["Organic traffic / month", kpiRow("organic_traffic")], ["Keywords ranking", _kwRow], ["Referring domains", kpiRow("referring_domains")]]
     .filter(([label, r]) => { if (!/domain rating|referring domains/i.test(label)) return true; const b = r ? (r.baseline ?? r.now) : null; return b != null; });
   slides.push(
     <Slide key="prove" variant="cream" n="21" kicker="How We Prove It" title="Two scoreboards, reported every month"

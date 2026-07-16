@@ -559,6 +559,51 @@ export function isOffTopicTheory(kw) {
   return /\b(societal|green|holistic|relationship|internal|differentiated|undifferentiated)\s+marketing\b|\bmarketing\s+(mix|management|myopia|environment|concept|orientation)\b|\bkotler\b|\b4\s*p'?s\b|\bfull\s+form\b|\bmeaning\s+of\b|\bdefinition\s+of\b/.test(k);
 }
 
+// RC5/B4 — collapse near-identical keyword VARIANTS (word-order / singular-plural / verb-form
+// variants of the SAME buyer intent — e.g. "accounting outsourced" == "outsourced accountants" ==
+// "outsource accounting service" == "outsourcing accounting services") into ONE demand pool. We keep
+// the highest-volume keyword as the representative, list the collapsed variants under it, and NEVER
+// sum across variants — the pool's volume is the representative's, not the total. This is what fixes
+// the 4×590 inflation that made the deck's "searches in play" and lead numbers too high.
+const _KW_STOP = new Set("for the a an and or with your you our my their its in on to of at by near best top vs versus what which how why".split(" "));
+const _KW_FILLER = new Set("service services solution solutions".split(" "));   // generic, non-distinguishing
+const _kwStem = (w) => {
+  w = String(w || "").toLowerCase();
+  if (w.length <= 3) return w;
+  if (/(s|x|z|ch|sh)es$/.test(w)) w = w.slice(0, -2);
+  else if (/ies$/.test(w)) w = w.slice(0, -3) + "y";
+  else if (/ss$/.test(w)) { /* keep */ }
+  else if (/s$/.test(w)) w = w.slice(0, -1);
+  w = w.replace(/(ings?|edly|ed|ment|ations?|itions?|ional|ions?|ance|ence|ancy|ency|ants?|ents?|er|or|ive|ise|ize)$/, "");
+  w = w.replace(/e$/, "");
+  return w.length >= 2 ? w : String(w || "");
+};
+const _KW_SYN = { agency: "provid", company: "provid", firm: "provid", provider: "provid", advertising: "market", indian: "india" };
+const _kwToks = (s) => {
+  const out = new Set();
+  for (let w of String(s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)) {
+    if (!w || w.length < 3 || _KW_STOP.has(w) || _KW_FILLER.has(w)) continue;
+    w = _kwStem(w); w = _KW_SYN[w] || w;
+    if (w && w.length >= 2) out.add(w);
+  }
+  return out;
+};
+const _kwJaccard = (a, b) => { let h = 0; for (const t of a) if (b.has(t)) h++; return h / Math.max(1, a.size + b.size - h); };
+export function dedupeKeywordVariants(accepted = [], threshold = 0.8) {
+  const clusters = [];   // { rep, t, variants:[] }
+  for (const k of (accepted || [])) {
+    if (!k || !k.keyword) continue;
+    const t = _kwToks(k.keyword);
+    if (!t.size) { clusters.push({ rep: k, t, variants: [] }); continue; }
+    const i = clusters.findIndex((c) => c.t.size && _kwJaccard(c.t, t) >= threshold);
+    if (i === -1) { clusters.push({ rep: k, t, variants: [] }); continue; }
+    const c = clusters[i];
+    if ((Number(k.global_volume) || 0) > (Number(c.rep.global_volume) || 0)) { c.variants.push(c.rep.keyword); c.rep = k; c.t = t; }
+    else c.variants.push(k.keyword);
+  }
+  return clusters.map((c) => (c.variants.length ? { ...c.rep, variants: c.variants } : c.rep));
+}
+
 export function buildContentArchitecture(accepted = [], crawlPages = []) {
   const commercial_pages = [];
   const blog_and_guides  = [];
@@ -568,28 +613,10 @@ export function buildContentArchitecture(accepted = [], crawlPages = []) {
   const slugify = (s) => String(s).toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").slice(0, 60);
 
-  // De-duplicate near-identical keywords (singular/plural/word-order variants) so we never
-  // recommend 3 separate pages for "small business seo package", "...packages", "seo
-  // packages for small businesses". Cluster by ≥70% token overlap, keep the highest volume.
-  const _STOP = new Set("for the a an and or with your you our in on to of at by".split(" "));
-  const _sing = (w) => /(s|x|z|ch|sh)es$/.test(w) ? w.slice(0, -2) : /ies$/.test(w) ? w.slice(0, -3) + "y" : /ss$/.test(w) ? w : /s$/.test(w) ? w.slice(0, -1) : w;
-  // Collapse interchangeable industry synonyms so semantic duplicates merge instead of forming
-  // separate pages, e.g. "digital marketing agency in india" == "indian digital marketing company"
-  // == "digital advertising company in india". Kept deliberately small: only provider-noun,
-  // marketing/advertising, and india/indian equivalences (do not broaden without re-checking dedup).
-  const _SYN = { agency: "provider", company: "provider", firm: "provider", advertising: "marketing", indian: "india" };
-  const _toks = (s) => new Set(String(s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 3 && !_STOP.has(w)).map(_sing).map((w) => _SYN[w] || w));
-  const _jaccard = (a, b) => { let h = 0; for (const t of a) if (b.has(t)) h++; return h / Math.max(1, a.size + b.size - h); };
-  const _deduped = [];
-  for (const k of (accepted || [])) {
-    const t = _toks(k.keyword);
-    if (!t.size) { _deduped.push({ k, t }); continue; }
-    const i = _deduped.findIndex((x) => x.t.size && _jaccard(x.t, t) >= 0.8);   // only near-identical merge
-    if (i === -1) _deduped.push({ k, t });
-    else if ((k.global_volume || 0) > (_deduped[i].k.global_volume || 0)) _deduped[i] = { k, t };
-  }
-
-  for (const { k } of _deduped) {
+  // RC5/B4 — collapse near-identical keyword variants into ONE demand pool (word-order / plural /
+  // verb-form variants of the same buyer intent). See dedupeKeywordVariants above — keeps the
+  // highest-volume representative and records the collapsed variants under it.
+  for (const k of dedupeKeywordVariants(accepted)) {
     // V3 Part 10.1 — geography relevance where applicable (the geo scope for local
     // demand; "Not geo-specific" for commercial/informational pages).
     const geoRel = k.intent_class === "local-commercial"
@@ -603,6 +630,7 @@ export function buildContentArchitecture(accepted = [], crawlPages = []) {
       funnel_role:         k.funnel_role,
       priority:            k.priority,
       geography_relevance: geoRel,
+      variants:            Array.isArray(k.variants) ? k.variants : [],   // RC5/B4 — collapsed near-identical terms, one demand pool
     };
 
     // Route "top/best/companies/agencies" queries to outreach — a page can't rank for them.
@@ -3526,6 +3554,11 @@ function buildV2Additions(input) {
   // industry-standard "addressable traffic" model rather than a flat multiplier.
   const accepted = keywords.accepted || [];
   const commercial = accepted.filter(k => k.intent_class === "transactional" || k.intent_class === "local-commercial");
+  // RC5/B4 — every headline TOTAL must count one demand pool per intent, never 4×590 across variants.
+  // Collapse variants BEFORE summing so total_monthly_search_volume / commercial totals match the
+  // deduped page set the deck builds (which also runs dedupeKeywordVariants). Same source of truth.
+  const _dedupAccepted = dedupeKeywordVariants(accepted);
+  const _dedupCommercial = dedupeKeywordVariants(commercial);
   const sumVol = (arr) => arr.reduce((s, k) => s + (Number(k.global_volume) || 0), 0);
   const cityPages = content_architecture.city_pages || [];
 
@@ -3551,9 +3584,9 @@ function buildV2Additions(input) {
   }
 
   const opportunity_summary = {
-    total_monthly_search_volume:        sumVol(accepted),
-    commercial_keyword_count:           commercial.length,
-    commercial_keyword_monthly_volume:  sumVol(commercial),
+    total_monthly_search_volume:        sumVol(_dedupAccepted),
+    commercial_keyword_count:           _dedupCommercial.length,
+    commercial_keyword_monthly_volume:  sumVol(_dedupCommercial),
     city_pages_needed:                  cityPages.length,
     city_pages_monthly_volume:          sumVol(cityPages.map(p => ({ global_volume: p.primary_volume }))),
     quick_wins_available:               accepted.filter(k => k.priority === "HIGH").length,
