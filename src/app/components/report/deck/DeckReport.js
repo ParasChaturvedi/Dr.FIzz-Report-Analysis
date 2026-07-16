@@ -31,7 +31,9 @@ model models version versions customize customise connectors connector skills sk
 compare choose select find learn discover manage improve grow increase boost provide deliver offer help support explore ensure evaluate consider assess review identify
 continue continues continued follow followup followed following related expand collapse next previous back forward submit cancel confirm close open apply reset clear done save saved read reading show hide view more less button link click tap here now today overview overviews summary details detail info information
 large small big huge tiny major minor focus focuses focused offers offering provides providing helps helping serves serving covers covering includes including features featuring targets targeting typical typically standard custom various multiple single dedicated specialized specialised known scale scales
-best top leading better great various several many most other some new latest popular common general specific main key major minor primary secondary basic advanced simple easy modern important trusted reliable professional expert quality affordable premium comprehensive complete full total leading proven established experienced`.split(/\s+/).filter(Boolean));
+best top leading better great various several many most other some new latest popular common general specific main key major minor primary secondary basic advanced simple easy modern important trusted reliable professional expert quality affordable premium comprehensive complete full total leading proven established experienced
+sign in history workflow workflows bookkeeping accounting accountant accountants payroll taxation audit auditing compliance advisory finance financial
+links image images share shares copy copied download downloads export exports save saves regenerate rewrite feedback upvote downvote`.split(/\s+/).filter(Boolean));
 const _deckTopicNoise = (name) => {
   const words = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return true;
@@ -371,7 +373,11 @@ export default function DeckReport({ data, live }) {
           <Tile flag n={fmtNum(traffic0 ?? 0)} label="Organic visits / month" />
           <Tile flag n={measured ? fmtNum(live.mentions_summary?.prompts_with_brand ?? 0) : fmtNum(aio.brand_cited_count ?? (aio.brand_cited ? 1 : 0))} label="AI answers naming you" />
           <Tile n={opp.total_monthly_search_volume ? fmtNum(opp.total_monthly_search_volume) : "N/A"} label="Searches up for grabs" />
-          <Tile n={rating ? `${rating}★` : "N/A"} label="Rating, beats most rivals" />
+          {/* RC1 — a null GBP rating can never headline a comparative claim ("beats most rivals").
+              Show the star rating only when measured; otherwise show the honest local starting line. */}
+          {rating != null
+            ? <Tile n={`${rating}★`} label="Rating, beats most rivals" />
+            : <Tile n={reviews != null ? fmtNum(reviews) : "0"} label="Google reviews today" />}
         </Tiles>
       </Split>
       <Callout className="mt2">{ds.story_thesis ? leadBold(ds.story_thesis) : <><b>The thesis:</b> the broad terms are taken. The high-intent, local, and AI-answer corners are not. {name} can own them, and this deck is the order to do it.</>}</Callout>
@@ -417,14 +423,18 @@ export default function DeckReport({ data, live }) {
   const _rivalRd = benchRows.map((c) => Number(c && c.refDomains)).filter((n) => n > 0);
   const _rivalRdMax = _rivalRd.length ? Math.max(..._rivalRd) : null;
   const _rdBucket = (n) => (n == null ? null : n >= 1000 ? "the thousands" : n >= 100 ? "the hundreds" : "double digits");
-  const _offpageLine = _rivalRdMax != null
-    ? `${dash(rd)} referring domains, ${Number(rd) < _rivalRdMax ? `behind rivals in ${_rdBucket(_rivalRdMax)}` : "ahead of most rivals"}. Trust must be earned.`
-    : `${dash(rd)} referring domains. Trust must be earned.`;
+  // RC1 — referring domains may not be returned by the provider for a run. A null is "not measured",
+  // never the string "N/A" and never the subject of a comparison ("behind rivals").
+  const _offpageLine = rd == null
+    ? "Referring domains not yet measured — the authority base is built from here."
+    : (_rivalRdMax != null
+      ? `${fmtNum(rd)} referring domains, ${Number(rd) < _rivalRdMax ? `behind rivals in ${_rdBucket(_rivalRdMax)}` : "ahead of most rivals"}. Trust must be earned.`
+      : `${fmtNum(rd)} referring domains. Trust must be earned.`);
   const pillars = [
     { k: "On-Page SEO", pk: "onpage", head: "Pages exist, signals don't", word: onpageHigh ? "Needs work" : "Solid", kind: onpageHigh ? "med" : "low", line: "Missing H1s, thin content, no commercial pages for buyer terms.", first: "Fix in Phase 1 to 2" },
     { k: "Technical SEO", pk: "tech", head: lcpMs != null ? `A ${lcpSeconds(lcpMs)} load blocks everything` : "Crawl & speed need work", word: techCrit ? "Critical" : techWarn ? "Needs work" : "Solid", kind: techCrit ? "high" : techWarn ? "med" : "low", line: "Speed, broken links and crawl issues keep the site near-invisible.", first: "Fix first" },
-    { k: "Off-Page / Authority", pk: "offpage", head: `Domain Rating just ${dash(dr)}`, word: dr != null && Number(dr) >= 30 ? "Building" : "Weak", kind: dr != null && Number(dr) >= 30 ? "med" : "high", line: _offpageLine, first: "Build over months" },
-    { k: "Local SEO / GBP", pk: "local", head: `${rating ? `${rating}★` : "N/A"} rating, thin profile`, word: rating != null && Number(rating) >= 4.5 ? "Quick win" : "Needs work", kind: rating != null && Number(rating) >= 4.5 ? "low" : "med", line: `Real review quality, but only ${dash(reviews)} reviews and a ${dash(mv(bm, "gbp_completeness", "gmbCompletenessScore"))}% complete profile.`, first: "Phase 1 to 2" },
+    { k: "Off-Page / Authority", pk: "offpage", head: dr != null ? `Domain Rating just ${dr}` : "Authority not yet measured", word: dr == null ? "Unmeasured" : (Number(dr) >= 30 ? "Building" : "Weak"), kind: dr == null ? "med" : (Number(dr) >= 30 ? "med" : "high"), line: _offpageLine, first: "Build over months" },
+    { k: "Local SEO / GBP", pk: "local", head: rating != null ? `${rating}★ rating, thin profile` : "No Google rating yet", word: rating != null && Number(rating) >= 4.5 ? "Quick win" : "Needs work", kind: rating != null && Number(rating) >= 4.5 ? "low" : "med", line: (() => { const _gc = mv(bm, "gbp_completeness", "gmbCompletenessScore"); const _rev = reviews != null ? Number(reviews) : null; return (rating != null && _rev) ? `Real review quality, but only ${dash(reviews)} reviews and a ${dash(_gc)}% complete profile.` : `${_rev ? `${_rev} reviews` : "No reviews yet"} and a ${dash(_gc)}% complete profile — the local ground is unclaimed.`; })(), first: "Phase 1 to 2" },
     { k: "GEO / AEO", pk: "geo", head: "Invisible in AI answers", word: Number(geo.overall?.sov) >= 15 ? "On track" : "Open field", kind: Number(geo.overall?.sov) >= 15 ? "low" : "med", line: aioMeasured ? `Cited in ${aio.brand_cited_count ?? 0} of ${aio.total_citations} Google AI Overview sources. Ready to be quoted, not chosen.` : `${pctStr(geo.overall?.sov)} share of voice, ${pctStr(geo.overall?.citation_rate)} citation rate${isIllus ? " (illustrative)" : ""}. Ready to be quoted, not chosen.`, first: "Phase 2 to 3" },
   ];
   slides.push(
@@ -561,20 +571,27 @@ export default function DeckReport({ data, live }) {
   /* 8 · THE OPENING (competitors), 4 rows + door-they-leave-open column */
   /* 06 · THE GAP IN NUMBERS — the hard quantitative gap comes FIRST, so "the opening" that
      follows reads as the answer to a gap the reader has already seen (natural flow). */
+  // RC1 — when a whole provider column is null across EVERY row (Domain Rating / referring domains not
+  // collected for this run), DROP the column rather than shipping a wall of "N/A" under a caption that
+  // claims "none are estimated". An honest 3-column table beats a 5-column one that is half empty.
+  const _b5 = benchRows.slice(0, 5);
+  const _hasDR = [dr, ..._b5.map((c) => c && c.dr)].some((v) => v != null);
+  const _hasRD = [rd, ..._b5.map((c) => c && c.refDomains)].some((v) => v != null);
+  const _benchHead = [{ label: "Competitor" }, ...(_hasDR ? [{ label: "Domain Rating", align: "right" }] : []), { label: "Organic Traffic / mo", align: "right" }, { label: "Ranking Keywords", align: "right" }, ...(_hasRD ? [{ label: "Referring Domains", align: "right" }] : [])];
+  const _benchRows = [
+    ..._b5.map((c) => ({ cells: [{ v: <strong>{c.name || c.domain}</strong> }, ...(_hasDR ? [{ v: dash(c.dr), num: true, align: "right" }] : []), { v: c.traffic != null ? fmtNum(c.traffic) : "N/A", num: true, align: "right" }, { v: c.keywords != null ? fmtNum(c.keywords) : "N/A", num: true, align: "right" }, ...(_hasRD ? [{ v: c.refDomains != null ? fmtNum(c.refDomains) : "N/A", num: true, align: "right" }] : [])] })),
+    { you: true, cells: [`${name} (you)`, ...(_hasDR ? [{ v: dash(dr), num: true, align: "right" }] : []), { v: fmtNum(traffic0), num: true, align: "right" }, { v: dash(mv(bm, "organic_keywords", "organicKeywords")), num: true, align: "right" }, ...(_hasRD ? [{ v: dash(rd), num: true, align: "right" }] : [])] },
+  ];
   slides.push(
     <Slide key="gap" variant="cream" n="06" kicker="The Gap In Numbers" title="How far ahead the competition really is"
       sub={<>{ds.gap_sub || "Your real baseline against the market, with the metrics we pull for every rival."} {benchIllus ? IllusTag : null}</>} foot={foot("06 · COMPETITOR BENCHMARK")}>
-      <DataTable compact head={[{ label: "Competitor" }, { label: "Domain Rating", align: "right" }, { label: "Organic Traffic / mo", align: "right" }, { label: "Ranking Keywords", align: "right" }, { label: "Referring Domains", align: "right" }]}
-        rows={[
-          ...benchRows.slice(0, 5).map((c) => ({ cells: [{ v: <strong>{c.name || c.domain}</strong> }, { v: dash(c.dr), num: true, align: "right" }, { v: c.traffic != null ? fmtNum(c.traffic) : "N/A", num: true, align: "right" }, { v: c.keywords != null ? fmtNum(c.keywords) : "N/A", num: true, align: "right" }, { v: c.refDomains != null ? fmtNum(c.refDomains) : "N/A", num: true, align: "right" }] })),
-          { you: true, cells: [`${name} (you)`, { v: dash(dr), num: true, align: "right" }, { v: fmtNum(traffic0), num: true, align: "right" }, { v: dash(mv(bm, "organic_keywords", "organicKeywords")), num: true, align: "right" }, { v: dash(rd), num: true, align: "right" }] },
-        ]} />
+      <DataTable compact head={_benchHead} rows={_benchRows} />
       <Row cols={3} className="mt" style={{ gap: 18 }}>
         <Card accent title="The gap is real, not fatal"><p className="small">The leader holds the authority, but most rivals sit within a 12-month reach of where {name} can be.</p></Card>
         <Card accent title="Traffic follows the basics"><p className="small">Their traffic comes from fixing what you already can: fast pages, clear titles, and answer-shaped content.</p></Card>
         <Card accent title="Keywords are uncontested"><p className="small">None defend the commercial and local terms in this plan, so your first {opp.commercial_keyword_count ? `${opp.commercial_keyword_count}` : "30+"} keywords face no real incumbent.</p></Card>
       </Row>
-      <Callout className="mt2" mark="i"><b>Reading it:</b> your row is measured today (Moz / DataForSEO). {benchIllus ? "Competitor figures are illustrative of the gap; your live competitor scrape drops straight into this table." : "Competitor authority, traffic and keyword counts are pulled per rival, none are estimated."}</Callout>
+      <Callout className="mt2" mark="i"><b>Reading it:</b> your row is measured today (Moz / DataForSEO). {benchIllus ? "Competitor figures are illustrative of the gap; your live competitor scrape drops straight into this table." : ((_hasDR && _hasRD) ? "Competitor authority, traffic and keyword counts are pulled per rival, none are estimated." : "Competitor traffic and keyword counts are pulled per rival, none are estimated. Authority columns the provider did not return for this run are omitted rather than shown empty.")}</Callout>
     </Slide>
   );
 
@@ -876,12 +893,13 @@ export default function DeckReport({ data, live }) {
   const _srcsTypedOf = (p) => (Array.isArray(p.cited_typed) && p.cited_typed.length
     ? p.cited_typed.map((s) => ({ source: String(s.source || "").replace(/^www\./, ""), type: (s.type && s.type !== "third_party") ? s.type : _classifySrc(s.source) })).filter((s) => s.source)
     : _srcsOf(p).map((d) => ({ source: d, type: _classifySrc(d) })));
-  // A row can have no external SOURCE (or no brand NAMED) yet still be a real answer — the AI answered from
-  // its OWN knowledge. Show the engine as the fallback attribution (muted italic) instead of a bare "—", so
-  // "ChatGPT / Gemini answered directly, no external page cited" reads clearly. A true NON-answer stays "—".
+  // RC2 (acenteus doc 3.5/3.6/3.7) — an engine cannot cite or name itself. When a real answer carried no
+  // external SOURCE (or named no BRAND), do NOT fall back to the engine label: that reads as "Gemini cited
+  // Gemini" and hides whether the engine cited nobody vs the scrape failed. Show an explicit honest status
+  // ("— no source shown" / "— none named") instead. A true NON-answer stays a bare "—".
   const _answeredRow = (p) => (Number(p.answer_length) > 0) || (Array.isArray(p.brands_named) && p.brands_named.length > 0) || (Array.isArray(p.source_domains) && p.source_domains.length > 0) || !!p.brand_mentioned;
-  const _engFallback = (p) => (_answeredRow(p) ? <span style={{ color: "var(--muted)", fontStyle: "italic" }}>{engName(p.engine)}</span> : "—");
-  const _srcCell = (p) => { const list = _srcsTypedOf(p); if (!list.length) return _engFallback(p);
+  const _emptyCell = (p, label) => (_answeredRow(p) ? <span style={{ color: "var(--muted)" }}>{label}</span> : "—");
+  const _srcCell = (p) => { const list = _srcsTypedOf(p); if (!list.length) return _emptyCell(p, "— no source shown");
     return <span>{list.slice(0, 3).map((s, i) => <span key={i} style={{ color: _srcTypeColor(s.type) }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > 3 ? <span style={{ color: "var(--muted)" }}> …</span> : null}</span>; };
   const _srcLegend = <div style={{ display: "flex", gap: 16, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}>
     <span><span style={{ color: C.rust }}>●</span> Competitor source</span>
@@ -919,7 +937,7 @@ export default function DeckReport({ data, live }) {
     slides.push(_campaignSlide("13a", "geo-prompts-mentions",
       "Mentions: where AI names brands, and who gets picked",
       "Best and top style questions. AI answers these from third-party listicles (Clutch, DesignRush, Reddit, publisher round-ups), naming the brands it trusts. You do not win these with your own page, you earn the mention.",
-      GROUPS.mentions, "Who it named", (p) => { const b = _namedOf(p); return b.length ? b.join(", ") : _engFallback(p); },
+      GROUPS.mentions, "Who it named", (p) => { const b = _namedOf(p); return b.length ? b.join(", ") : _emptyCell(p, "— none named"); },
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern">On these listicle questions AI names <b>rivals from directories and round-ups</b>{name ? <>, rarely {name}</> : null}.</Tc>
         <Tc kind="cost" label="What it costs you">Buyers act on the <b>names AI returns</b>, so every un-listed prompt is a lead that never hears of you.</Tc>
@@ -1153,17 +1171,25 @@ export default function DeckReport({ data, live }) {
   const dirs = (gmb.directories || []).slice(0, 12).map((x) => ({ name: x.name, state: x.listed === true ? "have" : x.listed === false ? "miss" : "q" }));
   const citeDirs = dirs.length ? dirs : (lb.citation_links || []).slice(0, 12).map((x) => ({ name: x.platform, state: x.client_listed ? "have" : "miss" }));
   slides.push(
-    <Slide key="backlinks" variant="cream" n="18" kicker="Citations & Backlinks" title={`Raising Domain Rating from ${dash(dr)} to ${proj.dr12 ?? 25}`}
+    <Slide key="backlinks" variant="cream" n="18" kicker="Citations & Backlinks" title={dr != null ? `Raising Domain Rating from ${dr} to ${proj.dr12 ?? 25}` : `Building Domain Rating to ${proj.dr12 ?? 25}`}
       sub={<>{ds.backlinks_sub || "Trust is built in three waves: citations for consistency, then earned links, then closing the leader's gap."} <Pillar kind="offpage" label="Off-Page SEO" /></>} foot={foot("18 · CITATIONS & BACKLINKS")}>
       <Split>
         <div>
           <h3 className="mini">Directories to claim or fix</h3>
           <DirGrid>{citeDirs.map((x, i) => <DirChip key={i} name={x.name} state={x.state} />)}</DirGrid>
-          <Card className="mt" style={{ marginTop: 14, padding: "13px 16px", display: "flex", gap: 18, alignItems: "center" }}>
-            <div><div style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 24, color: C.rust, lineHeight: 1 }}>{dash(rd)}</div><div style={{ fontFamily: "var(--mono)", fontSize: 8, textTransform: "uppercase", letterSpacing: ".06em", color: C.muted }}>domains now</div></div>
-            <div style={{ color: C.faint }}>→</div>
-            <div><div style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 24, color: C.rust, lineHeight: 1 }}>{rdTarget != null ? fmtNum(rdTarget) : "N/A"}</div><div style={{ fontFamily: "var(--mono)", fontSize: 8, textTransform: "uppercase", letterSpacing: ".06em", color: C.muted }}>target 12 mo</div></div>
-          </Card>
+          {/* RC1 — when referring domains were not returned by the provider, don't render a
+              "N/A now → N/A target" card. Show an honest one-line note instead. */}
+          {rd != null ? (
+            <Card className="mt" style={{ marginTop: 14, padding: "13px 16px", display: "flex", gap: 18, alignItems: "center" }}>
+              <div><div style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 24, color: C.rust, lineHeight: 1 }}>{fmtNum(rd)}</div><div style={{ fontFamily: "var(--mono)", fontSize: 8, textTransform: "uppercase", letterSpacing: ".06em", color: C.muted }}>domains now</div></div>
+              <div style={{ color: C.faint }}>→</div>
+              <div><div style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 24, color: C.rust, lineHeight: 1 }}>{rdTarget != null ? fmtNum(rdTarget) : `${proj.dr12 ?? 25}+`}</div><div style={{ fontFamily: "var(--mono)", fontSize: 8, textTransform: "uppercase", letterSpacing: ".06em", color: C.muted }}>target 12 mo</div></div>
+            </Card>
+          ) : (
+            <Card className="mt" style={{ marginTop: 14, padding: "13px 16px" }}>
+              <p className="small" style={{ margin: 0, color: C.muted }}>Referring domains are not yet measured for this site. The three waves below build that authority base from zero.</p>
+            </Card>
+          )}
         </div>
         <div>
           <h3 className="mini">The three waves to DR {proj.dr12 ?? 25}</h3>
@@ -1173,7 +1199,9 @@ export default function DeckReport({ data, live }) {
         </div>
       </Split>
       <p className="small" style={{ marginTop: 12, color: C.muted, fontSize: 10.5, lineHeight: 1.5 }}>
-        <b style={{ color: C.inkSoft }}>Domains now ({dash(rd)}) and DR {dash(dr)}</b> are measured today (Moz and DataForSEO). The <b style={{ color: C.inkSoft }}>12-month target</b> is a modelled projection that assumes the citation and earned-link plan runs. It is not a guarantee.
+        {(dr != null || rd != null)
+          ? <><b style={{ color: C.inkSoft }}>Domains now ({dash(rd)}) and DR {dash(dr)}</b> are measured today (Moz and DataForSEO). The <b style={{ color: C.inkSoft }}>12-month target</b> is a modelled projection that assumes the citation and earned-link plan runs. It is not a guarantee.</>
+          : <>Domain Rating and referring domains were not returned by the provider for this run, so only the <b style={{ color: C.inkSoft }}>modelled 12-month target</b> is shown. It assumes the citation and earned-link plan runs, and is not a guarantee.</>}
       </p>
     </Slide>
   );
@@ -1259,7 +1287,10 @@ export default function DeckReport({ data, live }) {
   // shows the same modelled DR.
   const _drKpi = kpiRow("domain_rating");
   const _drRow = _drKpi && proj.dr12 != null ? { ..._drKpi, target_12_months: proj.dr12, target_6_months: proj.dr6 ?? _drKpi.target_6_months } : _drKpi;
-  const seoBoard = [["Domain Rating", _drRow], ["Organic traffic / month", kpiRow("organic_traffic")], ["Keywords ranking", kpiRow("organic_keywords")], ["Referring domains", kpiRow("referring_domains")]];
+  // RC1 — a scoreboard row needs a REAL "now" to show a trend. When the provider did not return
+  // Domain Rating / referring domains for this run, drop that row rather than render "N/A → N/A".
+  const seoBoard = [["Domain Rating", _drRow], ["Organic traffic / month", kpiRow("organic_traffic")], ["Keywords ranking", kpiRow("organic_keywords")], ["Referring domains", kpiRow("referring_domains")]]
+    .filter(([label, r]) => { if (!/domain rating|referring domains/i.test(label)) return true; const b = r ? (r.baseline ?? r.now) : null; return b != null; });
   slides.push(
     <Slide key="prove" variant="cream" n="21" kicker="How We Prove It" title="Two scoreboards, reported every month"
       sub={ds.prove_sub || "Current is measured today. Targets are rounded estimates that assume the plan is implemented."} foot={foot("21 · MEASURING SUCCESS")}>
