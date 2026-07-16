@@ -1125,7 +1125,19 @@ export async function POST(request) {
         location:   businessData?.location || locationNameForCountry(countryCode),
         baselineRaw: {
           ...baselineMetrics,
-          crawlHealthScore:     crawlRaw?.healthScore ?? null,
+          // B7 — computeHealthScore (crawler) ignores Core Web Vitals, so a 14.7s-LCP / 28-mobile
+          // site can score ~71 next to a CRITICAL speed verdict. Fold a transparent CWV penalty into
+          // the STORED health so the number reconciles with the speed finding everywhere the deck
+          // shows it (audit map, roadmap target, scoreboard).
+          crawlHealthScore:     (() => {
+            const _h = crawlRaw?.healthScore;
+            if (_h == null) return null;
+            const _lcp = baselineMetrics.lcp, _mob = baselineMetrics.performanceMobile;
+            let pen = 0;
+            if (_lcp != null) pen += Number(_lcp) >= 6000 ? 18 : Number(_lcp) >= 4000 ? 12 : Number(_lcp) >= 2500 ? 6 : 0;
+            if (_mob != null) pen += Number(_mob) < 30 ? 8 : Number(_mob) < 50 ? 4 : 0;
+            return Math.max(0, Math.round(Number(_h) - pen));
+          })(),
           gbpCompletenessScore: gmbRaw?.completeness?.score ?? null,
           gbpReviewCount:       gmbRaw?.gmb?.reviewCount ?? gmbRaw?.reviewCount ?? null,
           gbpRating:            gmbRaw?.gmb?.rating ?? null,

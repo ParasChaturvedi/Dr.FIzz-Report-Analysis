@@ -1278,7 +1278,9 @@ export default function DeckReport({ data, live }) {
   );
 
   /* 22 · The 30/60/90/180 plan, color-coded dots */
-  const shTarget = (ksRows.find((r) => /health/i.test(r.key || r.metric || ""))?.target_12_months) ?? (Number(health) >= 90 ? 100 : 90);
+  // B8 — a health target of 100 is unhittable (no site is error-free) and the deck's own CRITICAL
+  // findings contradict it. Cap the modelled 12-month target at 92 (strong, but achievable).
+  const shTarget = Math.min(92, (ksRows.find((r) => /health/i.test(r.key || r.metric || ""))?.target_12_months) ?? (Number(health) >= 88 ? 92 : 90));
   const phaseDefs = [
     { badge: "30", duration: "First 30 days", title: "Foundation", mission: "Make the site visible. Pure unblocking, no strategy yet.", goal: { label: "Target", text: `Site health ${dash(health)} → ${shTarget}` } },
     { badge: "60", duration: "Days 31 to 60", title: "Capture", mission: "Take the easy commercial wins rivals leave undefended.", goal: { label: "Target", text: "First page ranking, ~25 reviews" } },

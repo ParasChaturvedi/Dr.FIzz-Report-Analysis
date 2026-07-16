@@ -461,7 +461,13 @@ async function auditPage(url, keywords = [], host = "", prefetched = null) {
 
   // Images audit
   const allImgs = [...html.matchAll(/<img\s([^>]*)>/gi)].map(m => m[1]);
-  const imgsWithoutAlt  = allImgs.filter(a => !(/alt=["'][^"']+["']/i.test(a)) || /alt=["']\s*["']/i.test(a)).length;
+  const _noAlt = allImgs.filter(a => !(/alt=["'][^"']+["']/i.test(a)) || /alt=["']\s*["']/i.test(a));
+  const imgsWithoutAlt  = _noAlt.length;
+  // B9 — collect the SRC of each image-without-alt so the site total can dedupe by src (a shared
+  // template logo/header repeated on every page should count once, not once per crawled page). Src
+  // normalised to path (strip protocol/host/query) so absolute + relative refs to the same asset merge.
+  const imgsWithoutAltSrcs = _noAlt.map(a => { const m = a.match(/src=["']([^"']+)["']/i); if (!m) return null;
+    return String(m[1]).trim().replace(/^https?:\/\/[^/]+/i, "").replace(/[?#].*$/, "").toLowerCase() || null; }).filter(Boolean);
   const imgsWithoutDims = allImgs.filter(a => !/width=/i.test(a) || !/height=/i.test(a)).length;
   // Split to match Screaming Frog: no alt= attribute at all vs alt present-but-empty.
   const imgsMissingAltAttr = allImgs.filter(a => !/\balt=/i.test(a)).length;
@@ -558,7 +564,7 @@ async function auditPage(url, keywords = [], host = "", prefetched = null) {
     metaTitle, metaDesc, canonical, robotsMeta, isNoindex, isNofollow,
     viewport, charset, hreflang,
     h1s, h1HasKeyword, h2s,
-    imgsWithoutAlt, imgsWithoutDims, imgsMissingAltAttr, imgsMissingAltText,
+    imgsWithoutAlt, imgsWithoutAltSrcs, imgsWithoutDims, imgsMissingAltAttr, imgsMissingAltText,
     multipleHead, multipleBody, multipleTitle, titleOutsideHead, httpResourceCount,
     internalLinks,
     schemas,
@@ -987,6 +993,10 @@ export async function crawlDomain(domain, keywords = []) {
   let   totalWords      = 0;
   let   eeatScoreTotal  = 0;
 
+  // B9 — dedupe images-without-alt by src across pages so a shared template image (logo/header)
+  // counts once, not once per crawled page. _noAltNoSrc holds non-alt images with no parseable src.
+  const _noAltSrcSet = new Set();
+  let _noAltNoSrc = 0;
   for (const p of pages) {
     if (!p.metaTitle)          result.summary.pagesMissingMetaTitle++;
     if (!p.metaDesc)           result.summary.pagesMissingMetaDesc++;
@@ -999,7 +1009,9 @@ export async function crawlDomain(domain, keywords = []) {
     if ((p.httpResourceCount||0) > 0) result.summary.pagesWithMixedContent++;
     if (p.isNoindex)           result.summary.pagesNoindex++;
     if (!p.canonical)          result.summary.pagesNoCanonical++;
-    result.summary.totalImgsWithoutAlt  += p.imgsWithoutAlt  || 0;
+    result.summary.totalImgsWithoutAlt  += p.imgsWithoutAlt  || 0;   // raw cross-page sum (kept as *Raw below)
+    for (const s of (p.imgsWithoutAltSrcs || [])) _noAltSrcSet.add(s);
+    _noAltNoSrc += Math.max(0, (p.imgsWithoutAlt || 0) - (p.imgsWithoutAltSrcs || []).length);
     result.summary.totalImgsMissingAltAttr += p.imgsMissingAltAttr || 0;
     result.summary.totalImgsMissingAltText += p.imgsMissingAltText || 0;
     result.summary.totalImgsWithoutDims += p.imgsWithoutDims || 0;
@@ -1022,6 +1034,11 @@ export async function crawlDomain(domain, keywords = []) {
     }
   }
 
+  // B9 — the HEADLINE image-alt figure is now the src-deduped count (template images counted once);
+  // the raw per-page sum is kept as *Raw for reference.
+  result.summary.totalImgsWithoutAltRaw    = result.summary.totalImgsWithoutAlt;
+  result.summary.totalImgsWithoutAltUnique = _noAltSrcSet.size + _noAltNoSrc;
+  result.summary.totalImgsWithoutAlt       = _noAltSrcSet.size + _noAltNoSrc;
   result.summary.pagesWithSchemaTypes = [...schemaTypeAll];
   result.summary.schemaTypes          = schemaTypeFreq;
   result.summary.avgWordCount         = pages.length > 0 ? Math.round(totalWords / pages.length) : 0;
