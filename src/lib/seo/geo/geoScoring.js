@@ -56,6 +56,17 @@ function weightedScore(signals) {
 // Metrics for ONE set of results (an engine, or all results for "overall").
 function metricsFor(results = []) {
   const n = results.length;
+  // §5 — mention/citation rates must be measured over the runs that RETURNED AN ANSWER, not over
+  // every prompt. A login-wall / non-answer run is not a "mention miss". nAnswered is the honest
+  // denominator; fall back to n only if nothing answered (avoids divide-by-zero).
+  const _answered = (r) => !r?.nonAnswer && (
+    Number(r?.answerLength) > 0 ||
+    (Array.isArray(r?.brandMentions) && r.brandMentions.length > 0) ||
+    (Array.isArray(r?.competitorMentions) && r.competitorMentions.length > 0) ||
+    (Array.isArray(r?.citations) && r.citations.length > 0) ||
+    String(r?.renderedText || r?.answerText || "").trim().length > 20
+  );
+  const nAnswered = results.filter(_answered).length || n;
   let brandMentions = 0, competitorMentions = 0;
   let brandMentionDocs = 0, brandCiteDocs = 0;
   let brandCitations = 0, competitorCitations = 0;
@@ -78,8 +89,8 @@ function metricsFor(results = []) {
   }
 
   const totalMentions = brandMentions + competitorMentions;
-  const mention_rate = pct(brandMentionDocs, n);   // % of answers that mention the brand
-  const citation_rate = pct(brandCiteDocs, n);     // % of answers that cite the brand's domain
+  const mention_rate = pct(brandMentionDocs, nAnswered);   // % of ANSWERED runs that mention the brand (§5)
+  const citation_rate = pct(brandCiteDocs, nAnswered);     // % of ANSWERED runs that cite the brand's domain (§5)
   const signals = {
     citation_presence: citation_rate,
     brand_presence: mention_rate,
@@ -90,8 +101,10 @@ function metricsFor(results = []) {
     topic_coverage: pct(topicCoveredDocs, n),
   };
   return {
-    prompts_answered: n,
-    sov: pct(brandMentions, totalMentions),
+    prompts_answered: nAnswered,          // §5 — runs that returned an answer (the rate denominator)
+    prompts_total: n,                     // §5 — all runs, so the answered/total basis is auditable
+    sov: pct(brandMentions, totalMentions),   // SoV denominator is total brand mentions (already correct)
+    sov_total_mentions: totalMentions,    // §5 — expose the SoV denominator so the % is auditable
     competitor_sov: pct(competitorMentions, totalMentions),
     mention_rate, citation_rate,
     brand_mentions: brandMentions, competitor_mentions: competitorMentions,

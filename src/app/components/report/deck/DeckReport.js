@@ -533,6 +533,15 @@ export default function DeckReport({ data, live }) {
         <div>
           <DataTable head={[{ label: "Issue found" }, { label: "Count", align: "right" }, { label: "Priority", align: "right" }]}
             rows={tp.slice(0, 8).map((t) => ({ cells: [techIssueCell(t), { v: dash(techCount(t)), num: true, align: "right" }, { align: "right", tag: { kind: /high|crit/i.test(t.priority) ? "high" : /med/i.test(t.priority) ? "med" : "low", label: titleCase(t.priority) } }] }))} />
+          {/* 3.3 — state crawl coverage honestly (findings apply to the crawled sample, not a census).
+              B7 — note the health score now includes a Core Web Vitals penalty, so it agrees with the speed verdict. */}
+          <p className="small" style={{ marginTop: 10, fontSize: 10, color: C.muted, lineHeight: 1.5 }}>
+            {(() => {
+              const _cr = d.websiteCrawl?.pageCount || (d.websiteCrawl?.pages || []).length || null;
+              const _tot = d.websiteCrawl?.siteSize?.totalPagesEstimate || d.websiteCrawl?.summary?.indexedPages || d.websiteCrawl?.indexedPages || null;
+              return <>Findings apply to the <b>{_cr ? fmtNum(_cr) : "crawled"} page{_cr === 1 ? "" : "s"} we crawled{_tot && _tot > _cr ? ` of ~${fmtNum(_tot)} on the site` : ""}</b>{_tot && _tot > _cr ? ", a sample" : ""}.{health != null ? <> Site health ({dash(health)}/100) includes a Core Web Vitals penalty, so it agrees with the speed verdict.</> : null}</>;
+            })()}
+          </p>
           {sv && Array.isArray(sv.signals) && sv.signals.length ? (
             <div style={{ marginTop: 16 }}>
               <h3 className="mini">Foundation validated {sv.eligible_for_audit ? <span style={{ color: "#3C7D5A" }}>· eligible for a full audit</span> : <span style={{ color: C.rust }}>· eligibility flagged</span>}</h3>
@@ -732,7 +741,7 @@ export default function DeckReport({ data, live }) {
             ));
           })()}
           <Verdict compact num={geo.overall?.geo_score ?? "N/A"}>
-            Your GEO score today. Each component above is scored 0–100 and weighted; right now only readiness scores materially (share of voice, mentions and citations are near zero), which is why the composite is {geo.overall?.geo_score ?? "low"}. <b>That is the gap this plan closes.</b> {isIllus ? IllusTag : null}
+            Your GEO score today. Share, mention and citation read 0%; the composite is {geo.overall?.geo_score ?? "low"} because the readiness component also credits <b>answer structure, topic coverage and source freshness</b> — measured, but not yet earning you visibility. <b>That is the gap this plan closes.</b> {isIllus ? IllusTag : null}
           </Verdict>
         </div>
       </Split>
@@ -852,8 +861,8 @@ export default function DeckReport({ data, live }) {
   const aioPromptRows = (aio.per_keyword || []).filter((k) => (k.sources || []).length).slice(0, 10).map((k) => {
     const cited = (k.sources || []).some((s) => lc(s).includes(lc(String(domain).split(".")[0])));
     return { cells: [
-      clamp(k.keyword, 44), <span className="eng-pill" key="e">Google AIO</span>,
-      clamp((k.sources || []).map((s) => String(s).replace(/^www\./, "")).join(", "), 46),
+      clamp(k.keyword, 90), <span className="eng-pill" key="e">Google AIO</span>,
+      clamp((k.sources || []).map((s) => String(s).replace(/^www\./, "")).join(", "), 110),
       { align: "right", v: <ResCell kind={cited ? "cited" : "absent"}>{cited ? "Cited" : "Not cited"}</ResCell> },
     ] };
   });
@@ -966,7 +975,7 @@ export default function DeckReport({ data, live }) {
         {/* B17 — show the full prompt + more cited sources (was clamped to 52 / 3 with an ellipsis).
             B18 — show more rows per campaign and state the count below. */}
         <DataTable compact head={[{ label: "Buyer prompt" }, { label: "Engine" }, { label: whoLabel }, { label: `${name} result`, align: "right" }]}
-          rows={group.slice(0, 12).map((p) => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 96), engName(p.engine), (typeof _who === "string" ? clamp(_who, 72) : { v: _who }), { align: "right", v: _resCell(p) }] }; })} />
+          rows={group.slice(0, 12).map((p) => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 150), engName(p.engine), (typeof _who === "string" ? clamp(_who, 110) : { v: _who }), { align: "right", v: _resCell(p) }] }; })} />
         {legend || null}
         {group.length
           ? <p className="mt" style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>Showing {Math.min(12, group.length)} of {group.length} prompt{group.length > 1 ? "s" : ""} in this campaign{group.length > 12 ? " — full set in the live dashboard" : ""}</p>
