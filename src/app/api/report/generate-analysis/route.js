@@ -16,7 +16,7 @@ import {
 } from "@/lib/seo/dataforseo";
 import { fetchPsiForStrategy } from "@/lib/seo/psi";
 import { fetchMozMetrics } from "@/lib/seo/moz/client";
-import { runBusinessLogic, deriveCompetitorBrands, isListicleQuery, isOverBroadHead, isOffTopicTheory, extractGeography } from "@/lib/seo/doctor-fizz-logic";
+import { runBusinessLogic, deriveCompetitorBrands, isListicleQuery, isOverBroadHead, isOffTopicTheory, extractGeography, classifyEntityType } from "@/lib/seo/doctor-fizz-logic";
 import { runQaGate } from "@/lib/seo/doctor-fizz-qa";
 import { locationNameForCountry } from "@/lib/seo/market";
 import { getSiteProfile } from "@/lib/claude/pipeline";
@@ -1380,6 +1380,21 @@ export async function POST(request) {
     //    competitor landscape so the deck's "Gap In Numbers" table shows real numbers ──
     if (reportType === "website" && aiSections.competitorLandscape) {
       try {
+        // RC4 — the benchmark ("how far ahead the competition is") must hold only REAL business
+        // competitors. Software vendors (xero/sage), professional bodies (icaew), trade publishers
+        // (accountingweb) and directories rank for the same queries but do not compete for the
+        // client's revenue, so drop them here. Unresolved entities are kept (dropping a real rival
+        // is worse than showing one uncertain), and a note is logged for visibility.
+        const _keepBiz = (arr, bucket) => (arr || []).filter((c) => {
+          const t = classifyEntityType(c);
+          if (t !== "business_competitor" && t !== "unresolved") {
+            console.log(`[generate-analysis] competitor filtered from ${bucket}: ${c?.name || c?.domain} → ${t}`);
+            return false;
+          }
+          return true;
+        });
+        aiSections.competitorLandscape.localCompetitors = _keepBiz(aiSections.competitorLandscape.localCompetitors, "local");
+        aiSections.competitorLandscape.nationalPlatforms = _keepBiz(aiSections.competitorLandscape.nationalPlatforms, "national");
         const compList = [...(aiSections.competitorLandscape.localCompetitors || []), ...(aiSections.competitorLandscape.nationalPlatforms || [])];
         const bench = await buildCompetitorBenchmark(compList, countryCode);
         const merge = (arr) => (arr || []).map((c) => { const m = bench[_normDom(c.domain || c.name)]; return m ? { ...c, ...m } : c; });

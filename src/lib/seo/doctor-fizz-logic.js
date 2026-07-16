@@ -2889,6 +2889,34 @@ export function classifyCompetitor(c, ctx = {}) {
   return "direct_business";
 }
 
+// RC4 — deterministic ENTITY-TYPE classifier. A benchmark of "how far ahead the competition is"
+// must contain only businesses that actually compete for the client's revenue — not the software
+// vendors, professional bodies, trade publishers or directories that merely rank for the same
+// queries. classifyCompetitor only splits directory-vs-business; this assigns the full type so the
+// benchmark can keep business competitors and route the rest out.
+const SOFTWARE_VENDOR_DOMAINS = new Set(["xero.com", "sage.com", "quickbooks.com", "intuit.com", "freshbooks.com", "zoho.com", "waveapps.com", "myob.com", "netsuite.com", "tallysolutions.com", "freeagent.com", "kashflow.com", "clearbooks.co.uk", "sap.com", "oracle.com", "salesforce.com", "hubspot.com", "gusto.com", "bill.com", "expensify.com", "dext.com", "pandle.com", "odoo.com", "wave.com"]);
+const SOFTWARE_VENDOR_SIGNALS = ["software", "erp", "saas"];
+const PROFESSIONAL_BODY_DOMAINS = new Set(["icaew.com", "aicpa.org", "acca.com", "accaglobal.com", "cimaglobal.com", "aat.org.uk", "ifac.org", "cpaaustralia.com.au", "cpacanada.ca", "theiia.org", "cfainstitute.org", "icai.org", "icas.com", "aicpa-cima.com"]);
+const PROFESSIONAL_BODY_SIGNALS = ["institute of", "chartered", "association of", "professional body", "governing body", "federation of"];
+const PUBLISHER_DOMAINS = new Set(["forbes.com", "businessinsider.com", "techcrunch.com", "entrepreneur.com", "inc.com", "accountingweb.co.uk", "accountingweb.com", "accountingtoday.com", "accountancyage.com", "cpapracticeadvisor.com", "journalofaccountancy.com", "ft.com", "economist.com", "bloomberg.com", "wsj.com", "theguardian.com", "bbc.co.uk", "bbc.com"]);
+const PUBLISHER_SIGNALS = ["magazine", "journal", "news", "media", "insights", "/blog"];
+
+export function classifyEntityType(c) {
+  const host = bareHost(typeof c === "string" ? c : (c?.domain || c?.name || ""));
+  const hay = (host + " " + String(typeof c === "string" ? c : (c?.name || "")).toLowerCase());
+  const domMatch = (set) => { for (const d of set) { if (host === d || host.endsWith("." + d)) return true; } return false; };
+  const sig = (arr) => arr.some((s) => hay.includes(s));
+  // A real service business often has vendor-ish words too ("accounting software support agency"),
+  // so a vendor signal only wins when the entity does NOT read as a services/consulting firm.
+  const looksLikeFirm = /\b(agency|agencies|consult|advis|services?|outsourc|firm|partners?|associates|accountants?|bookkeep)\b/.test(hay);
+  if (domMatch(SOFTWARE_VENDOR_DOMAINS) || (sig(SOFTWARE_VENDOR_SIGNALS) && !looksLikeFirm)) return "software_vendor";
+  if (domMatch(PROFESSIONAL_BODY_DOMAINS) || sig(PROFESSIONAL_BODY_SIGNALS)) return "professional_body";
+  if (domMatch(PUBLISHER_DOMAINS) || sig(PUBLISHER_SIGNALS)) return "publisher";
+  if (classifyCompetitor(c) === "platform_interceptor") return "directory";
+  if (!host || !host.includes(".")) return "unresolved";
+  return "business_competitor";
+}
+
 /**
  * Segment competitor inputs into the two V3 strategic buckets:
  *   - validated_business: eligible for direct comparison / keyword gap / GBP / overtake
