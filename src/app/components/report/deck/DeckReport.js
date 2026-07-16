@@ -709,9 +709,30 @@ export default function DeckReport({ data, live }) {
         </div>
         <div>
           <h3 className="mini">How the 0 to 100 GEO score is weighted</h3>
-          {GEO_WEIGHTS.map(([label, w]) => <ScoreSig key={label} label={label} weight={`${w}%`} />)}
+          {/* B1 / B2 — show each component's MEASURED value next to its weight, so the reader can see
+              the inputs that produce the composite score (not just the weights). */}
+          {(() => {
+            const _pc = (v) => (v == null ? "—" : `${Math.round(Number(v))}%`);
+            const _sig = Array.isArray(air.signals) ? air.signals : [];
+            const _rows = [
+              { label: "Share of voice vs competitors", w: 30, v: _pc(geo.overall?.sov) },
+              { label: "Citation rate · you as the source", w: 25, v: _pc(geo.overall?.citation_rate) },
+              { label: "Mention rate · named at all", w: 20, v: _pc(geo.overall?.mention_rate) },
+              { label: "Entity & topical association", w: 15, v: (geo.overall?.entity_association != null ? _pc(geo.overall.entity_association) : (geo.overall?.topics_recognised != null ? `${geo.overall.topics_recognised} recognised` : "0 recognised")) },
+              { label: "Schema & answer-readiness", w: 10, v: (_sig.length ? `${_sig.filter((s) => s.ok).length} of ${_sig.length} signals` : "measured") },
+            ];
+            return _rows.map((r) => (
+              <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,.09)" }}>
+                <span style={{ fontSize: 11.5, color: "#d6d0c6" }}>{r.label}</span>
+                <span style={{ whiteSpace: "nowrap", fontFamily: "var(--mono)", fontSize: 9.5 }}>
+                  <span style={{ color: C.rust, fontWeight: 700 }}>{r.v}</span>
+                  <span style={{ color: C.faint, marginLeft: 8 }}>· weight {r.w}%</span>
+                </span>
+              </div>
+            ));
+          })()}
           <Verdict compact num={geo.overall?.geo_score ?? "N/A"}>
-            Your GEO score today. Readiness is strong (schema, FAQs), but share of voice, mentions and citations are near zero. <b>That is the gap this plan closes.</b> {isIllus ? IllusTag : null}
+            Your GEO score today. Each component above is scored 0–100 and weighted; right now only readiness scores materially (share of voice, mentions and citations are near zero), which is why the composite is {geo.overall?.geo_score ?? "low"}. <b>That is the gap this plan closes.</b> {isIllus ? IllusTag : null}
           </Verdict>
         </div>
       </Split>
@@ -764,7 +785,7 @@ export default function DeckReport({ data, live }) {
       <Triad className="mt2">
         <Tc kind="evidence" label="Evidence">{aioMeasured
           ? <>In Google AI Overviews, {aioCompStr || "rivals"} are cited while <b>{name} appears in 0</b> of {aio.total_citations} citations.</>
-          : <><b>{leader?.brand || "The leader"}</b> leads share of voice at {Math.round(leader?.avg || 0)}%; you hold {pctStr(geo.overall?.sov)}.</>}</Tc>
+          : <><b>{leader?.brand || "The leader"}</b> leads share of voice at {Math.round(leader?.avg || 0)}%; you hold {pctStr(geo.overall?.sov)}{_geoPromptCount ? <> — measured across {_geoPromptCount} prompts × {enginesRun} engine{enginesRun > 1 ? "s" : ""}, so the slice is auditable, not a bare percentage</> : null}.</>}</Tc>
         <Tc kind="cost" label="What it costs you">Every AI recommendation that omits you is a <b>warm, high-intent lead</b> handed to a competitor.</Tc>
         <Tc kind="action" label="Do this first">Publish answer-first FAQ pages on your <b>core service questions</b> to enter the answer set where rivals are already cited.</Tc>
       </Triad>
@@ -1333,9 +1354,16 @@ export default function DeckReport({ data, live }) {
     const _rawT = Number(_kwKpi.target_12_months ?? _kwKpi.target_6_months ?? _kwKpi.s12 ?? _kwKpi.s6) || 0;
     return { ..._kwKpi, target_12_months: Math.max(_rawT, _base + _kwPagesPlanned) };
   })();
+  // B3 — the scoreboard organic-traffic point must sit inside the outcome slide's modelled RANGE.
+  // Reconcile the board target to proj.t12/t6 (the same model the outcome ranges are drawn from),
+  // exactly as the DR row is reconciled to proj.dr12, so the two slides can never diverge.
+  const _trafKpi = kpiRow("organic_traffic");
+  const _trafRow = _trafKpi && proj.t12 != null
+    ? { ..._trafKpi, target_12_months: Math.round(proj.t12), target_6_months: proj.t6 != null ? Math.round(proj.t6) : _trafKpi.target_6_months }
+    : _trafKpi;
   // RC1 — a scoreboard row needs a REAL "now" to show a trend. When the provider did not return
   // Domain Rating / referring domains for this run, drop that row rather than render "N/A → N/A".
-  const seoBoard = [["Domain Rating", _drRow], ["Organic traffic / month", kpiRow("organic_traffic")], ["Keywords ranking", _kwRow], ["Referring domains", kpiRow("referring_domains")]]
+  const seoBoard = [["Domain Rating", _drRow], ["Organic traffic / month", _trafRow], ["Keywords ranking", _kwRow], ["Referring domains", kpiRow("referring_domains")]]
     .filter(([label, r]) => { if (!/domain rating|referring domains/i.test(label)) return true; const b = r ? (r.baseline ?? r.now) : null; return b != null; });
   slides.push(
     <Slide key="prove" variant="cream" n="21" kicker="How We Prove It" title="Two scoreboards, reported every month"
