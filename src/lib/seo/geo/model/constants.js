@@ -30,6 +30,18 @@ export const GEO_CLUSTERS = [
   "Pricing intent", "Best-tool intent", "Competitor intent",
   "Problem aware", "Solution aware", "Service category", "Location specific",
 ];
+// Map the 14 deterministic clusters onto the 3 architect campaigns, so the TEMPLATE FALLBACK
+// (used only when the Claude architect is unavailable) can still present the same three campaigns
+// the onboarding selection UI groups by. Mentions = best/top listicle questions; Citation Commercial
+// = buying/comparison/pricing; Citation Information = learning/explainer.
+export const CLUSTER_TO_CAMPAIGN = {
+  "Technical SEO": "Citation Information", "Content SEO": "Citation Information", "GEO": "Citation Information",
+  "Problem aware": "Citation Information", "Solution aware": "Citation Information",
+  "Brand comparison": "Citation Commercial", "Product comparison": "Citation Commercial", "Use-case comparison": "Citation Commercial",
+  "Pricing intent": "Citation Commercial", "Competitor intent": "Citation Commercial",
+  "Local SEO": "Mentions", "Best-tool intent": "Mentions", "Service category": "Mentions", "Location specific": "Mentions",
+};
+export const ARCHITECT_CAMPAIGN_ORDER = ["Citation Commercial", "Mentions", "Citation Information"];
 export const GEO_INTENTS = [
   "informational", "commercial", "comparison", "transactional",
   "local", "pricing", "competitor", "best-provider", "troubleshooting",

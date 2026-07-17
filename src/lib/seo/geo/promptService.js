@@ -73,6 +73,13 @@ export function normalizeSource(input = {}) {
   const businessType = clean(s.businessType || s.business_type || meta.business_type || "");
   const audience = clean(s.audience || s.buyerType || s.buyer_type || s.targetMarket || s.target_market || "");
   const businessScope = clean(s.businessScope || s.business_scope || meta.business_scope || "");
+  // Real crawled/confirmed service surface (Step-2 taxonomy). Kept as first-class fields so the
+  // architect can ground prompts in — and SCORE relevance against — the business's actual services,
+  // not just the single `category` head. This is the "deeply analyse the crawled data" signal.
+  const coreServices = arr(s.coreServices || report?.coreServices).map(clean).filter(Boolean);
+  const offerings = arr(s.offerings || s.offering).map(clean).filter(Boolean);
+  const categories = arr(s.categories).map(clean).filter(Boolean);
+  const specificService = clean(s.specificService || s.category || "");
 
   const locationMode = s.locationMode || s.location_mode || report?.report_meta?.location_mode || "country";
   // Step-3 location: prefer the NARROWEST real place the user selected (city → state →
@@ -140,6 +147,7 @@ export function normalizeSource(input = {}) {
   return {
     // identity / context
     brand, clientName: brand, domain, industry, category, businessType, audience, businessScope,
+    coreServices, offerings, categories, specificService,
     location, locationMode, locationContext, homepageTitle, homepageContent, searchIntent, locations,
     // keywords
     keywords, competitorKeywords, keywordClusters, keywordGaps, semanticThemes,

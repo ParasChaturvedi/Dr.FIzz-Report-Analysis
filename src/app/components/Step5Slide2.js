@@ -849,10 +849,54 @@ export default function Step5Slide2({
           try {
             sessionStorage.setItem(`drfizz:report:${cachedReport.id}`, JSON.stringify({ id: cachedReport.id, reportType: cachedReport.reportType, data: cachedReport.data }));
           } catch (_) {}
+          // GEO GATE (parity with the fresh path): the cached SEO report is ready, but the report's
+          // AI-visibility slides need the GEO scan too. Queue it (idempotent — returns instantly if a
+          // fresh scan is already cached, which it usually is for a cached report), then WAIT until it
+          // is measured before opening, so the user never lands on a report with a blank GEO section.
+          // If the scan can't complete within the cap (stuck worker), open the valid cached report
+          // anyway — DeckReportLive keeps polling and hydrates GEO live rather than trapping the user.
+          try {
+            await fetch("/api/seo/geo/ensure", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                domain, runMode: "fast",
+                source: {
+                  domain,
+                  name: businessData?.businessName || businessData?.name || domain,
+                  industry: businessData?.industrySector || businessData?.industry || businessData?.category || "",
+                  category: businessData?.category || "",
+                  specificService: businessData?.specificService || businessData?.category || "",
+                  coreServices: Array.isArray(businessData?.coreServices) ? businessData.coreServices : [],
+                  offerings: Array.isArray(businessData?.offerings) ? businessData.offerings : [],
+                  categories: Array.isArray(businessData?.categories) ? businessData.categories : [],
+                  keywords,
+                  country: (businessData?.countryCode && /^[a-z]{2}$/i.test(businessData.countryCode)) ? String(businessData.countryCode).toLowerCase() : (businessData?.country || marketCC || "in"),
+                  state: businessData?.state || businessData?.region || "",
+                  city: businessData?.city || "",
+                },
+              }),
+            }).catch(() => {});
+          } catch (_) {}
           // Replay for the SAME length this domain's first real fetch took (or a
           // realistic default if we haven't measured it on this device yet).
           const targetLoadMs = getStoredLoadMs(domain) || defaultLoadMs;
           await playRealisticJourney(targetLoadMs);
+          // Wait for GEO to be measured too (usually already cached → instant). Progress-labelled so a
+          // rare re-scan reads as a live scan, not a frozen screen.
+          try {
+            const GEO_MAX_MS = 40 * 60 * 1000, GEO_POLL_MS = 8000, geoStart = Date.now();
+            while (Date.now() - geoStart < GEO_MAX_MS) {
+              const gr = await fetch(`/api/seo/geo/report?domain=${encodeURIComponent(domain)}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+              if (gr?.measured === true) break;                                  // GEO ready → open
+              const st = gr?.geo_status?.state;
+              if (st === "failed" || st === "session_required") break;           // GEO source failed → open the valid cached report anyway
+              const gs = gr?.geo_status || {};
+              const c = Number(gs.completed_count ?? gs.collected_count ?? 0);
+              const t = Number(gs.prompt_count ? gs.prompt_count * 4 : 0);
+              try { updateStage("geoLlm", { state: "loading", value: t && c ? `Scanning AI engines… ${Math.min(99, Math.round((c / t) * 100))}% (${c}/${t})` : "Scanning AI engines…" }); } catch {}
+              await delay(GEO_POLL_MS);
+            }
+          } catch (_) {}
           setProgressPct(100);
           stopFakeProgress();
           await delay(450);
@@ -1124,6 +1168,11 @@ export default function Step5Slide2({
               name: businessData?.businessName || businessData?.name || domain,
               industry: businessData?.industrySector || businessData?.industry || businessData?.category || "",
               category: businessData?.category || "",
+              // crawled service surface → relevant, per-campaign prompts if this path regenerates
+              specificService: businessData?.specificService || businessData?.category || "",
+              coreServices: Array.isArray(businessData?.coreServices) ? businessData.coreServices : [],
+              offerings: Array.isArray(businessData?.offerings) ? businessData.offerings : [],
+              categories: Array.isArray(businessData?.categories) ? businessData.categories : [],
               keywords,
               competitors: allCompetitors,
               // Step-3 place selection — pass city/state/country structured so the prompt

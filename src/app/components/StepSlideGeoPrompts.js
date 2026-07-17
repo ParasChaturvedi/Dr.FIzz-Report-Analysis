@@ -3,9 +3,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ArrowRight, ArrowLeft, Plus, X, Check, Sparkles, Info } from "lucide-react";
 
-const MIN_SELECTED = 15;
-const AUDIT_COUNT = 15;
-const TARGET_COUNT = 30;
+// Fixed 3-campaign structure: 10 prompts generated per campaign (30 total), the 5 most
+// business-relevant pre-selected in each, and the user MUST keep at least 5 selected in EVERY
+// campaign (so all three report slides always have data).
+const CAMPAIGNS = ["Citation Commercial", "Mentions", "Citation Information"];
+const CAMPAIGN_LABEL = { "Citation Commercial": "Commercial", Mentions: "Mentions", "Citation Information": "Information" };
+const PER_CAMPAIGN_TARGET = 10;                          // generated per campaign
+const PER_CAMPAIGN_MIN = 5;                              // must keep >= 5 selected in each
+const AUDIT_COUNT = PER_CAMPAIGN_MIN * CAMPAIGNS.length; // 15 auto-selected (5 per campaign)
+const MIN_SELECTED = AUDIT_COUNT;                        // 15 total floor
+const TARGET_COUNT = PER_CAMPAIGN_TARGET * CAMPAIGNS.length; // 30 generated
 const EST_MS = 55000; // ~expected authoring time (Claude prompt-set architect)
 
 /* Tolerant storage read (matches the rest of the wizard: localStorage first, then sessionStorage). */
@@ -73,11 +80,23 @@ export default function StepSlideGeoPrompts({
     const biz = businessData || readJson("businessData") || {};
     const loc = languageLocationData || readJson("languageLocationData") || {};
     const kws = Array.isArray(selectedKeywords) ? selectedKeywords : (readJson("selectedKeywords") || []);
+    // The crawled + user-confirmed service surface (Step-2 taxonomy). Passing the FULL surface —
+    // not just the single category head — lets the architect author, and score relevance against,
+    // THIS business's real services. This is the "deeply analyse the crawled data" signal.
+    const coreServices = (Array.isArray(biz.coreServices) ? biz.coreServices : []).map((s) => String(s || "").trim()).filter(Boolean);
+    const offerings = (Array.isArray(biz.offerings) ? biz.offerings : (biz.offering ? [biz.offering] : [])).map((s) => String(s || "").trim()).filter(Boolean);
+    const categories = (Array.isArray(biz.categories) ? biz.categories : (biz.category ? [biz.category] : [])).map((s) => String(s || "").trim()).filter(Boolean);
+    const specificService = String(biz.specificService || biz.category || "").trim();
     return {
       domain,
       name: biz.businessName || biz.name || "",
       industry: biz.industrySector || biz.industry || "",
       category: biz.category || biz.offeringType || "",
+      specificService,
+      coreServices, offerings, categories,
+      // fold the surface into semanticThemes so buildIntake's topic axis is grounded in the real
+      // services even when no semantic-theme export is present at this step.
+      semanticThemes: [...coreServices, ...offerings, ...categories, specificService].filter(Boolean).slice(0, 24),
       keywords: (Array.isArray(kws) ? kws : []).map((k) => (typeof k === "string" ? k : k?.keyword)).filter(Boolean).slice(0, 30),
       country: loc.country || loc.countryCode || "",
       state: loc.state || "",
@@ -109,27 +128,16 @@ export default function StepSlideGeoPrompts({
       setPrompts(list);
       setProjectId(data.project_id || null);
       setRunId(data.run_id || null);
-      // Auto-select the most relevant + highest-accuracy prompts, but CAMPAIGN-BALANCED so
-      // every campaign slide in the report is populated. A pure quality_score sort starved the
-      // informational cluster — its prompts rank at the priority tail (22-30), so the top-15
-      // filled up on Commercial + Mentions and left the "Citation, informational" report slide
-      // empty. Instead: group by cluster, sort each by quality_score DESC then priority ASC, then
-      // round-robin across clusters taking the best remaining from each until AUDIT_COUNT — so
-      // each campaign contributes its strongest prompts and all three slides (Mentions / Citation
-      // commercial / Citation informational) get content.
+      // Auto-select the TOP 5 MOST BUSINESS-RELEVANT prompts in EACH campaign (5+5+5 = 15). The
+      // architect scores quality_score as a continuous blend of the model's weight and the crawl
+      // relevance, so "highest quality_score per campaign" == "most on-business per campaign".
+      // Picking per-campaign (not a global top-15) guarantees all three report slides are populated.
       const _rank = (a, b) => { const qa = Number(a.quality_score) || 0, qb = Number(b.quality_score) || 0; return qb !== qa ? qb - qa : (a.priority || 999) - (b.priority || 999); };
       const _byCluster = {};
       for (const p of list) { const k = p.cluster || "GEO"; (_byCluster[k] ||= []).push(p); }
-      const _pools = Object.values(_byCluster).map((arr) => [...arr].sort(_rank));
       const auto = [];
-      for (let _more = true; _more && auto.length < AUDIT_COUNT;) {
-        _more = false;
-        for (const pool of _pools) {
-          if (!pool.length) continue;
-          auto.push(pool.shift().prompt_id);
-          _more = true;
-          if (auto.length >= AUDIT_COUNT) break;
-        }
+      for (const camp of CAMPAIGNS) {
+        for (const p of (_byCluster[camp] || []).slice().sort(_rank).slice(0, PER_CAMPAIGN_MIN)) auto.push(p.prompt_id);
       }
       setSelected(new Set(auto));
       setPct(100);
@@ -163,9 +171,45 @@ export default function StepSlideGeoPrompts({
     setCustomInput("");
   }, [customInput]);
   const removeCustom = useCallback((t) => setCustom((prev) => prev.filter((x) => x !== t)), []);
+  // Re-run the author (clears the per-domain candidate cache) — used when a campaign came back empty.
+  const regenerate = useCallback(() => {
+    try { localStorage.removeItem(`geoPromptCandidates:${domain}`); } catch {}
+    startedRef.current = false;
+    setPrompts([]); setSelected(new Set()); setError(null); setPct(0); setLoading(true);
+  }, [domain]);
+
+  // Group prompts by campaign, ordered Commercial → Mentions → Information; each sorted by priority.
+  const groups = useMemo(() => {
+    const g = {};
+    for (const p of prompts) { const k = p.cluster || "GEO"; (g[k] ||= []).push(p); }
+    for (const k in g) g[k].sort((a, b) => (a.priority || 999) - (b.priority || 999));
+    const ordered = {};
+    for (const c of CAMPAIGNS) if (g[c]) ordered[c] = g[c];      // the 3 campaigns first, in order
+    for (const k of Object.keys(g)) if (!ordered[k]) ordered[k] = g[k];  // any stray bucket after
+    return ordered;
+  }, [prompts]);
+
+  // Per-campaign selection state: how many of each campaign are selected, and the effective minimum
+  // (5, clamped to however many that campaign actually generated, so it can never hard-block Next).
+  const perCampaign = useMemo(() => {
+    const m = {};
+    for (const c of CAMPAIGNS) {
+      const list = groups[c] || [];
+      m[c] = { total: list.length, chosen: list.filter((p) => selected.has(p.prompt_id)).length, min: Math.min(PER_CAMPAIGN_MIN, list.length) };
+    }
+    return m;
+  }, [groups, selected]);
+  // A campaign with ZERO generated prompts means generation failed for it — never let Next through
+  // into an empty report slide (the min clamp would otherwise make 0 >= 0 trivially pass). Require
+  // the set to have loaded AND no campaign to be empty AND each to meet its (clamped) minimum.
+  const emptyCampaigns = CAMPAIGNS.filter((c) => (perCampaign[c]?.total || 0) === 0);
+  const campaignsReady = prompts.length > 0 && emptyCampaigns.length === 0
+    && CAMPAIGNS.every((c) => (perCampaign[c]?.chosen || 0) >= (perCampaign[c]?.min ?? PER_CAMPAIGN_MIN));
+  const shortCampaigns = CAMPAIGNS.filter((c) => (perCampaign[c]?.chosen || 0) < (perCampaign[c]?.min ?? PER_CAMPAIGN_MIN));
 
   const totalChosen = selected.size + custom.length;
-  const canContinue = totalChosen >= MIN_SELECTED && !loading && !submitting;
+  // Gate: EVERY campaign must keep at least 5 selected, so all three report slides always have data.
+  const canContinue = campaignsReady && !loading && !submitting;
 
   const handleNext = useCallback(async () => {
     if (!canContinue) return;
@@ -187,13 +231,6 @@ export default function StepSlideGeoPrompts({
     }
   }, [canContinue, projectId, runId, selected, custom, onGeoPromptsSubmit, onNext]);
 
-  const groups = useMemo(() => {
-    const g = {};
-    for (const p of prompts) { const k = p.cluster || "GEO"; (g[k] ||= []).push(p); }
-    for (const k in g) g[k].sort((a, b) => (a.priority || 999) - (b.priority || 999));
-    return g;
-  }, [prompts]);
-
   return (
     <div className="w-full h-full flex flex-col bg-transparent overflow-x-hidden">
       <div className="px-3 sm:px-4 md:px-6 pt-5 sm:pt-6 md:pt-7">
@@ -207,9 +244,9 @@ export default function StepSlideGeoPrompts({
                 <Sparkles size={13} /> GEO Prompts
               </div>
               <h2 className="mt-1 text-xl sm:text-2xl font-bold text-[var(--text)]">The AI prompts we&apos;ll run for you</h2>
-              <p className="mt-1 text-[13px] text-[var(--muted)] max-w-[560px] mx-auto">
-                We generate {TARGET_COUNT} high-relevance, neutral buyer prompts for your market. The top {AUDIT_COUNT} are
-                pre-selected — adjust the selection (minimum {MIN_SELECTED}) and add your own below.
+              <p className="mt-1 text-[13px] text-[var(--muted)] max-w-[580px] mx-auto">
+                We generate {PER_CAMPAIGN_TARGET} neutral buyer prompts in each of {CAMPAIGNS.length} campaigns ({TARGET_COUNT} total). The {PER_CAMPAIGN_MIN} most
+                relevant per campaign are pre-selected — keep at least {PER_CAMPAIGN_MIN} in each and add your own below.
               </p>
             </div>
 
@@ -237,18 +274,30 @@ export default function StepSlideGeoPrompts({
               </div>
             ) : (
               <>
-                {/* selected counter */}
+                {/* selected counter — gate is per-campaign (>= 5 in each), not just a total */}
                 <div className="mt-5 mb-3 flex items-center justify-between rounded-lg bg-[var(--input)] px-3 py-2 border border-[var(--border)]">
                   <span className="text-[13px] font-semibold text-[var(--text)]">{totalChosen} selected</span>
-                  <span className={`text-[12px] font-medium ${totalChosen >= MIN_SELECTED ? "text-emerald-600" : "text-[#d45427]"}`}>
-                    {totalChosen >= MIN_SELECTED ? "✓ ready" : `select ${MIN_SELECTED - totalChosen} more (min ${MIN_SELECTED})`}
+                  <span className={`text-[12px] font-medium ${campaignsReady ? "text-emerald-600" : "text-[#d45427]"}`}>
+                    {emptyCampaigns.length ? (
+                      <>couldn&apos;t generate {emptyCampaigns.map((c) => CAMPAIGN_LABEL[c] || c).join(", ")} — <button type="button" onClick={regenerate} className="underline font-semibold">regenerate</button></>
+                    ) : campaignsReady ? "✓ ready" : `pick at least ${PER_CAMPAIGN_MIN} in ${shortCampaigns.map((c) => CAMPAIGN_LABEL[c] || c).join(", ")}`}
                   </span>
                 </div>
 
-                {/* prompt list, grouped by campaign */}
-                {Object.entries(groups).map(([cluster, list]) => (
+                {/* prompt list, grouped by campaign — each header shows selected/total + a per-campaign hint */}
+                {Object.entries(groups).map(([cluster, list]) => {
+                  const pc = perCampaign[cluster];
+                  const ok = pc ? pc.chosen >= pc.min : true;
+                  return (
                   <div key={cluster} className="mb-4">
-                    <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">{cluster}</div>
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">{CAMPAIGN_LABEL[cluster] || cluster}</span>
+                      {pc ? (
+                        <span className={`text-[11px] font-semibold ${ok ? "text-emerald-600" : "text-[#d45427]"}`}>
+                          {pc.chosen}/{list.length} selected{ok ? "" : ` · pick ${pc.min - pc.chosen} more`}
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="space-y-1.5">
                       {list.map((p) => {
                         const on = selected.has(p.prompt_id);
@@ -264,7 +313,8 @@ export default function StepSlideGeoPrompts({
                       })}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
 
                 {/* Others — add custom prompts. Added prompts render as FULL ROWS (checkbox + text +
                     remove), identical to the generated prompts, so they read as part of the same list. */}
@@ -297,7 +347,7 @@ export default function StepSlideGeoPrompts({
                 <div className="mt-5 flex items-start gap-2 rounded-lg bg-[#d45427]/10 border border-[#d45427]/45 px-3.5 py-2.5">
                   <Info size={15} className="mt-0.5 shrink-0 text-[#d45427]" />
                   <p className="text-[12.5px] leading-snug text-[var(--text)]">
-                    <b className="text-[#d45427]">Note:</b> the audit analyses {AUDIT_COUNT} prompts. Any additional prompts you select or add still run and appear in your dashboard.
+                    <b className="text-[#d45427]">Note:</b> the audit analyses {AUDIT_COUNT} prompts ({PER_CAMPAIGN_MIN} per campaign). Any additional prompts you select or add still run and appear in your dashboard.
                   </p>
                 </div>
                 <div className="h-2" />

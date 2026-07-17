@@ -33,6 +33,7 @@ import {
   GEO_CLUSTERS, GEO_INTENTS, CLUSTER_IS_NEUTRAL, COMPARISON_CLUSTERS, LOCALIZED_CLUSTERS,
   CLUSTER_DEFAULT_INTENT, CLUSTER_EXPECTED_ANSWER, CLUSTER_WEIGHT, ANSWER_STRUCTURES,
   RUN_MODE_PROMPT_RANGE, RUN_MODE_PRESETS, normalizeRunMode,
+  CLUSTER_TO_CAMPAIGN, ARCHITECT_CAMPAIGN_ORDER,
 } from "./model/constants.js";
 import { semanticSig } from "./semanticSig.js";
 
@@ -695,11 +696,34 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
   if (useClaude && String(process.env.ANTHROPIC_API_KEY || "").trim()) {
     try {
       const { generatePromptSet } = await import("./promptSetArchitect.js");
-      const arch = await generatePromptSet(source, { size: target, domain: source.domain || "" });
-      if (arch && Array.isArray(arch.prompts) && arch.prompts.length >= Math.min(minBand, 12)) {
+      // FAST (onboarding) runs a FIXED 3-campaign structure: exactly perCampaign prompts in each of
+      // Citation Commercial / Mentions / Citation Information (the selection UI needs equal, full
+      // campaigns and enforces a per-campaign minimum). Other modes keep the emergent split.
+      const per = mode === "fast" ? (Number(process.env.GEO_PER_CAMPAIGN) || 10) : 0;
+      const arch = await generatePromptSet(source, { size: target, perCampaign: per, domain: source.domain || "" });
+      // Accept the architect set. For per-campaign mode, require each of the 3 campaigns to meet the
+      // UI floor (>= 5), NOT the full per*3 — generatePromptSet caps each campaign at `per`, so a
+      // 1-prompt shortfall in ONE campaign (thin single-service business) would otherwise fail the
+      // all-or-nothing >= per*3 gate and DISCARD an otherwise reference-quality set, silently
+      // downgrading to the lower-quality template fallback. The selection UI already clamps each
+      // campaign's minimum to what exists, so a slightly short campaign is fine.
+      let accept = false;
+      if (arch && Array.isArray(arch.prompts)) {
+        if (per > 0) {
+          const _cc = {};
+          for (const p of arch.prompts) { const k = p.campaign || p.cluster; _cc[k] = (_cc[k] || 0) + 1; }
+          accept = ARCHITECT_CAMPAIGN_ORDER.every((c) => (_cc[c] || 0) >= 5);
+        } else {
+          accept = arch.prompts.length >= Math.min(minBand, 12);
+        }
+      }
+      if (accept) {
         const locCtx = source.locationContext || { mode: source.locationMode || "country", country: source.location || "", country_name: source.location || "", label: source.location || "" };
         const _loc = { mode: locCtx.mode || "country", label: locCtx.label || locCtx.country_name || locCtx.country || "", city: locCtx.city || "", state: locCtx.state || "", country: locCtx.country || "" };
-        const prompts = arch.prompts.slice(0, target).map((r, i) => ({
+        // Per-campaign mode returns an already-balanced set (exactly per×3) — never slice it (a
+        // global slice(0,target) truncates the LAST campaigns first, which starved informational).
+        const _archPrompts = per > 0 ? arch.prompts : arch.prompts.slice(0, target);
+        const prompts = _archPrompts.map((r, i) => ({
           prompt: r.prompt,
           cluster: r.cluster,
           campaign: r.campaign,
@@ -710,6 +734,7 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
           source_keyword: "",
           expected_answer_type: r.expected_answer_type,
           quality_score: r.quality_score,
+          relevance_score: r.relevance_score,
           priority_score: r.priority_score,
           priority: i + 1,
           dedup_key: r.dedup_key,
@@ -867,18 +892,59 @@ export async function planGeoPrompts({ source = {}, runMode = "standard", planMo
       : { mode: locationCtx.mode || "country", label: locationCtx.label || locationCtx.country || "", city: locationCtx.city || "", state: locationCtx.state || "", country: locationCtx.country || "" },
   }));
 
+  // FAST-mode campaign shaping (parity with the architect path): the onboarding selection UI groups
+  // by the 3 architect campaigns and enforces a per-campaign minimum, so even this deterministic
+  // fallback must present the SAME three campaigns. Map each 14-cluster prompt onto its campaign,
+  // keep the top `per` by priority per campaign, and relabel cluster = campaign (original kept on
+  // geo_cluster). Any campaign the map under-fills stays short; the UI clamps its minimum to what
+  // exists, so it never hard-blocks Next.
+  const per = mode === "fast" ? (Number(process.env.GEO_PER_CAMPAIGN) || 10) : 0;
+  const PER_FLOOR = 5;
+  let outPrompts = prompts;
+  if (per > 0) {
+    const balanced = [];
+    for (const camp of ARCHITECT_CAMPAIGN_ORDER) {
+      const inCamp = prompts
+        .filter((p) => (CLUSTER_TO_CAMPAIGN[p.cluster] || "Citation Information") === camp)
+        .sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0))
+        .slice(0, per)
+        .map((p) => ({ ...p, geo_cluster: p.cluster, campaign: camp, cluster: camp }));
+      // TOP-UP a short campaign from ITS OWN clusters so it reaches the floor (avoids a thin/empty
+      // report slide when the 14-cluster pool mapped few prompts onto this campaign). Neutral only.
+      if (inCamp.length < PER_FLOOR) {
+        const seen = new Set(inCamp.map((p) => lc(p.prompt)));
+        const campClusters = GEO_CLUSTERS.filter((c) => (CLUSTER_TO_CAMPAIGN[c] || "") === camp);
+        outer: for (const c of campClusters) {
+          for (const r of deterministicForCluster(c, (per - inCamp.length) + 3, ctx)) {
+            const pr = tidyPrompt(r.prompt, locationCtx.label || locationCtx.country_name || "");
+            if (!pr || pr.length < 6 || seen.has(lc(pr)) || !isNeutralClean(pr, forbidden)) continue;
+            seen.add(lc(pr));
+            const qs = scoreQuality({ prompt: pr, cluster: c, intent: CLUSTER_DEFAULT_INTENT[c], neutral: true }, ctx);
+            inCamp.push({ prompt: pr, geo_cluster: c, campaign: camp, cluster: camp, intent: CLUSTER_DEFAULT_INTENT[c], neutral: true, source_keyword: "", expected_answer_type: CLUSTER_EXPECTED_ANSWER[c], quality_score: qs, priority_score: qs, dedup_key: dedupeSignature(pr), location_context: { mode: locationCtx.mode || "country", label: locationCtx.label || locationCtx.country || "", city: locationCtx.city || "", state: locationCtx.state || "", country: locationCtx.country || "" } });
+            if (inCamp.length >= per) break outer;
+          }
+        }
+      }
+      balanced.push(...inCamp);
+    }
+    if (balanced.length) outPrompts = balanced.map((p, i) => ({ ...p, priority: i + 1 }));
+  }
+
   // distribution summary
-  const distribution = { by_cluster: {}, by_intent: {} };
-  for (const c of GEO_CLUSTERS) distribution.by_cluster[c] = 0;
+  const distribution = { by_cluster: {}, by_intent: {}, by_campaign: {} };
   for (const it of GEO_INTENTS) distribution.by_intent[it] = 0;
-  for (const p of prompts) { distribution.by_cluster[p.cluster] = (distribution.by_cluster[p.cluster] || 0) + 1; distribution.by_intent[p.intent] = (distribution.by_intent[p.intent] || 0) + 1; }
+  for (const p of outPrompts) {
+    distribution.by_cluster[p.cluster] = (distribution.by_cluster[p.cluster] || 0) + 1;
+    distribution.by_intent[p.intent] = (distribution.by_intent[p.intent] || 0) + 1;
+    if (p.campaign) distribution.by_campaign[p.campaign] = (distribution.by_campaign[p.campaign] || 0) + 1;
+  }
 
   // architect:false marks the deterministic template fallback (the ~11% path) so callers
   // can log/flag it and prefer a regenerate rather than treating it as reference quality.
   if (useClaude && String(process.env.ANTHROPIC_API_KEY || "").trim()) {
     try { console.warn("[planGeoPrompts] architect unavailable after retry — shipped TEMPLATE fallback (lower quality); a regenerate is advised"); } catch { /* ignore */ }
   }
-  return { prompts, distribution, target, runMode: mode, planMode, usedClaude, analysisUsed, architect: false };
+  return { prompts: outPrompts, distribution, target, runMode: mode, planMode, usedClaude, analysisUsed, architect: false };
 }
 
 export default planGeoPrompts;
