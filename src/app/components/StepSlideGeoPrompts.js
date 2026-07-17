@@ -109,11 +109,28 @@ export default function StepSlideGeoPrompts({
       setPrompts(list);
       setProjectId(data.project_id || null);
       setRunId(data.run_id || null);
-      // Auto-select ONLY the most relevant + highest-accuracy prompts: rank by quality_score
-      // (0-100 neutrality/accuracy score) first, then priority. Take the top AUDIT_COUNT.
-      const auto = [...list]
-        .sort((a, b) => { const qa = Number(a.quality_score) || 0, qb = Number(b.quality_score) || 0; return qb !== qa ? qb - qa : (a.priority || 999) - (b.priority || 999); })
-        .slice(0, AUDIT_COUNT).map((p) => p.prompt_id);
+      // Auto-select the most relevant + highest-accuracy prompts, but CAMPAIGN-BALANCED so
+      // every campaign slide in the report is populated. A pure quality_score sort starved the
+      // informational cluster — its prompts rank at the priority tail (22-30), so the top-15
+      // filled up on Commercial + Mentions and left the "Citation, informational" report slide
+      // empty. Instead: group by cluster, sort each by quality_score DESC then priority ASC, then
+      // round-robin across clusters taking the best remaining from each until AUDIT_COUNT — so
+      // each campaign contributes its strongest prompts and all three slides (Mentions / Citation
+      // commercial / Citation informational) get content.
+      const _rank = (a, b) => { const qa = Number(a.quality_score) || 0, qb = Number(b.quality_score) || 0; return qb !== qa ? qb - qa : (a.priority || 999) - (b.priority || 999); };
+      const _byCluster = {};
+      for (const p of list) { const k = p.cluster || "GEO"; (_byCluster[k] ||= []).push(p); }
+      const _pools = Object.values(_byCluster).map((arr) => [...arr].sort(_rank));
+      const auto = [];
+      for (let _more = true; _more && auto.length < AUDIT_COUNT;) {
+        _more = false;
+        for (const pool of _pools) {
+          if (!pool.length) continue;
+          auto.push(pool.shift().prompt_id);
+          _more = true;
+          if (auto.length >= AUDIT_COUNT) break;
+        }
+      }
       setSelected(new Set(auto));
       setPct(100);
       setTimeout(() => setLoading(false), 250);
