@@ -58,23 +58,25 @@ async function withRetry(fn, { backoffs = [1500, 3000], validate, label = "modul
 // pages were deep-audited, instead of just the audited count.
 function formatCrawlValue(crawl) {
   if (!crawl) return "—";
-  const audited = crawl.pageCount ?? 0;
-  const total   = crawl.totalPagesEstimate ?? 0;
-  const indexed = crawl.indexedPages;
+  const audited  = crawl.pageCount ?? 0;
+  const indexed  = crawl.indexedPages;          // Google site: estimate — fuzzy, usually inflated
+  const sitemapN = crawl.sitemapUrlCount ?? 0;  // hard list of REAL urls
   const fmt = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n));
 
-  let sizeLabel;
-  if (indexed != null && indexed > audited) {
-    sizeLabel = `~${fmt(indexed)} indexed`;
-  } else if (total > audited) {
-    sizeLabel = `${fmt(total)} pages`;
-  } else {
-    sizeLabel = `${audited} page${audited === 1 ? "" : "s"}`;
-  }
-  const sitemap = crawl.hasSitemap ? "sitemap ✓" : "no sitemap";
-  // When we audited fewer than the site total, note how many were sampled.
-  const sampled = total > audited ? ` · ${audited} audited` : "";
-  return `${sizeLabel}${sampled} · ${sitemap}`;
+  // 3.3 — a page is genuinely "un-audited" only when a HARD source proves more crawlable pages
+  // exist: the sitemap's real URL list, or a crawl we had to truncate. Google's site: count must
+  // NOT drive the "sampled X of Y" framing — it makes a fully-audited 20-page site read as "20 of 199".
+  const realTotal = Math.max(sitemapN, audited);
+  const partial   = (!!crawl.crawlTruncated) || realTotal > audited;
+
+  const sizeLabel = partial
+    ? `${fmt(realTotal)} pages`
+    : `${audited} page${audited === 1 ? "" : "s"} audited`;
+  // Google index count is shown as a soft, separate estimate — never the headline size.
+  const idxNote  = (indexed != null && indexed > realTotal) ? ` · ~${fmt(indexed)} in Google index (est.)` : "";
+  const sampled  = partial ? ` · ${audited} audited` : "";
+  const sitemap  = crawl.hasSitemap ? "sitemap ✓" : "no sitemap";
+  return `${sizeLabel}${sampled}${idxNote} · ${sitemap}`;
 }
 
 // ─── Stage & check initial state ──────────────────────────────────────────────

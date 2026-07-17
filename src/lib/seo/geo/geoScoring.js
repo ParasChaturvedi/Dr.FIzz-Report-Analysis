@@ -144,18 +144,20 @@ function shareOfVoice(byEngine, ctx) {
   );
   for (const n of discSet) tally[n] ||= { brand: n, is_client: false, discovered: true, per_engine: {} };
 
+  const totalCounts = {};   // B11 — raw cross-engine mention count per brand, so the SoV % has a visible denominator
   for (const e of engines) {
     const counts = {}; let total = 0;
+    const _add = (k, c) => { counts[k] = (counts[k] || 0) + c; total += c; totalCounts[k] = (totalCounts[k] || 0) + c; };
     for (const r of byEngine[e]) {
-      for (const m of (r.brandMentions || [])) { const k = brandName; const c = Number(m.mention_count) || 1; counts[k] = (counts[k] || 0) + c; total += c; }
+      for (const m of (r.brandMentions || [])) { const c = Number(m.mention_count) || 1; _add(brandName, c); }
       for (const m of (r.competitorMentions || [])) { const k = (m.entity_name || "competitor").trim();
         // §5 — a competitorMention entity can be topic/UI noise the collector mis-tagged as a rival
         // ("Google Business Profile", "KPIs", "…Opens"). DROP it here so it never enters counts OR the
         // total: this keeps it off the SoV bars AND re-normalizes the real brands' percentages.
         // isTopicNoise (NOT isBrandNoise) so real lowercase rivals — pagetraffic, webchutney — survive.
         if (!k || (isTopicNoise(k) && !_configured.has(k.toLowerCase()))) continue;
-        const c = Number(m.mention_count) || 1; ensure(k); counts[k] = (counts[k] || 0) + c; total += c; }
-      for (const d of (r.discoveredBrands || [])) { const k = String(d?.name || "").trim(); if (!k || !discSet.has(k)) continue; const c = Number(d.count) || 1; counts[k] = (counts[k] || 0) + c; total += c; }
+        const c = Number(m.mention_count) || 1; ensure(k); _add(k, c); }
+      for (const d of (r.discoveredBrands || [])) { const k = String(d?.name || "").trim(); if (!k || !discSet.has(k)) continue; const c = Number(d.count) || 1; _add(k, c); }
     }
     for (const name of Object.keys(tally)) tally[name].per_engine[e] = pct(counts[name] || 0, total);
   }
@@ -164,6 +166,7 @@ function shareOfVoice(byEngine, ctx) {
     .map((b) => {
       const vals = engines.map((e) => b.per_engine[e] || 0);
       b.avg = vals.length ? Math.round((vals.reduce((a, x) => a + x, 0) / vals.length) * 10) / 10 : 0;
+      b.mentions = totalCounts[b.brand] || 0;   // B11 — the underlying mention count behind the %
       return b;
     }).sort((a, b) => b.avg - a.avg);
   return { engines, by_brand };

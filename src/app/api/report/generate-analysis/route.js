@@ -13,6 +13,7 @@ import {
   fetchCompetitorDomains,
   fetchRankedKeywords,
   fetchDataForSeo,
+  fetchDataForSeoBacklinkStats,
 } from "@/lib/seo/dataforseo";
 import { fetchPsiForStrategy } from "@/lib/seo/psi";
 import { fetchMozMetrics } from "@/lib/seo/moz/client";
@@ -265,8 +266,11 @@ function buildKeywordTiersFromGap(keywordGapData, vocab, exclusions, brands = []
 
   // Tier 2 = LOCAL only. Country-scope terms ("… in india") are national commercial, not
   // place-based — gate to city/region scope so the "Local / Place-based" pillar is honest.
-  const localKws = (keywordGapData.gapKeywords || [])
-    .filter(k => (k.intent === "local" || k.intent === "transactional") && okPage(k))
+  // Item 4/5 — include the demand-gated, generated place-based candidates (service × city/region, each
+  // validated with REAL DataForSEO volume) so the Local tier populates the SAME way geography_pages do,
+  // even when the site's organic gap keywords carry no city/region scope (which left Tier 2 empty).
+  const localKws = [...(keywordGapData.placeBasedKeywords || []), ...(keywordGapData.gapKeywords || [])]
+    .filter(k => (k.intent === "local" || k.intent === "transactional" || k.generated) && okPage(k))
     .filter(k => { const s = extractGeography(k.keyword).scope; return s === "city" || s === "region"; })
     .filter(k => fresh(k.keyword))
     .slice(0, 6)
@@ -750,13 +754,16 @@ async function buildCompetitorBenchmark(competitors = [], countryCode = "in") {
   const out = {};
   await Promise.all(domains.slice(0, 5).map(async (dom) => {
     try {
-      const [moz, rank] = await Promise.all([
+      const [moz, rank, dfsBl] = await Promise.all([
         fetchMozMetrics(dom).catch(() => null),
         fetchDomainRankOverview(dom, { countryCode }).catch(() => null),
+        fetchDataForSeoBacklinkStats(dom).catch(() => null),
       ]);
       out[dom] = {
-        dr: moz?.domainAuthority ?? null,
-        refDomains: moz?.backlinksSummary?.referring_domains ?? null,
+        // 3.4 — DA: Moz DA (best) → DataForSEO backlinks-summary rank. Mirrors the client DR + Info
+        // panel Moz-down fallback so the benchmark populates when Moz is 403 (no more wall of N/A).
+        dr: moz?.domainAuthority ?? dfsBl?.rank ?? null,
+        refDomains: moz?.backlinksSummary?.referring_domains ?? dfsBl?.referringDomains ?? null,
         // A DataForSEO "no coverage" domain returns 0, not a measured zero. Coalesce 0 -> null
         // so the deck renders an honest "N/A" instead of a false "0 traffic / 0 keywords" for a
         // real competitor (e.g. an agency domain not in their DB). Real non-zero values survive.
@@ -930,8 +937,13 @@ export async function POST(request) {
 
     // V3 Part 4, keep business and search competitors SEPARATE so the logic layer
     // can validate them: only business competitors enter direct comparison.
-    const businessCompetitors = Array.isArray(competitorData?.businessCompetitors) ? competitorData.businessCompetitors : [];
-    const searchCompetitorsList = Array.isArray(competitorData?.searchCompetitors) ? competitorData.searchCompetitors : [];
+    const _rawBiz = Array.isArray(competitorData?.businessCompetitors) ? competitorData.businessCompetitors : [];
+    const _rawSearch = Array.isArray(competitorData?.searchCompetitors) ? competitorData.searchCompetitors : [];
+    // RC4/3.2 — defensively re-apply the entity-type split in case an older/cached competitorData (or a
+    // custom-typed Step-4 entry) still carries a vendor/body/publisher/directory in the business list.
+    const businessCompetitors = _rawBiz.filter((c) => { const t = classifyEntityType(c); return t === "business_competitor" || t === "unresolved"; });
+    const _reclassed = _rawBiz.filter((c) => !businessCompetitors.includes(c));
+    const searchCompetitorsList = [..._rawSearch, ..._reclassed];
     // Merged list retained only for the free-text Claude narrative helper (not comparison).
     const competitors = [...businessCompetitors, ...searchCompetitorsList];
 
@@ -1012,6 +1024,19 @@ export async function POST(request) {
           ? moz.backlinkDomains.slice(0, 15).map((dd) => ({ domain: dd.domain, da: dd.rank ?? dd.domain_rank ?? null, spam: dd.backlinks_spam_score ?? null, backlinks: dd.backlinks ?? null }))
           : [],
       };
+    }
+
+    // Item 4 / 3.1 — DataForSEO fallback when Moz is unavailable (app-wide 403 insufficient-quota):
+    // the backlinks-summary carries the SAME authority rank + referring-domains + backlinks the Info
+    // panel falls back to, so the report's DR / referring-domains / backlinks degrade gracefully
+    // instead of rendering N/A. Only fills what Moz left null.
+    if (dr == null || referringDomains == null || backlinks == null) {
+      const dfsBl = await safeCall(() => fetchDataForSeoBacklinkStats(domain));
+      if (dfsBl) {
+        if (dr == null && Number.isFinite(dfsBl.rank)) dr = dfsBl.rank;
+        if (referringDomains == null && Number.isFinite(dfsBl.referringDomains) && dfsBl.referringDomains > 0) referringDomains = dfsBl.referringDomains;
+        if (backlinks == null && Number.isFinite(dfsBl.backlinks) && dfsBl.backlinks > 0) backlinks = dfsBl.backlinks;
+      }
     }
 
     console.log("[generate-analysis] baseline:", { dr, organicTraffic, organicKeywords, referringDomains, backlinks, mobileScore, desktopScore });

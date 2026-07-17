@@ -55,7 +55,15 @@ const mv = (bm, key, legacy) => {
 const para = (arr, i = 0) => (Array.isArray(arr) ? arr[i] : (i === 0 ? arr : null));
 const paras = (arr, n = 3) => (Array.isArray(arr) ? arr.slice(0, n) : arr ? [arr] : []);
 const titleCase = (s) => String(s || "").replace(/[-_.]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
-const prettyName = (d, domain) => d?.businessData?.name || titleCase(String(domain || "").replace(/\.(com|co\.uk|io|net|org|in|us)$/i, "").split(".")[0]);
+// B13 — prefer a real, correctly-cased business name (user-supplied, then the GMB profile title)
+// before falling back to a title-cased domain slug; the slug fallback keeps known acronym tokens
+// (cca, llp, plc, cpa, aca, acca) UPPER-CASE so "acenteus-cca" renders "Acenteus CCA", not "Acenteus Cca".
+const _NAME_ACR = new Set("cca llp llc plc ltd cpa aca acca cima ceo cfo cto uk usa uae".split(/\s+/));
+const _slugName = (domain) => String(domain || "").replace(/\.(com|co\.uk|io|net|org|in|us)$/i, "").split(".")[0]
+  .replace(/[-_.]/g, " ").trim().split(/\s+/).filter(Boolean)
+  .map((w) => (_NAME_ACR.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+  .join(" ");
+const prettyName = (d, domain) => d?.businessData?.businessName || d?.businessData?.name || d?.gmbCheck?.name || _slugName(domain);
 const lcpSeconds = (ms) => (ms == null ? null : `${(Number(ms) / 1000).toFixed(1)}s`);
 const lc = (s) => String(s || "").toLowerCase();
 // Geo qualifier suffix for a page card pill (" · Local" / " · UK"), broadened beyond the literal "Local".
@@ -727,7 +735,7 @@ export default function DeckReport({ data, live }) {
               { label: "Share of voice vs competitors", w: 30, v: _pc(geo.overall?.sov) },
               { label: "Citation rate · you as the source", w: 25, v: _pc(geo.overall?.citation_rate) },
               { label: "Mention rate · named at all", w: 20, v: _pc(geo.overall?.mention_rate) },
-              { label: "Entity & topical association", w: 15, v: (geo.overall?.entity_association != null ? _pc(geo.overall.entity_association) : (geo.overall?.topics_recognised != null ? `${geo.overall.topics_recognised} recognised` : "0 recognised")) },
+              { label: "Entity & topical association", w: 15, v: _pc(geo.overall?.signals?.topic_coverage) },
               { label: "Schema & answer-readiness", w: 10, v: (_sig.length ? `${_sig.filter((s) => s.ok).length} of ${_sig.length} signals` : "measured") },
             ];
             return _rows.map((r) => (
@@ -774,7 +782,7 @@ export default function DeckReport({ data, live }) {
             ? [...aioCompetitorsFull.sort((a, b) => b.pct - a.pct), aioSovRows.find((s) => s.is_client), ...aioSovRows.filter((s) => s.is_other)].filter(Boolean).map((b, i) => (
                 <CBar key={i} name={b.brand + (b.is_client ? " (you)" : "")} pct={b.pct} you={b.is_client} value={`${Math.round(b.pct)}%`} />))
             : (sov.filter((b) => !b.is_client).length
-              ? sovRows.map((b, i) => (<CBar key={i} name={b.brand + (b.is_client ? " (you)" : (b.discovered ? " (AI-named)" : ""))} pct={b.avg} you={b.is_client} value={`${Math.round(b.avg)}%`} />))
+              ? sovRows.map((b, i) => (<CBar key={i} name={b.brand + (b.is_client ? " (you)" : (b.discovered ? " (AI-named)" : ""))} pct={b.avg} you={b.is_client} value={b.mentions > 0 ? `${Math.round(b.avg)}% · ${b.mentions}` : `${Math.round(b.avg)}%`} />))
               : citedDomains.slice(0, 6).map((d, i) => { const mx = citedDomains[0]?.count || 1; return <CBar key={i} name={String(d.domain).replace(/^www\./, "")} pct={Math.round((d.count / mx) * 100)} value={`${d.count}×`} />; }))}
         </div>
         <div>

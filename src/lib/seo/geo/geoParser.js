@@ -19,6 +19,11 @@ const ENGINE_KEY_BY_NAME = Object.fromEntries(
 );
 
 const clean = (s) => String(s == null ? "" : s).trim().replace(/\s+/g, " ");
+// B14 — normalise brand DISPLAY casing once at the entity layer: an all-lowercase scrape ("acobloom")
+// is Title-cased so it renders identically to a capitalised mention ("Acobloom"); names that already
+// carry deliberate casing (camelCase / TitleCase / ALLCAPS: PageTraffic, WATConsult) are left untouched.
+// Matching keys elsewhere still lowercase, so dedup / known-set logic is unaffected.
+const canonBrand = (s) => { const t = clean(s); return (!t || /[A-Z]/.test(t)) ? t : t.replace(/\b[a-z]/g, (c) => c.toUpperCase()); };
 const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 function domainOf(url) { try { return new URL(url).hostname.replace(/^www\./, "").toLowerCase(); } catch { return ""; } }
 function rootDomain(d) {
@@ -239,10 +244,10 @@ export function parseAnswer(response = {}, ctx = {}) {
   const citeUrls = Array.isArray(response.citations) ? response.citations : [];
   const engine = ENGINE_KEY_BY_NAME[String(response.engine || "").toLowerCase()] || String(response.engine || "").toLowerCase();
 
-  const brand = clean(ctx.brand);
+  const brand = canonBrand(ctx.brand);
   const brandDomain = rootDomain(ctx.brandDomain || "");
   const competitors = (ctx.competitors || [])
-    .map((c) => (typeof c === "string" ? { name: clean(c), domain: "" } : { name: clean(c.name || c.brand || ""), domain: rootDomain(c.domain || "") }))
+    .map((c) => (typeof c === "string" ? { name: canonBrand(c), domain: "" } : { name: canonBrand(c.name || c.brand || ""), domain: rootDomain(c.domain || "") }))
     .filter((c) => c.name || c.domain);
 
   // ── mentions (with first-appearance order) ──

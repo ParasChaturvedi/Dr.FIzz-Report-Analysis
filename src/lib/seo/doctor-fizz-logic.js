@@ -595,7 +595,12 @@ export function dedupeKeywordVariants(accepted = [], threshold = 0.8) {
     if (!k || !k.keyword) continue;
     const t = _kwToks(k.keyword);
     if (!t.size) { clusters.push({ rep: k, t, variants: [] }); continue; }
-    const i = clusters.findIndex((c) => c.t.size && _kwJaccard(c.t, t) >= threshold);
+    // INTENT-AWARE: only collapse variants that share the SAME intent_class. Without this, the
+    // aggressive stemming/stopwords ("near", "best", filler "service/services") merge a local term
+    // ("payroll outsourcing near me") into a commercial cluster and the higher-volume commercial rep
+    // wins — which EMPTIES the local tier and MIXES the commercial tier (the reported regression).
+    // The 4×590 commercial variants still collapse (all transactional), so RC5/B4 stays fixed.
+    const i = clusters.findIndex((c) => c.t.size && c.rep.intent_class === k.intent_class && _kwJaccard(c.t, t) >= threshold);
     if (i === -1) { clusters.push({ rep: k, t, variants: [] }); continue; }
     const c = clusters[i];
     if ((Number(k.global_volume) || 0) > (Number(c.rep.global_volume) || 0)) { c.variants.push(c.rep.keyword); c.rep = k; c.t = t; }
@@ -719,7 +724,7 @@ export function buildContentArchitecture(accepted = [], crawlPages = []) {
     if (!_svcSrc.length) _svcSrc = listicle_outreach;
     if (!_svcSrc.length) _svcSrc = geography_pages;
     const _svc = _svcSrc.slice(0, 4).map((p) => String(p.keyword_cluster || p.page_name || p.keyword || "").trim()).filter(Boolean);
-    if (!_svc.length) for (const { k } of _deduped.slice(0, 4)) { const t = String(k.keyword || "").trim(); if (t) _svc.push(t); }
+    if (!_svc.length) for (const k of dedupeKeywordVariants(accepted).slice(0, 4)) { const t = String(k.keyword || "").trim(); if (t) _svc.push(t); }
     const _angles = (svc) => [
       { t: `How to choose the right ${svc}`,          kw: `how to choose ${svc}` },
       { t: `${toTitle(svc)}: a complete guide`,       kw: `${svc} guide` },
@@ -3593,7 +3598,9 @@ function buildV2Additions(input) {
   // Per-keyword achievable CTR by difficulty (where on page 1 it can realistically land):
   //   easy (KD<30) → ~pos 3-5 ≈ 9% CTR; medium (KD<55) → ~pos 6-8 ≈ 3%; hard → ~pos 9-12 ≈ 1.2%.
   const ctrFor = (kd) => (kd == null ? 0.03 : kd < 30 ? 0.09 : kd < 55 ? 0.03 : 0.012);
-  const capturable = accepted.reduce((s, k) => s + (Number(k.global_volume) || 0) * ctrFor(k.keyword_difficulty), 0);
+  // RC5 — project over the DEDUPED demand pool (_dedupAccepted), not the raw list: four ~590 variants
+  // of one intent otherwise inflate capturable traffic (and the derived leads/revenue) ~4×.
+  const capturable = _dedupAccepted.reduce((s, k) => s + (Number(k.global_volume) || 0) * ctrFor(k.keyword_difficulty), 0);
   // 6-month: ~40% of mature footprint live; 12-month: ~95%. Floor to the KPI projection.
   const trafficKpi = (kpis.metrics || []).find(m => (m.key || "").includes("organic_traffic"));
   const kpi6 = toNumOrNull(trafficKpi?.target_6_months) || 0;

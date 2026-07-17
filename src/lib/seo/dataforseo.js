@@ -1148,6 +1148,50 @@ export async function fetchDataForSeoDomainRank(domain) {
 }
 
 /* ============================================================================
+   DataForSEO backlinks-summary fallback returning the normalised domain rank
+   (0-100 DA proxy) AND referring-domains + backlinks COUNT from ONE call. Used by
+   the REPORT path (client baseline + competitor benchmark) so DA / referring-domains
+   degrade gracefully when Moz is 403 (insufficient-quota), matching the Info panel's
+   DA fallback. 30-min cached. Soft-fails to null.
+============================================================================ */
+export async function fetchDataForSeoBacklinkStats(domain) {
+  const login = DATAFORSEO_LOGIN;
+  const password = DATAFORSEO_PASSWORD;
+  if (!login || !password) return null;
+  const target = String(domain || "")
+    .replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase().trim();
+  if (!target) return null;
+  const cacheKey = `dfsBacklinkStats:${target}`;
+  const cached = cacheGet(CACHE.seo, cacheKey);
+  if (cached) return cached;
+  try {
+    const auth = Buffer.from(`${login}:${password}`).toString("base64");
+    const res = await fetch("https://api.dataforseo.com/v3/backlinks/summary/live", {
+      method: "POST",
+      headers: { Authorization: `Basic ${auth}`, "Content-Type": "application/json" },
+      body: JSON.stringify([{ target, internal_list_limit: 1, include_subdomains: true, backlinks_status_type: "all" }]),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const task = Array.isArray(json?.tasks) ? json.tasks[0] : null;
+    if (task?.status_code && task.status_code !== 20000) return null;
+    const row = Array.isArray(task?.result) ? task.result[0] : null;
+    if (!row) return null;
+    let rank = Number(row.rank);
+    if (Number.isFinite(rank) && rank > 100) rank = rank / 10;   // 0-1000 → 0-100
+    const out = {
+      rank: Number.isFinite(rank) ? Math.max(0, Math.min(100, Math.round(rank))) : null,
+      referringDomains: Number.isFinite(Number(row.referring_domains)) ? Number(row.referring_domains) : null,
+      backlinks: Number.isFinite(Number(row.backlinks)) ? Number(row.backlinks) : null,
+    };
+    cacheSet(CACHE.seo, cacheKey, out, 30 * 60 * 1000);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/* ============================================================================
    NEW: Competitor Domains (top competing domains)
    TTL: 30 minutes
 ============================================================================ */

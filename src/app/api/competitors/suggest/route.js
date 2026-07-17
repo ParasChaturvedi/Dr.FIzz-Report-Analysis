@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSiteProfile, getKeywordsFromProfile, getCompetitorsFromProfile } from "@/lib/claude/pipeline";
 import { normalizeHost } from "@/lib/perplexity/utils";
 import { fetchCompetitorDomains } from "@/lib/seo/dataforseo";
+import { classifyEntityType } from "@/lib/seo/doctor-fizz-logic";
 
 export const runtime = "nodejs";
 
@@ -71,15 +72,31 @@ export async function POST(req) {
       .map((x) => String(x).toLowerCase().trim())
       .filter(Boolean);
 
-    const claudeBizDomains = (comp.businessCompetitors || [])
+    // RC4/3.2 — route Claude's business list through the SAME entity-type classifier the report
+    // benchmark uses: software vendors (xero/sage), professional bodies (icaew), trade publishers
+    // (accountingweb) and directories rank for these queries but are SEARCH competitors, not business
+    // rivals. Keep only real rivals (+ 'unresolved' — never drop a real one on uncertainty) in the
+    // business bucket; move the rest into search so Step 4 shows them cleanly separated.
+    const _rawBiz = comp.businessCompetitors || [];
+    const bizKept = [];
+    const bizToSearch = [];
+    for (const c of _rawBiz) {
+      const t = classifyEntityType(c);
+      if (t === "business_competitor" || t === "unresolved") bizKept.push(c);
+      else bizToSearch.push(String(c).toLowerCase().trim());
+    }
+
+    const claudeBizDomains = bizKept
       .map((x) => String(x).toLowerCase().trim())
       .filter(Boolean);
 
-    // Build merged search competitors: DataForSEO first, then any Claude additions not already included
+    // Build merged search competitors: DataForSEO first, then Claude search additions, then the
+    // reclassified non-business entities pulled out of the business list.
     const mergedSearchSet = new Set(dfsSearchDomains);
     for (const d of claudeSearchDomains) {
       mergedSearchSet.add(d);
     }
+    for (const d of bizToSearch) { if (d) mergedSearchSet.add(d); }
     const bizSet = new Set(claudeBizDomains);
 
     // Remove business competitors from search list to avoid duplicates
@@ -90,7 +107,7 @@ export async function POST(req) {
     return NextResponse.json(
       {
         domain: comp.domain,
-        businessCompetitors: comp.businessCompetitors || [],
+        businessCompetitors: bizKept,
         searchCompetitors: searchFiltered,
         buckets: comp.buckets || {},
         profile: {
