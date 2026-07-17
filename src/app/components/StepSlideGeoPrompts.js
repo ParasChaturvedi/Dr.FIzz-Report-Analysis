@@ -225,14 +225,15 @@ export default function StepSlideGeoPrompts({
         </>
       )}
 
-      {/* bottom bar */}
-      <div className="fixed bottom-0 left-[56px] md:left-[72px] lg:left-[80px] right-0 bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur border-t border-gray-200 dark:border-[var(--extra-border-dark)] px-4 py-3 flex items-center justify-between">
-        <button onClick={onBack} className="inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-[var(--extra-border-dark)] px-4 py-2 text-[13px] text-gray-700 dark:text-gray-200 hover:border-[#d45427]">
-          <ArrowLeft size={15} /> Back
+      {/* bottom bar — centered Back + Next, matching the other onboarding steps */}
+      <div className="fixed bottom-0 left-[56px] md:left-[72px] lg:left-[80px] right-0 bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur border-t border-gray-200 dark:border-[var(--extra-border-dark)] px-4 py-5 flex justify-center gap-3 sm:gap-4">
+        <button onClick={onBack} type="button"
+          className="inline-flex items-center gap-2 rounded-full bg-[var(--input)] border border-[#d45427] px-5 sm:px-6 py-2.5 sm:py-3 text-[13px] md:text-[14px] text-[var(--text)] hover:opacity-90 shadow-sm">
+          <ArrowLeft size={16} /> Back
         </button>
-        <button onClick={handleNext} disabled={!canContinue}
-          className="inline-flex items-center gap-1.5 rounded-full bg-[image:var(--infoHighlight-gradient)] px-5 py-2.5 text-[13px] font-semibold text-white shadow-sm disabled:opacity-40">
-          {submitting ? "Saving…" : "Next"} <ArrowRight size={15} />
+        <button onClick={handleNext} disabled={!canContinue} type="button"
+          className="inline-flex items-center gap-2 rounded-full bg-[image:var(--infoHighlight-gradient)] px-5 sm:px-6 py-2.5 sm:py-3 text-[13px] md:text-[14px] font-semibold text-white hover:opacity-90 shadow-sm disabled:opacity-40">
+          {submitting ? "Saving…" : "Next"} <ArrowRight size={16} />
         </button>
       </div>
     </div>
