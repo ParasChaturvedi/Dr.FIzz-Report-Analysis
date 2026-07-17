@@ -34,9 +34,23 @@ large small big huge tiny major minor focus focuses focused offers offering prov
 best top leading better great various several many most other some new latest popular common general specific main key major minor primary secondary basic advanced simple easy modern important trusted reliable professional expert quality affordable premium comprehensive complete full total leading proven established experienced
 sign in history workflow workflows bookkeeping accounting accountant accountants payroll taxation audit auditing compliance advisory finance financial
 links image images share shares copy copied download downloads export exports save saves regenerate rewrite feedback upvote downvote`.split(/\s+/).filter(Boolean));
+// MENTION vs CITATION — a SOURCE the AI cites (a directory, publisher, review site, social/forum) is a
+// CITATION, never a competitor brand MENTION. These names leak into the answer prose ("According to
+// Search Engine Journal…", "listed on Clutch") and must be kept OFF the mention surfaces (SoV bars,
+// "who it named"). Matched as a whole normalized name, so a real brand that merely contains one of
+// these words is unaffected.
+const _DECK_SOURCE = new Set([
+  "reddit","quora","medium","linkedin","wikipedia","youtube","facebook","instagram","twitter","x","tiktok","pinterest",
+  "glassdoor","indeed","clutch","designrush","goodfirms","sortlist","trustpilot","capterra","g2","g2 crowd","sitejabber",
+  "ambitionbox","yelp","forbes","techcrunch","mashable","wired","the verge","verge","cnet","zdnet","venturebeat",
+  "business insider","search engine journal","search engine land","the manifest","manifest","product hunt","producthunt",
+  "hacker news","hackernews","hackernoon","gartner","upwork","fiverr","justdial","indiamart","tradeindia","sulekha","techtarget","crunchbase",
+].map((s) => s.toLowerCase()));
 const _deckTopicNoise = (name) => {
   const words = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return true;
+  const _n = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (_DECK_SOURCE.has(_n) || _DECK_SOURCE.has(_n.replace(/\s+/g, ""))) return true;  // cited source/publisher/directory → not a mention
   if (words.some((w) => /^opens$/i.test(w))) return true;                          // "… Opens in a new tab" (plural only, keeps "Open Influence")
   if (words.every((w) => _DECK_NOISE_GEN.has(w.toLowerCase()))) return true;        // every word generic → topic
   if (words.length === 1 && _DECK_NOISE_ACR.has(words[0].toLowerCase().replace(/s$/, ""))) return true; // KPIs, SMEs
@@ -771,9 +785,12 @@ export default function DeckReport({ data, live }) {
     .sort((a, b) => (Number(b.avg) || 0) - (Number(a.avg) || 0));
   // brands the AI named that were NOT on the client's configured list — extra market intel.
   const _discovered = sov.filter((b) => b.discovered && !b.is_client);
+  // When there are no non-client MENTIONS, the chart below falls back to citedDomains (CITATIONS).
+  // The title/framing must switch too — never call a citation a "mention".
+  const _sovIsCitations = !aioMeasured && sov.filter((b) => !b.is_client).length === 0 && citedDomains.length > 0;
   slides.push(
     <Slide key="geo-sov" n="11" kicker="GEO · Share of Voice"
-      title={aioMeasured ? `In AI Overviews, you hold ${Math.round((aioSovRows.find((s) => s.is_client)?.pct) ?? 0)} of every 100 citations` : (geo.overall?.sov != null ? `Share of Voice: you hold ${Math.round(geo.overall.sov)} of every 100 mentions` : "Who AI names when buyers ask")}
+      title={aioMeasured ? `In AI Overviews, you hold ${Math.round((aioSovRows.find((s) => s.is_client)?.pct) ?? 0)} of every 100 citations` : (_sovIsCitations ? "Who AI cites when buyers ask" : (geo.overall?.sov != null ? `Share of Voice: you hold ${Math.round(geo.overall.sov)} of every 100 mentions` : "Who AI names when buyers ask"))}
       sub={<>{aioMeasured ? "Of every source cited in Google's AI Overviews, this is the slice each domain owns." : "Of every brand named across the full prompt set, this is the slice each competitor owns."} {ProvTag}</>} foot={foot("11 · GEO · SHARE OF VOICE")}>
       <Split>
         <div>

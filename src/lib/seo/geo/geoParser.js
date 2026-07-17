@@ -98,6 +98,20 @@ best top leading trusted popular great better various several many different ess
 overall additionally furthermore moreover meanwhile instead therefore finally ultimately importantly notably specifically generally typically usually often sometimes perhaps maybe likely probably certainly clearly obviously interestingly unfortunately fortunately similarly likewise conversely alternatively
 founded headquartered depending prominent notable renowned numerous regarding following specializing nevertheless assuming establishing operating serving ranked listed featured awarded recognized dedicated committed established known trusted proven`.split(/\s+/).filter(Boolean));
 
+// MENTION vs CITATION — directory / publisher / review-site / social names the AI ATTRIBUTES to are
+// CITATIONS (sources), never competitor brand MENTIONS. _GENERIC catches the single-word ones (clutch,
+// reddit, g2…); this set adds the multi-word / publisher names it misses ("Search Engine Journal",
+// "The Manifest", "Product Hunt", "TechCrunch") so a SOURCE named in the prose is never promoted to a
+// brand mention. Matched as a whole normalized name → a real brand containing one of these words is safe.
+const _SOURCE_NAMES = new Set([
+  "search engine journal","searchenginejournal","search engine land","searchengineland","the manifest","manifest",
+  "product hunt","producthunt","hacker news","hackernews","hackernoon","techcrunch","mashable","the verge","verge",
+  "wired","cnet","zdnet","venturebeat","business insider","businessinsider","forbes","gartner","crunchbase","g2 crowd",
+  "clutch","designrush","goodfirms","sortlist","trustpilot","capterra","sitejabber","ambitionbox","yelp","glassdoor",
+  "indeed","reddit","quora","medium","linkedin","wikipedia","youtube","upwork","fiverr","justdial","indiamart","tradeindia","sulekha","techtarget",
+]);
+const _isSourceName = (nm) => { const k = String(nm || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); return !!k && (_SOURCE_NAMES.has(k) || _SOURCE_NAMES.has(k.replace(/\s+/g, ""))); };
+
 function discoverBrands(text, { known = new Set(), location = "" } = {}) {
   const t = String(text || "");
   if (t.length < 20) return [];
@@ -282,6 +296,13 @@ export function parseAnswer(response = {}, ctx = {}) {
   });
   const sourceDomains = [...new Set(citations.map((c) => c.cited_domain).filter(Boolean))];
 
+  // MENTION vs CITATION guard — a "discovered brand" that is actually a KNOWN SOURCE (directory /
+  // publisher / review site the AI attributed to) is a CITATION, not a competitor the AI recommended,
+  // so drop it from the MENTION axis. Matched by NAME against _SOURCE_NAMES — deliberately NOT by "does
+  // its name match any cited domain", because a real rival whose OWN site is cited (the AI named it AND
+  // linked it) must STAY a mention. A source not on the list still lands in the citation axis correctly.
+  const discoveredBrandsClean = discoveredBrands.filter((d) => !_isSourceName(d.name));
+
   const brandEntity = entities.find((e) => e.type === "brand");
   const sentiment = brandEntity && brandEntity.count > 0 ? detectSentiment(text, brand, brandEntity.firstIndex) : null;
 
@@ -303,7 +324,7 @@ export function parseAnswer(response = {}, ctx = {}) {
     nonAnswer: _nonAnswer,
     brandMentions,
     competitorMentions,
-    discoveredBrands,   // brands AI named that weren't configured — surfaced as extra competitors
+    discoveredBrands: discoveredBrandsClean,   // brands AI named that weren't configured (cited sources removed) — surfaced as extra competitors
     // Flat, ordered list of EVERY brand/competitor actually named in this answer, plus the one the
     // AI led with. This is the real "who it named" evidence the deck's prompts table renders — the
     // renderer/API had a field for it but the parser never emitted it (so it always read empty).
@@ -312,10 +333,10 @@ export function parseAnswer(response = {}, ctx = {}) {
     // open-discovered brands in too (configured names first for stable order, then deduped). The
     // client is never self-listed (discoverBrands excludes it) and the tightened stoplist keeps
     // generic terms out, so this surfaces the REAL rivals the AI recommended for that prompt.
-    brandsMentioned: [...present.map((e) => e.name), ...discoveredBrands.map((d) => d.name)]
+    brandsMentioned: [...present.map((e) => e.name), ...discoveredBrandsClean.map((d) => d.name)]
       .filter(Boolean)
       .filter((n, i, a) => a.findIndex((x) => x.toLowerCase() === n.toLowerCase()) === i),
-    leadBrand: present[0]?.name || discoveredBrands[0]?.name || "",
+    leadBrand: present[0]?.name || discoveredBrandsClean[0]?.name || "",
     // CITATION TRUTH: "cited" means the BRAND'S OWN domain was an actual source in this answer —
     // NOT merely that the answer had any citation. The deck's result column must read this, never
     // citation_count>0, so it never says "Cited" when a rival's domain (not yours) was the source.

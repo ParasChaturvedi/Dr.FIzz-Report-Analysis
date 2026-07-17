@@ -94,7 +94,9 @@ export async function GET(req) {
       const worker = Array.isArray(r.brands_mentioned) ? r.brands_mentioned : [];
       let derived = [];
       try {
-        const p = parseAnswer({ visibleAnswerText: r.rendered_text || "", renderedText: r.rendered_text || "", engine: r.engine, rawPrompt: r.raw_prompt }, _geoCtx);
+        // Pass the STORED citation sources so the parser's mention-vs-citation guard fires on re-derivation
+        // too: a "brand" whose name matches a cited SOURCE domain is dropped from "who it named" (no re-scan).
+        const p = parseAnswer({ visibleAnswerText: r.rendered_text || "", renderedText: r.rendered_text || "", engine: r.engine, rawPrompt: r.raw_prompt, citations: Array.isArray(r.source_domains) ? r.source_domains : [] }, _geoCtx);
         derived = Array.isArray(p.brandsMentioned) ? p.brandsMentioned : [];
       } catch {}
       const seen = new Set(); const out = [];

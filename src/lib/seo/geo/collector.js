@@ -214,9 +214,15 @@ async function waitForStableAnswer(page, cfg) {
     }
   }
   if (last) return last.slice(0, 8000);
-  // Fallback: the answer node never matched — return the tail of the body MINUS the
-  // prompt echo, so a selector drift still yields *something* to calibrate against.
-  const body = await page.evaluate(() => document.body.innerText || "");
+  // Fallback: the answer node never matched. Return the tail of the body with the SOURCE/citation
+  // regions and page chrome REMOVED FIRST — otherwise each engine's Sources panel (Clutch, Reddit,
+  // trustpilot.com…) pollutes the answer text and its source NAMES get counted as brand MENTIONS,
+  // which is exactly the mention-vs-citation blur. Citations are harvested separately (buildCitations).
+  const body = await page.evaluate(() => {
+    const clone = document.body.cloneNode(true);
+    clone.querySelectorAll('[class*="source" i],[class*="citation" i],[class*="reference" i],[class*="footnote" i],[aria-label*="source" i],[aria-label*="citation" i],a[class*="citation" i],nav,header,footer,aside').forEach((n) => { try { n.remove(); } catch {} });
+    return clone.innerText || "";
+  });
   return body.replace(/\s+/g, " ").slice(-6000);
 }
 
