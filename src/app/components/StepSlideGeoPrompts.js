@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { ArrowRight, ArrowLeft, Plus, X, Check, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowLeft, Plus, X, Check, Sparkles, Info } from "lucide-react";
 
 const MIN_SELECTED = 15;
 const AUDIT_COUNT = 15;
@@ -109,7 +109,11 @@ export default function StepSlideGeoPrompts({
       setPrompts(list);
       setProjectId(data.project_id || null);
       setRunId(data.run_id || null);
-      const auto = [...list].sort((a, b) => (a.priority || 999) - (b.priority || 999)).slice(0, AUDIT_COUNT).map((p) => p.prompt_id);
+      // Auto-select ONLY the most relevant + highest-accuracy prompts: rank by quality_score
+      // (0-100 neutrality/accuracy score) first, then priority. Take the top AUDIT_COUNT.
+      const auto = [...list]
+        .sort((a, b) => { const qa = Number(a.quality_score) || 0, qb = Number(b.quality_score) || 0; return qb !== qa ? qb - qa : (a.priority || 999) - (b.priority || 999); })
+        .slice(0, AUDIT_COUNT).map((p) => p.prompt_id);
       setSelected(new Set(auto));
       setPct(100);
       setTimeout(() => setLoading(false), 250);
@@ -245,9 +249,21 @@ export default function StepSlideGeoPrompts({
                   </div>
                 ))}
 
-                {/* Others — add custom prompts */}
+                {/* Others — add custom prompts. Added prompts render as FULL ROWS (checkbox + text +
+                    remove), identical to the generated prompts, so they read as part of the same list. */}
                 <div className="mt-5">
                   <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Others — add your own</div>
+                  {custom.length > 0 && (
+                    <div className="space-y-1.5 mb-2">
+                      {custom.map((t) => (
+                        <div key={t} className="w-full flex items-start gap-2.5 rounded-lg border border-[#d45427] bg-[#d45427]/10 px-3 py-2">
+                          <span className="mt-0.5 grid place-items-center h-4 w-4 rounded shrink-0 border bg-[#d45427] border-[#d45427] text-white"><Check size={12} /></span>
+                          <span className="flex-1 text-[13px] leading-snug text-[var(--text)]">{t}</span>
+                          <button type="button" onClick={() => removeCustom(t)} aria-label="Remove" className="text-[var(--muted)] hover:text-[#d45427] shrink-0 mt-0.5"><X size={14} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <input value={customInput} onChange={(e) => setCustomInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
@@ -258,22 +274,15 @@ export default function StepSlideGeoPrompts({
                       <Plus size={14} /> Add
                     </button>
                   </div>
-                  {custom.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {custom.map((t) => (
-                        <span key={t} className="inline-flex items-center gap-1 rounded-full bg-[#d45427]/10 border border-[#d45427]/40 px-2.5 py-1 text-[12px] text-[var(--text)]">
-                          {t}
-                          <button type="button" onClick={() => removeCustom(t)} className="text-[var(--muted)] hover:text-[#d45427]"><X size={12} /></button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
 
-                {/* disclaimer */}
-                <p className="mt-5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-300">
-                  Note: the audit analyses {AUDIT_COUNT} prompts. Any additional prompts you select or add still run and appear in your dashboard.
-                </p>
+                {/* disclaimer — rust accent + readable text so it is clearly visible on the panel bg */}
+                <div className="mt-5 flex items-start gap-2 rounded-lg bg-[#d45427]/10 border border-[#d45427]/45 px-3.5 py-2.5">
+                  <Info size={15} className="mt-0.5 shrink-0 text-[#d45427]" />
+                  <p className="text-[12.5px] leading-snug text-[var(--text)]">
+                    <b className="text-[#d45427]">Note:</b> the audit analyses {AUDIT_COUNT} prompts. Any additional prompts you select or add still run and appear in your dashboard.
+                  </p>
+                </div>
                 <div className="h-2" />
               </>
             )}
