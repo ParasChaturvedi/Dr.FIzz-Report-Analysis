@@ -15,7 +15,7 @@
 // collection, cached 30 days by the same idempotency guard). No GEO data is faked.
 // ─────────────────────────────────────────────────────────────────────────────
 import { generateGeoPromptsForProject } from "@/lib/seo/geo/promptService";
-import { getGeoProjectByDomain, getLatestRun, setPromptsStatus, updateGeoRun } from "@/lib/seo/geo/model/geoStore";
+import { getGeoProjectByDomain, getLatestRun, getGeoPrompts, setPromptsStatus, updateGeoRun } from "@/lib/seo/geo/model/geoStore";
 
 export const runtime = "nodejs";
 // 300s: generating the prompt set now runs the seo-geo-prompt-set-architect skill via
@@ -49,6 +49,16 @@ export async function POST(req) {
         }
         if (run.status === "session_required") {
           return Response.json({ ok: true, status: "session_required", run_id: run.run_id, project_id: project.project_id, note: "engines need login sessions" });
+        }
+        // ONBOARDING SELECTION — the new step-5 "GEO Prompts" already generated the set and the user
+        // approved a subset, leaving a DRAFT run whose APPROVED prompts are the only ones to scan.
+        // Queue THAT run directly; do NOT regenerate + approve-all (which would discard the selection).
+        if (run.status === "draft") {
+          const approved = await getGeoPrompts(project.project_id, { status: "approved" });
+          if (approved.length) {
+            await updateGeoRun(run.run_id, { status: "queued", queued_at: new Date().toISOString(), approved_prompt_count: approved.length, stopped_by_user: false });
+            return Response.json({ ok: true, status: "queued", run_id: run.run_id, project_id: project.project_id, prompts: approved.length, note: "queued your selected prompts" });
+          }
         }
       }
     }

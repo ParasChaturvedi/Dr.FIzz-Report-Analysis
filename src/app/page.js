@@ -8,6 +8,7 @@ import StepSlide2 from "./components/StepSlide2";
 import StepSlide3 from "./components/StepSlide3";
 import StepSlide4 from "./components/StepSlide4";
 import StepSlide5 from "./components/StepSlide5";
+import StepSlideGeoPrompts from "./components/StepSlideGeoPrompts";
 import Step5Slide2 from "./components/Step5Slide2";
 import ThemeToggle from "./components/ThemeToggle";
 import SidebarInfoPanel from "./components/SidebarInfoPanel";
@@ -17,7 +18,7 @@ import { prefetchOpportunitiesAndContent } from "@/lib/prefetch-opportunities";
 
 /* ---------- Mobile-only compact steps: 3 / 2 with dotted connectors ---------- */
 function MobileStepsThreeTwo({ currentStep }) {
-  const active = typeof currentStep === "number" ? currentStep : 5;
+  const active = typeof currentStep === "number" ? currentStep : 6;
 
   const Dot = ({ n }) => {
     const state = n === active ? "active" : n < active ? "complete" : "idle";
@@ -31,7 +32,7 @@ function MobileStepsThreeTwo({ currentStep }) {
       <div
         className={`h-7 w-7 rounded-full grid place-items-center text-[11px] font-semibold ${cls}`}
         aria-current={n === active ? "step" : undefined}
-        aria-label={`Step ${n} of 5`}
+        aria-label={`Step ${n} of 6`}
       >
         {n}
       </div>
@@ -68,7 +69,7 @@ function MobileStepsThreeTwo({ currentStep }) {
     <div className="sm:hidden w-full bg-[var(--bg-panel)] rounded-tl-2xl rounded-tr-2xl pt-10 pb-2 px-3">
       <div className="mx-auto w-fit space-y-6">
         <Row3 a={1} b={2} c={3} />
-        <Row2 a={4} b={5} />
+        <Row3 a={4} b={5} c={6} />
       </div>
     </div>
   );
@@ -127,6 +128,7 @@ export default function Home() {
   const [languageLocationData, setLanguageLocationData] = useState(null);
   const [selectedKeywords, setSelectedKeywords] = useState([]);
   const [competitorData, setCompetitorData] = useState(null);
+  const [geoPromptsData, setGeoPromptsData] = useState(null);
 
   const [editorData, setEditorData] = useState(null);
   const [catalog, setCatalog] = useState([]);
@@ -260,12 +262,12 @@ export default function Home() {
   }, []);
 
   const handleNextStep = () => {
-    if (currentStep === 5) return setCurrentStep("5b");
-    if (typeof currentStep === "number" && currentStep < 5) setCurrentStep((s) => s + 1);
+    if (currentStep === 6) return setCurrentStep("5b");
+    if (typeof currentStep === "number" && currentStep < 6) setCurrentStep((s) => s + 1);
   };
 
   const handleBackStep = () => {
-    if (currentStep === "5b") return setCurrentStep(5);
+    if (currentStep === "5b") return setCurrentStep(6);
     if (typeof currentStep === "number" && currentStep > 1) setCurrentStep((s) => s - 1);
   };
 
@@ -333,6 +335,15 @@ export default function Home() {
     } catch {}
   }, []);
 
+  const handleGeoPromptsSubmit = useCallback((data) => {
+    // { project_id, run_id, selectedPromptIds, customPrompts } — the scan (fired from Step5Slide2)
+    // queues this project's draft run so ONLY these selected prompts run.
+    setGeoPromptsData(data || null);
+    try {
+      localStorage.setItem("selectedGeoPrompts", JSON.stringify(data || {}));
+    } catch {}
+  }, []);
+
   const renderCurrentStep = () => {
     switch (currentStep) {
       case 1:
@@ -369,6 +380,18 @@ export default function Home() {
 
       case 5:
         return (
+          <StepSlideGeoPrompts
+            onNext={handleNextStep}
+            onBack={handleBackStep}
+            onGeoPromptsSubmit={handleGeoPromptsSubmit}
+            businessData={businessData}
+            languageLocationData={languageLocationData}
+            selectedKeywords={selectedKeywords}
+          />
+        );
+
+      case 6:
+        return (
           <StepSlide5
             onNext={handleNextStep}
             onBack={handleBackStep}
@@ -382,7 +405,7 @@ export default function Home() {
       case "5b":
         return (
           <Step5Slide2
-            onBack={() => setCurrentStep(5)}
+            onBack={() => setCurrentStep(6)}
             onDashboard={() => setCurrentStep("dashboard")}
             businessData={businessData}
             languageLocationData={languageLocationData}
@@ -462,7 +485,7 @@ export default function Home() {
         languageLocationData={languageLocationData}
         keywordData={selectedKeywords}
         competitorData={competitorData}
-        currentStep={currentStep === "5b" ? 5 : currentStep}
+        currentStep={currentStep === "5b" ? 6 : currentStep}
         onClose={() => setIsInfoOpen(false)}
         variant={sidebarVariant}
       />
@@ -477,7 +500,7 @@ export default function Home() {
             <div className="hidden sm:flex w-full justify-center">
               <div className="max-w-[100%] w-full rounded-tr-2xl rounded-tl-2xl px-5 md:px-6 py-5 md:py-6 bg-[var(--bg-panel)] text-sm md:text-base overflow-hidden">
                 <div className="flex justify-center">
-                  <Steps currentStep={currentStep === "5b" ? 5 : currentStep} />
+                  <Steps currentStep={currentStep === "5b" ? 6 : currentStep} />
                 </div>
               </div>
             </div>

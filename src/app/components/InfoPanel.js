@@ -530,7 +530,7 @@ export default function InfoPanel({
   }, [isPinned, onClose]);
 
   /* ---------- Auto-pin only on DESKTOP; disable on tablet/mobile ---------- */
-  const LAST_STEP = 6;
+  const LAST_STEP = 7;   // 6 real steps (incl. GEO Prompts) + the "5b" data screen mapped to 6
   const hasWebsite = Boolean(rawWebsite);
 
   useEffect(() => {

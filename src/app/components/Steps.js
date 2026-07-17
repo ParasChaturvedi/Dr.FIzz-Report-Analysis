@@ -8,7 +8,8 @@ export default function Steps({ currentStep = 1 }) {
     { id: 2, label: "Add Business" },
     { id: 3, label: "Lang & Loc" },
     { id: 4, label: "Add Keywords" },
-    { id: 5, label: "Competition" },
+    { id: 5, label: "GEO Prompts" },
+    { id: 6, label: "Competition" },
   ];
 
   const wrapRef = useRef(null);
