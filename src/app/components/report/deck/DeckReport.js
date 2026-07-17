@@ -972,6 +972,17 @@ export default function DeckReport({ data, live }) {
     <span><span style={{ color: "#3C7D5A" }}>●</span> Owned</span>
     <span><span style={{ color: "#B4ABA0" }}>●</span> Unknown</span>
   </div>;
+  // Owner request — a cited SOURCE is one of two kinds: (1) DIRECT = the brand/competitor's OWN domain
+  // ("the brand telling its own name"), (2) THIRD-PARTY = a directory / publisher / review aggregator
+  // that lists it. Split the single citation column into these two, cross-checked by domain classification
+  // (_classifySrc). Each cell shows only the sources of its kind; "—" when the row has none of that kind.
+  const _srcList = (list) => <span>{list.slice(0, 5).map((s, i) => <span key={i} style={{ color: _srcTypeColor(s.type) }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > 5 ? <span style={{ color: "var(--muted)" }}> +{list.length - 5} more</span> : null}</span>;
+  const _directSrcCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "owned" || s.type === "competitor"); return list.length ? _srcList(list) : <span style={{ color: "var(--muted)" }}>—</span>; };
+  const _thirdPartySrcCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "third_party" || s.type === "unknown"); return list.length ? _srcList(list) : (_answeredRow(p) ? <span style={{ color: "var(--muted)" }}>—</span> : "—"); };
+  const _srcSplitLegend = <div style={{ display: "flex", gap: 18, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)", flexWrap: "wrap" }}>
+    <span><b style={{ color: C.ink }}>Direct sources</b> = the brand's own site (<span style={{ color: "#3C7D5A" }}>●</span> yours · <span style={{ color: C.rust }}>●</span> a competitor's)</span>
+    <span><b style={{ color: C.ink }}>Third-party aggregators</b> = directories, publishers &amp; review sites that list them</span>
+  </div>;
   // B20 — name the third-party sources AI ACTUALLY cited in this scan, not a generic hardcoded
   // list (Clutch/DesignRush/G2/Reddit). Falls back to unnamed "directories and round-ups" if none.
   const _citedDirs = Array.from(new Set(
@@ -994,13 +1005,19 @@ export default function DeckReport({ data, live }) {
     const GROUPS = { mentions: [], commercial: [], informational: [] };
     for (const p of geoPool) GROUPS[_campaignOf(p)].push(p);
     const _promptTag = isIllus ? IllusTag : <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".06em", textTransform: "uppercase", color: "#3C7D5A", background: "rgba(60,125,90,.14)", padding: "2px 8px", borderRadius: 5, marginLeft: 6, whiteSpace: "nowrap" }}>Measured · live AI engines</span>;
-    const _campaignSlide = (nLabel, key, title, sub, group, whoLabel, whoOf, triad, legend) => (
+    const _campaignSlide = (nLabel, key, title, sub, group, whoLabel, whoOf, triad, legend, srcSplit) => (
       <Slide key={key} variant="cream" n={nLabel} kicker="The Prompts We Ran" title={title}
         sub={<>{sub} {_promptTag}</>} foot={foot(`${nLabel.toUpperCase()} · GEO · PROMPTS`)}>
         {/* B17 — show the full prompt + more cited sources (was clamped to 52 / 3 with an ellipsis).
-            B18 — show more rows per campaign and state the count below. */}
-        <DataTable compact head={[{ label: "Buyer prompt" }, { label: "Engine" }, { label: whoLabel }, { label: `${name} result`, align: "right" }]}
-          rows={group.slice(0, 12).map((p) => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 150), engName(p.engine), (typeof _who === "string" ? clamp(_who, 110) : { v: _who }), { align: "right", v: _resCell(p) }] }; })} />
+            B18 — show more rows per campaign and state the count below.
+            srcSplit — citation campaigns split the cited SOURCE into DIRECT (brand's own domain) vs
+            THIRD-PARTY AGGREGATORS (directories/publishers) as two separate columns. */}
+        <DataTable compact head={srcSplit
+            ? [{ label: "Buyer prompt" }, { label: "Engine" }, { label: "Direct sources" }, { label: "Third-party aggregators" }, { label: `${name} result`, align: "right" }]
+            : [{ label: "Buyer prompt" }, { label: "Engine" }, { label: whoLabel }, { label: `${name} result`, align: "right" }]}
+          rows={group.slice(0, 12).map((p) => srcSplit
+            ? { cells: [clamp(p.prompt, 150), engName(p.engine), { v: _directSrcCell(p) }, { v: _thirdPartySrcCell(p) }, { align: "right", v: _resCell(p) }] }
+            : (() => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 150), engName(p.engine), (typeof _who === "string" ? clamp(_who, 110) : { v: _who }), { align: "right", v: _resCell(p) }] }; })())} />
         {legend || null}
         {group.length
           ? <p className="mt" style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>Showing {Math.min(12, group.length)} of {group.length} prompt{group.length > 1 ? "s" : ""} in this campaign{group.length > 12 ? " — full set in the live dashboard" : ""}</p>
@@ -1028,7 +1045,7 @@ export default function DeckReport({ data, live }) {
         <Tc kind="evidence" label="The pattern"><b>Competitor pages</b> win these citations today, so their site is the answer, not yours.</Tc>
         <Tc kind="cost" label="What it costs you">The buyer reads the <b>cited page and its brand</b>, at the exact moment of intent.</Tc>
         <Tc kind="action" label="Build these">Publish <b>answer-first comparison, pricing and selection pages</b> for these exact questions.</Tc>
-      </Triad>, _srcLegend
+      </Triad>, _srcSplitLegend, true
     ));
     // 13c — CITATION INFORMATION: learning questions, blogs to write.
     slides.push(_campaignSlide("13c", "geo-prompts-info",
@@ -1039,7 +1056,7 @@ export default function DeckReport({ data, live }) {
         <Tc kind="evidence" label="The pattern"><b>Competitors are writing these explainers</b>, so AI learns the topic from them.</Tc>
         <Tc kind="cost" label="What it costs you">They build <b>topical authority and entity trust</b> with AI while you stay invisible.</Tc>
         <Tc kind="action" label="Write these">Publish <b>answer-first blogs</b> on these questions, structured for AI to lift and cite.</Tc>
-      </Triad>, _srcLegend
+      </Triad>, _srcSplitLegend, true
     ));
   }
 
