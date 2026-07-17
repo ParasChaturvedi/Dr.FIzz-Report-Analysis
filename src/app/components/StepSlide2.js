@@ -286,6 +286,9 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
 
   /* ---------------- Auto-scroll to bottom (matches Step1Slide1 intent) ---------------- */
   useEffect(() => {
+    // Do NOT yank the scroll while a dropdown is OPEN — the user is multi-selecting categories
+    // and every pick re-fired scrollIntoView, making the screen jump on each option.
+    if (openDropdown !== null) return;
     if (tailRef.current) {
       requestAnimationFrame(() => {
         tailRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -323,6 +326,13 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
   const handleBack = () => onBack?.();
   const handleDropdownToggle = (name) =>
     setOpenDropdown((prev) => (prev === name ? null : name));
+
+  // Next is shown ALWAYS but disabled until the required selections exist (industry + offering +
+  // at least one category) — independent of whether a dropdown is still open.
+  const _industryValue = selectedIndustry === "Others" ? customIndustry : selectedIndustry;
+  const _offeringValues = selectedOfferings.map((o) => (o === "Others" ? customOffering : o)).filter(Boolean);
+  const _categoryValues = selectedCategories.map((c) => (c === "Others" ? customCategory : c)).filter(Boolean);
+  const canProceed = !!String(_industryValue || "").trim() && _offeringValues.length > 0 && _categoryValues.length > 0;
 
   // Industry is single-select and drives the Specific Categories list. Offering type is no
   // longer a visible dropdown: it is derived silently (from the detection, else "Services") so
@@ -708,14 +718,13 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
               <ArrowLeft size={16} /> Back
             </button>
 
-            {showSummary && (
-              <button
-                onClick={handleNext}
-                className="inline-flex items-center gap-2 rounded-full bg-[image:var(--infoHighlight-gradient)] px-5 sm:px-6 py-2.5 sm:py-3 text-white hover:opacity-90 shadow-sm text-[13px] md:text-[14px]"
-              >
-                Next <ArrowRight size={16} />
-              </button>
-            )}
+            <button
+              onClick={handleNext}
+              disabled={!canProceed}
+              className="inline-flex items-center gap-2 rounded-full bg-[image:var(--infoHighlight-gradient)] px-5 sm:px-6 py-2.5 sm:py-3 text-white hover:opacity-90 shadow-sm text-[13px] md:text-[14px] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:opacity-40"
+            >
+              Next <ArrowRight size={16} />
+            </button>
           </div>
         </div>
       </div>
