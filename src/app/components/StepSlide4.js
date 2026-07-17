@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ArrowRight, ArrowLeft, Plus, X, Check } from "lucide-react";
 
+// How many suggested keyword chips to show (the generator returns ~20; was capped at 8).
+const SUGGESTED_LIMIT = 15;
+
 export default function StepSlide4({
   onNext,
   onBack,
@@ -137,7 +140,7 @@ export default function StepSlide4({
       return true;
     });
 
-    return next.slice(0, 8).concat("More");
+    return next.slice(0, SUGGESTED_LIMIT).concat("More");
   }, []);
 
   useEffect(() => {
@@ -169,7 +172,7 @@ export default function StepSlide4({
               seen.add(key);
               return true;
             })
-            .slice(0, 8);
+            .slice(0, SUGGESTED_LIMIT);
 
           const final = kw.length ? kw.concat("More") : ["Keyword 1","Keyword 2","Keyword 3","Keyword 4","Keyword 5","Keyword 6","Keyword 7","Keyword 8","More"];
           if (active) setSuggestedKeywords(final);
@@ -209,7 +212,7 @@ export default function StepSlide4({
             seen.add(key);
             return true;
           })
-          .slice(0, 8);
+          .slice(0, SUGGESTED_LIMIT);
 
         const final = kw.length ? kw.concat("More") : ["Keyword 1","Keyword 2","Keyword 3","Keyword 4","Keyword 5","Keyword 6","Keyword 7","Keyword 8","More"];
         if (active) setSuggestedKeywords(final);
