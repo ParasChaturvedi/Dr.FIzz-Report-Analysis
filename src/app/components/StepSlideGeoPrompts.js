@@ -5,6 +5,8 @@ import { ArrowRight, ArrowLeft, Plus, X, Check, Sparkles } from "lucide-react";
 
 const MIN_SELECTED = 15;
 const AUDIT_COUNT = 15;
+const TARGET_COUNT = 30;
+const EST_MS = 55000; // ~expected authoring time (Claude prompt-set architect)
 
 /* Tolerant storage read (matches the rest of the wizard: localStorage first, then sessionStorage). */
 function readJson(key) {
@@ -39,9 +41,30 @@ export default function StepSlideGeoPrompts({
   const [projectId, setProjectId] = useState(null);
   const [runId, setRunId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [pct, setPct] = useState(0);
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const startedRef = useRef(false);
+
+  // Pin the bottom bar exactly like the other steps: compute the scroll-panel height so it fills the
+  // space between the panel top and the (in-flow) bottom bar, and the content scrolls INSIDE it.
+  const panelRef = useRef(null);
+  const bottomBarRef = useRef(null);
+  const [panelHeight, setPanelHeight] = useState(null);
+  useEffect(() => {
+    const recompute = () => {
+      if (!panelRef.current) return;
+      const vpH = window.innerHeight;
+      const barH = bottomBarRef.current?.getBoundingClientRect().height ?? 0;
+      const topOffset = panelRef.current.getBoundingClientRect().top;
+      setPanelHeight(Math.max(360, vpH - barH - topOffset - 24));
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    if (panelRef.current) ro.observe(panelRef.current);
+    window.addEventListener("resize", recompute);
+    return () => { ro.disconnect(); window.removeEventListener("resize", recompute); };
+  }, []);
 
   const domain = useMemo(() => cleanDomain(readSite()), []);
 
@@ -62,6 +85,19 @@ export default function StepSlideGeoPrompts({
     };
   }, [domain, businessData, languageLocationData, selectedKeywords]);
 
+  // Simulated real-time progress while the (single, non-streaming) Claude author runs. Eases toward 95%
+  // over the expected duration, then the hydrate below snaps it to 100% the moment the set arrives.
+  useEffect(() => {
+    if (!loading) return;
+    const start = (typeof performance !== "undefined" ? performance.now() : Date.now());
+    const id = setInterval(() => {
+      const elapsed = (typeof performance !== "undefined" ? performance.now() : Date.now()) - start;
+      const target = 95 * (1 - Math.exp(-elapsed / (EST_MS / 3)));
+      setPct((p) => Math.max(p, Math.min(95, Math.round(target))));
+    }, 350);
+    return () => clearInterval(id);
+  }, [loading]);
+
   // Generate the candidate set once. Cached per-domain so going Back/Next doesn't re-run the Claude author.
   useEffect(() => {
     if (startedRef.current || !domain) return;
@@ -73,17 +109,17 @@ export default function StepSlideGeoPrompts({
       setPrompts(list);
       setProjectId(data.project_id || null);
       setRunId(data.run_id || null);
-      // auto-select the highest-relevance ones (lowest priority number), aim for the audit count
       const auto = [...list].sort((a, b) => (a.priority || 999) - (b.priority || 999)).slice(0, AUDIT_COUNT).map((p) => p.prompt_id);
       setSelected(new Set(auto));
-      setLoading(false);
+      setPct(100);
+      setTimeout(() => setLoading(false), 250);
     };
     if (cached?.prompts?.length) { hydrate(cached); return; }
     (async () => {
       try {
         const res = await fetch("/api/seo/geo/prompts/onboard", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ domain, source }),
+          body: JSON.stringify({ domain, source, targetCount: TARGET_COUNT }),
         });
         const json = await res.json();
         if (!res.ok || !json.ok) throw new Error(json.error || `generate failed (${res.status})`);
@@ -99,7 +135,6 @@ export default function StepSlideGeoPrompts({
   const toggle = useCallback((id) => {
     setSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   }, []);
-
   const addCustom = useCallback(() => {
     const t = customInput.trim();
     if (t.length < 6) return;
@@ -131,7 +166,6 @@ export default function StepSlideGeoPrompts({
     }
   }, [canContinue, projectId, runId, selected, custom, onGeoPromptsSubmit, onNext]);
 
-  // group prompts by cluster/campaign for a scannable list
   const groups = useMemo(() => {
     const g = {};
     for (const p of prompts) { const k = p.cluster || "GEO"; (g[k] ||= []).push(p); }
@@ -140,101 +174,129 @@ export default function StepSlideGeoPrompts({
   }, [prompts]);
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-3 sm:px-4 pb-40">
-      <div className="text-center mb-4">
-        <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#d45427] uppercase tracking-wide">
-          <Sparkles size={13} /> GEO Prompts
-        </div>
-        <h2 className="mt-1 text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">The AI prompts we&apos;ll run for you</h2>
-        <p className="mt-1 text-[13px] text-gray-500 dark:text-gray-300">
-          We generated {prompts.length || "~30"} neutral buyer prompts for your market. The highest-relevance ones are pre-selected —
-          adjust the selection (minimum {MIN_SELECTED}) and add your own below.
-        </p>
-      </div>
-
-      {loading ? (
-        <div className="py-16 flex flex-col items-center gap-3 text-gray-500">
-          <div className="h-6 w-6 rounded-full border-2 border-gray-300 border-t-[#d45427] animate-spin" />
-          <p className="text-[13px]">Generating your prompt set…</p>
-        </div>
-      ) : error ? (
-        <div className="py-10 text-center">
-          <p className="text-[13px] text-red-500">Couldn&apos;t generate prompts: {error}</p>
-          <button onClick={() => { startedRef.current = false; setError(null); setLoading(true); }} className="mt-3 text-[13px] font-semibold text-[#d45427] underline">Retry</button>
-        </div>
-      ) : (
-        <>
-          {/* selected counter */}
-          <div className="sticky top-0 z-10 -mx-1 mb-3 flex items-center justify-between rounded-lg bg-white/90 dark:bg-[var(--extra-input-dark)]/90 backdrop-blur px-3 py-2 border border-gray-200 dark:border-[var(--extra-border-dark)]">
-            <span className="text-[13px] font-semibold text-gray-800 dark:text-white">{totalChosen} selected</span>
-            <span className={`text-[12px] ${totalChosen >= MIN_SELECTED ? "text-emerald-600" : "text-[#d45427]"}`}>
-              {totalChosen >= MIN_SELECTED ? "✓ ready" : `select ${MIN_SELECTED - totalChosen} more (min ${MIN_SELECTED})`}
-            </span>
-          </div>
-
-          {/* prompt list, grouped by campaign */}
-          {Object.entries(groups).map(([cluster, list]) => (
-            <div key={cluster} className="mb-4">
-              <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{cluster}</div>
-              <div className="space-y-1.5">
-                {list.map((p) => {
-                  const on = selected.has(p.prompt_id);
-                  return (
-                    <button key={p.prompt_id} type="button" onClick={() => toggle(p.prompt_id)}
-                      className={`w-full flex items-start gap-2.5 text-left rounded-lg border px-3 py-2 transition-colors ${on ? "border-[#d45427] bg-[#fff3ee] dark:bg-[#3a1f14]" : "border-gray-200 dark:border-[var(--extra-border-dark)] bg-white dark:bg-[var(--extra-input-dark)] hover:border-[#d45427]/50"}`}>
-                      <span className={`mt-0.5 grid place-items-center h-4 w-4 rounded shrink-0 border ${on ? "bg-[#d45427] border-[#d45427] text-white" : "border-gray-300"}`}>
-                        {on ? <Check size={12} /> : null}
-                      </span>
-                      <span className="text-[13px] leading-snug text-gray-800 dark:text-gray-100">{p.prompt_text}</span>
-                    </button>
-                  );
-                })}
+    <div className="w-full h-full flex flex-col bg-transparent overflow-x-hidden">
+      <div className="px-3 sm:px-4 md:px-6 pt-5 sm:pt-6 md:pt-7">
+        <div ref={panelRef} className="mx-auto w-full max-w-[1120px] box-border" style={{ padding: "0px 24px", height: panelHeight ? `${panelHeight}px` : "auto" }}>
+          <style jsx>{`.inner-scroll{scrollbar-width:none;-ms-overflow-style:none}.inner-scroll::-webkit-scrollbar{display:none}`}</style>
+          <div className="inner-scroll h-full w-full overflow-y-auto">
+          <div className="max-w-[820px] mx-auto">
+            {/* header */}
+            <div className="text-center">
+              <div className="inline-flex items-center gap-1.5 text-[11px] sm:text-[12px] font-semibold text-[#d45427] uppercase tracking-wide">
+                <Sparkles size={13} /> GEO Prompts
               </div>
+              <h2 className="mt-1 text-xl sm:text-2xl font-bold text-[var(--text)]">The AI prompts we&apos;ll run for you</h2>
+              <p className="mt-1 text-[13px] text-[var(--muted)] max-w-[560px] mx-auto">
+                We generate {TARGET_COUNT} high-relevance, neutral buyer prompts for your market. The top {AUDIT_COUNT} are
+                pre-selected — adjust the selection (minimum {MIN_SELECTED}) and add your own below.
+              </p>
             </div>
-          ))}
 
-          {/* Others — add custom prompts */}
-          <div className="mt-5">
-            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Others — add your own</div>
-            <div className="flex gap-2">
-              <input value={customInput} onChange={(e) => setCustomInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
-                placeholder="Type a prompt buyers might ask an AI…"
-                className="flex-1 rounded-lg border border-gray-300 dark:border-[var(--extra-border-dark)] bg-white dark:bg-[var(--extra-input-dark)] px-3 py-2 text-[13px] text-gray-800 dark:text-white outline-none focus:border-[#d45427]" />
-              <button type="button" onClick={addCustom} disabled={customInput.trim().length < 6}
-                className="inline-flex items-center gap-1 rounded-lg bg-[#d45427] px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-40">
-                <Plus size={14} /> Add
-              </button>
-            </div>
-            {custom.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {custom.map((t) => (
-                  <span key={t} className="inline-flex items-center gap-1 rounded-full bg-[#fff3ee] dark:bg-[#3a1f14] border border-[#d45427]/40 px-2.5 py-1 text-[12px] text-gray-800 dark:text-gray-100">
-                    {t}
-                    <button type="button" onClick={() => removeCustom(t)} className="text-gray-400 hover:text-[#d45427]"><X size={12} /></button>
+            {loading ? (
+              <div className="py-14 flex flex-col items-center gap-4">
+                {/* circular percentage loader */}
+                <div className="relative h-20 w-20">
+                  <svg viewBox="0 0 100 100" className="h-20 w-20 -rotate-90">
+                    <circle cx="50" cy="50" r="44" fill="none" stroke="var(--border)" strokeWidth="8" />
+                    <circle cx="50" cy="50" r="44" fill="none" stroke="#d45427" strokeWidth="8" strokeLinecap="round"
+                      strokeDasharray={2 * Math.PI * 44} strokeDashoffset={2 * Math.PI * 44 * (1 - pct / 100)}
+                      style={{ transition: "stroke-dashoffset 350ms ease" }} />
+                  </svg>
+                  <div className="absolute inset-0 grid place-items-center text-[15px] font-bold text-[var(--text)]">{pct}%</div>
+                </div>
+                <div className="text-center">
+                  <p className="text-[13px] font-medium text-[var(--text)]">Generating your prompt set…</p>
+                  <p className="text-[12px] text-[var(--muted)] mt-0.5">Authoring {TARGET_COUNT} neutral prompts — this usually takes ~30–60 seconds.</p>
+                </div>
+              </div>
+            ) : error ? (
+              <div className="py-12 text-center">
+                <p className="text-[13px] text-red-500">Couldn&apos;t generate prompts: {error}</p>
+                <button onClick={() => { startedRef.current = false; setError(null); setPct(0); setLoading(true); }} className="mt-3 text-[13px] font-semibold text-[#d45427] underline">Retry</button>
+              </div>
+            ) : (
+              <>
+                {/* selected counter */}
+                <div className="mt-5 mb-3 flex items-center justify-between rounded-lg bg-[var(--input)] px-3 py-2 border border-[var(--border)]">
+                  <span className="text-[13px] font-semibold text-[var(--text)]">{totalChosen} selected</span>
+                  <span className={`text-[12px] font-medium ${totalChosen >= MIN_SELECTED ? "text-emerald-600" : "text-[#d45427]"}`}>
+                    {totalChosen >= MIN_SELECTED ? "✓ ready" : `select ${MIN_SELECTED - totalChosen} more (min ${MIN_SELECTED})`}
                   </span>
+                </div>
+
+                {/* prompt list, grouped by campaign */}
+                {Object.entries(groups).map(([cluster, list]) => (
+                  <div key={cluster} className="mb-4">
+                    <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">{cluster}</div>
+                    <div className="space-y-1.5">
+                      {list.map((p) => {
+                        const on = selected.has(p.prompt_id);
+                        return (
+                          <button key={p.prompt_id} type="button" onClick={() => toggle(p.prompt_id)}
+                            className={`w-full flex items-start gap-2.5 text-left rounded-lg border px-3 py-2 transition-colors ${on ? "border-[#d45427] bg-[#d45427]/10" : "border-[var(--border)] bg-[var(--input)] hover:border-[#d45427]/50"}`}>
+                            <span className={`mt-0.5 grid place-items-center h-4 w-4 rounded shrink-0 border ${on ? "bg-[#d45427] border-[#d45427] text-white" : "border-[var(--muted)]"}`}>
+                              {on ? <Check size={12} /> : null}
+                            </span>
+                            <span className="text-[13px] leading-snug text-[var(--text)]">{p.prompt_text}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))}
-              </div>
+
+                {/* Others — add custom prompts */}
+                <div className="mt-5">
+                  <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Others — add your own</div>
+                  <div className="flex gap-2">
+                    <input value={customInput} onChange={(e) => setCustomInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
+                      placeholder="Type a prompt buyers might ask an AI…"
+                      className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[13px] text-[var(--text)] outline-none focus:border-[#d45427]" />
+                    <button type="button" onClick={addCustom} disabled={customInput.trim().length < 6}
+                      className="inline-flex items-center gap-1 rounded-lg bg-[#d45427] px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-40">
+                      <Plus size={14} /> Add
+                    </button>
+                  </div>
+                  {custom.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {custom.map((t) => (
+                        <span key={t} className="inline-flex items-center gap-1 rounded-full bg-[#d45427]/10 border border-[#d45427]/40 px-2.5 py-1 text-[12px] text-[var(--text)]">
+                          {t}
+                          <button type="button" onClick={() => removeCustom(t)} className="text-[var(--muted)] hover:text-[#d45427]"><X size={12} /></button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* disclaimer */}
+                <p className="mt-5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-300">
+                  Note: the audit analyses {AUDIT_COUNT} prompts. Any additional prompts you select or add still run and appear in your dashboard.
+                </p>
+                <div className="h-2" />
+              </>
             )}
           </div>
+          </div>
+        </div>
+      </div>
 
-          {/* disclaimer */}
-          <p className="mt-5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/40 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-300">
-            Note: the audit analyses {AUDIT_COUNT} prompts. Any additional prompts you select or add still run and appear in your dashboard.
-          </p>
-        </>
-      )}
-
-      {/* bottom bar — centered Back + Next, matching the other onboarding steps */}
-      <div className="fixed bottom-0 left-[56px] md:left-[72px] lg:left-[80px] right-0 bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur border-t border-gray-200 dark:border-[var(--extra-border-dark)] px-4 py-5 flex justify-center gap-3 sm:gap-4">
-        <button onClick={onBack} type="button"
-          className="inline-flex items-center gap-2 rounded-full bg-[var(--input)] border border-[#d45427] px-5 sm:px-6 py-2.5 sm:py-3 text-[13px] md:text-[14px] text-[var(--text)] hover:opacity-90 shadow-sm">
-          <ArrowLeft size={16} /> Back
-        </button>
-        <button onClick={handleNext} disabled={!canContinue} type="button"
-          className="inline-flex items-center gap-2 rounded-full bg-[image:var(--infoHighlight-gradient)] px-5 sm:px-6 py-2.5 sm:py-3 text-[13px] md:text-[14px] font-semibold text-white hover:opacity-90 shadow-sm disabled:opacity-40">
-          {submitting ? "Saving…" : "Next"} <ArrowRight size={16} />
-        </button>
+      {/* in-flow bottom bar — centered Back + Next, identical to the other steps */}
+      <div ref={bottomBarRef} className="flex-shrink-0 bg-transparent">
+        <div className="border-t border-[var(--border)]" />
+        <div className="mx-auto w-full max-w-[1120px] px-3 sm:px-4 md:px-6">
+          <div className="py-5 sm:py-6 md:py-7 flex justify-center gap-3 sm:gap-4">
+            <button onClick={onBack} type="button"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--input)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:opacity-90 shadow-sm border border-[#d45427]">
+              <ArrowLeft size={16} /> Back
+            </button>
+            <button onClick={handleNext} disabled={!canContinue} type="button"
+              className="inline-flex items-center gap-2 rounded-full bg-[image:var(--infoHighlight-gradient)] px-5 sm:px-6 py-2.5 sm:py-3 text-white hover:opacity-90 shadow-sm text-[13px] md:text-[14px] disabled:opacity-40">
+              {submitting ? "Saving…" : "Next"} <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
