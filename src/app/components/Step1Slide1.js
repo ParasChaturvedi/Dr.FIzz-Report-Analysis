@@ -7,7 +7,9 @@ export default function Step1Slide1({ onNext, onWebsiteSubmit }) {
   const [site, setSite] = useState("");
   // V4 — report mode is MULTI-SELECT. The singular `reportMode` (primary, or "Hybrid"
   // when several are chosen) is still written for back-compat with the report logic.
-  const [reportModes, setReportModes] = useState(["Full Website"]);
+  // Report mode is fixed to a full-website scan (the step-1 multi-select selector was removed as
+  // redundant). Kept as state so the primaryMode/reportModes payload below stays unchanged.
+  const [reportModes] = useState(["Full Website"]);
   const [messages, setMessages] = useState([]);
   const [currentState, setCurrentState] = useState("initial"); // initial | submitted | confirmed
   const [error, setError] = useState("");
@@ -265,22 +267,6 @@ export default function Step1Slide1({ onNext, onWebsiteSubmit }) {
                     {error}
                   </p>
                 )}
-                {/* V4 — Report Mode (defines crawl + report scope) — multi-select */}
-                <div className="mt-4">
-                  <p className="text-[11px] sm:text-[12px] text-gray-500 mb-1.5 text-center">Report mode <span className="text-gray-400">(select all that apply)</span></p>
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {["Full Website", "Local SEO", "Service Page", "GEO Report", "Hybrid"].map((m) => {
-                      const active = reportModes.includes(m);
-                      return (
-                      <button key={m} type="button"
-                        onClick={() => setReportModes((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]))}
-                        className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors ${active ? "bg-[#d45427] text-white border-[#d45427]" : "bg-white text-gray-600 border-gray-300 hover:border-[#d45427]"}`}>
-                        {m}
-                      </button>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
             </div>
           ) : (
