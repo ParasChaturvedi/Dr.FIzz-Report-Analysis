@@ -26,6 +26,11 @@ import { semanticSig } from "@/lib/seo/geo/semanticSig";
 // Vitals, Google Business Profile, Digital Marketing), generic acronyms (KPIs, SMEs, GBP, ROI), and
 // scraped "…Opens" UI chrome — while keeping real rivals (PageTraffic, Social Panga, Dentsu Webchutney).
 const _DECK_NOISE_ACR = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux ui api cms crm saas faq kpi aov b2b b2c ai llm gpt serp url gmb gbp nap eeat eat sme smb".split(/\s+/));
+// ARTEFACT tokens (ad-metrics + UI-button words) that can NEVER be part of a real brand name. A name
+// is noise if ANY word is an artefact, so a real word glued to a metric/UI word (Mapbox Terms, Ad
+// Spend, Apple Continue, Sign In Answer) is dropped while a clean agency name (Social Beat, Schbang)
+// survives. Kept in sync with geoParser _ARTEFACT so the deck is never stricter than the server.
+const _DECK_ARTEFACT = new Set("roas roi ctr cpc cpm cpa aov ltv cac spend spending impressions terms continue submit cancel confirm signin signup logout settings regenerate rewrite upvote downvote".split(/\s+/));
 const _DECK_NOISE_GEN = new Set(`technical core web vitals google business profile digital marketing content social media strategy strategies analytics conversion optimization optimisation branding design designs development seo sem services service agency agencies company companies page pages listing listings profile profiles map maps search engine engines score scores keyword keywords overview overviews ranking rankings backlink backlinks schema robots sitemap computer computers space spaces artifact artifacts system systems solution solutions tool tools data cloud technology technologies technical software online platform platforms network networks compute computing generative experience experiences result results insight insights metric metrics report reports dashboard
 model models version versions customize customise connectors connector skills skill sources source ask asked canvas prompt prompts thread threads assistant assistants question questions answer answers example examples reason reasons factor factors option options feature features benefit benefits use uses case cases level levels item items element elements aspect aspects part parts area areas field fields topic topics subject subjects step steps way ways tip tips point points thing things kind kinds type types
 compare choose select find learn discover manage improve grow increase boost provide deliver offer help support explore ensure evaluate consider assess review identify
@@ -53,8 +58,10 @@ const _deckTopicNoise = (name) => {
   const _n = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   if (_DECK_SOURCE.has(_n) || _DECK_SOURCE.has(_n.replace(/\s+/g, ""))) return true;  // cited source/publisher/directory → not a mention
   if (words.some((w) => /^opens$/i.test(w))) return true;                          // "… Opens in a new tab" (plural only, keeps "Open Influence")
+  if (words.some((w) => { const l = w.toLowerCase(); return _DECK_ARTEFACT.has(l) || _DECK_ARTEFACT.has(l.replace(/s$/, "")); })) return true; // any metric/UI artefact word → not a brand
   if (words.every((w) => _DECK_NOISE_GEN.has(w.toLowerCase()))) return true;        // every word generic → topic
-  if (words.length === 1 && _DECK_NOISE_ACR.has(words[0].toLowerCase().replace(/s$/, ""))) return true; // KPIs, SMEs
+  const _a = words[0] ? words[0].toLowerCase() : "";                                // KPIs, SMEs, ROAS — check raw AND plural-stripped
+  if (words.length === 1 && (_DECK_NOISE_ACR.has(_a) || _DECK_NOISE_ACR.has(_a.replace(/s$/, "")))) return true;
   return false;
 };
 
@@ -1043,7 +1050,7 @@ export default function DeckReport({ data, live }) {
       return best;
     };
     const _campaignSlide = (nLabel, key, title, sub, group, whoLabel, whoOf, triad, legend, srcSplit) => {
-      const _rowCap = srcSplit ? 8 : 12;                             // B18 — fewer rows on the 5-col citation slides so the count line + triad fit
+      const _rowCap = srcSplit ? 6 : 12;                             // B18 — the citation slides carry the §5.4 "cite this page" sub-line (taller rows), so cap at 6 so the count line + triad stay on-slide
       const _flagged = group.filter((p) => p.needs_review).length;  // MC-7 — low parser-confidence rows (already computed on the run)
       const _promptCell = (p) => {                                   // §5.4 — attach the "cite this page" fix under the prompt (citation slides only)
         const base = clamp(p.prompt, srcSplit ? 132 : 150);
