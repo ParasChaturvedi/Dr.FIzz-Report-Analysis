@@ -806,7 +806,7 @@ HARD RULES
 - Tight slots: titles ≤ 9 words; subs ≤ 28 words; each paragraph ≤ 42 words; callouts ≤ 45 words; priority body ≤ 28 words; result ≤ 10 words.
 - NEVER use an em dash (—) or en dash (–). Use a comma, a colon, a full stop, or the word "to" for ranges ("Days 31 to 60", never "Days 31–60"). This is strict.
 - NEVER write "KD" or a raw keyword-difficulty score. Say "low difficulty" / "high difficulty" in plain English.
-- The AI-visibility prompt set is always "25 to 100 prompts" reverse-engineered from website scraping, competitor analysis, and proprietary intent tests. NEVER state a single hard prompt count.
+- Describe the AI-visibility prompt set as reverse-engineered from website scraping, competitor analysis, and intent tests. Do NOT commit to a specific number in this copy — the deck fills in the ACTUAL prompt count that ran (or "25 to 100" only when no scan has run yet). So write it generically, e.g. "a focused set of buyer prompts", never a hard "30" or a "25 to 100" range in your text.
 - Where it fits, make every recommendation answer the founder's four questions plainly: what is broken, what it costs in growth, what to do first, and what result to expect (a rounded estimate). The "result" on a priority is that expected outcome.
 - UK/market terms only: never reference US-only or off-market geography or terms for a non-US client.
 

@@ -466,8 +466,17 @@ async function auditPage(url, keywords = [], host = "", prefetched = null) {
   // B9 — collect the SRC of each image-without-alt so the site total can dedupe by src (a shared
   // template logo/header repeated on every page should count once, not once per crawled page). Src
   // normalised to path (strip protocol/host/query) so absolute + relative refs to the same asset merge.
-  const imgsWithoutAltSrcs = _noAlt.map(a => { const m = a.match(/src=["']([^"']+)["']/i); if (!m) return null;
-    return String(m[1]).trim().replace(/^https?:\/\/[^/]+/i, "").replace(/[?#].*$/, "").toLowerCase() || null; }).filter(Boolean);
+  // Try the real asset URL across the common lazy-load attributes too (data-src / data-lazy-src /
+  // data-original / first srcset entry), so a template hero that carries only data-src still dedupes
+  // by its path instead of being summed per page.
+  const _imgSrc = (a) => {
+    const m = a.match(/\bsrc=["']([^"']+)["']/i)
+      || a.match(/\bdata-(?:src|lazy-src|original|lazy)=["']([^"']+)["']/i)
+      || a.match(/\bsrcset=["']([^"',\s]+)/i);
+    return m ? m[1] : null;
+  };
+  const imgsWithoutAltSrcs = _noAlt.map(a => { const raw = _imgSrc(a); if (!raw) return null;
+    return String(raw).trim().replace(/^https?:\/\/[^/]+/i, "").replace(/[?#].*$/, "").toLowerCase() || null; }).filter(Boolean);
   const imgsWithoutDims = allImgs.filter(a => !/width=/i.test(a) || !/height=/i.test(a)).length;
   // Split to match Screaming Frog: no alt= attribute at all vs alt present-but-empty.
   const imgsMissingAltAttr = allImgs.filter(a => !/\balt=/i.test(a)).length;

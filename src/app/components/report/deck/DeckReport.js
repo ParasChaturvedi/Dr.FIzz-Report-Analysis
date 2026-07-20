@@ -33,6 +33,7 @@ continue continues continued follow followup followed following related expand c
 large small big huge tiny major minor focus focuses focused offers offering provides providing helps helping serves serving covers covering includes including features featuring targets targeting typical typically standard custom various multiple single dedicated specialized specialised known scale scales
 best top leading better great various several many most other some new latest popular common general specific main key major minor primary secondary basic advanced simple easy modern important trusted reliable professional expert quality affordable premium comprehensive complete full total leading proven established experienced
 sign in history workflow workflows bookkeeping accounting accountant accountants payroll taxation audit auditing compliance advisory finance financial
+startup startups founder founders entrepreneur entrepreneurs enterprise enterprises freelancer freelancers ecommerce b2b b2c india indian usa uk chennai mumbai delhi bengaluru bangalore pune hyderabad noida gurgaon kolkata ahmedabad jaipur surat lucknow
 links image images share shares copy copied download downloads export exports save saves regenerate rewrite feedback upvote downvote`.split(/\s+/).filter(Boolean));
 // MENTION vs CITATION — a SOURCE the AI cites (a directory, publisher, review site, social/forum) is a
 // CITATION, never a competitor brand MENTION. These names leak into the answer prose ("According to
@@ -294,8 +295,16 @@ export default function DeckReport({ data, live }) {
   // buyer prompts we ran across how many engines. Renders as a small badge on the GEO slides.
   const _geoPromptCount = new Set((geo.prompts_executed || []).map((p) => p.prompt || p.prompt_text || p.id).filter(Boolean)).size
     || Number(live.mentions_summary?.total_prompts) || Number(live.prompts_run) || 0;
-  const geoProvenance = (measured && _geoPromptCount && enginesRun)
-    ? `${_geoPromptCount} buyer prompts × ${enginesRun} engine${enginesRun > 1 ? "s" : ""}`
+  // scan-size honesty (item 12) — the REAL number of unique prompts run, falling back to the run's
+  // stored count when the executed array isn't in the bundle, so no slide promises "25 to 100".
+  const promptsRun = _geoPromptCount || Number(geo.run?.prompt_count) || 0;
+  // RC3 — reconcile "N prompts × M engines" with the tables (which sample one engine per prompt) by
+  // stating the REAL number of AI answers collected. Do NOT compute prompts×engines — a partial run
+  // (an engine's session expired / timed out) leaves holes, so the true count is the executed-rows
+  // length (one row per prompt-engine answer) / the run's completed_count, not the full grid.
+  const answersRun = (geo.prompts_executed || []).length || Number(geo.run?.completed_count) || (promptsRun && enginesRun ? promptsRun * enginesRun : 0);
+  const geoProvenance = (measured && promptsRun && enginesRun)
+    ? `${promptsRun} prompts × ${enginesRun} engine${enginesRun > 1 ? "s" : ""} (${answersRun} answers)`
     : (aioMeasured && aio.keywords_checked ? `${aio.keywords_checked} buyer queries × Google AI Overviews` : null);
   const ProvTag = geoProvenance ? <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginLeft: 8, whiteSpace: "nowrap" }}>Source: {geoProvenance}</span> : null;
   // Real cited domains (who AI quotes instead of you) — the honest "who owns the answer
@@ -338,7 +347,7 @@ export default function DeckReport({ data, live }) {
         // Data-provenance note (near the top): states what really backs the report — a completed
         // multi-engine GEO scan (prompts × engines) vs a pending scan — so no figure is mistaken
         // for measured when it is not. SEO figures are always measured (Moz / DataForSEO crawl).
-        { k: "DATA", v: measured ? `SEO measured · GEO real scan (${_geoPromptCount} prompts × ${enginesRun} engine${enginesRun > 1 ? "s" : ""})` : (aioMeasured ? "SEO measured · GEO: Google AI Overviews measured" : "SEO measured · GEO scan pending") },
+        { k: "DATA", v: measured ? `SEO measured · GEO real scan (${promptsRun} prompts × ${enginesRun} engine${enginesRun > 1 ? "s" : ""} · ${answersRun} answers)` : (aioMeasured ? "SEO measured · GEO: Google AI Overviews measured" : "SEO measured · GEO scan pending") },
         { k: "PREPARED BY", v: "DOCTOR FIZZ" }, { k: "REF", v: refOf(name) },
       ]} />
   );
@@ -646,12 +655,14 @@ export default function DeckReport({ data, live }) {
   );
 
   /* 10 · WHAT BUYERS TYPE */
-  const tierCard = (tag, tagKind, heading, desc, items, accent = false) => (
+  // 3b — `limit` lets Tier 1 render ALL mapped commercial pages so the visible rows equal the
+  // "Commercial pages mapped" tile (was a hard slice(0,5) that showed 5 while the tile said 7).
+  const tierCard = (tag, tagKind, heading, desc, items, accent = false, limit = 5) => (
     <Card accent={accent}>
       <span className={`tag ${tagKind}`}>{tag}</span>
       <h4 style={{ margin: "12px 0 2px", fontSize: 14 }}>{heading}</h4>
       <p className="small" style={{ margin: "0 0 12px" }}>{desc}</p>
-      {(items || []).slice(0, 5).map((k, i) => (
+      {(items || []).slice(0, limit).map((k, i) => (
         <div key={i}>
           <KV k={k.keyword_cluster || k.page_name || k.proposed_title || k.keyword} v={Number(k.primary_volume) > 0 ? fmtNum(k.primary_volume) : "—"} />
           {/* RC5/B4 — near-identical variants share ONE demand pool; list them so the reader sees the
@@ -666,9 +677,9 @@ export default function DeckReport({ data, live }) {
   );
   slides.push(
     <Slide key="keywords" n="08" kicker="Keyword Strategy" title={ds.keywords_title || "Three kinds of searcher. One of them buys."}
-      sub={<>{ds.keywords_sub || "We chase the commercial tier first. That is the one that turns a ranking into a client."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("08 · KEYWORD STRATEGY")}>
+      sub={<>{(() => { const _cp = (ca.commercial_pages || []).length; const _terms = Number(opp.commercial_keyword_count) || _cp; return _cp ? `${_terms > _cp ? `${_terms} commercial terms map to ${_cp} landing pages` : `${_cp} commercial landing pages mapped`} — the tier that turns a ranking into a client.` : (ds.keywords_sub || "We chase the commercial tier first. That is the one that turns a ranking into a client."); })()} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("08 · KEYWORD STRATEGY")}>
       <Row cols={3} style={{ gap: 18 }}>
-        {tierCard("Tier 1 · Ready to buy", "new", "Commercial intent", "A landing page each. This is where revenue comes from.", ca.commercial_pages, true)}
+        {tierCard("Tier 1 · Ready to buy", "new", "Commercial intent", "A landing page each. This is where revenue comes from.", ca.commercial_pages, true, (ca.commercial_pages || []).length || 5)}
         {tierCard("Tier 2 · Local", "pull", "Place-based intent", "The uncontested ground. City in the H1, real local proof.", ca.geography_pages || ca.city_pages, false)}
         {tierCard("Tier 3 · Learning", "ghost", "Informational intent", "Answer content that feeds AI engines and builds topical authority.", ca.blog_and_guides, false)}
       </Row>
@@ -695,19 +706,19 @@ export default function DeckReport({ data, live }) {
   /* 11 · GEO & AI VISIBILITY (verdict) */
   slides.push(
     <Slide key="geo-verdict" variant="dark" n="09" kicker="GEO & AI Visibility" title="Are you visible when buyers ask AI?"
-      sub={<>{ds.geo_intro || "A growing share of buyers ask AI for a recommendation, then act on the names returned."} {aioMeasured ? MeasTag : IllusTag}</>} foot={foot("09 · GEO & AI VISIBILITY")}>
+      sub={<>{((measured && promptsRun) ? String(ds.geo_intro || "").replace(/(?:a set of\s*)?25\s*(?:to|–|-)\s*100\s*prompts/i, `${promptsRun} prompts`) : ds.geo_intro) || "A growing share of buyers ask AI for a recommendation, then act on the names returned."} {aioMeasured ? MeasTag : IllusTag}</>} foot={foot("09 · GEO & AI VISIBILITY")}>
       <Verdict num={geoVerdictWord}>
         {aioMeasured ? (
           <>Across <b>{aio.keywords_checked} tracked buyer queries</b>, Google returns an AI Overview {aio.aio_coverage_pct}% of the time. Of the <b>{aio.total_citations} sources</b> those answers cite, {name} is cited <b>{aio.brand_cited_count ?? 0} times</b>.{aioCompStr ? <> {aioCompStr} are cited instead.</> : null} <b>You are technically ready to be quoted, but not yet being chosen.</b></>
         ) : (
-          <>Across <b>{_geoPromptCount ? `${_geoPromptCount} buyer prompts` : "25 to 100 prompts"} on {enginesRun || geo.overall?.engines_tested || CANON_ENGINES.length} engines</b>, {name} is named in <b>{pctStr(geo.overall?.mention_rate)}</b> of answers and cited in <b>{pctStr(geo.overall?.citation_rate)}</b>.{leader ? <> {leader.brand} is heard instead.</> : null} <b>You are ready to be quoted, but not yet being chosen.</b></>
+          <>Across <b>{promptsRun ? `${promptsRun} buyer prompts` : "25 to 100 prompts"} on {enginesRun || geo.overall?.engines_tested || CANON_ENGINES.length} engines</b>, {name} is named in <b>{pctStr(geo.overall?.mention_rate)}</b> of answers and cited in <b>{pctStr(geo.overall?.citation_rate)}</b>.{leader ? <> {leader.brand} is heard instead.</> : null} <b>You are ready to be quoted, but not yet being chosen.</b></>
         )}
       </Verdict>
       <Split className="mt2" style={{ marginTop: 22 }}>
         <div>
           <h3 className="mini">How we gathered this</h3>
           <Checks items={[
-            { state: "do", text: `Built ${_geoPromptCount || "25 to 100"} buyer prompts from your services, competitor terms and proprietary intent tests.` },
+            { state: "do", text: `Built ${promptsRun || "25 to 100"} buyer prompts from your services, competitor terms and proprietary intent tests.` },
             { state: "do", text: `Ran each across ${enginesRun || CANON_ENGINES.length} engine${(enginesRun || CANON_ENGINES.length) > 1 ? "s" : ""}, capturing every brand named and source cited.` },
             { state: "do", text: "Scored you vs each competitor, so every number is relative, not vanity." },
           ]} />
@@ -732,7 +743,7 @@ export default function DeckReport({ data, live }) {
         <div>
           <h3 className="mini">The collection method</h3>
           <Checks items={[
-            { state: "do", text: <><b>Build:</b> {_geoPromptCount || "25 to 100"} prompts reverse-engineered from your site, competitors and proprietary intent tests.</> },
+            { state: "do", text: <><b>Build:</b> {promptsRun || "25 to 100"} prompts reverse-engineered from your site, competitors and proprietary intent tests.</> },
             { state: "do", text: <><b>Run:</b> every prompt across Google AI Overviews, Claude, Gemini, Perplexity and ChatGPT.</> },
             { state: "do", text: <><b>Score:</b> share of voice, mention rate and citation rate, you vs each competitor, per engine.</> },
             { state: "do", text: <><b>Repeat:</b> the same set re-runs monthly, so every movement is comparable over time.</> },
@@ -749,7 +760,7 @@ export default function DeckReport({ data, live }) {
               { label: "Share of voice vs competitors", w: 30, v: _pc(geo.overall?.sov) },
               { label: "Citation rate · you as the source", w: 25, v: _pc(geo.overall?.citation_rate) },
               { label: "Mention rate · named at all", w: 20, v: _pc(geo.overall?.mention_rate) },
-              { label: "Entity & topical association", w: 15, v: _pc(geo.overall?.signals?.topic_coverage) },
+              { label: "Entity & topical association", w: 15, v: _pc(geo.overall?.topic_coverage ?? geo.score_breakdown?.signals?.topic_coverage ?? (geo.topic_dominance?.total_topics ? geo.topic_dominance.client_lead_share : null)) },
               { label: "Schema & answer-readiness", w: 10, v: (_sig.length ? `${_sig.filter((s) => s.ok).length} of ${_sig.length} signals` : "measured") },
             ];
             return _rows.map((r) => (
@@ -819,14 +830,14 @@ export default function DeckReport({ data, live }) {
       <Triad className="mt2">
         <Tc kind="evidence" label="Evidence">{aioMeasured
           ? <>In Google AI Overviews, {aioCompStr || "rivals"} are cited while <b>{name} appears in 0</b> of {aio.total_citations} citations.</>
-          : <><b>{leader?.brand || "The leader"}</b> leads share of voice at {Math.round(leader?.avg || 0)}%; you hold {pctStr(geo.overall?.sov)}{_geoPromptCount ? <> — measured across {_geoPromptCount} prompts × {enginesRun} engine{enginesRun > 1 ? "s" : ""}, so the slice is auditable, not a bare percentage</> : null}.</>}</Tc>
+          : <><b>{leader?.brand || "The leader"}</b> leads share of voice at {Math.round(leader?.avg || 0)}%; you hold {pctStr(geo.overall?.sov)}{promptsRun ? <> — measured across {promptsRun} prompts × {enginesRun} engine{enginesRun > 1 ? "s" : ""}, so the slice is auditable, not a bare percentage</> : null}.</>}</Tc>
         <Tc kind="cost" label="What it costs you">Every AI recommendation that omits you is a <b>warm, high-intent lead</b> handed to a competitor.</Tc>
         <Tc kind="action" label="Do this first">Publish answer-first FAQ pages on your <b>core service questions</b> to enter the answer set where rivals are already cited.</Tc>
       </Triad>
       {/* item 2/8 — when EVERY GEO metric reads 0, say plainly this is a real measured result,
           not a broken scan, and point to the near-miss signal (who WAS named/cited instead). */}
       {(!aioMeasured && measured && (Number(geo.overall?.mention_rate) || 0) === 0 && (Number(geo.overall?.citation_rate) || 0) === 0 && (Number(geo.overall?.sov) || 0) === 0) ? (
-        <Callout className="mt2"><b>Is a flat 0% a scan error? No, it is a real measured result.</b> Across {_geoPromptCount ? `${_geoPromptCount} prompts` : "the full prompt set"} on {enginesRun || CANON_ENGINES.length} AI engines, {name} was named in <b>0</b> answers and cited <b>0</b> times. The scan did run and did capture answers. {citedDomains.length ? <>It found <b>{citedDomains.slice(0, 3).map((d) => String(d.domain).replace(/^www\./, "")).join(", ")}</b>{citedDomains.length > 3 ? " and others" : ""} cited in your place.</> : <>It found rivals named in your place.</>} So this is not a suspicious blank. You are genuinely absent from AI answers today, which is precisely the gap this plan closes.</Callout>
+        <Callout className="mt2"><b>Is a flat 0% a scan error? No, it is a real measured result.</b> Across {promptsRun ? `${promptsRun} prompts` : "the full prompt set"} on {enginesRun || CANON_ENGINES.length} AI engines, {name} was named in <b>0</b> answers and cited <b>0</b> times. The scan did run and did capture answers. {citedDomains.length ? <>It found <b>{citedDomains.slice(0, 3).map((d) => String(d.domain).replace(/^www\./, "")).join(", ")}</b>{citedDomains.length > 3 ? " and others" : ""} cited in your place.</> : <>It found rivals named in your place.</>} So this is not a suspicious blank. You are genuinely absent from AI answers today, which is precisely the gap this plan closes.</Callout>
       ) : null}
       {/* item 2 (AIO-only) — same reassurance when only Google AI Overviews is measured and the
           brand is cited 0 times. Without this, the AIO-only state showed a bare 0% and no context. */}
@@ -940,20 +951,28 @@ export default function DeckReport({ data, live }) {
   for (const _p of geoPool) { const _s = new Set(); for (const _b of (Array.isArray(_p.brands_named) ? _p.brands_named : [])) { const _k = lc(String(_b).trim()); if (_k && !_s.has(_k)) { _s.add(_k); _namedCount[_k] = (_namedCount[_k] || 0) + 1; } } }
   const _cfgNamedSet = new Set((comps || []).map((c) => lc(c?.name || c?.domain || "").trim()).filter(Boolean));
   const _corroboratedName = (n) => { const k = lc(String(n).trim()); return _cfgNamedSet.has(k) || (_namedCount[k] || 0) >= 2; };
-  const _namedOf = (p) => (Array.isArray(p.brands_named) ? p.brands_named : []).filter(Boolean).filter((n) => !_deckTopicNoise(n)).filter(_corroboratedName);
+  // 3.5 — a configured rival (business/API competitor) is always a real brand, so it BYPASSES the
+  // topic-noise net (which now also drops generic segment/location tokens like "Startups"/"India Sign");
+  // only DISCOVERED names must clear _deckTopicNoise. Mirrors the SoV belt.
+  const _namedOf = (p) => (Array.isArray(p.brands_named) ? p.brands_named : []).filter(Boolean).filter((n) => _cfgNamedSet.has(lc(String(n).trim())) || !_deckTopicNoise(n)).filter(_corroboratedName);
   const _resCell = (p) => <ResCell kind={resKind(p)}>{p.brand_cited ? "Cited" : p.brand_mentioned ? "Named" : ((Number(p.answer_length) > 0 || p.citation_count > 0) ? "Not named" : "No answer")}</ResCell>;
   // §feedback (Mentions vs Citations) — each CITED SOURCE carries its own provenance (competitor / third-party /
   // owned), classified independently of the mention. Colour-code it so a competitor's page winning the citation
   // reads differently from a neutral directory. Falls back to third_party for any untyped cited domain.
-  const _srcTypeColor = (t) => (t === "competitor" ? C.rust : t === "owned" ? "#3C7D5A" : t === "unknown" ? "#B4ABA0" : "var(--muted)");
+  const _srcTypeColor = (t) => (t === "competitor" ? C.rust : t === "owned" ? "#3C7D5A" : t === "social" ? "#B07A2E" : t === "unknown" ? "#B4ABA0" : "var(--muted)");
   // Deterministic provenance AT RENDER (works whichever pipeline produced the citations): owned = the
   // client's own domain, competitor = a configured rival's domain, else third-party (directory/publisher/forum).
   const _normDom = (u) => String(u || "").toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[\/?#]/)[0].trim();
   const _brandDom = _normDom(domain);
   const _compDoms = (comps || []).map((c) => _normDom(c?.domain)).filter((x) => x && x.includes("."));
+  // 3.7 — social / forum / directory hosts (LinkedIn, YouTube, Reddit, Clutch, JustDial…) are a listing
+  // you EARN (an outreach / Mentions play), NOT an editorial page you can out-write. Flag them so a
+  // LinkedIn citation on the "blogs to write" slide reads as outreach, not "write a blog". Reuses _DECK_SOURCE.
+  const _isSocialDir = (d) => { const p = _normDom(d).split("."); const stem = p.length >= 2 ? p[p.length - 2] : (p[0] || ""); return !!stem && _DECK_SOURCE.has(stem); };
   const _classifySrc = (d) => { const nd = _normDom(d); if (!nd || !nd.includes(".")) return "unknown";   // blank/malformed → explicit unknown (R2), never guessed
     if (_brandDom && (nd === _brandDom || nd.endsWith("." + _brandDom))) return "owned";
     if (_compDoms.some((cd) => nd === cd || nd.endsWith("." + cd) || cd.endsWith("." + nd))) return "competitor";
+    if (_isSocialDir(nd)) return "social";   // outreach target (earn a listing), not a page to write
     return "third_party"; };
   const _srcsTypedOf = (p) => (Array.isArray(p.cited_typed) && p.cited_typed.length
     ? p.cited_typed.map((s) => ({ source: String(s.source || "").replace(/^www\./, ""), type: (s.type && s.type !== "third_party") ? s.type : _classifySrc(s.source) })).filter((s) => s.source)
@@ -976,12 +995,14 @@ export default function DeckReport({ data, live }) {
   // ("the brand telling its own name"), (2) THIRD-PARTY = a directory / publisher / review aggregator
   // that lists it. Split the single citation column into these two, cross-checked by domain classification
   // (_classifySrc). Each cell shows only the sources of its kind; "—" when the row has none of that kind.
-  const _srcList = (list) => <span>{list.slice(0, 5).map((s, i) => <span key={i} style={{ color: _srcTypeColor(s.type) }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > 5 ? <span style={{ color: "var(--muted)" }}> +{list.length - 5} more</span> : null}</span>;
-  const _directSrcCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "owned" || s.type === "competitor"); return list.length ? _srcList(list) : <span style={{ color: "var(--muted)" }}>—</span>; };
-  const _thirdPartySrcCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "third_party" || s.type === "unknown"); return list.length ? _srcList(list) : (_answeredRow(p) ? <span style={{ color: "var(--muted)" }}>—</span> : "—"); };
-  const _srcSplitLegend = <div style={{ display: "flex", gap: 18, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)", flexWrap: "wrap" }}>
+  // B18 — cap domains per split cell (default 3 on the citation slides) so 13B/13C stay short enough
+  // that the "Showing X of Y" count line + triad don't clip off the fixed-height slide.
+  const _srcList = (list, cap = 5) => <span>{list.slice(0, cap).map((s, i) => <span key={i} style={{ color: _srcTypeColor(s.type) }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > cap ? <span style={{ color: "var(--muted)" }}> +{list.length - cap} more</span> : null}</span>;
+  const _directSrcCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "owned" || s.type === "competitor"); return list.length ? _srcList(list, 3) : <span style={{ color: "var(--muted)" }}>—</span>; };
+  const _thirdPartySrcCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "third_party" || s.type === "unknown" || s.type === "social"); return list.length ? _srcList(list, 3) : (_answeredRow(p) ? <span style={{ color: "var(--muted)" }}>—</span> : "—"); };
+  const _srcSplitLegend = <div style={{ display: "flex", gap: 16, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)", flexWrap: "wrap" }}>
     <span><b style={{ color: C.ink }}>Direct sources</b> = the brand's own site (<span style={{ color: "#3C7D5A" }}>●</span> yours · <span style={{ color: C.rust }}>●</span> a competitor's)</span>
-    <span><b style={{ color: C.ink }}>Third-party aggregators</b> = directories, publishers &amp; review sites that list them</span>
+    <span><b style={{ color: C.ink }}>Third-party aggregators</b> = directories &amp; publishers (<span style={{ color: "#B07A2E" }}>●</span> social / directory = earn a listing, not a blog)</span>
   </div>;
   // B20 — name the third-party sources AI ACTUALLY cited in this scan, not a generic hardcoded
   // list (Clutch/DesignRush/G2/Reddit). Falls back to unnamed "directories and round-ups" if none.
@@ -1005,26 +1026,52 @@ export default function DeckReport({ data, live }) {
     const GROUPS = { mentions: [], commercial: [], informational: [] };
     for (const p of geoPool) GROUPS[_campaignOf(p)].push(p);
     const _promptTag = isIllus ? IllusTag : <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".06em", textTransform: "uppercase", color: "#3C7D5A", background: "rgba(60,125,90,.14)", padding: "2px 8px", borderRadius: 5, marginLeft: 6, whiteSpace: "nowrap" }}>Measured · live AI engines</span>;
-    const _campaignSlide = (nLabel, key, title, sub, group, whoLabel, whoOf, triad, legend, srcSplit) => (
+    // §5.4 — the fix-layer signal a competitor can't copy: which of YOUR pages should answer this
+    // buyer prompt. Heuristic token-overlap against the crawled/mapped inventory already in the deck;
+    // shown only on a real match (>=2 shared meaningful words), else nothing — never an invented URL.
+    const _kwToks = (s) => new Set(String(s || "").toLowerCase().match(/[a-z]{4,}/g) || []);
+    const _suggestClientUrl = (p) => {
+      const pt = _kwToks(p.prompt || p.prompt_text); if (pt.size < 2) return null;
+      const score = (s) => { let n = 0; for (const w of _kwToks(s)) if (pt.has(w)) n++; return n; };
+      let best = null, bs = 1;
+      for (const pg of (ca.pagesToOptimise || [])) { const sc = score(pg.keyword || pg.page || pg.page_name); const u = pg.matched_url || pg.url; if (sc > bs && u) { bs = sc; best = { url: u, kind: "have" }; } }
+      for (const pg of [...(ca.commercial_pages || []), ...(ca.geography_pages || ca.city_pages || []), ...(ca.blog_and_guides || [])]) {
+        if (pg.action === "optimise-existing") continue;
+        const sc = score(pg.keyword_cluster || pg.page_name || pg.keyword || pg.page);
+        if (sc > bs) { bs = sc; const s = String(pg.url_slug || pg.url || "").trim(); if (s) best = { url: /^https?:/.test(s) ? s : ("/" + s.replace(/^\/+/, "")), kind: "build" }; }
+      }
+      return best;
+    };
+    const _campaignSlide = (nLabel, key, title, sub, group, whoLabel, whoOf, triad, legend, srcSplit) => {
+      const _rowCap = srcSplit ? 8 : 12;                             // B18 — fewer rows on the 5-col citation slides so the count line + triad fit
+      const _flagged = group.filter((p) => p.needs_review).length;  // MC-7 — low parser-confidence rows (already computed on the run)
+      const _promptCell = (p) => {                                   // §5.4 — attach the "cite this page" fix under the prompt (citation slides only)
+        const base = clamp(p.prompt, srcSplit ? 132 : 150);
+        if (!srcSplit) return base;
+        const s = _suggestClientUrl(p);
+        return s ? { v: <>{base}<div style={{ fontFamily: "var(--mono)", fontSize: 8.5, color: s.kind === "have" ? "#3C7D5A" : C.rust, marginTop: 2, letterSpacing: ".02em" }}>&rarr; {s.kind === "have" ? "cite your page" : "build"}: {clamp(s.url, 46)}</div></> } : base;
+      };
+      return (
       <Slide key={key} variant="cream" n={nLabel} kicker="The Prompts We Ran" title={title}
         sub={<>{sub} {_promptTag}</>} foot={foot(`${nLabel.toUpperCase()} · GEO · PROMPTS`)}>
-        {/* B17 — show the full prompt + more cited sources (was clamped to 52 / 3 with an ellipsis).
-            B18 — show more rows per campaign and state the count below.
-            srcSplit — citation campaigns split the cited SOURCE into DIRECT (brand's own domain) vs
-            THIRD-PARTY AGGREGATORS (directories/publishers) as two separate columns. */}
+        {/* B17 — full prompt + cited sources (was clamped with an ellipsis). B18 — row-capped so the
+            count line + triad stay on-slide. srcSplit — citation campaigns split the cited SOURCE into
+            DIRECT (brand's own domain) vs THIRD-PARTY AGGREGATORS, with the §5.4 "cite this page" fix
+            surfaced as a sub-line under each prompt (which of the client's pages should win it). */}
         <DataTable compact head={srcSplit
-            ? [{ label: "Buyer prompt" }, { label: "Engine" }, { label: "Direct sources" }, { label: "Third-party aggregators" }, { label: `${name} result`, align: "right" }]
+            ? [{ label: "Buyer prompt · cite this page" }, { label: "Engine" }, { label: "Direct sources" }, { label: "Third-party aggregators" }, { label: `${name} result`, align: "right" }]
             : [{ label: "Buyer prompt" }, { label: "Engine" }, { label: whoLabel }, { label: `${name} result`, align: "right" }]}
-          rows={group.slice(0, 12).map((p) => srcSplit
-            ? { cells: [clamp(p.prompt, 150), engName(p.engine), { v: _directSrcCell(p) }, { v: _thirdPartySrcCell(p) }, { align: "right", v: _resCell(p) }] }
+          rows={group.slice(0, _rowCap).map((p) => srcSplit
+            ? { cells: [_promptCell(p), engName(p.engine), { v: _directSrcCell(p) }, { v: _thirdPartySrcCell(p) }, { align: "right", v: _resCell(p) }] }
             : (() => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 150), engName(p.engine), (typeof _who === "string" ? clamp(_who, 110) : { v: _who }), { align: "right", v: _resCell(p) }] }; })())} />
         {legend || null}
         {group.length
-          ? <p className="mt" style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>Showing {Math.min(12, group.length)} of {group.length} prompt{group.length > 1 ? "s" : ""} in this campaign{group.length > 12 ? " — full set in the live dashboard" : ""}</p>
+          ? <p className="mt" style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>Showing {Math.min(_rowCap, group.length)} of {group.length} prompt{group.length > 1 ? "s" : ""} in this campaign{group.length > _rowCap ? " — full set in the live dashboard" : ""}{_flagged ? ` · ${_flagged} flagged for manual review (low parser confidence)` : ""}</p>
           : <p className="mt" style={{ fontSize: 11, color: "var(--muted)" }}>No prompts of this type surfaced in this run.</p>}
         {group.length ? triad : null}
       </Slide>
-    );
+      );
+    };
     // 13a — MENTIONS: best/top, AI names brands from third-party listicles.
     slides.push(_campaignSlide("13a", "geo-prompts-mentions",
       "Mentions: where AI names brands, and who gets picked",
@@ -1134,29 +1181,27 @@ export default function DeckReport({ data, live }) {
       the reader understands how the 0–100 score is weighted BEFORE seeing the 0% numbers.) */
 
   /* 17 · What we build */
-  // item 4a — slide 15 shows only pages to BUILD (create-new), the same partition slide 16 uses, so a
-  // page never appears as both "build" here and "optimise" there. item 3d — title/subtitle numbers
-  // derive from what is actually built, never a fixed "Four".
-  // P5 guard — a page must never appear as BUILD here and OPTIMISE on slide 16. Exclude both
-  // action==="optimise-existing" AND anything whose keyword is in the optimise set (covers the rare
-  // AI-fallback path where deterministic action tags are absent).
-  const _optKeys15 = new Set((ca.pagesToOptimise || []).flatMap((p) => [lc(p.keyword || "").replace(/[^a-z0-9]+/g, " ").trim(), lc(p.page || "").replace(/[^a-z0-9]+/g, " ").trim()]).filter(Boolean));
-  const _bkey = (p) => lc(p.keyword_cluster || p.page_name || p.keyword || "").replace(/[^a-z0-9]+/g, " ").trim();
-  const _toBuild = (arr) => (arr || []).filter((p) => (p.action || "create-new") !== "optimise-existing" && !_optKeys15.has(_bkey(p)));
-  const _bcComm = _toBuild(ca.commercial_pages).slice(0, 3);
-  const _bcLocal = _toBuild(ca.geography_pages || ca.city_pages).slice(0, 1);
-  const buildCards = [..._bcComm, ..._bcLocal];
+  // item 3.8 / 1.5 — slide 15 (What we build) and slide 16 (Content map) must read the SAME create set,
+  // so their counts agree (was: §15 curated 3+1 from raw arrays → "2", §16 used the crawl-filtered
+  // pagesToBuild → "4"). Define the create set ONCE here (lifted from §16) and feed both. P5 guard:
+  // createPages is already the crawl-filtered NEW-only partition, so a build page can never be an
+  // optimise page on §16. item 3d — the title number derives from what is actually built.
+  const _ck = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const _optimiseKeys = new Set([...(ca.pagesToOptimise || []).flatMap((p) => [_ck(p.keyword), _ck(p.page)])].filter(Boolean));
+  const createPages = (Array.isArray(ca.pagesToBuild) && ca.pagesToBuild.length)
+    ? ca.pagesToBuild
+    : [...(ca.commercial_pages || []), ...(ca.geography_pages || ca.city_pages || [])].filter((p) => { const k = _ck(p.keyword_cluster || p.page_name); return k && !_optimiseKeys.has(k); });
+  // §15 FEATURES the top few of that same set; §16 lists it in full. Both counts trace to createPages.
+  const buildCards = createPages.slice(0, 4);
   const _numCap = (n) => (["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"][n] || String(n));
   const _buildTitle = buildCards.length
     ? `${_numCap(buildCards.length)} page${buildCards.length === 1 ? " does" : "s do"} most of the work`
     : "Optimise what exists before building new";
-  // §3 — subtitle must describe the pages ACTUALLY shown (buildCards), never the mapped-total. A stale
-  // logic-layer ds.build_sub said "8 service + 4 location" while the deck rendered 1 card → single-source it here.
-  const _bParts = [];
-  if (_bcComm.length) _bParts.push(`${_numCap(_bcComm.length).toLowerCase()} commercial`);
-  if (_bcLocal.length) _bParts.push(`${_numCap(_bcLocal.length).toLowerCase()} local`);
-  const _buildSub = _bParts.length
-    ? `Only pages with real, measured demand — ${_bParts.join(" and ")}. Each has a job and a target.`
+  // §3 / 1.5 — subtitle describes the pages ACTUALLY shown, and states the remainder that lives on the
+  // Content Map, so "builds N" visibly reconciles with §16's "M to create".
+  const _moreToBuild = Math.max(0, createPages.length - buildCards.length);
+  const _buildSub = buildCards.length
+    ? `Only pages with real, measured demand — ${_numCap(buildCards.length).toLowerCase()} to build first${_moreToBuild ? `, ${_moreToBuild} more on the Content Map` : ""}. Each has a job and a target.`
     : `Only pages with real, measured demand. Each has a job and a target.`;
   const shipWith = ["Exact-intent H1 and meta", "800 to 1,500 unique words", "5 to 8 FAQs plus schema", "Strong CTA above the fold", "Internal links and alt text", "Sub-2.5s load time"];
   slides.push(
@@ -1165,9 +1210,9 @@ export default function DeckReport({ data, live }) {
       {buildCards.length ? (
         <Row cols={buildCards.length >= 4 ? 4 : 3} style={{ gap: 16 }}>
           {buildCards.map((p, i) => (
-            <Card key={i} accent title={p.page_name || titleCase(p.keyword_cluster)}>
-              <Pill>{p.primary_volume ? `${fmtNum(p.primary_volume)}/mo` : "N/A"}{geoQual(p)}</Pill>
-              <p className="small" style={{ marginTop: 8 }}>{clamp(p.commercial_reason || p.why_separate_page || "A focused page wins this intent.", 90)}</p>
+            <Card key={i} accent title={p.page || p.page_name || titleCase(p.keyword_cluster)}>
+              <Pill>{p.volume ? p.volume : (p.primary_volume ? `${fmtNum(p.primary_volume)}/mo` : "N/A")}{geoQual(p)}</Pill>
+              <p className="small" style={{ marginTop: 8 }}>{clamp(p.purpose || p.commercial_reason || p.why_separate_page || "A focused page wins this intent.", 90)}</p>
             </Card>
           ))}
         </Row>
@@ -1185,19 +1230,8 @@ export default function DeckReport({ data, live }) {
   );
 
   /* 18 · The content map (optimise vs create), 4 count-badged groups */
-  // Phase-4 rule: a term already OWNED by an existing page (optimise) must NEVER also appear as a
-  // gap to CREATE. Dedupe the create lists against the optimise keys by normalized cluster/keyword,
-  // so "cost of outsourcing payroll" can't sit in both columns.
-  const _ck = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  const _optimiseKeys = new Set([
-    ...(ca.pagesToOptimise || []).flatMap((p) => [_ck(p.keyword), _ck(p.page)]),
-  ].filter(Boolean));
-  // PREFER the crawl-filtered create sets (route.js pagesToBuild/blogsToBuild = only pages that do
-  // NOT already exist on the site — the true owned/unowned partition). Fall back to raw clusters
-  // minus the optimise keys only when the crawl-filtered set is absent (older cached reports).
-  const createPages = (Array.isArray(ca.pagesToBuild) && ca.pagesToBuild.length)
-    ? ca.pagesToBuild
-    : [...(ca.commercial_pages || []), ...(ca.geography_pages || [])].filter((p) => { const k = _ck(p.keyword_cluster || p.page_name); return k && !_optimiseKeys.has(k); });
+  // createPages / _optimiseKeys / _ck are defined ONCE in the §15 block above and shared here, so both
+  // slides count the same create set (item 3.8 / 1.5). Blogs stay local to this slide.
   const _optimiseBlogKeys = new Set((ca.blogsToOptimise || []).flatMap((p) => [_ck(p.keyword), _ck(p.page)]).filter(Boolean));
   const createBlogs = (Array.isArray(ca.blogsToBuild) && ca.blogsToBuild.length)
     ? ca.blogsToBuild
@@ -1323,17 +1357,22 @@ export default function DeckReport({ data, live }) {
   const prioKind = (p) => (/high|crit/i.test(p || "") ? "high" : /med/i.test(p || "") ? "med" : "low");
   // Reference action-board rows carry a "Days X to Y" timeframe chip, not the work-type
   // name. Map each action's tier/phase (or, failing that, its priority) to a day range.
+  // item 9 — the WINDOW must vary row-to-row like effort does, not sit at a constant "Days 1 to 30".
+  // Every technical issue funnels into the single Foundation tier, so combine the tier with the row's
+  // PRIORITY: a CRITICAL/HIGH foundation fix stays Days 1-30, a MEDIUM cleanup moves to 30-60, LOW to
+  // 60-90 — so an all-Foundation board still spreads across windows.
   const phaseDays = (phase, priority) => {
     const p = String(phase || "").toLowerCase();
+    const pr = String(priority || "").toLowerCase();
     if (/\bday/.test(p)) return String(phase);
     const m = p.match(/\b(30|60|90|180)\b/);
     if (m) return m[1] === "30" ? "Days 1 to 30" : m[1] === "60" ? "Days 30 to 60" : m[1] === "90" ? "Days 60 to 90" : "Days 90 to 180";
-    if (/found|technical|fix|load|crawl|speed|index|h1|meta|schema/.test(p)) return "Days 1 to 30";
+    const urgent = /quick|crit|high/.test(pr);
+    if (/found|technical|fix|load|crawl|speed|index|h1|meta|schema/.test(p)) return urgent ? "Days 1 to 30" : /med/.test(pr) ? "Days 30 to 60" : "Days 60 to 90";
     if (/capture|commercial|page|content|on.?page|keyword|build/.test(p)) return "Days 30 to 60";
     if (/author|local|geo|citation|review|gbp|map/.test(p)) return "Days 60 to 90";
     if (/compound|link|pr|scale|press|outreach|listicle/.test(p)) return "Days 90 to 180";
-    const pr = String(priority || "").toLowerCase();
-    return /high|crit/.test(pr) ? "Days 1 to 30" : /med/.test(pr) ? "Days 30 to 90" : "Days 90 to 180";
+    return urgent ? "Days 1 to 30" : /med/.test(pr) ? "Days 30 to 90" : "Days 90 to 180";
   };
   slides.push(
     <Slide key="actions" variant="cream" n="19" kicker="Who Does What" title="Every move, sorted by the work it takes"
@@ -1370,8 +1409,13 @@ export default function DeckReport({ data, live }) {
   // Only scrub PATH-like slugs (slash at a word boundary — preceded by whitespace or start), so inline
   // slash phrases such as "on-page/off-page" or "A/B-testing" are left intact. An invented slug is
   // removed but its leading whitespace is preserved via the captured group.
+  // item 11 — validate SINGLE-word slugs too (the old `(?:-…)+` only checked hyphenated slugs, so
+  // invented single words like "/foo" slipped through). `*` makes the hyphen optional, so ANY
+  // word-boundary "/slug" not in the real (mapped + crawled) set is stripped as invented, while real
+  // crawl-derived paths (/branding, /blog, /seo-2) survive. The `(^|\s)` boundary still spares inline
+  // slashes like "on-page/off-page" or "A/B".
   const _scrubPlanSlugs = (t) => String(t || "")
-    .replace(/(^|\s)\/([a-z][a-z0-9]*(?:-[a-z0-9]+)+)/gi, (m, pre, slug) => (_realSlugs.has(slug.toLowerCase()) ? m : pre))
+    .replace(/(^|\s)\/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)/gi, (m, pre, slug) => (_realSlugs.has(slug.toLowerCase()) ? m : pre))
     .replace(/\s{2,}/g, " ").replace(/\s+([.,])/g, "$1").trim();
   slides.push(
     <Slide key="plan" n="20" kicker="The Plan" title="One job per phase. Move on when it's done." foot={foot("20 · THE 30/60/90/180 PLAN")}>

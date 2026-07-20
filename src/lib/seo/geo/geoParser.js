@@ -77,7 +77,8 @@ post posts vitals core experience voice keyword keywords backlink backlinks rank
 technical robots schema canonical redirect redirects title titles tag tags heading headings snippet snippets citation citations
 generative discovery presence visibility awareness reputation positioning outreach funnel pipeline dashboard report reports
 january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday
-india indian usa uk us united states america american europe european asia asian australia canada uae dubai singapore mumbai delhi gurgaon bangalore bengaluru chennai pune kolkata hyderabad noida
+india indian usa uk us united states america american europe european asia asian australia canada uae dubai singapore mumbai delhi gurgaon bangalore bengaluru chennai pune kolkata hyderabad noida ahmedabad jaipur surat lucknow
+startup startups founder founders entrepreneur entrepreneurs freelancer freelancers
 british dutch german french italian spanish portuguese russian chinese japanese korean canadian australian brazilian mexican swiss swedish norwegian danish irish scottish welsh
 specialization specializations deliverables deliverable expertise portfolio portfolios offerings offering capabilities capability methodology methodologies approach approaches process processes pricing packages package deliverable focused based driven oriented
 return returns investment investments cost costs price prices fee fees rate rates budget spend spending
