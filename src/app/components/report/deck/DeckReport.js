@@ -338,7 +338,10 @@ export default function DeckReport({ data, live }) {
 
   let _pg = 1;
   const pg = () => String(++_pg).padStart(2, "0");
-  const foot = (left) => ({ left, mid: domain, pg: pg() });
+  // S27 — carry the data-as-of stamp in EVERY page footer (not just the cover), so any single slide is
+  // self-dating. Kept compact (domain · date) so the centered footer never overflows.
+  const _asOf = d.generatedAt ? dateGB(d.generatedAt) : null;
+  const foot = (left) => ({ left, mid: _asOf ? `${domain} · ${_asOf}` : domain, pg: pg() });
 
   const traffic0 = mv(bm, "organic_traffic", "organicTraffic");
   const dr = mv(bm, "domain_rating", "domainRating");
@@ -749,7 +752,6 @@ export default function DeckReport({ data, live }) {
 
   /* 10 · How the GEO score works — placed BEFORE the 0% numbers (item 13) so the reader
      understands how the 0–100 score is calculated before seeing the share/mention/citation. */
-  const GEO_WEIGHTS = [["Share of voice vs competitors", 30], ["Citation rate · you as the source", 25], ["Mention rate · named at all", 20], ["Entity & topical association", 15], ["Schema & answer-readiness", 10]];
   slides.push(
     <Slide key="geo-method" variant="dark" n="10" kicker="How The GEO Score Works" title="Every GEO number, and where it comes from"
       sub="No figure is invented. Each is collected by running real prompts and measuring you against the same competitors, every month." foot={foot("10 · GEO METHODOLOGY")}>
@@ -768,27 +770,34 @@ export default function DeckReport({ data, live }) {
           {/* B1 / B2 — show each component's MEASURED value next to its weight, so the reader can see
               the inputs that produce the composite score (not just the weights). */}
           {(() => {
-            const _pc = (v) => (v == null ? "—" : `${Math.round(Number(v))}%`);
-            const _sig = Array.isArray(air.signals) ? air.signals : [];
-            const _rows = [
-              { label: "Share of voice vs competitors", w: 30, v: _pc(geo.overall?.sov) },
-              { label: "Citation rate · you as the source", w: 25, v: _pc(geo.overall?.citation_rate) },
-              { label: "Mention rate · named at all", w: 20, v: _pc(geo.overall?.mention_rate) },
-              { label: "Entity & topical association", w: 15, v: _pc(geo.overall?.topic_coverage ?? geo.score_breakdown?.signals?.topic_coverage ?? (geo.topic_dominance?.total_topics ? geo.topic_dominance.client_lead_share : null)) },
-              { label: "Schema & answer-readiness", w: 10, v: (_sig.length ? `${_sig.filter((s) => s.ok).length} of ${_sig.length} signals` : "measured") },
+            // B2/S12 — display the ACTUAL scoring function (model/constants.js GEO_SCORE_WEIGHTS: citation
+            // .30 / brand .20 / position .15 / intent .15 / consistency .10 / freshness .05 / topic .05),
+            // with each signal's REAL measured value from geo.overall.signals — the exact inputs
+            // weightedScore() sums. A signal with no data is EXCLUDED and its weight renormalizes across
+            // the rest, so the composite below reproduces from exactly these rows. Keep weights in sync.
+            const _pc = (v) => `${Math.round(Number(v))}%`;
+            const _s = geo.overall?.signals || geo.score_breakdown?.signals || {};
+            const _comp = [
+              { key: "citation_presence", label: "Citation rate · you cited as the source", w: 30, v: _s.citation_presence ?? geo.overall?.citation_rate },
+              { key: "brand_presence", label: "Mention rate · named at all", w: 20, v: _s.brand_presence ?? geo.overall?.mention_rate },
+              { key: "citation_position", label: "Citation position · how high you rank", w: 15, v: _s.citation_position },
+              { key: "intent_match", label: "Intent match · right answer for the query", w: 15, v: _s.intent_match ?? geo.overall?.mention_rate },
+              { key: "cross_engine_consistency", label: "Cross-engine consistency", w: 10, v: _s.cross_engine_consistency },
+              { key: "freshness", label: "Source freshness", w: 5, v: _s.freshness },
+              { key: "topic_coverage", label: "Topic & entity coverage", w: 5, v: _s.topic_coverage ?? geo.overall?.topic_coverage ?? (geo.topic_dominance?.total_topics ? geo.topic_dominance.client_lead_share : null) },
             ];
-            return _rows.map((r) => (
-              <div key={r.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,.09)" }}>
-                <span style={{ fontSize: 11.5, color: "#d6d0c6" }}>{r.label}</span>
+            return _comp.map((r) => { const _has = r.v != null; return (
+              <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "4.5px 0", borderBottom: "1px solid rgba(255,255,255,.09)", opacity: _has ? 1 : 0.55 }}>
+                <span style={{ fontSize: 11, color: "#d6d0c6" }}>{r.label}</span>
                 <span style={{ whiteSpace: "nowrap", fontFamily: "var(--mono)", fontSize: 9.5 }}>
-                  <span style={{ color: C.rust, fontWeight: 700 }}>{r.v}</span>
-                  <span style={{ color: C.faint, marginLeft: 8 }}>· weight {r.w}%</span>
+                  <span style={{ color: C.rust, fontWeight: 700 }}>{_has ? _pc(r.v) : "no data"}</span>
+                  <span style={{ color: C.faint, marginLeft: 8 }}>· weight {r.w}%{_has ? "" : " · excluded"}</span>
                 </span>
               </div>
-            ));
-          })()}
+            ); })}
+          )()}
           <Verdict compact num={geo.overall?.geo_score ?? "N/A"}>
-            Your GEO score today. Share, mention and citation read 0%; the composite is {geo.overall?.geo_score ?? "low"} because the readiness component also credits <b>answer structure, topic coverage and source freshness</b> — measured, but not yet earning you visibility. <b>That is the gap this plan closes.</b> {isIllus ? IllusTag : null}
+            The composite is the <b>weighted average of the measured rows above</b> (a row with no data is excluded, its weight shared across the rest). Today the readiness-side signals carry it while share, mention and citation read 0%, so it reflects <b>readiness, not yet visibility</b> — the gap this plan closes. {isIllus ? IllusTag : null}
           </Verdict>
         </div>
       </Split>
@@ -881,7 +890,7 @@ export default function DeckReport({ data, live }) {
   const mcNote = aioMeasured ? "Measured in Google AI Overviews. Per-platform detail follows the full scan." : null;
   slides.push(
     <Slide key="geo-mc" n="12" kicker="GEO · Mentions & Citations" title="Mention rate and citation rate, by platform"
-      sub={<>Being mentioned is good. Being cited as the source is what builds trust and clicks. You are weak on both, and almost invisible as a source. {aioMeasured ? MeasTag : IllusTag} {ProvTag}</>} foot={foot("12 · GEO · MENTIONS & CITATIONS")}>
+      sub={<>Being mentioned is good. Being cited as the source is what builds trust and clicks. You are weak on both, and almost invisible as a source.<span style={{ display: "block", marginTop: 5 }}>{aioMeasured ? MeasTag : IllusTag} {ProvTag}</span></>} foot={foot("12 · GEO · MENTIONS & CITATIONS")}>
       <Split>
         {metricCol("Mention Rate", "how often you appear at all", geo.overall?.mention_rate, mcLeader?.mention_rate, mcLeader?.brand, aioMeasured ? [] : engineRows("mention_rate"), mcNote)}
         {metricCol("Citation Rate", "how often you are the source", geo.overall?.citation_rate, mcLeader?.citation_rate, mcLeader?.brand, aioMeasured ? [] : engineRows("citation_rate"), mcNote)}
@@ -1407,6 +1416,9 @@ export default function DeckReport({ data, live }) {
     : rm.flatMap((p) => (p.actions || []).map((a) => (typeof a === "string" ? { title: a, desc: "", phase: p.duration } : { ...a, phase: p.timeframe ?? p.duration })))
   ).slice(0, 14);  // item 10 — every diagnosed issue must get a matching fix here (was 6, which
                    // dropped the lower-priority tech fixes like the duplicate-head-tag issue).
+  // Slide-23 fix — the fixed-height board clips past ~7 rows, so cap the DISPLAY and carry the rest to
+  // the day-by-day plan slide with a "showing X of Y" line (the data keeps all 14 for that slide).
+  const _actionCap = 7;
   const prioKind = (p) => (/high|crit/i.test(p || "") ? "high" : /med/i.test(p || "") ? "med" : "low");
   // Reference action-board rows carry a "Days X to Y" timeframe chip, not the work-type
   // name. Map each action's tier/phase (or, failing that, its priority) to a day range.
@@ -1434,10 +1446,10 @@ export default function DeckReport({ data, live }) {
         { color: "#C95322", label: "Content" }, { color: "#3C7D5A", label: "On-Page" }, { color: "#3B6FB2", label: "Lead-Gen" },
         { color: "#8A4FB2", label: "Listicle Outreach" }, { color: "#A07414", label: "PR & Authority" }, { color: "#1A8A8A", label: "Citations" },
       ]} />
-      {actionRows.length ? actionRows.map((a, i) => (
+      {actionRows.length ? <>{actionRows.slice(0, _actionCap).map((a, i) => (
         <ActionRow key={i} accentClass={accentFor(a.channel || a.title)} title={clamp(a.title, 72)} desc={clamp(a.desc || a.description || "", 88)}
           meta={<>{a.priority ? <Tag kind={prioKind(a.priority)}>{titleCase(a.priority)}</Tag> : null}<span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: C.muted, margin: "0 8px", whiteSpace: "nowrap" }}>{ownerFor(a.channel || a.title)}</span>{a.effort ? <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: C.rust, marginRight: 8, whiteSpace: "nowrap" }}>{String(a.effort).replace(/^≈\s*/, "~")}</span> : null}<Pill>{phaseDays(a.phase, a.priority)}</Pill></>} />
-      )) : <GapPanel title="Action board pending">Recommendations populate from the strategy build.</GapPanel>}
+      ))}{actionRows.length > _actionCap ? <p style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 8 }}>Showing the top {_actionCap} of {actionRows.length} moves by priority — the full sequence is scheduled on the day-by-day plan.</p> : null}</> : <GapPanel title="Action board pending">Recommendations populate from the strategy build.</GapPanel>}
     </Slide>
   );
 
@@ -1447,7 +1459,7 @@ export default function DeckReport({ data, live }) {
   const shTarget = Math.min(92, (ksRows.find((r) => /health/i.test(r.key || r.metric || ""))?.target_12_months) ?? (Number(health) >= 88 ? 92 : 90));
   const phaseDefs = [
     { badge: "30", duration: "First 30 days", title: "Foundation", mission: "Make the site visible. Pure unblocking, no strategy yet.", goal: { label: "Target", text: `Site health ${dash(health)} → ${shTarget}` } },
-    { badge: "60", duration: "Days 31 to 60", title: "Capture", mission: "Take the easy commercial wins rivals leave undefended.", goal: { label: "Target", text: "First page ranking, ~25 reviews" } },
+    { badge: "60", duration: "Days 31 to 60", title: "Capture", mission: "Take the easy commercial wins rivals leave undefended.", goal: { label: "Do / watch", text: "Do: earn ~25 reviews · Watch: first-page ranking" } },
     { badge: "90", duration: "Days 61 to 90", title: "Authority", mission: "Own the local ground and earn the first AI citations.", goal: { label: "Target", text: "In the local map pack" } },
     { badge: "180", duration: "Days 91 to 180", title: "Compound", mission: "Turn early wins into a widening lead with content and press.", goal: { label: "Target", text: proj.dr12 != null ? `DR ${proj.dr12}, traffic compounding` : "Compounding" } },
   ];
