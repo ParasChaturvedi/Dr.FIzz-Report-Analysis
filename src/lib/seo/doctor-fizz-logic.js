@@ -3618,8 +3618,14 @@ function buildV2Additions(input) {
     trafficKpi.estimation_note = "Projected from real keyword volume × achievable-position CTR (same model as the opportunity summary).";
   }
 
+  // S3/S10 — the headline "market size" must be the DEDUPED, ADDRESSABLE demand: the sum of the MAPPED
+  // pages the plan actually builds/optimises (each page is one deduped keyword cluster). This reconciles
+  // slide 3 ("searches up for grabs"), slide 10 ("monthly searches in play"), and the story prose to ONE
+  // number, instead of the larger all-accepted-keyword sum that read as inflated / double-counting pools.
+  // Falls back to the deduped accepted total only if no content pages were built.
+  const _mappedVol = [...(content_architecture.commercial_pages || []), ...(content_architecture.geography_pages || content_architecture.city_pages || []), ...(content_architecture.blog_and_guides || [])].reduce((s, p) => s + (Number(p.primary_volume) || 0), 0);
   const opportunity_summary = {
-    total_monthly_search_volume:        sumVol(_dedupAccepted),
+    total_monthly_search_volume:        _mappedVol || sumVol(_dedupAccepted),
     commercial_keyword_count:           _dedupCommercial.length,
     commercial_keyword_monthly_volume:  sumVol(_dedupCommercial),
     city_pages_needed:                  cityPages.length,
