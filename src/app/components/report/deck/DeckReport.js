@@ -1029,8 +1029,17 @@ export default function DeckReport({ data, live }) {
       if (sc > bs) { bs = sc; const s = String(pg.url_slug || pg.url || "").trim(); if (s) best = { url: /^https?:/.test(s) ? s : ("/" + s.replace(/^\/+/, "")), kind: "build" }; }
     }
     // Never suggest the bare homepage — "→ cite your page: /" is a non-answer for a specific buyer
-    // question. Require a real path segment; otherwise show "—" (honest "no mapped page yet").
-    if (best) { const path = String(best.url).replace(/[?#].*$/, "").replace(/^https?:\/\/[^/]+/i, "").replace(/\/+$/, ""); if (!path) return null; }
+    // question. A homepage match is treated as NO match and falls through to a create proposal.
+    if (best) { const path = String(best.url).replace(/[?#].*$/, "").replace(/^https?:\/\/[^/]+/i, "").replace(/\/+$/, ""); if (!path) best = null; }
+    // No owned or planned page won this prompt → route it to the CREATE list with a proposed slug built
+    // from the prompt's content words, never the homepage (slides 16/17 fix). Labelled "build", so it
+    // reads as a page to create and never claims an existing URL.
+    if (!best) {
+      const _stop = new Set("what which whats how why when where does do is are was the a an to for from in on of and or vs versus with your you our best top should can will need needs much many any into out look choose choosing choosing pick reach reaching find finding get make use using help helps include includes generate generating build good better right".split(/\s+/));
+      const _w = String(p.prompt || p.prompt_text || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 2 && !_stop.has(w));
+      const _slug = _w.slice(0, 4).join("-");
+      return _slug ? { url: "/" + _slug, kind: "create" } : null;
+    }
     return best;
   };
   const _directSrcCell = (p) => {
