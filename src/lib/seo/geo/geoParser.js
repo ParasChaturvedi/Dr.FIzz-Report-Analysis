@@ -91,8 +91,14 @@ const _GEN_ACRONYMS = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux u
 // "Ad Spend", "Apple Continue", "Sign In Answer" — a real word glued to a metric/UI word — are dropped,
 // while a clean agency name like "Social Beat" or "Schbang" survives). A denylist of brand names is
 // whack-a-mole against fresh AI hallucinations; this catches them by CLASS.
-const _ARTEFACT = new Set("roas roi ctr cpc cpm cpa aov ltv cac spend spending impressions terms continue submit cancel confirm signin signup logout settings regenerate rewrite upvote downvote".split(/\s+/));
-const _isArtefactName = (words) => words.some((w) => { const l = String(w).toLowerCase(); return _ARTEFACT.has(l) || _ARTEFACT.has(l.replace(/s$/, "")); });
+// Includes the AI-ENGINE names themselves (copilot/chatgpt/gemini/…) + their UI chrome (message, smart,
+// send) — when a new engine (esp. Copilot) is scanned, its own interface text leaks into the parse as
+// bogus "brands" ("Copilot Today", "India Message Copilot", "Smart I'm"). An engine name is never an
+// agency competitor, so drop any name containing one.
+const _ARTEFACT = new Set("roas roi ctr cpc cpm cpa aov ltv cac spend spending impressions terms continue submit cancel confirm signin signup logout settings regenerate rewrite upvote downvote message smart send copilot chatgpt gemini claude perplexity aioverviews bing".split(/\s+/));
+// split hyphens too so "Full-Service" is seen as two generic words, and flag verb-contraction fragments ("I'm", "you're").
+const _artWords = (words) => words.flatMap((w) => String(w).split(/[-–—]/)).filter(Boolean);
+const _isArtefactName = (words) => _artWords(words).some((w) => { const l = String(w).toLowerCase(); return _ARTEFACT.has(l) || _ARTEFACT.has(l.replace(/s$/, "")); }) || words.some((w) => /['’](m|re|ve|ll|d)$/i.test(String(w)));
 
 // Common English words (gerunds, verbs, plural nouns, adjectives, adverbs) that appear Title-cased at a
 // sentence start or as a list lead ("Choosing the right…", "Focus on…", "Experts recommend…") but are NOT
@@ -140,8 +146,8 @@ function discoverBrands(text, { known = new Set(), location = "" } = {}) {
     const name = words.join(" ");
     const low = name.toLowerCase();
     if (name.length < 3 || known.has(low) || loc.has(low)) continue;
-    // DROP when every word is generic/opener/location (e.g. "Email Marketing", "Digital Media").
-    if (words.every((w) => _GENERIC.has(w.toLowerCase()) || loc.has(w.toLowerCase()))) continue;
+    // DROP when every word (hyphens split) is generic/opener/location ("Email Marketing", "Full-Service").
+    if (_artWords(words).every((w) => _GENERIC.has(w.toLowerCase()) || loc.has(w.toLowerCase()))) continue;
     if (words.some((w) => /^opens$/i.test(w))) continue;   // scraped UI-chrome ("… Opens in a new tab") — plural only, keeps "Open Influence"
     if (_isArtefactName(words)) continue;                  // any metric/UI artefact word → not a brand (Ad Spend, Mapbox Terms, ROAS…)
     // Descriptive compounds are attributes of a brand, not a brand ("India-based", "ROI-focused",
@@ -187,8 +193,8 @@ export function isTopicNoise(name) {
   const words = String(name || "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) return true;
   if (words.some((w) => /^opens$/i.test(w))) return true;                 // "… Opens in a new tab" (plural only, keeps "Open Influence")
-  if (_isArtefactName(words)) return true;                                 // any metric/UI artefact word → not a brand (Mapbox Terms, Ad Spend, ROAS, Apple Continue)
-  if (words.every((w) => { const l = w.toLowerCase(); return _GENERIC.has(l) || _STOPWORDS.has(l); })) return true; // every word generic/stopword ("With", "In") → not a brand
+  if (_isArtefactName(words)) return true;                                 // any metric/UI artefact/engine word → not a brand (Mapbox Terms, Ad Spend, ROAS, Copilot Today, Smart I'm)
+  if (_artWords(words).every((w) => { const l = w.toLowerCase(); return _GENERIC.has(l) || _STOPWORDS.has(l); })) return true; // every word (hyphens split) generic/stopword ("With", "In", "Full-Service") → not a brand
   const _a = words[0] ? words[0].toLowerCase() : "";                       // KPIs, SMEs, ROI, ROAS — check raw AND plural-stripped (fixes ROAS→"roa" miss)
   if (words.length === 1 && (_GEN_ACRONYMS.has(_a) || _GEN_ACRONYMS.has(_a.replace(/s$/, "")))) return true;
   return false;

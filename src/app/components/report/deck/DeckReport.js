@@ -30,7 +30,7 @@ const _DECK_NOISE_ACR = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux
 // is noise if ANY word is an artefact, so a real word glued to a metric/UI word (Mapbox Terms, Ad
 // Spend, Apple Continue, Sign In Answer) is dropped while a clean agency name (Social Beat, Schbang)
 // survives. Kept in sync with geoParser _ARTEFACT so the deck is never stricter than the server.
-const _DECK_ARTEFACT = new Set("roas roi ctr cpc cpm cpa aov ltv cac spend spending impressions terms continue submit cancel confirm signin signup logout settings regenerate rewrite upvote downvote".split(/\s+/));
+const _DECK_ARTEFACT = new Set("roas roi ctr cpc cpm cpa aov ltv cac spend spending impressions terms continue submit cancel confirm signin signup logout settings regenerate rewrite upvote downvote message smart send copilot chatgpt gemini claude perplexity aioverviews bing".split(/\s+/));
 // STOPWORDS — prepositions / articles / conjunctions / pronouns that leak out of answer prose as a
 // bogus one-word "brand" (e.g. AI writes "…partner with BigCommerce" and the parser emits "With").
 // A name whose every word is a stopword (or generic topic word) can never be a real brand. Real
@@ -58,8 +58,9 @@ const _DECK_SOURCE = new Set([
   "hacker news","hackernews","hackernoon","gartner","upwork","fiverr","justdial","indiamart","tradeindia","sulekha","techtarget","crunchbase",
 ].map((s) => s.toLowerCase()));
 const _deckTopicNoise = (name) => {
-  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  const words = String(name || "").trim().split(/[\s\-–—]+/).filter(Boolean);   // split hyphens too — "Full-Service" is two generic words, not a brand
   if (!words.length) return true;
+  if (words.some((w) => /['’](m|re|ve|ll|d)$/i.test(w))) return true;           // contraction fragment ("I'm", "you're", "we've") — never a brand
   const _n = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   if (_DECK_SOURCE.has(_n) || _DECK_SOURCE.has(_n.replace(/\s+/g, ""))) return true;  // cited source/publisher/directory → not a mention
   if (words.some((w) => /^opens$/i.test(w))) return true;                          // "… Opens in a new tab" (plural only, keeps "Open Influence")
@@ -760,7 +761,7 @@ export default function DeckReport({ data, live }) {
           <h3 className="mini">The collection method</h3>
           <Checks items={[
             { state: "do", text: <><b>Build:</b> {promptsRun || "25 to 100"} prompts reverse-engineered from your site, competitors and proprietary intent tests.</> },
-            { state: "do", text: <><b>Run:</b> every prompt across Google AI Overviews, Claude, Gemini, Perplexity and ChatGPT.</> },
+            { state: "do", text: <><b>Run:</b> every prompt across {(() => { const ns = (geo.by_engine || []).map((e) => engName(e.engine)).filter((n) => n && n !== "N/A"); const list = ns.length ? [...new Set(ns)] : CANON_ENGINES.map((e) => e.name); return list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : (list[0] || "the leading AI engines"); })()}.</> },
             { state: "do", text: <><b>Score:</b> share of voice, mention rate and citation rate, you vs each competitor, per engine.</> },
             { state: "do", text: <><b>Repeat:</b> the same set re-runs monthly, so every movement is comparable over time.</> },
           ]} />
