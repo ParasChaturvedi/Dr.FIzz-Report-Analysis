@@ -834,7 +834,7 @@ export default function DeckReport({ data, live }) {
                 <CBar key={i} name={b.brand + (b.is_client ? " (you)" : "")} pct={b.pct} you={b.is_client} value={`${Math.round(b.pct)}%`} />))
             : (sov.filter((b) => !b.is_client).length
               ? sovRows.map((b, i) => (<CBar key={i} name={b.brand + (b.is_client ? " (you)" : (b.discovered ? " (AI-named)" : ""))} pct={b.avg} you={b.is_client} value={b.mentions > 0 ? `${Math.round(b.avg)}% · ${b.mentions}` : `${Math.round(b.avg)}%`} />))
-              : citedDomains.slice(0, 6).map((d, i) => { const mx = citedDomains[0]?.count || 1; return <CBar key={i} name={String(d.domain).replace(/^www\./, "")} pct={Math.round((d.count / mx) * 100)} value={`${d.count}×`} />; }))}
+              : citedDomains.slice(0, 6).map((d, i) => { const mx = citedDomains[0]?.count || 1; return <CBar key={i} name={String(d.domain).replace(/^www\./, "")} pct={Math.round((d.count / mx) * 100)} value={`${d.count}×`} noPctLabel />; }))}
         </div>
         <div>
           {aioMeasured ? (
@@ -1337,25 +1337,33 @@ export default function DeckReport({ data, live }) {
   const maxRev = Math.max(reviews || 0, ...reviewCompetitors.map((c) => c.review_count || 0), 1);
   const _reviewLeader = reviewCompetitors[0];
   const _reviewGap = _reviewLeader ? Math.max(0, (Number(_reviewLeader.review_count) || 0) - (Number(reviews) || 0)) : null;
+  // S21 — the dial must REPRODUCE from the visible checklist (was a provider "completeness" score like 77
+  // sitting next to a 6-of-8 tick list = 75%). Drive the dial off the same checklist so a client can count
+  // the ticks and get the number. Falls back to the provider score only when there are no field rows.
+  const _gbpFields = (gbp.field_analysis || gmb.completeness?.breakdown || []).slice(0, 8);
+  const _gbpPass = _gbpFields.filter((f) => !(f.client_status === "missing" || f.pass === false)).length;
+  const _gbpDial = _gbpFields.length ? Math.round((_gbpPass / _gbpFields.length) * 100) : (gbpScore ?? 0);
   slides.push(
     <Slide key="gbp" n="17" kicker="Google Business Profile" title="Your fastest path into local results"
       sub={<>{ds.gbp_sub || "The map pack drives most local enquiries. Your reviews already beat rivals; the profile just needs completing."} <Pillar kind="local" label="Local SEO" /></>} foot={foot("17 · GOOGLE BUSINESS PROFILE")}>
       <div className="gbp-split">
-        <Ring value={gbpScore ?? 0} />
+        <Ring value={_gbpDial} />
         <div className="gbp-checks">
-          {(gbp.field_analysis || gmb.completeness?.breakdown || []).slice(0, 8).map((f, i) => (
+          {_gbpFields.map((f, i) => (
             <div key={i} className="gc"><span className="ic" style={{ background: (f.client_status === "missing" || f.pass === false) ? C.rust : C.good }}>{(f.client_status === "missing" || f.pass === false) ? "✕" : "✓"}</span>{f.label}</div>
           ))}
+          {_gbpFields.length ? <div style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)", marginTop: 6 }}>{_gbpPass} of {_gbpFields.length} complete = {_gbpDial}%</div> : null}
         </div>
       </div>
       <div style={{ marginTop: 22 }}>
         {gbp.has_competitor_data && reviewCompetitors.length > 0 ? (
           <>
-            <CBar name={`${name} (you)`} pct={(reviews / maxRev) * 100} you value={dash(reviews)} />
-            {reviewCompetitors.map((c, i) => <CBar key={i} name={c.name} pct={((c.review_count || 0) / maxRev) * 100} value={dash(c.review_count)} />)}
+            <div style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)", marginBottom: 6 }}>Review counts, bars scaled to the leader</div>
+            <CBar name={`${name} (you)`} pct={(reviews / maxRev) * 100} you value={dash(reviews)} noPctLabel />
+            {reviewCompetitors.map((c, i) => <CBar key={i} name={c.name} pct={((c.review_count || 0) / maxRev) * 100} value={dash(c.review_count)} noPctLabel />)}
           </>
         ) : null}
-        <Callout mark="→" className={gbp.has_competitor_data && reviewCompetitors.length > 0 ? "mt2" : ""}><b>Goal:</b> lift completeness from {dash(gbpScore)} → 95, and {_reviewGap ? `close the review gap (${_reviewGap} behind ${_reviewLeader.name || "the local leader"})` : `grow reviews from ${dash(reviews)} → 100+`} in 6 months. Set hours, post weekly, reply to every review, and WhatsApp a review link after each job.</Callout>
+        <Callout mark="→" className={gbp.has_competitor_data && reviewCompetitors.length > 0 ? "mt2" : ""}><b>Goal:</b> lift completeness from {_gbpDial}% → 95%, and {_reviewGap ? `close the review gap (${_reviewGap} behind ${_reviewLeader.name || "the local leader"})` : `grow reviews from ${dash(reviews)} → 100+`} in 6 months. Set hours, post weekly, reply to every review, and WhatsApp a review link after each job.</Callout>
       </div>
     </Slide>
   );
@@ -1566,7 +1574,7 @@ export default function DeckReport({ data, live }) {
         {priorities.map((p, i) => (
           <Card key={i} dark accent title={<><span style={{ color: C.rust, fontFamily: "var(--display)", fontWeight: 700, marginRight: 8 }}>{String(i + 1).padStart(2, "0")}</span>{p.title}</>}>
             <p className="small">{clamp(p.description, 110)}</p>
-            {p.expected_result && <p className="small" style={{ color: C.rustSoft, fontWeight: 600, marginTop: 8 }}>Result: {clamp(p.expected_result, 60)}</p>}
+            {p.expected_result && <p className="small" style={{ color: C.rustSoft, fontWeight: 600, marginTop: 8 }}>Modelled result: {clamp(p.expected_result, 60)}</p>}
           </Card>
         ))}
       </Row>
