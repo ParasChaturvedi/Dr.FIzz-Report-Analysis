@@ -678,7 +678,7 @@ export default function DeckReport({ data, live }) {
       <p className="small" style={{ margin: "0 0 12px" }}>{desc}</p>
       {(items || []).slice(0, limit).map((k, i) => (
         <div key={i}>
-          <KV k={k.keyword_cluster || k.page_name || k.proposed_title || k.keyword} v={Number(k.primary_volume) > 0 ? fmtNum(k.primary_volume) : "—"} />
+          <KV k={k.keyword_cluster || k.page_name || k.proposed_title || k.keyword} v={Number(k.primary_volume) > 0 ? fmtNum(k.primary_volume) : "n/a"} />
           {/* RC5/B4 — near-identical variants share ONE demand pool; list them so the reader sees the
               single volume covers the whole cluster (not summed per variant). */}
           {Array.isArray(k.variants) && k.variants.length
@@ -1363,6 +1363,12 @@ export default function DeckReport({ data, live }) {
         <div>
           <h3 className="mini">Directories to claim or fix</h3>
           <DirGrid>{citeDirs.map((x, i) => <DirChip key={i} name={x.name} state={x.state} />)}</DirGrid>
+          {/* Slide-22 fix — a legend so the grid's marks aren't ambiguous (claimed vs unclaimed vs unknown). */}
+          <div style={{ display: "flex", gap: 14, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".04em", textTransform: "uppercase", color: C.muted, flexWrap: "wrap" }}>
+            <span><b style={{ color: "#3C7D5A" }}>●</b> claimed &amp; consistent</span>
+            <span><b style={{ color: C.rust }}>●</b> unclaimed</span>
+            <span><b style={{ color: C.faint }}>●</b> not yet verified</span>
+          </div>
           {/* RC1 — when referring domains were not returned by the provider, don't render a
               "N/A now → N/A target" card. Show an honest one-line note instead. */}
           {rd != null ? (
