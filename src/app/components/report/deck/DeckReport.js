@@ -31,6 +31,11 @@ const _DECK_NOISE_ACR = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux
 // Spend, Apple Continue, Sign In Answer) is dropped while a clean agency name (Social Beat, Schbang)
 // survives. Kept in sync with geoParser _ARTEFACT so the deck is never stricter than the server.
 const _DECK_ARTEFACT = new Set("roas roi ctr cpc cpm cpa aov ltv cac spend spending impressions terms continue submit cancel confirm signin signup logout settings regenerate rewrite upvote downvote".split(/\s+/));
+// STOPWORDS — prepositions / articles / conjunctions / pronouns that leak out of answer prose as a
+// bogus one-word "brand" (e.g. AI writes "…partner with BigCommerce" and the parser emits "With").
+// A name whose every word is a stopword (or generic topic word) can never be a real brand. Real
+// agency names (Schbang, Webchutney, Flipkart, EchoVME) contain none of these, so this is safe.
+const _DECK_STOP = new Set("a an the and or of to in on at by for with from into onto over under as is are was were be been being it its this that these those we our us you your they them their he she his her my me up out no not yes via per vs versus about above below near then than but so if while when where which who whom whose what why how also just only more less most least very".split(/\s+/));
 const _DECK_NOISE_GEN = new Set(`technical core web vitals google business profile digital marketing content social media strategy strategies analytics conversion optimization optimisation branding design designs development seo sem services service agency agencies company companies page pages listing listings profile profiles map maps search engine engines score scores keyword keywords overview overviews ranking rankings backlink backlinks schema robots sitemap computer computers space spaces artifact artifacts system systems solution solutions tool tools data cloud technology technologies technical software online platform platforms network networks compute computing generative experience experiences result results insight insights metric metrics report reports dashboard
 model models version versions customize customise connectors connector skills skill sources source ask asked canvas prompt prompts thread threads assistant assistants question questions answer answers example examples reason reasons factor factors option options feature features benefit benefits use uses case cases level levels item items element elements aspect aspects part parts area areas field fields topic topics subject subjects step steps way ways tip tips point points thing things kind kinds type types
 compare choose select find learn discover manage improve grow increase boost provide deliver offer help support explore ensure evaluate consider assess review identify
@@ -59,7 +64,7 @@ const _deckTopicNoise = (name) => {
   if (_DECK_SOURCE.has(_n) || _DECK_SOURCE.has(_n.replace(/\s+/g, ""))) return true;  // cited source/publisher/directory → not a mention
   if (words.some((w) => /^opens$/i.test(w))) return true;                          // "… Opens in a new tab" (plural only, keeps "Open Influence")
   if (words.some((w) => { const l = w.toLowerCase(); return _DECK_ARTEFACT.has(l) || _DECK_ARTEFACT.has(l.replace(/s$/, "")); })) return true; // any metric/UI artefact word → not a brand
-  if (words.every((w) => _DECK_NOISE_GEN.has(w.toLowerCase()))) return true;        // every word generic → topic
+  if (words.every((w) => { const l = w.toLowerCase(); return _DECK_NOISE_GEN.has(l) || _DECK_STOP.has(l); })) return true; // every word generic/stopword ("With", "In", "For B2B") → not a brand
   const _a = words[0] ? words[0].toLowerCase() : "";                                // KPIs, SMEs, ROAS — check raw AND plural-stripped
   if (words.length === 1 && (_DECK_NOISE_ACR.has(_a) || _DECK_NOISE_ACR.has(_a.replace(/s$/, "")))) return true;
   return false;
@@ -1005,11 +1010,37 @@ export default function DeckReport({ data, live }) {
   // B18 — cap domains per split cell (default 3 on the citation slides) so 13B/13C stay short enough
   // that the "Showing X of Y" count line + triad don't clip off the fixed-height slide.
   const _srcList = (list, cap = 5) => <span>{list.slice(0, cap).map((s, i) => <span key={i} style={{ color: _srcTypeColor(s.type) }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > cap ? <span style={{ color: "var(--muted)" }}> +{list.length - cap} more</span> : null}</span>;
-  const _directSrcCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "owned" || s.type === "competitor"); return list.length ? _srcList(list, 3) : <span style={{ color: "var(--muted)" }}>—</span>; };
+  // §5.4 — the fix-layer signal (which of the client's pages should win this prompt) lives IN the
+  // DIRECT SOURCES column: when the client is not itself a cited direct source (that cell is otherwise
+  // "—") we show the page to cite/build, so it adds NO row height (a sub-line was clipping the count
+  // line + triad off the fixed-height citation slides). Heuristic token-overlap vs the crawled/mapped
+  // inventory; only a real match is shown, never an invented URL.
+  const _kwToks = (s) => new Set(String(s || "").toLowerCase().match(/[a-z]{4,}/g) || []);
+  const _suggestClientUrl = (p) => {
+    const pt = _kwToks(p.prompt || p.prompt_text); if (pt.size < 2) return null;
+    const score = (s) => { let n = 0; for (const w of _kwToks(s)) if (pt.has(w)) n++; return n; };
+    let best = null, bs = 1;
+    for (const pg of (ca.pagesToOptimise || [])) { const sc = score(pg.keyword || pg.page || pg.page_name); const u = pg.matched_url || pg.url; if (sc > bs && u) { bs = sc; best = { url: u, kind: "have" }; } }
+    for (const pg of [...(ca.commercial_pages || []), ...(ca.geography_pages || ca.city_pages || []), ...(ca.blog_and_guides || [])]) {
+      if (pg.action === "optimise-existing") continue;
+      const sc = score(pg.keyword_cluster || pg.page_name || pg.keyword || pg.page);
+      if (sc > bs) { bs = sc; const s = String(pg.url_slug || pg.url || "").trim(); if (s) best = { url: /^https?:/.test(s) ? s : ("/" + s.replace(/^\/+/, "")), kind: "build" }; }
+    }
+    // Never suggest the bare homepage — "→ cite your page: /" is a non-answer for a specific buyer
+    // question. Require a real path segment; otherwise show "—" (honest "no mapped page yet").
+    if (best) { const path = String(best.url).replace(/[?#].*$/, "").replace(/^https?:\/\/[^/]+/i, "").replace(/\/+$/, ""); if (!path) return null; }
+    return best;
+  };
+  const _directSrcCell = (p) => {
+    const list = _srcsTypedOf(p).filter((s) => s.type === "owned" || s.type === "competitor");
+    if (list.length) return _srcList(list, 3);
+    const sug = _suggestClientUrl(p);
+    return sug ? <span style={{ color: "#3C7D5A", fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".02em" }}>&rarr; {sug.kind === "have" ? "cite" : "build"} {clamp(sug.url, 24)}</span> : <span style={{ color: "var(--muted)" }}>—</span>;
+  };
   const _thirdPartySrcCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "third_party" || s.type === "unknown" || s.type === "social"); return list.length ? _srcList(list, 3) : (_answeredRow(p) ? <span style={{ color: "var(--muted)" }}>—</span> : "—"); };
-  const _srcSplitLegend = <div style={{ display: "flex", gap: 16, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)", flexWrap: "wrap" }}>
-    <span><b style={{ color: C.ink }}>Direct sources</b> = the brand's own site (<span style={{ color: "#3C7D5A" }}>●</span> yours · <span style={{ color: C.rust }}>●</span> a competitor's)</span>
-    <span><b style={{ color: C.ink }}>Third-party aggregators</b> = directories &amp; publishers (<span style={{ color: "#B07A2E" }}>●</span> social / directory = earn a listing, not a blog)</span>
+  const _srcSplitLegend = <div style={{ display: "flex", gap: 18, marginTop: 6, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden" }}>
+    <span><b style={{ color: C.ink }}>Direct sources</b> = own site (<span style={{ color: "#3C7D5A" }}>●</span> yours · <span style={{ color: C.rust }}>●</span> rival)</span>
+    <span><b style={{ color: C.ink }}>Third-party</b> = directories &amp; publishers (<span style={{ color: "#B07A2E" }}>●</span> social = earn a listing, not a blog)</span>
   </div>;
   // B20 — name the third-party sources AI ACTUALLY cited in this scan, not a generic hardcoded
   // list (Clutch/DesignRush/G2/Reddit). Falls back to unnamed "directories and round-ups" if none.
@@ -1033,47 +1064,37 @@ export default function DeckReport({ data, live }) {
     const GROUPS = { mentions: [], commercial: [], informational: [] };
     for (const p of geoPool) GROUPS[_campaignOf(p)].push(p);
     const _promptTag = isIllus ? IllusTag : <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".06em", textTransform: "uppercase", color: "#3C7D5A", background: "rgba(60,125,90,.14)", padding: "2px 8px", borderRadius: 5, marginLeft: 6, whiteSpace: "nowrap" }}>Measured · live AI engines</span>;
-    // §5.4 — the fix-layer signal a competitor can't copy: which of YOUR pages should answer this
-    // buyer prompt. Heuristic token-overlap against the crawled/mapped inventory already in the deck;
-    // shown only on a real match (>=2 shared meaningful words), else nothing — never an invented URL.
-    const _kwToks = (s) => new Set(String(s || "").toLowerCase().match(/[a-z]{4,}/g) || []);
-    const _suggestClientUrl = (p) => {
-      const pt = _kwToks(p.prompt || p.prompt_text); if (pt.size < 2) return null;
-      const score = (s) => { let n = 0; for (const w of _kwToks(s)) if (pt.has(w)) n++; return n; };
-      let best = null, bs = 1;
-      for (const pg of (ca.pagesToOptimise || [])) { const sc = score(pg.keyword || pg.page || pg.page_name); const u = pg.matched_url || pg.url; if (sc > bs && u) { bs = sc; best = { url: u, kind: "have" }; } }
-      for (const pg of [...(ca.commercial_pages || []), ...(ca.geography_pages || ca.city_pages || []), ...(ca.blog_and_guides || [])]) {
-        if (pg.action === "optimise-existing") continue;
-        const sc = score(pg.keyword_cluster || pg.page_name || pg.keyword || pg.page);
-        if (sc > bs) { bs = sc; const s = String(pg.url_slug || pg.url || "").trim(); if (s) best = { url: /^https?:/.test(s) ? s : ("/" + s.replace(/^\/+/, "")), kind: "build" }; }
-      }
-      return best;
-    };
     const _campaignSlide = (nLabel, key, title, sub, group, whoLabel, whoOf, triad, legend, srcSplit) => {
-      const _rowCap = srcSplit ? 6 : 12;                             // B18 — the citation slides carry the §5.4 "cite this page" sub-line (taller rows), so cap at 6 so the count line + triad stay on-slide
+      // B18 — fit rows to the FIXED-HEIGHT page so the "Showing X of Y" count line + the triad below it
+      // never clip off the bottom. A flat cap clipped on citation campaigns because their compare/pricing
+      // prompts wrap to two lines (a ~60px row vs a ~38px one-line row), while informational/mentions
+      // prompts stay one line. So size each row by whether its prompt wraps and take rows until the
+      // running height would push the footer off-slide. srcSplit citation slides also carry a legend +
+      // 5 columns, so they get a smaller body budget than the mentions slide. Over-estimating a
+      // borderline prompt as two-line is the safe direction (shows one fewer row, never clips).
+      const _rowBudget = srcSplit ? 250 : 340;                       // px of table-body height before the footer must start
+      const _wrapAt = srcSplit ? 40 : 56;                            // prompt chars that fit on one line in this column
+      const _rowPx = (p) => { const n = String(p.prompt || "").length; return n > _wrapAt * 2 ? 82 : (n > _wrapAt ? 60 : 38); }; // 1 / 2 / 3-line row height — long compare prompts ("In-house team vs an agency for a B2B company in India") wrap to three lines
+      const _shownRows = [];
+      { let _u = 0; for (const p of group) { const c = _rowPx(p); if (_u + c > _rowBudget && _shownRows.length) break; _u += c; _shownRows.push(p); } }
+      const _shown = _shownRows.length;
       const _flagged = group.filter((p) => p.needs_review).length;  // MC-7 — low parser-confidence rows (already computed on the run)
-      const _promptCell = (p) => {                                   // §5.4 — attach the "cite this page" fix under the prompt (citation slides only)
-        const base = clamp(p.prompt, srcSplit ? 132 : 150);
-        if (!srcSplit) return base;
-        const s = _suggestClientUrl(p);
-        return s ? { v: <>{base}<div style={{ fontFamily: "var(--mono)", fontSize: 8.5, color: s.kind === "have" ? "#3C7D5A" : C.rust, marginTop: 2, letterSpacing: ".02em" }}>&rarr; {s.kind === "have" ? "cite your page" : "build"}: {clamp(s.url, 46)}</div></> } : base;
-      };
       return (
       <Slide key={key} variant="cream" n={nLabel} kicker="The Prompts We Ran" title={title}
         sub={<>{sub} {_promptTag}</>} foot={foot(`${nLabel.toUpperCase()} · GEO · PROMPTS`)}>
         {/* B17 — full prompt + cited sources (was clamped with an ellipsis). B18 — row-capped so the
             count line + triad stay on-slide. srcSplit — citation campaigns split the cited SOURCE into
-            DIRECT (brand's own domain) vs THIRD-PARTY AGGREGATORS, with the §5.4 "cite this page" fix
-            surfaced as a sub-line under each prompt (which of the client's pages should win it). */}
+            DIRECT (brand's own domain) vs THIRD-PARTY AGGREGATORS; the §5.4 "cite this page" fix rides
+            IN the Direct-sources cell (when empty), so it costs no row height. */}
         <DataTable compact head={srcSplit
-            ? [{ label: "Buyer prompt · cite this page" }, { label: "Engine" }, { label: "Direct sources" }, { label: "Third-party aggregators" }, { label: `${name} result`, align: "right" }]
+            ? [{ label: "Buyer prompt" }, { label: "Engine" }, { label: "Direct sources · to cite" }, { label: "Third-party aggregators" }, { label: `${name} result`, align: "right" }]
             : [{ label: "Buyer prompt" }, { label: "Engine" }, { label: whoLabel }, { label: `${name} result`, align: "right" }]}
-          rows={group.slice(0, _rowCap).map((p) => srcSplit
-            ? { cells: [_promptCell(p), engName(p.engine), { v: _directSrcCell(p) }, { v: _thirdPartySrcCell(p) }, { align: "right", v: _resCell(p) }] }
+          rows={_shownRows.map((p) => srcSplit
+            ? { cells: [clamp(p.prompt, 110), engName(p.engine), { v: _directSrcCell(p) }, { v: _thirdPartySrcCell(p) }, { align: "right", v: _resCell(p) }] }
             : (() => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 150), engName(p.engine), (typeof _who === "string" ? clamp(_who, 110) : { v: _who }), { align: "right", v: _resCell(p) }] }; })())} />
         {legend || null}
         {group.length
-          ? <p className="mt" style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>Showing {Math.min(_rowCap, group.length)} of {group.length} prompt{group.length > 1 ? "s" : ""} in this campaign{group.length > _rowCap ? " — full set in the live dashboard" : ""}{_flagged ? ` · ${_flagged} flagged for manual review (low parser confidence)` : ""}</p>
+          ? <p className="mt" style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>Showing {_shown} of {group.length} prompt{group.length > 1 ? "s" : ""} in this campaign{group.length > _shown ? " — full set in the live dashboard" : ""}{_flagged ? ` · ${_flagged} flagged for manual review (low parser confidence)` : ""}</p>
           : <p className="mt" style={{ fontSize: 11, color: "var(--muted)" }}>No prompts of this type surfaced in this run.</p>}
         {group.length ? triad : null}
       </Slide>
@@ -1093,7 +1114,7 @@ export default function DeckReport({ data, live }) {
     // 13b — CITATION COMMERCIAL: buying questions where a website is the source.
     slides.push(_campaignSlide("13b", "geo-prompts-commercial",
       "Citation, commercial: questions a page on your site can win",
-      "Buying-intent questions (compare, pricing, how to choose) where AI cites a WEBSITE as the source. Build the answer-first page and you become the cited answer, which drives the lead. This is what competitors are already doing.",
+      "Buying-intent questions (compare, pricing, how to choose) where AI cites a website as the source. Build the answer-first page and you become the cited answer that drives the lead.",
       GROUPS.commercial, "Source it cited", _srcCell,
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern"><b>Competitor pages</b> win these citations today, so their site is the answer, not yours.</Tc>
@@ -1104,7 +1125,7 @@ export default function DeckReport({ data, live }) {
     // 13c — CITATION INFORMATION: learning questions, blogs to write.
     slides.push(_campaignSlide("13c", "geo-prompts-info",
       "Citation, informational: blogs to write for AI visibility",
-      "Learning-stage questions where AI cites explainer content. Publish these and AI starts citing you, building the topical authority that feeds the commercial wins. This is where competitors are actively writing blogs.",
+      "Learning-stage questions where AI cites explainer content. Publish these and AI starts citing you, building the topical authority that feeds the commercial wins.",
       GROUPS.informational, "Source it cited", _srcCell,
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern"><b>Competitors are writing these explainers</b>, so AI learns the topic from them.</Tc>

@@ -104,7 +104,8 @@ choose select pick find compare evaluate consider assess review research explore
 experts leaders options factors reasons ways tips steps things points areas aspects elements examples types kinds prices costs fees rates plans packages lists guides answers questions clients customers users teams professionals specialists consultants partners benefits features results reviews ratings brands names businesses markets industries sectors trends insights
 best top leading trusted popular great better various several many different essential important critical crucial vital useful helpful valuable effective efficient reliable reputable established experienced professional skilled talented creative innovative modern advanced comprehensive complete affordable premium quality
 overall additionally furthermore moreover meanwhile instead therefore finally ultimately importantly notably specifically generally typically usually often sometimes perhaps maybe likely probably certainly clearly obviously interestingly unfortunately fortunately similarly likewise conversely alternatively
-founded headquartered depending prominent notable renowned numerous regarding following specializing nevertheless assuming establishing operating serving ranked listed featured awarded recognized dedicated committed established known trusted proven`.split(/\s+/).filter(Boolean));
+founded headquartered depending prominent notable renowned numerous regarding following specializing nevertheless assuming establishing operating serving ranked listed featured awarded recognized dedicated committed established known trusted proven
+with from into onto over under about above below near then than while when where which whom whose your their they them our its this that these those also just only more less most least very`.split(/\s+/).filter(Boolean));
 
 // MENTION vs CITATION — directory / publisher / review-site / social names the AI ATTRIBUTES to are
 // CITATIONS (sources), never competitor brand MENTIONS. _GENERIC catches the single-word ones (clutch,
@@ -187,7 +188,7 @@ export function isTopicNoise(name) {
   if (!words.length) return true;
   if (words.some((w) => /^opens$/i.test(w))) return true;                 // "… Opens in a new tab" (plural only, keeps "Open Influence")
   if (_isArtefactName(words)) return true;                                 // any metric/UI artefact word → not a brand (Mapbox Terms, Ad Spend, ROAS, Apple Continue)
-  if (words.every((w) => _GENERIC.has(w.toLowerCase()))) return true;      // every word generic → topic
+  if (words.every((w) => { const l = w.toLowerCase(); return _GENERIC.has(l) || _STOPWORDS.has(l); })) return true; // every word generic/stopword ("With", "In") → not a brand
   const _a = words[0] ? words[0].toLowerCase() : "";                       // KPIs, SMEs, ROI, ROAS — check raw AND plural-stripped (fixes ROAS→"roa" miss)
   if (words.length === 1 && (_GEN_ACRONYMS.has(_a) || _GEN_ACRONYMS.has(_a.replace(/s$/, "")))) return true;
   return false;
