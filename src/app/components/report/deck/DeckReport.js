@@ -288,12 +288,14 @@ export default function DeckReport({ data, live }) {
   // so the GEO section is never sparse/1-bar. (Copilot stays out, still hard-blocked.) ──
   const ENG_NAME = { aioverviews: "Google AI Overviews", "google ai overviews": "Google AI Overviews", chatgpt: "ChatGPT", gemini: "Gemini", perplexity: "Perplexity", claude: "Claude", copilot: "Microsoft Copilot", "microsoft copilot": "Microsoft Copilot" };
   const engName = (e) => ENG_NAME[String(e || "").toLowerCase()] || e || "N/A";
-  // ChatGPT is scanned logged-out via the Browserless stealth path. Microsoft Copilot stays out for
-  // now (still hard-blocked / needs a session). Keep this list in sync with GEO_ENGINES.
+  // ChatGPT is scanned logged-out via the Browserless stealth path. Copilot is back in the canonical
+  // set (6-engine Bing+Copilot methodology). This is only the illustrative/fallback list — actual
+  // reports render whatever engines returned data (geo.by_engine), so a 5-engine scan still shows 5.
+  // Keep this list in sync with GEO_ENGINES.
   const CANON_ENGINES = [
     { key: "aioverviews", name: "Google AI Overviews" }, { key: "claude", name: "Claude" },
     { key: "gemini", name: "Gemini" }, { key: "perplexity", name: "Perplexity" },
-    { key: "chatgpt", name: "ChatGPT" },
+    { key: "chatgpt", name: "ChatGPT" }, { key: "copilot", name: "Copilot" },
   ];
   const ENGINES_TOTAL = CANON_ENGINES.length;
   const _engIdx = {};
@@ -419,7 +421,7 @@ export default function DeckReport({ data, live }) {
           {/* RC1 — a null GBP rating can never headline a comparative claim ("beats most rivals").
               Show the star rating only when measured; otherwise show the honest local starting line. */}
           {rating != null
-            ? <Tile n={`${rating}★`} label="Rating, beats most rivals" />
+            ? <Tile n={`${rating}★`} label="Higher rating, fewer reviews" />
             : <Tile n={reviews != null ? fmtNum(reviews) : "0"} label="Google reviews today" />}
         </Tiles>
       </Split>
@@ -520,7 +522,7 @@ export default function DeckReport({ data, live }) {
               was reached, validated and crawled, so the technical basics genuinely pass. */}
           <Checks items={[
             { state: "ok", text: <><b>Reachable &amp; crawlable.</b> Valid SSL and a live, indexable homepage — the technical basics pass.</> },
-            { state: "ok", text: <><b>Schema in place.</b> {faqCount ? `${faqCount} FAQ blocks AI can lift.` : "Answer-shaped content AI can lift."}</> },
+            { state: "ok", text: <><b>Schema in place.</b> {faqCount ? `${faqCount} FAQ blocks present, a structure associated with answer extraction.` : "Answer-shaped content present."}</> },
             { state: rating ? "ok" : "do", text: rating ? <><b>A genuine {rating}★ rating.</b> Real trust to build on.</> : <>Build first reviews for trust.</> },
             { state: "ok", text: <><b>An open field.</b> No one owns the commercial space.</> },
           ]} />
@@ -634,7 +636,7 @@ export default function DeckReport({ data, live }) {
   const _hasRD = [rd, ..._b5.map((c) => c && c.refDomains)].some((v) => v != null);
   const _benchHead = [{ label: "Competitor" }, ...(_hasDR ? [{ label: "Domain Rating", align: "right" }] : []), { label: "Organic Traffic / mo", align: "right" }, { label: "Ranking Keywords", align: "right" }, ...(_hasRD ? [{ label: "Referring Domains", align: "right" }] : [])];
   const _benchRows = [
-    ..._b5.map((c) => ({ cells: [{ v: <strong>{c.name || c.domain}</strong> }, ...(_hasDR ? [{ v: dash(c.dr), num: true, align: "right" }] : []), { v: c.traffic != null ? fmtNum(c.traffic) : "N/A", num: true, align: "right" }, { v: c.keywords != null ? fmtNum(c.keywords) : "N/A", num: true, align: "right" }, ...(_hasRD ? [{ v: c.refDomains != null ? fmtNum(c.refDomains) : "N/A", num: true, align: "right" }] : [])] })),
+    ..._b5.map((c) => ({ cells: [{ v: <strong>{c.name || c.domain}</strong> }, ...(_hasDR ? [{ v: dash(c.dr), num: true, align: "right" }] : []), { v: c.traffic != null ? fmtNum(c.traffic) : "n/a", num: true, align: "right" }, { v: c.keywords != null ? fmtNum(c.keywords) : "n/a", num: true, align: "right" }, ...(_hasRD ? [{ v: c.refDomains != null ? fmtNum(c.refDomains) : "n/a", num: true, align: "right" }] : [])] })),
     { you: true, cells: [`${name} (you)`, ...(_hasDR ? [{ v: dash(dr), num: true, align: "right" }] : []), { v: fmtNum(traffic0), num: true, align: "right" }, { v: dash(mv(bm, "organic_keywords", "organicKeywords")), num: true, align: "right" }, ...(_hasRD ? [{ v: dash(rd), num: true, align: "right" }] : [])] },
   ];
   slides.push(
@@ -646,7 +648,7 @@ export default function DeckReport({ data, live }) {
         <Card accent title="Traffic follows the basics"><p className="small">Their traffic comes from fixing what you already can: fast pages, clear titles, and answer-shaped content.</p></Card>
         <Card accent title="Keywords are uncontested"><p className="small">None defend the commercial and local terms in this plan, so your first {opp.commercial_keyword_count ? `${opp.commercial_keyword_count}` : "30+"} keywords face no real incumbent.</p></Card>
       </Row>
-      <Callout className="mt2" mark="i"><b>Reading it:</b> your row is measured today (Moz / DataForSEO). {benchIllus ? "Competitor figures are illustrative of the gap; your live competitor scrape drops straight into this table." : ((_hasDR && _hasRD) ? "Competitor authority, traffic and keyword counts are pulled per rival, none are estimated." : "Competitor traffic and keyword counts are pulled per rival, none are estimated. Authority columns the provider did not return for this run are omitted rather than shown empty.")}</Callout>
+      <Callout className="mt2" mark="i"><b>Reading it:</b> your row is measured today (Moz / DataForSEO). {benchIllus ? "Competitor figures are illustrative of the gap; your live competitor scrape drops straight into this table." : ((_hasDR && _hasRD) ? "Competitor authority, traffic and keyword counts are pulled per rival (Moz / DataForSEO), none are estimated. A cell reading n/a means the provider returned no value for that domain, never a zero." : "Competitor traffic and keyword counts are pulled per rival, none are estimated. A cell reading n/a means the provider returned no value for that domain; authority columns it did not return for this run are omitted rather than shown empty.")}</Callout>
     </Slide>
   );
 
@@ -1182,7 +1184,7 @@ export default function DeckReport({ data, live }) {
               const _isCrawlGuide = /llms\.txt/i.test(`${s.label || ""} ${s.key || ""}`);
               const _base = s.label + (s.detail ? `, ${clamp(s.detail, 50)}` : "");
               if (s.ok && _isCrawlGuide && _geoZero) {
-                return { state: "do", text: <>{s.label} — <span style={{ color: "var(--muted)" }}>present, but not yet earning citations</span></> };
+                return { state: "do", text: <>{s.label} — <span style={{ color: "var(--muted)" }}>present (a crawl guide for AI engines)</span></> };
               }
               return { state: s.ok ? "ok" : "no", text: _base };
             });
@@ -1234,7 +1236,7 @@ export default function DeckReport({ data, live }) {
   const shipWith = ["Exact-intent H1 and meta", "800 to 1,500 unique words", "5 to 8 FAQs plus schema", "Strong CTA above the fold", "Internal links and alt text", "Sub-2.5s load time"];
   slides.push(
     <Slide key="build" variant="cream" n="15" kicker="What We Build" title={_buildTitle}
-      sub={<>{_buildSub} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("15 · WHAT TO BUILD")}>
+      sub={<>{_buildSub} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("15 · WHAT WE BUILD")}>
       {buildCards.length ? (
         <Row cols={buildCards.length >= 4 ? 4 : 3} style={{ gap: 16 }}>
           {buildCards.map((p, i) => (
@@ -1265,23 +1267,31 @@ export default function DeckReport({ data, live }) {
     ? ca.blogsToBuild
     : (ca.blog_and_guides || []).filter((b) => { const k = _ck(b.keyword_cluster || b.proposed_title); return !k || !_optimiseBlogKeys.has(k); });
   const PbHead = ({ count, label }) => (<div className="pbhead"><span className="ct2">{count}</span><span className="cl2">{label}</span></div>);
+  // Slide-20 fix — DEDUP optimise items to the PAGE level. The keyword→existing-page match can point
+  // several keyword clusters at one real URL (e.g. 5 "social media …" terms → /social-media-marketing);
+  // rendering one row per keyword reads as 5 separate jobs when it is one page task. Group by matched_url
+  // and carry the cluster count, so the client sees "optimise /social-media-marketing · 5 keyword clusters".
+  const _dedupPages = (list) => { const m = new Map(); (list || []).forEach((p, idx) => { const k = String(p.matched_url || "").toLowerCase().trim() || `__row${idx}`; if (m.has(k)) m.get(k)._clusters++; else m.set(k, { ...p, _clusters: 1 }); }); return [...m.values()]; };
+  const _optPages = _dedupPages(ca.pagesToOptimise);
+  const _optBlogs = _dedupPages(ca.blogsToOptimise);
+  const _optVal = (p) => (p._clusters > 1 ? `tighten intent · ${p._clusters} clusters` : (p.action ? clamp(p.action, 34) : (p.volume || null)));
   slides.push(
     <Slide key="contentmap" variant="cream" n="16" kicker="The Content Map" title="What to optimise, and what to create"
       sub={<>{ds.contentmap_sub || "We reviewed the pages we crawled. Some are rank-ready and need polish; the rest are gaps to fill."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("16 · THE CONTENT MAP")}>
       <Split>
         <div>
-          <PbHead count={(ca.pagesToOptimise || []).length || (ca.pagesExistingFlagged ?? 0)} label="service pages you have · optimise" />
-          {(ca.pagesToOptimise || []).length ? (
-            (ca.pagesToOptimise || []).slice(0, 5).map((p, i) => (
-              <PbItem key={`o${i}`} name={p.page || titleCase(p.keyword)} code={p.matched_url} value={p.action ? clamp(p.action, 34) : (p.volume || null)} />
+          <PbHead count={_optPages.length || (ca.pagesExistingFlagged ?? 0)} label="service pages you have · optimise" />
+          {_optPages.length ? (
+            _optPages.slice(0, 5).map((p, i) => (
+              <PbItem key={`o${i}`} name={p.page || titleCase(p.keyword)} code={p.matched_url} value={_optVal(p)} />
             ))
           ) : (
             <Card soft><p className="small">{ca.pagesExistingFlagged > 0 ? "Matched real demand: add H1, FAQ and schema, and expand thin content. Per-page detail lands with the on-page pass." : "No existing pages matched the target keywords."}</p></Card>
           )}
-          <PbHead count={(ca.blogsToOptimise || []).length || 0} label="blog posts you have · optimise" />
-          {(ca.blogsToOptimise || []).length ? (
-            (ca.blogsToOptimise || []).slice(0, 3).map((p, i) => (
-              <PbItem key={`bo${i}`} name={p.page || titleCase(p.keyword)} code={p.matched_url} value={p.action ? clamp(p.action, 34) : (p.volume || null)} />
+          <PbHead count={_optBlogs.length || 0} label="blog posts you have · optimise" />
+          {_optBlogs.length ? (
+            _optBlogs.slice(0, 3).map((p, i) => (
+              <PbItem key={`bo${i}`} name={p.page || titleCase(p.keyword)} code={p.matched_url} value={_optVal(p)} />
             ))
           ) : (
             <Card soft><p className="small">Existing posts that match demand get refreshed with sharper titles, FAQs and internal links. Per-post detail lands with the content pass.</p></Card>
@@ -1494,7 +1504,15 @@ export default function DeckReport({ data, live }) {
       <Split>
         <div className="metric-col">
           <h3 className="mini">Search (SEO)</h3>
-          {seoBoard.map(([label, r], i) => { const kn = (v) => (v == null ? "N/A" : fmtNum(Math.round(Number(v)))); return (<Trend key={i} label={label} now={r ? kn(r.baseline ?? r.now) : "N/A"} target={r ? kn(r.target_12_months ?? r.target_6_months ?? r.s12 ?? r.s6) : "N/A"} />); })}
+          {(() => {
+            // Slide-25 false-precision fix — the modelled organic-traffic TARGET renders as a RANGE
+            // using the exact same ±15% band as the outcome slide (slide 4), so a range model never
+            // shows a 4-sig-fig point estimate here (2,810 → "2.5K to 3K"). Measured "now" stays a point.
+            const _rc = (n) => { if (n == null) return null; const step = n >= 5000 ? 1000 : n >= 2000 ? 500 : n >= 500 ? 50 : n >= 100 ? 10 : 5; return Math.round(n / step) * step; };
+            const _rng = (n) => { if (n == null) return "N/A"; const lo = _rc(n * 0.85), hi = _rc(n * 1.15); return lo === hi ? `~${fmtNum(_rc(n))}` : `${fmtNum(lo)} to ${fmtNum(hi)}`; };
+            const kn = (v) => (v == null ? "N/A" : fmtNum(Math.round(Number(v))));
+            return seoBoard.map(([label, r], i) => { const tgt = r ? (r.target_12_months ?? r.target_6_months ?? r.s12 ?? r.s6) : null; const modelled = /organic traffic|keywords ranking/i.test(label); return (<Trend key={i} label={label} now={r ? kn(r.baseline ?? r.now) : "N/A"} target={r ? (modelled ? _rng(tgt) : kn(tgt)) : "N/A"} />); });
+          })()}
           <Trend label="Site health score" now={dash(health)} target={dash(shTarget)} />
         </div>
         <div className="metric-col">

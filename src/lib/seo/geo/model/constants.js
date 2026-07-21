@@ -8,8 +8,12 @@
 
 // §15 — supported engines (stable keys used everywhere) + their UI labels.
 // ChatGPT is scanned LOGGED-OUT via the Browserless stealth + CAPTCHA-solving path (clears its
-// Cloudflare "Just a moment" wall). Copilot stays out — it is still hard-blocked / needs a session.
-export const GEO_ENGINES = ["aioverviews", "claude", "gemini", "perplexity", "chatgpt"];
+// Cloudflare "Just a moment" wall). Copilot is BACK in the canonical set (restores the Bing+Copilot
+// axis / 6-engine methodology, per the 2026-07-21 QA doc) — it runs via a logged-in session
+// (LOGIN_ENGINES). NOTE: this is the scan-set config; the report renders whatever engines actually
+// returned data (deck reads geo.by_engine), so existing 5-engine reports are unaffected until a
+// re-scan runs Copilot. Copilot still needs its session captured on the worker to return answers.
+export const GEO_ENGINES = ["aioverviews", "claude", "gemini", "perplexity", "chatgpt", "copilot"];
 export const GEO_ENGINE_LABELS = {
   chatgpt: "ChatGPT",
   aioverviews: "Google AI Overview",
@@ -176,7 +180,7 @@ export const RUN_MODE_PRESETS = {
   // that return real data reliably with zero maintenance — Google AI Overviews (search, no
   // login) + Claude (Anthropic API). The report shows these as measured and the rest as not
   // yet scanned. Re-add engines here once a residential-proxy/session path is in place.
-  fast:       { label: "Fast (pre-report)", prompt_limit: 30, concurrency_limit: 5, default_engines: ["aioverviews", "claude", "gemini", "perplexity", "chatgpt"], validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: true, cost_level: "medium", screenshot_mode: "off" },
+  fast:       { label: "Fast (pre-report)", prompt_limit: 30, concurrency_limit: 5, default_engines: ["aioverviews", "claude", "gemini", "perplexity", "chatgpt", "copilot"], validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: true, cost_level: "medium", screenshot_mode: "off" },
   dev_smoke:  { label: "Dev / Smoke Test", prompt_limit: 25,  default_engines: ["aioverviews", "perplexity"], validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: false, cost_level: "low",    screenshot_mode: "on_error" },
   standard:   { label: "Standard GEO",     prompt_limit: 80,  default_engines: GEO_ENGINES,                    validation_enabled: false, validation_sample_percent: 0,  residential_proxy_default: false, cost_level: "medium", screenshot_mode: "on_error" },
   full:       { label: "Full GEO",         prompt_limit: 250, default_engines: GEO_ENGINES,                    validation_enabled: true,  validation_sample_percent: 15, residential_proxy_default: false, cost_level: "full",   screenshot_mode: "on_error" },
