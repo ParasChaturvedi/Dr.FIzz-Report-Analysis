@@ -36,6 +36,11 @@ const _DECK_ARTEFACT = new Set("roas roi ctr cpc cpm cpa aov ltv cac spend spend
 // A name whose every word is a stopword (or generic topic word) can never be a real brand. Real
 // agency names (Schbang, Webchutney, Flipkart, EchoVME) contain none of these, so this is safe.
 const _DECK_STOP = new Set("a an the and or of to in on at by for with from into onto over under as is are was were be been being it its this that these those we our us you your they them their he she his her my me up out no not yes via per vs versus about above below near then than but so if while when where which who whom whose what why how also just only more less most least very".split(/\s+/));
+// Conversational preambles an engine (esp. Copilot) prefaces an answer with — "Hi Sara, here are …",
+// "Hello, sure!" — get scraped as a Capitalised phrase and mistaken for a named brand. A name whose
+// FIRST word is one of these is a greeting, not a company. Kept tight (no "yes"/"good"/"dear") so real
+// brands like "Yes Bank" survive. Mirror in geoParser so the deck is never stricter than the server.
+const _DECK_GREET = new Set("hi hello hey heya hiya howdy greetings thanks thankyou welcome".split(/\s+/));
 const _DECK_NOISE_GEN = new Set(`technical core web vitals google business profile digital marketing content social media strategy strategies analytics conversion optimization optimisation branding design designs development seo sem services service agency agencies company companies page pages listing listings profile profiles map maps search engine engines score scores keyword keywords overview overviews ranking rankings backlink backlinks schema robots sitemap computer computers space spaces artifact artifacts system systems solution solutions tool tools data cloud technology technologies technical software online platform platforms network networks compute computing generative experience experiences result results insight insights metric metrics report reports dashboard
 model models version versions customize customise connectors connector skills skill sources source ask asked canvas prompt prompts thread threads assistant assistants question questions answer answers example examples reason reasons factor factors option options feature features benefit benefits use uses case cases level levels item items element elements aspect aspects part parts area areas field fields topic topics subject subjects step steps way ways tip tips point points thing things kind kinds type types
 compare choose select find learn discover manage improve grow increase boost provide deliver offer help support explore ensure evaluate consider assess review identify
@@ -61,6 +66,7 @@ const _deckTopicNoise = (name) => {
   const words = String(name || "").trim().split(/[\s\-–—]+/).filter(Boolean);   // split hyphens too — "Full-Service" is two generic words, not a brand
   if (!words.length) return true;
   if (words.some((w) => /['’](m|re|ve|ll|d)$/i.test(w))) return true;           // contraction fragment ("I'm", "you're", "we've") — never a brand
+  if (words[0] && _DECK_GREET.has(words[0].toLowerCase().replace(/[^a-z]/g, ""))) return true;  // "Hi Sara", "Hello there" — greeting preamble, not a brand
   const _n = String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   if (_DECK_SOURCE.has(_n) || _DECK_SOURCE.has(_n.replace(/\s+/g, ""))) return true;  // cited source/publisher/directory → not a mention
   if (words.some((w) => /^opens$/i.test(w))) return true;                          // "… Opens in a new tab" (plural only, keeps "Open Influence")
@@ -162,12 +168,20 @@ export default function DeckReport({ data, live }) {
     blogsToBuild: (_caAI.blogsToBuild?.length ? _caAI.blogsToBuild : _caDF.blogsToBuild) || null,
     listicle_outreach: (_caAI.listicle_outreach?.length ? _caAI.listicle_outreach : _caDF.listicle_outreach) || [],
   };
-  // P1 — a standalone city page needs real demand: a dedicated page for "social media agency la" (30/mo,
-  // and "la"=LA is off-region for an India-focused site) is too thin to justify. Require ≥ 40 searches/mo;
-  // thinner city terms fold into the broader service page rather than shipping their own page.
+  // P1 — a standalone page needs real demand: a dedicated page for "social media agency la" (30/mo, and
+  // "la"=LA is off-region for an India-focused site) is too thin to justify. Require ≥ 40 searches/mo;
+  // thinner terms fold into the broader service page rather than shipping their own page. "social media
+  // agency la" actually rides in commercial_pages (not geography), which the first pass missed — apply the
+  // same floor there, but NEVER empty the tier: if the floor would remove every commercial page, keep the
+  // three highest-volume so the Tier-1 card + "commercial pages mapped" tile still render.
   const _cityOk = (p) => (Number(p.primary_volume) || 0) >= 40;
   ca.geography_pages = (ca.geography_pages || []).filter(_cityOk);
   ca.city_pages = (ca.city_pages || []).filter(_cityOk);
+  if (Array.isArray(ca.commercial_pages) && ca.commercial_pages.length) {
+    const _keptComm = ca.commercial_pages.filter(_cityOk);
+    ca.commercial_pages = _keptComm.length ? _keptComm
+      : ca.commercial_pages.slice().sort((a, b) => (Number(b.primary_volume) || 0) - (Number(a.primary_volume) || 0)).slice(0, 3);
+  }
   // Prefer the RICH Stage-3 technical_issues (why_it_matters / affected_count /
   // recommended_action / estimated_effort / expected_unlock); the top-level
   // technicalPriorities ({issue,priority,action}) is the partial fallback.
@@ -339,6 +353,32 @@ export default function DeckReport({ data, live }) {
   const geoProvenance = (measured && promptsRun && enginesRun)
     ? `${promptsRun} prompts × ${enginesRun} engine${enginesRun > 1 ? "s" : ""} (${answersRun} answers)`
     : (aioMeasured && aio.keywords_checked ? `${aio.keywords_checked} buyer queries × Google AI Overviews` : null);
+  // GS1 — recompute the GEO score with readiness signals GATED to real visibility. Hoisted here (was in the
+  // slide-10 block) so the outcome slide (04), the GEO-score slide (10) AND the scoreboard (25) read ONE gated
+  // value, not the inflated raw geo_score. "Cross-engine consistency 100%" while named in 0% of answers is
+  // consistency of ABSENCE, and content freshness can't lift a brand never cited; when there is NO visibility
+  // base (0% cited AND 0% named) we EXCLUDE consistency + freshness so the composite reads the real ~0, not 15.
+  // Weights mirror model/constants.js GEO_SCORE_WEIGHTS.
+  const _geoSig = geo.overall?.signals || geo.score_breakdown?.signals || {};
+  const _geoVal = {
+    citation_presence: _geoSig.citation_presence ?? geo.overall?.citation_rate,
+    brand_presence: _geoSig.brand_presence ?? geo.overall?.mention_rate,
+    citation_position: _geoSig.citation_position,
+    intent_match: _geoSig.intent_match ?? geo.overall?.mention_rate,
+    cross_engine_consistency: _geoSig.cross_engine_consistency,
+    freshness: _geoSig.freshness,
+    topic_coverage: _geoSig.topic_coverage ?? geo.overall?.topic_coverage ?? (geo.topic_dominance?.total_topics ? geo.topic_dominance.client_lead_share : null),
+  };
+  const _GEO_W = { citation_presence: 30, brand_presence: 20, citation_position: 15, intent_match: 15, cross_engine_consistency: 10, freshness: 5, topic_coverage: 5 };
+  const _geoReadinessKeys = new Set(["cross_engine_consistency", "freshness"]);
+  const _geoPresence = Math.max(Number(_geoVal.citation_presence) || 0, Number(_geoVal.brand_presence) || 0);
+  const _geoGated = _geoPresence <= 0;   // no visibility → gate the readiness signals out of the score
+  const _geoScoreGated = (() => {
+    let n = 0, d = 0;
+    for (const k in _GEO_W) { let v = _geoVal[k]; if (_geoGated && _geoReadinessKeys.has(k)) v = null; if (v == null) continue; n += Number(v) * _GEO_W[k]; d += _GEO_W[k]; }
+    return d ? Math.round(n / d) : (Number(geo.overall?.geo_score) || 0);
+  })();
+  const _geoScore = (measured && (promptsRun || answersRun)) ? _geoScoreGated : (geo.overall?.geo_score ?? null);
   const ProvTag = geoProvenance ? <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginLeft: 8, whiteSpace: "nowrap" }}>Source: {geoProvenance}</span> : null;
   // Real cited domains (who AI quotes instead of you) — the honest "who owns the answer
   // space" for a client with no measured Share of Voice. From the measured citation analysis.
@@ -472,7 +512,7 @@ export default function DeckReport({ data, live }) {
       <Row cols={3} className="mt2">
         <Card accent title="Search visibility"><p className="small">From <strong style={{ color: C.rust }}>{kw0 ? `${fmtNum(kw0)} ranking keywords today` : "today's base"}</strong> to a targeted base of <strong style={{ color: C.rust }}>{opp.commercial_keyword_count ? `${opp.commercial_keyword_count}+ commercial terms` : "commercial terms"}</strong>, led by zero-difficulty wins.</p></Card>
         <Card accent title="Local dominance"><p className="small">Into the <strong style={{ color: C.rust }}>local map pack</strong>, on a {rating ? `${rating}★` : "strong"} rating rivals can&apos;t match.</p></Card>
-        <Card accent title="AI presence"><p className="small">From a <strong style={{ color: C.rust }}>GEO score of {geo.overall?.geo_score} to 45+</strong>{isIllus ? " (illustrative)" : ""}, lifting share of voice, mentions and citations across every AI engine we scan.</p></Card>
+        <Card accent title="AI presence"><p className="small">From a <strong style={{ color: C.rust }}>GEO score of {_geoScore ?? geo.overall?.geo_score} to 45+</strong>{isIllus ? " (illustrative)" : ""}, lifting share of voice, mentions and citations across every AI engine we scan.</p></Card>
       </Row>
       <p className="small" style={{ marginTop: 12, color: C.muted, fontSize: 10.5, lineHeight: 1.5 }}>
         <b style={{ color: C.inkSoft }}>How we model this:</b> <b style={{ color: C.inkSoft }}>Today</b> is measured (Moz / DataForSEO). Future stages are <b style={{ color: C.inkSoft }}>modelled projections</b>, not guarantees: capturable traffic = keyword volume × realistic page-1 CTR (~9% zero-difficulty, ~3% medium, ~1.2% hard), phased in as each page ships and assuming the plan runs on schedule.
@@ -770,32 +810,9 @@ export default function DeckReport({ data, live }) {
   );
 
   /* 10 · How the GEO score works — placed BEFORE the 0% numbers (item 13) so the reader
-     understands how the 0–100 score is calculated before seeing the share/mention/citation. */
-  // GS1 — recompute the GEO score with readiness signals GATED to real visibility. "Cross-engine
-  // consistency 100%" while named in 0% of answers is consistency of ABSENCE, and content freshness can't
-  // lift a brand never cited; when there is NO visibility base (0% cited AND 0% named) we EXCLUDE
-  // consistency + freshness so the composite reads the real ~0, not an inflated 15. ONE definition, used
-  // here AND on the slide-25 scoreboard (SB1). Weights mirror model/constants.js GEO_SCORE_WEIGHTS.
-  const _geoSig = geo.overall?.signals || geo.score_breakdown?.signals || {};
-  const _geoVal = {
-    citation_presence: _geoSig.citation_presence ?? geo.overall?.citation_rate,
-    brand_presence: _geoSig.brand_presence ?? geo.overall?.mention_rate,
-    citation_position: _geoSig.citation_position,
-    intent_match: _geoSig.intent_match ?? geo.overall?.mention_rate,
-    cross_engine_consistency: _geoSig.cross_engine_consistency,
-    freshness: _geoSig.freshness,
-    topic_coverage: _geoSig.topic_coverage ?? geo.overall?.topic_coverage ?? (geo.topic_dominance?.total_topics ? geo.topic_dominance.client_lead_share : null),
-  };
-  const _GEO_W = { citation_presence: 30, brand_presence: 20, citation_position: 15, intent_match: 15, cross_engine_consistency: 10, freshness: 5, topic_coverage: 5 };
-  const _geoReadinessKeys = new Set(["cross_engine_consistency", "freshness"]);
-  const _geoPresence = Math.max(Number(_geoVal.citation_presence) || 0, Number(_geoVal.brand_presence) || 0);
-  const _geoGated = _geoPresence <= 0;   // no visibility → gate the readiness signals out of the score
-  const _geoScoreGated = (() => {
-    let n = 0, d = 0;
-    for (const k in _GEO_W) { let v = _geoVal[k]; if (_geoGated && _geoReadinessKeys.has(k)) v = null; if (v == null) continue; n += Number(v) * _GEO_W[k]; d += _GEO_W[k]; }
-    return d ? Math.round(n / d) : (Number(geo.overall?.geo_score) || 0);
-  })();
-  const _geoScore = (measured && (promptsRun || answersRun)) ? _geoScoreGated : (geo.overall?.geo_score ?? null);
+     understands how the 0–100 score is calculated before seeing the share/mention/citation.
+     The gated _geoScore / _geoVal / _geoGated are computed once near the top (after geoProvenance)
+     so slides 04, 10 and 25 all read the SAME gated value. */
   slides.push(
     <Slide key="geo-method" variant="dark" n="10" kicker="How The GEO Score Works" title="Every GEO number, and where it comes from"
       sub="No figure is invented. Each is collected by running real prompts and measuring you against the same competitors, every month." foot={foot("10 · GEO METHODOLOGY")}>
@@ -1106,7 +1123,7 @@ export default function DeckReport({ data, live }) {
     return sug ? <span style={{ color: "#3C7D5A", fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".02em" }}>&rarr; {sug.kind === "have" ? "cite" : "build"} {clamp(sug.url, 24)}</span> : <span style={{ color: "var(--muted)" }}>—</span>;
   };
   const _thirdPartySrcCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "third_party" || s.type === "unknown" || s.type === "social"); return list.length ? _srcList(list, 3) : (_answeredRow(p) ? <span style={{ color: "var(--muted)" }}>—</span> : "—"); };
-  const _srcSplitLegend = <div style={{ display: "flex", gap: 18, marginTop: 6, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden" }}>
+  const _srcSplitLegend = <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 18px", marginTop: 10, paddingTop: 7, borderTop: "1px solid var(--line)", fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)", whiteSpace: "normal" }}>
     <span><b style={{ color: C.ink }}>Direct sources</b> = own site (<span style={{ color: "#3C7D5A" }}>●</span> yours · <span style={{ color: C.rust }}>●</span> rival)</span>
     <span><b style={{ color: C.ink }}>Third-party</b> = directories &amp; publishers (<span style={{ color: "#B07A2E" }}>●</span> social = earn a listing, not a blog)</span>
   </div>;
@@ -1140,9 +1157,9 @@ export default function DeckReport({ data, live }) {
       // running height would push the footer off-slide. srcSplit citation slides also carry a legend +
       // 5 columns, so they get a smaller body budget than the mentions slide. Over-estimating a
       // borderline prompt as two-line is the safe direction (shows one fewer row, never clips).
-      const _rowBudget = srcSplit ? 250 : 340;                       // px of table-body height before the footer must start
+      const _rowBudget = srcSplit ? 200 : 340;                       // px of table-body height before the footer must start (srcSplit reserves a row for the legend below the table — CC2)
       const _wrapAt = srcSplit ? 40 : 56;                            // prompt chars that fit on one line in this column
-      const _rowPx = (p) => { const n = String(p.prompt || "").length; return n > _wrapAt * 2 ? 82 : (n > _wrapAt ? 60 : 38); }; // 1 / 2 / 3-line row height — long compare prompts ("In-house team vs an agency for a B2B company in India") wrap to three lines
+      const _rowPx = (p) => { const n = String(p.prompt || "").length; const base = n > _wrapAt * 2 ? 82 : (n > _wrapAt ? 60 : 38); return srcSplit ? Math.max(base, 60) : base; }; // 1 / 2 / 3-line row height; srcSplit rows carry multi-domain Direct/Third-party cells that wrap, so never estimate shorter than a 2-line row (stops the table bleeding into the legend)
       const _shownRows = [];
       { let _u = 0; for (const p of group) { const c = _rowPx(p); if (_u + c > _rowBudget && _shownRows.length) break; _u += c; _shownRows.push(p); } }
       const _shown = _shownRows.length;
@@ -1393,7 +1410,7 @@ export default function DeckReport({ data, live }) {
   const _gbpDial = _gbpFields.length ? Math.round((_gbpPass / _gbpFields.length) * 100) : (gbpScore ?? 0);
   slides.push(
     <Slide key="gbp" n="17" kicker="Google Business Profile" title="Your fastest path into local results"
-      sub={<>{ds.gbp_sub || "The map pack drives most local enquiries. Your reviews already beat rivals; the profile just needs completing."} <Pillar kind="local" label="Local SEO" /></>} foot={foot("17 · GOOGLE BUSINESS PROFILE")}>
+      sub={<>{(() => { const _s = ds.gbp_sub || "The map pack drives most local enquiries. Your reviews already beat rivals; the profile just needs completing."; return (_gbpDial != null) ? _s.replace(/\b\d{1,3}\s*(?:percent|%)\s+complete/gi, `${_gbpDial} percent complete`) : _s; })()} <Pillar kind="local" label="Local SEO" /></>} foot={foot("17 · GOOGLE BUSINESS PROFILE")}>
       <div className="gbp-split">
         <Ring value={_gbpDial} />
         <div className="gbp-checks">
@@ -1428,8 +1445,9 @@ export default function DeckReport({ data, live }) {
         <div>
           <h3 className="mini">Directories to claim or fix</h3>
           <DirGrid>{citeDirs.map((x, i) => <DirChip key={i} name={x.name} state={x.state} />)}</DirGrid>
-          {/* Slide-22 fix — a legend so the grid's marks aren't ambiguous (claimed vs unclaimed vs unknown). */}
-          <div style={{ display: "flex", gap: 14, marginTop: 8, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".04em", textTransform: "uppercase", color: C.muted, flexWrap: "wrap" }}>
+          {/* Slide-22 fix — a legend so the grid's marks aren't ambiguous (claimed vs unclaimed vs unknown).
+              B1 — its own reserved band (paddingTop/marginBottom) so it never collides with the domains card below. */}
+          <div style={{ display: "flex", gap: 14, marginTop: 10, marginBottom: 4, fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".04em", textTransform: "uppercase", color: C.muted, flexWrap: "wrap" }}>
             <span><b style={{ color: "#3C7D5A" }}>●</b> claimed &amp; consistent</span>
             <span><b style={{ color: C.rust }}>●</b> unclaimed</span>
             <span><b style={{ color: C.faint }}>●</b> not yet verified</span>
@@ -1437,7 +1455,7 @@ export default function DeckReport({ data, live }) {
           {/* RC1 — when referring domains were not returned by the provider, don't render a
               "N/A now → N/A target" card. Show an honest one-line note instead. */}
           {rd != null ? (
-            <Card className="mt" style={{ marginTop: 14, padding: "13px 16px", display: "flex", gap: 18, alignItems: "center" }}>
+            <Card className="mt" style={{ marginTop: 18, padding: "13px 16px", display: "flex", gap: 18, alignItems: "center" }}>
               <div><div style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 24, color: C.rust, lineHeight: 1 }}>{fmtNum(rd)}</div><div style={{ fontFamily: "var(--mono)", fontSize: 8, textTransform: "uppercase", letterSpacing: ".06em", color: C.muted }}>domains now</div></div>
               <div style={{ color: C.faint }}>→</div>
               <div><div style={{ fontFamily: "var(--display)", fontWeight: 700, fontSize: 24, color: C.rust, lineHeight: 1 }}>{rdTarget != null ? fmtNum(rdTarget) : `${proj.dr12 ?? 25}+`}</div><div style={{ fontFamily: "var(--mono)", fontSize: 8, textTransform: "uppercase", letterSpacing: ".06em", color: C.muted }}>target 12 mo</div></div>

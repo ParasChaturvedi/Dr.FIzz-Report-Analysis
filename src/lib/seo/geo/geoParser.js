@@ -99,6 +99,10 @@ const _ARTEFACT = new Set("roas roi ctr cpc cpm cpa aov ltv cac spend spending i
 // split hyphens too so "Full-Service" is seen as two generic words, and flag verb-contraction fragments ("I'm", "you're").
 const _artWords = (words) => words.flatMap((w) => String(w).split(/[-–—]/)).filter(Boolean);
 const _isArtefactName = (words) => _artWords(words).some((w) => { const l = String(w).toLowerCase(); return _ARTEFACT.has(l) || _ARTEFACT.has(l.replace(/s$/, "")); }) || words.some((w) => /['’](m|re|ve|ll|d)$/i.test(String(w)));
+// Conversational preambles an engine (esp. Copilot) opens an answer with — "Hi Sara, here are…", "Hello,
+// sure!" — get scraped as a Capitalised phrase and mistaken for a named brand. A name whose FIRST word is
+// a greeting is not a company. Kept tight (no "yes"/"good"/"dear") so "Yes Bank" etc. survive.
+const _GREET = new Set("hi hello hey heya hiya howdy greetings thanks thankyou welcome".split(/\s+/));
 
 // Common English words (gerunds, verbs, plural nouns, adjectives, adverbs) that appear Title-cased at a
 // sentence start or as a list lead ("Choosing the right…", "Focus on…", "Experts recommend…") but are NOT
@@ -194,6 +198,7 @@ export function isTopicNoise(name) {
   if (!words.length) return true;
   if (words.some((w) => /^opens$/i.test(w))) return true;                 // "… Opens in a new tab" (plural only, keeps "Open Influence")
   if (_isArtefactName(words)) return true;                                 // any metric/UI artefact/engine word → not a brand (Mapbox Terms, Ad Spend, ROAS, Copilot Today, Smart I'm)
+  if (words[0] && _GREET.has(words[0].toLowerCase().replace(/[^a-z]/g, ""))) return true;  // "Hi Sara", "Hello there" — greeting preamble, not a brand
   if (_artWords(words).every((w) => { const l = w.toLowerCase(); return _GENERIC.has(l) || _STOPWORDS.has(l); })) return true; // every word (hyphens split) generic/stopword ("With", "In", "Full-Service") → not a brand
   const _a = words[0] ? words[0].toLowerCase() : "";                       // KPIs, SMEs, ROI, ROAS — check raw AND plural-stripped (fixes ROAS→"roa" miss)
   if (words.length === 1 && (_GEN_ACRONYMS.has(_a) || _GEN_ACRONYMS.has(_a.replace(/s$/, "")))) return true;
