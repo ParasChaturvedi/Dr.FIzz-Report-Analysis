@@ -274,8 +274,17 @@ export async function getGeoRun(runId) {
   catch { return null; }
 }
 export async function getLatestRun(projectId) {
-  try { const c = await col(C.runs); if (!c) return null; return await c.find({ geo_project_id: projectId }).sort({ created_at: -1 }).limit(1).next(); }
-  catch { return null; }
+  try {
+    const c = await col(C.runs); if (!c) return null;
+    // A "draft" is an unclaimed Phase-2 planning run (the worker NEVER collects it — see createGeoRun).
+    // It must never shadow a real EXECUTED run in the report/status: a newer draft sitting on top of a
+    // queued→partial/completed run made a scan that saved real answers read as "unmeasured", so the
+    // report never generated and the live GEO hydration never resolved. Prefer the latest NON-draft run;
+    // fall back to any run only when a project has nothing but drafts.
+    let r = await c.find({ geo_project_id: projectId, status: { $ne: "draft" } }).sort({ created_at: -1 }).limit(1).next();
+    if (!r) r = await c.find({ geo_project_id: projectId }).sort({ created_at: -1 }).limit(1).next();
+    return r;
+  } catch { return null; }
 }
 export async function listRuns(projectId, limit = 20) {
   try { const c = await col(C.runs); if (!c) return []; return await c.find({ geo_project_id: projectId }).sort({ created_at: -1 }).limit(limit).toArray(); }
