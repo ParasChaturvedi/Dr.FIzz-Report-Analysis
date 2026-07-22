@@ -119,9 +119,12 @@ function projectOutcome(bm, v2) {
   const up6 = v2?.opportunity_summary?.estimated_traffic_uplift_6m ?? null;
   const up12 = v2?.opportunity_summary?.estimated_traffic_uplift_12m ?? null;
   const t0 = traffic0 == null ? 0 : Number(traffic0);
-  const t6 = up6 != null ? Number(up6) : null;
-  const t12 = up12 != null ? Number(up12) : null;
-  const t3 = t6 != null ? Math.round(t6 / 2) : null;
+  // O1 — the milestones are the CUMULATIVE total (today's baseline + the modelled new-page capture), so
+  // the series CLIMBS from today. Returning the bare incremental made Day 90 sit BELOW the total baseline
+  // and read as a first-quarter decline. Same cumulative series feeds slides 04, 25 and 26.
+  const t6 = up6 != null ? Math.round(t0 + Number(up6)) : null;
+  const t12 = up12 != null ? Math.round(t0 + Number(up12)) : null;
+  const t3 = up6 != null ? Math.round(t0 + Number(up6) / 2) : null;
   const drBase = dr0 == null ? null : Number(dr0);
   const drAt = (add) => (drBase == null ? null : Math.min(60, drBase + add));
   return { t0, t3, t6, t12, dr0: drBase, dr3: drAt(3), dr6: drAt(5), dr12: drAt(15) };
@@ -159,6 +162,12 @@ export default function DeckReport({ data, live }) {
     blogsToBuild: (_caAI.blogsToBuild?.length ? _caAI.blogsToBuild : _caDF.blogsToBuild) || null,
     listicle_outreach: (_caAI.listicle_outreach?.length ? _caAI.listicle_outreach : _caDF.listicle_outreach) || [],
   };
+  // P1 — a standalone city page needs real demand: a dedicated page for "social media agency la" (30/mo,
+  // and "la"=LA is off-region for an India-focused site) is too thin to justify. Require ≥ 40 searches/mo;
+  // thinner city terms fold into the broader service page rather than shipping their own page.
+  const _cityOk = (p) => (Number(p.primary_volume) || 0) >= 40;
+  ca.geography_pages = (ca.geography_pages || []).filter(_cityOk);
+  ca.city_pages = (ca.city_pages || []).filter(_cityOk);
   // Prefer the RICH Stage-3 technical_issues (why_it_matters / affected_count /
   // recommended_action / estimated_effort / expected_unlock); the top-level
   // technicalPriorities ({issue,priority,action}) is the partial fallback.
@@ -171,6 +180,12 @@ export default function DeckReport({ data, live }) {
   const lb = d.linkBuilding || {};
   const gbp = df.gbp_comparison || {};
   const gmb = d.gmbCheck || {};
+  // A1 — ONE GBP completeness number across slide 05 (audit) and slide 21 (dial): the visible checklist's
+  // pass-fraction (reproducible — count the ticks), falling back to the provider completeness only when no
+  // field rows exist. Used everywhere so the same metric never shows two numbers (was 77% vs 75%).
+  const _gbpFieldsShared = (gbp.field_analysis || gmb.completeness?.breakdown || []).slice(0, 8);
+  const _gbpPassShared = _gbpFieldsShared.filter((f) => !(f.client_status === "missing" || f.pass === false)).length;
+  const _gbpComplete = _gbpFieldsShared.length ? Math.round((_gbpPassShared / _gbpFieldsShared.length) * 100) : (mv(bm, "gbp_completeness", "gmbCompletenessScore") ?? null);
   const rm = Array.isArray(d.roadmap) ? d.roadmap : [];
   const air = df.ai_readiness || {};
   const sv = df.site_validation || null;   // Stage-1 Website Validation summary (SSL/redirect/canonical/reachable)
@@ -283,6 +298,9 @@ export default function DeckReport({ data, live }) {
     return kept.sort((a, b) => (Number(b.avg) || 0) - (Number(a.avg) || 0));
   })();
   const leader = [...sov].filter((b) => !b.is_client).sort((a, b) => (b.avg || 0) - (a.avg || 0))[0] || null;
+  // G1 — name the top brands actually heard, not just one, so the callout shows the real field.
+  const _topHeard = [...sov].filter((b) => !b.is_client && (b.avg || 0) > 0).sort((a, b) => (b.avg || 0) - (a.avg || 0)).slice(0, 3).map((b) => b.brand).filter(Boolean);
+  const _heardList = _topHeard.length > 1 ? `${_topHeard.slice(0, -1).join(", ")} and ${_topHeard[_topHeard.length - 1]}` : (_topHeard[0] || "");
 
   // ── Canonical 5-engine framing. The by-platform panels always list all canonical engines:
   // the ones that actually ran carry REAL values; the rest render dimmed as "not yet scanned",
@@ -365,7 +383,7 @@ export default function DeckReport({ data, live }) {
         // Data-provenance note (near the top): states what really backs the report — a completed
         // multi-engine GEO scan (prompts × engines) vs a pending scan — so no figure is mistaken
         // for measured when it is not. SEO figures are always measured (Moz / DataForSEO crawl).
-        { k: "DATA", v: measured ? `SEO measured · GEO real scan (${promptsRun} prompts × ${enginesRun} engine${enginesRun > 1 ? "s" : ""} · ${answersRun} answers)` : (aioMeasured ? "SEO measured · GEO: Google AI Overviews measured" : "SEO measured · GEO scan pending") },
+        { k: "DATA", v: measured ? (() => { const _att = (promptsRun && enginesRun) ? promptsRun * enginesRun : answersRun; const _miss = Math.max(0, _att - answersRun); return `SEO measured · GEO scan: ${promptsRun}×${enginesRun} = ${_att} attempted · ${answersRun} captured${_miss > 0 ? ` · ${_miss} blocked/empty` : ""} (rates over captured)`; })() : (aioMeasured ? "SEO measured · GEO: Google AI Overviews measured" : "SEO measured · GEO scan pending") },
         { k: "PREPARED BY", v: "DOCTOR FIZZ" }, { k: "REF", v: refOf(name) },
       ]} />
   );
@@ -483,7 +501,7 @@ export default function DeckReport({ data, live }) {
     { k: "On-Page SEO", pk: "onpage", head: "Pages exist, signals don't", word: onpageHigh ? "Needs work" : "Solid", kind: onpageHigh ? "med" : "low", line: "Missing H1s, thin content, no commercial pages for buyer terms.", first: "Fix in Phase 1 to 2" },
     { k: "Technical SEO", pk: "tech", head: lcpMs != null ? `A ${lcpSeconds(lcpMs)} load blocks everything` : "Crawl & speed need work", word: techCrit ? "Critical" : techWarn ? "Needs work" : "Solid", kind: techCrit ? "high" : techWarn ? "med" : "low", line: "Speed, broken links and crawl issues keep the site near-invisible.", first: "Fix first" },
     { k: "Off-Page / Authority", pk: "offpage", head: dr != null ? `Domain Rating just ${dr}` : "Authority not yet measured", word: dr == null ? "Unmeasured" : (Number(dr) >= 30 ? "Building" : "Weak"), kind: dr == null ? "med" : (Number(dr) >= 30 ? "med" : "high"), line: _offpageLine, first: "Build over months" },
-    { k: "Local SEO / GBP", pk: "local", head: rating != null ? `${rating}★ rating, thin profile` : "No Google rating yet", word: rating != null && Number(rating) >= 4.5 ? "Quick win" : "Needs work", kind: rating != null && Number(rating) >= 4.5 ? "low" : "med", line: (() => { const _gc = mv(bm, "gbp_completeness", "gmbCompletenessScore"); const _rev = reviews != null ? Number(reviews) : null; return (rating != null && _rev) ? `Real review quality, but only ${dash(reviews)} reviews and a ${dash(_gc)}% complete profile.` : `${_rev ? `${_rev} reviews` : "No reviews yet"} and a ${dash(_gc)}% complete profile — the local ground is unclaimed.`; })(), first: "Phase 1 to 2" },
+    { k: "Local SEO / GBP", pk: "local", head: rating != null ? `${rating}★ rating, thin profile` : "No Google rating yet", word: rating != null && Number(rating) >= 4.5 ? "Quick win" : "Needs work", kind: rating != null && Number(rating) >= 4.5 ? "low" : "med", line: (() => { const _gc = _gbpComplete; const _rev = reviews != null ? Number(reviews) : null; return (rating != null && _rev) ? `Real review quality, but only ${dash(reviews)} reviews and a ${dash(_gc)}% complete profile.` : `${_rev ? `${_rev} reviews` : "No reviews yet"} and a ${dash(_gc)}% complete profile — the local ground is unclaimed.`; })(), first: "Phase 1 to 2" },
     { k: "GEO / AEO", pk: "geo", head: "Invisible in AI answers", word: Number(geo.overall?.sov) >= 15 ? "On track" : "Open field", kind: Number(geo.overall?.sov) >= 15 ? "low" : "med", line: aioMeasured ? `Cited in ${aio.brand_cited_count ?? 0} of ${aio.total_citations} Google AI Overview sources. Ready to be quoted, not chosen.` : `${pctStr(geo.overall?.sov)} share of voice, ${pctStr(geo.overall?.citation_rate)} citation rate${isIllus ? " (illustrative)" : ""}. Ready to be quoted, not chosen.`, first: "Phase 2 to 3" },
   ];
   slides.push(
@@ -640,7 +658,7 @@ export default function DeckReport({ data, live }) {
   const _hasRD = [rd, ..._b5.map((c) => c && c.refDomains)].some((v) => v != null);
   const _benchHead = [{ label: "Competitor" }, ...(_hasDR ? [{ label: "Domain Rating", align: "right" }] : []), { label: "Organic Traffic / mo", align: "right" }, { label: "Ranking Keywords", align: "right" }, ...(_hasRD ? [{ label: "Referring Domains", align: "right" }] : [])];
   const _benchRows = [
-    ..._b5.map((c) => ({ cells: [{ v: <strong>{c.name || c.domain}</strong> }, ...(_hasDR ? [{ v: dash(c.dr), num: true, align: "right" }] : []), { v: c.traffic != null ? fmtNum(c.traffic) : "n/a", num: true, align: "right" }, { v: c.keywords != null ? fmtNum(c.keywords) : "n/a", num: true, align: "right" }, ...(_hasRD ? [{ v: c.refDomains != null ? fmtNum(c.refDomains) : "n/a", num: true, align: "right" }] : [])] })),
+    ..._b5.map((c) => ({ cells: [{ v: <strong>{c.name || c.domain}</strong> }, ...(_hasDR ? [{ v: (c.dr == null || (Number(c.dr) === 0 && Number(c.refDomains) > 0)) ? "n/a" : dash(c.dr), num: true, align: "right" }] : []), { v: c.traffic != null ? fmtNum(c.traffic) : "n/a", num: true, align: "right" }, { v: c.keywords != null ? fmtNum(c.keywords) : "n/a", num: true, align: "right" }, ...(_hasRD ? [{ v: c.refDomains != null ? fmtNum(c.refDomains) : "n/a", num: true, align: "right" }] : [])] })),
     { you: true, cells: [`${name} (you)`, ...(_hasDR ? [{ v: dash(dr), num: true, align: "right" }] : []), { v: fmtNum(traffic0), num: true, align: "right" }, { v: dash(mv(bm, "organic_keywords", "organicKeywords")), num: true, align: "right" }, ...(_hasRD ? [{ v: dash(rd), num: true, align: "right" }] : [])] },
   ];
   slides.push(
@@ -724,12 +742,12 @@ export default function DeckReport({ data, live }) {
   /* 11 · GEO & AI VISIBILITY (verdict) */
   slides.push(
     <Slide key="geo-verdict" variant="dark" n="09" kicker="GEO & AI Visibility" title="Are you visible when buyers ask AI?"
-      sub={<>{((measured && promptsRun) ? String(ds.geo_intro || "").replace(/(?:a set of\s*)?25\s*(?:to|–|-)\s*100\s*prompts/i, `${promptsRun} prompts`) : ds.geo_intro) || "A growing share of buyers ask AI for a recommendation, then act on the names returned."} {aioMeasured ? MeasTag : IllusTag}</>} foot={foot("09 · GEO & AI VISIBILITY")}>
+      sub={<>{(() => { const _gi = String(ds.geo_intro || ""); if (measured && promptsRun) { return /pending|not (?:yet |been )?(?:run|scanned|measured)|scan is (?:coming|pending)|awaiting/i.test(_gi) ? "A growing share of buyers ask AI for a recommendation, then act on the names returned — here is where you stand across the engines we measured." : _gi.replace(/(?:a set of\s*)?25\s*(?:to|–|-)\s*100\s*prompts/i, `${promptsRun} prompts`); } return _gi || "A growing share of buyers ask AI for a recommendation, then act on the names returned."; })()} {aioMeasured ? MeasTag : IllusTag}</>} foot={foot("09 · GEO & AI VISIBILITY")}>
       <Verdict num={geoVerdictWord}>
         {aioMeasured ? (
           <>Across <b>{aio.keywords_checked} tracked buyer queries</b>, Google returns an AI Overview {aio.aio_coverage_pct}% of the time. Of the <b>{aio.total_citations} sources</b> those answers cite, {name} is cited <b>{aio.brand_cited_count ?? 0} times</b>.{aioCompStr ? <> {aioCompStr} are cited instead.</> : null} <b>You are technically ready to be quoted, but not yet being chosen.</b></>
         ) : (
-          <>Across <b>{promptsRun ? `${promptsRun} buyer prompts` : "25 to 100 prompts"} on {enginesRun || geo.overall?.engines_tested || CANON_ENGINES.length} engines</b>, {name} is named in <b>{pctStr(geo.overall?.mention_rate)}</b> of answers and cited in <b>{pctStr(geo.overall?.citation_rate)}</b>.{leader ? <> {leader.brand} is heard instead.</> : null} <b>You are ready to be quoted, but not yet being chosen.</b></>
+          <>Across <b>{promptsRun ? `${promptsRun} buyer prompts` : "25 to 100 prompts"} on {enginesRun || geo.overall?.engines_tested || CANON_ENGINES.length} engines</b>, {name} is named in <b>{pctStr(geo.overall?.mention_rate)}</b> of answers and cited in <b>{pctStr(geo.overall?.citation_rate)}</b>.{_heardList ? <> Instead, AI names {_heardList}.</> : null} <b>You are ready to be quoted, but not yet being chosen.</b></>
         )}
       </Verdict>
       <Split className="mt2" style={{ marginTop: 22 }}>
@@ -753,6 +771,31 @@ export default function DeckReport({ data, live }) {
 
   /* 10 · How the GEO score works — placed BEFORE the 0% numbers (item 13) so the reader
      understands how the 0–100 score is calculated before seeing the share/mention/citation. */
+  // GS1 — recompute the GEO score with readiness signals GATED to real visibility. "Cross-engine
+  // consistency 100%" while named in 0% of answers is consistency of ABSENCE, and content freshness can't
+  // lift a brand never cited; when there is NO visibility base (0% cited AND 0% named) we EXCLUDE
+  // consistency + freshness so the composite reads the real ~0, not an inflated 15. ONE definition, used
+  // here AND on the slide-25 scoreboard (SB1). Weights mirror model/constants.js GEO_SCORE_WEIGHTS.
+  const _geoSig = geo.overall?.signals || geo.score_breakdown?.signals || {};
+  const _geoVal = {
+    citation_presence: _geoSig.citation_presence ?? geo.overall?.citation_rate,
+    brand_presence: _geoSig.brand_presence ?? geo.overall?.mention_rate,
+    citation_position: _geoSig.citation_position,
+    intent_match: _geoSig.intent_match ?? geo.overall?.mention_rate,
+    cross_engine_consistency: _geoSig.cross_engine_consistency,
+    freshness: _geoSig.freshness,
+    topic_coverage: _geoSig.topic_coverage ?? geo.overall?.topic_coverage ?? (geo.topic_dominance?.total_topics ? geo.topic_dominance.client_lead_share : null),
+  };
+  const _GEO_W = { citation_presence: 30, brand_presence: 20, citation_position: 15, intent_match: 15, cross_engine_consistency: 10, freshness: 5, topic_coverage: 5 };
+  const _geoReadinessKeys = new Set(["cross_engine_consistency", "freshness"]);
+  const _geoPresence = Math.max(Number(_geoVal.citation_presence) || 0, Number(_geoVal.brand_presence) || 0);
+  const _geoGated = _geoPresence <= 0;   // no visibility → gate the readiness signals out of the score
+  const _geoScoreGated = (() => {
+    let n = 0, d = 0;
+    for (const k in _GEO_W) { let v = _geoVal[k]; if (_geoGated && _geoReadinessKeys.has(k)) v = null; if (v == null) continue; n += Number(v) * _GEO_W[k]; d += _GEO_W[k]; }
+    return d ? Math.round(n / d) : (Number(geo.overall?.geo_score) || 0);
+  })();
+  const _geoScore = (measured && (promptsRun || answersRun)) ? _geoScoreGated : (geo.overall?.geo_score ?? null);
   slides.push(
     <Slide key="geo-method" variant="dark" n="10" kicker="How The GEO Score Works" title="Every GEO number, and where it comes from"
       sub="No figure is invented. Each is collected by running real prompts and measuring you against the same competitors, every month." foot={foot("10 · GEO METHODOLOGY")}>
@@ -777,28 +820,32 @@ export default function DeckReport({ data, live }) {
             // weightedScore() sums. A signal with no data is EXCLUDED and its weight renormalizes across
             // the rest, so the composite below reproduces from exactly these rows. Keep weights in sync.
             const _pc = (v) => `${Math.round(Number(v))}%`;
-            const _s = geo.overall?.signals || geo.score_breakdown?.signals || {};
+            // GS1 — "Content freshness" (not "source freshness": with citation rate 0 it is the client's own
+            // content recency, not cited-source recency). Readiness signals are GATED out of the score when
+            // visibility is 0, and shown greyed with a "gated" note so the composite honestly reads ~0.
             const _comp = [
-              { key: "citation_presence", label: "Citation rate · you cited as the source", w: 30, v: _s.citation_presence ?? geo.overall?.citation_rate },
-              { key: "brand_presence", label: "Mention rate · named at all", w: 20, v: _s.brand_presence ?? geo.overall?.mention_rate },
-              { key: "citation_position", label: "Citation position · how high you rank", w: 15, v: _s.citation_position },
-              { key: "intent_match", label: "Intent match · right answer for the query", w: 15, v: _s.intent_match ?? geo.overall?.mention_rate },
-              { key: "cross_engine_consistency", label: "Cross-engine consistency", w: 10, v: _s.cross_engine_consistency },
-              { key: "freshness", label: "Source freshness", w: 5, v: _s.freshness },
-              { key: "topic_coverage", label: "Topic & entity coverage", w: 5, v: _s.topic_coverage ?? geo.overall?.topic_coverage ?? (geo.topic_dominance?.total_topics ? geo.topic_dominance.client_lead_share : null) },
+              { key: "citation_presence", label: "Citation rate · you cited as the source", w: 30 },
+              { key: "brand_presence", label: "Mention rate · named at all", w: 20 },
+              { key: "citation_position", label: "Citation position · how high you rank", w: 15 },
+              { key: "intent_match", label: "Intent match · right answer for the query", w: 15 },
+              { key: "cross_engine_consistency", label: "Cross-engine consistency", w: 10 },
+              { key: "freshness", label: "Content freshness", w: 5 },
+              { key: "topic_coverage", label: "Topic & entity coverage", w: 5 },
             ];
-            return _comp.map((r) => { const _has = r.v != null; return (
-              <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "4.5px 0", borderBottom: "1px solid rgba(255,255,255,.09)", opacity: _has ? 1 : 0.55 }}>
+            return _comp.map((r) => { const _isGated = _geoGated && _geoReadinessKeys.has(r.key); const v = _geoVal[r.key]; const _has = v != null && !_isGated; return (
+              <div key={r.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "4.5px 0", borderBottom: "1px solid rgba(255,255,255,.09)", opacity: _has ? 1 : 0.5 }}>
                 <span style={{ fontSize: 11, color: "#d6d0c6" }}>{r.label}</span>
                 <span style={{ whiteSpace: "nowrap", fontFamily: "var(--mono)", fontSize: 9.5 }}>
-                  <span style={{ color: C.rust, fontWeight: 700 }}>{_has ? _pc(r.v) : "no data"}</span>
-                  <span style={{ color: C.faint, marginLeft: 8 }}>· weight {r.w}%{_has ? "" : " · excluded"}</span>
+                  <span style={{ color: _isGated ? C.faint : C.rust, fontWeight: 700 }}>{v == null ? "no data" : _pc(v)}</span>
+                  <span style={{ color: C.faint, marginLeft: 8 }}>· weight {r.w}%{_isGated ? " · gated (0% visibility)" : (v == null ? " · excluded" : "")}</span>
                 </span>
               </div>
             ); })}
           )()}
-          <Verdict compact num={geo.overall?.geo_score ?? "N/A"}>
-            The composite is the <b>weighted average of the measured rows above</b> (a row with no data is excluded, its weight shared across the rest). Today the readiness-side signals carry it while share, mention and citation read 0%, so it reflects <b>readiness, not yet visibility</b> — the gap this plan closes. {isIllus ? IllusTag : null}
+          <Verdict compact num={_geoScore ?? "N/A"}>
+            {_geoGated
+              ? <>The composite is a <b>weighted average of the measured rows</b>, but the readiness signals (cross-engine consistency, content freshness) are <b>gated out</b> — "consistency" while named in 0% of answers is consistency of absence, not visibility. Cited and named in <b>0%</b>, the honest visibility score is <b>near zero</b>. That is the gap this plan closes. {isIllus ? IllusTag : null}</>
+              : <>The composite is the <b>weighted average of the measured rows above</b> (a row with no data is excluded, its weight shared across the rest). {isIllus ? IllusTag : null}</>}
           </Verdict>
         </div>
       </Split>
@@ -1203,7 +1250,7 @@ export default function DeckReport({ data, live }) {
               const _isCrawlGuide = /llms\.txt/i.test(`${s.label || ""} ${s.key || ""}`);
               const _base = s.label + (s.detail ? `, ${clamp(s.detail, 50)}` : "");
               if (s.ok && _isCrawlGuide && _geoZero) {
-                return { state: "do", text: <>{s.label} — <span style={{ color: "var(--muted)" }}>present (a crawl guide for AI engines)</span></> };
+                return { state: "do", text: <>{s.label} — <span style={{ color: "var(--muted)" }}>present, but emerging &mdash; no major engine is proven to cite from it yet</span></> };
               }
               return { state: s.ok ? "ok" : "no", text: _base };
             });
@@ -1553,7 +1600,7 @@ export default function DeckReport({ data, live }) {
         </div>
         <div className="metric-col">
           <h3 className="mini">AI answers (GEO) {isIllus ? <Hypo>Illustrative</Hypo> : null}</h3>
-          <Trend label="GEO score (0 to 100)" now={geo.overall?.geo_score} target="45+" />
+          <Trend label="GEO score (0 to 100)" now={_geoScore ?? geo.overall?.geo_score} target="45+" />
           <Trend label="Share of voice vs rivals" now={pctStr(geo.overall?.sov)} target="18%" />
           <Trend label="Mention rate" now={pctStr(geo.overall?.mention_rate)} target="35%" />
           <Trend label="Citation rate" now={pctStr(geo.overall?.citation_rate)} target="15%" />

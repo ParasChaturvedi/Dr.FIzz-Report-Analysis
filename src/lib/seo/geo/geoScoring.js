@@ -193,10 +193,20 @@ export function computeGeoMetrics(results = [], ctx = {}) {
   const variance = presences.length ? presences.reduce((a, b) => a + (b - avg) ** 2, 0) / presences.length : 0;
   const consistency = engines.length > 1 ? Math.max(0, r0(100 - Math.sqrt(variance))) : (engines.length === 1 ? 100 : 0);
 
-  for (const e of engines) { by_engine[e].signals.cross_engine_consistency = consistency; by_engine[e].geo_score = weightedScore(by_engine[e].signals); }
+  // GS1 — GATE readiness signals on real visibility. "Consistency 100%" while named in 0% of answers is
+  // consistency of ABSENCE, and freshness/topic can't lift a brand that is never cited/named. When the
+  // visibility base (citation OR brand presence) is 0, EXCLUDE cross_engine_consistency + freshness from
+  // the score (set null → weightedScore drops them) so a brand cited 0% can't post an inflated 15.
+  const _gateReadiness = (sig) => {
+    const presence = Math.max(Number(sig.citation_presence) || 0, Number(sig.brand_presence) || 0);
+    if (presence <= 0) { sig.cross_engine_consistency = null; sig.freshness = null; }
+  };
+  for (const e of engines) { by_engine[e].signals.cross_engine_consistency = consistency; _gateReadiness(by_engine[e].signals); by_engine[e].geo_score = weightedScore(by_engine[e].signals); }
 
   const overall = metricsFor(list);
   overall.signals.cross_engine_consistency = consistency;
+  overall.signals.cross_engine_consistency_raw = consistency;   // keep the raw value for the readiness panel
+  _gateReadiness(overall.signals);
   overall.geo_score = weightedScore(overall.signals);
   overall.engines_tested = engines.length;
   overall.prompts_total = list.length;
