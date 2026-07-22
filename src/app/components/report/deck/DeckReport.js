@@ -45,7 +45,7 @@ const _DECK_NOISE_GEN = new Set(`technical core web vitals google business profi
 model models version versions customize customise connectors connector skills skill sources source ask asked canvas prompt prompts thread threads assistant assistants question questions answer answers example examples reason reasons factor factors option options feature features benefit benefits use uses case cases level levels item items element elements aspect aspects part parts area areas field fields topic topics subject subjects step steps way ways tip tips point points thing things kind kinds type types
 compare choose select find learn discover manage improve grow increase boost provide deliver offer help support explore ensure evaluate consider assess review identify
 continue continues continued follow followup followed following related expand collapse next previous back forward submit cancel confirm close open apply reset clear done save saved read reading show hide view more less button link click tap here now today overview overviews summary details detail info information
-large small big huge tiny major minor focus focuses focused offers offering provides providing helps helping serves serving covers covering includes including features featuring targets targeting typical typically standard custom various multiple single dedicated specialized specialised known scale scales
+large small big huge tiny major minor focus focuses focused offers offering provides providing helps helping serves serving covers covering includes including features featuring targets targeting typical typically standard custom various multiple single dedicated specialized specialised known scale scales market markets mid midmarket segment segments enterprise enterprises startup startups smb sme
 best top leading better great various several many most other some new latest popular common general specific main key major minor primary secondary basic advanced simple easy modern important trusted reliable professional expert quality affordable premium comprehensive complete full total leading proven established experienced
 sign in history workflow workflows bookkeeping accounting accountant accountants payroll taxation audit auditing compliance advisory finance financial
 startup startups founder founders entrepreneur entrepreneurs enterprise enterprises freelancer freelancers ecommerce b2b b2c india indian usa uk chennai mumbai delhi bengaluru bangalore pune hyderabad noida gurgaon kolkata ahmedabad jaipur surat lucknow
@@ -1410,7 +1410,14 @@ export default function DeckReport({ data, live }) {
   const _gbpDial = _gbpFields.length ? Math.round((_gbpPass / _gbpFields.length) * 100) : (gbpScore ?? 0);
   slides.push(
     <Slide key="gbp" n="17" kicker="Google Business Profile" title="Your fastest path into local results"
-      sub={<>{(() => { const _s = ds.gbp_sub || "The map pack drives most local enquiries. Your reviews already beat rivals; the profile just needs completing."; return (_gbpDial != null) ? _s.replace(/\b\d{1,3}\s*(?:percent|%)\s+complete/gi, `${_gbpDial} percent complete`) : _s; })()} <Pillar kind="local" label="Local SEO" /></>} foot={foot("17 · GOOGLE BUSINESS PROFILE")}>
+      sub={<>{(() => { const _s = ds.gbp_sub || "The map pack drives most local enquiries. Your reviews already beat rivals; the profile just needs completing."; if (_gbpDial == null) return _s;
+        // Reconcile whatever completeness figure the LLM wrote in the subtitle to the DIAL value, in any
+        // phrasing it uses — "85 percent complete", "85% complete/done", "85 out of 100", "85/100" — so the
+        // subtitle never contradicts the dial (A1). Numbers that aren't completeness (reviews, star rating)
+        // are left alone. */
+        return _s
+          .replace(/\b\d{1,3}\s*(?:percent|%)\s+(?:complete|done)\b/gi, `${_gbpDial} percent complete`)
+          .replace(/\b\d{1,3}\s*(?:out of|\/)\s*100\b/gi, `${_gbpDial} out of 100`); })()} <Pillar kind="local" label="Local SEO" /></>} foot={foot("17 · GOOGLE BUSINESS PROFILE")}>
       <div className="gbp-split">
         <Ring value={_gbpDial} />
         <div className="gbp-checks">

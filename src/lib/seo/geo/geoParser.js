@@ -64,7 +64,7 @@ _OPENERS,
 ...`services service solutions solution company companies agency agencies firm firms provider providers platform platforms
 business businesses brand brands branding team teams group groups digital marketing seo sem ppc smm advertising ads
 design designs development developer media creative consulting consultancy consultants studio studios partners partner
-global international national local regional enterprise enterprises industries industry sector market marketplace clients client
+global international national local regional enterprise enterprises industries industry sector sectors segment segments mid midmarket smb sme market markets marketplace clients client
 customers customer results result strategy strategies campaign campaigns content social website websites web app apps
 software tool tools email ecommerce e-commerce commerce retail wholesale b2b b2c saas crm cms roi kpi ux ui api seo-friendly
 analytics automation optimization optimisation conversion engagement audience traffic leads sales revenue growth
