@@ -1613,6 +1613,23 @@ export default function Step5Slide2({
     }
   };
 
+  // Auto-start collection the moment this final step mounts (i.e. right after Step 6 · competitors) —
+  // no Dashboard click needed, restoring the older "it just starts" behaviour. The ref guard + a short
+  // delay make it run EXACTLY once (survives React StrictMode's double-invoke) and lets the passed-in
+  // inputs (business / competitors / keywords) settle before the pipeline reads them. handleDashboard's
+  // own `if (loading) return` is a second guard against any double-start.
+  const _autoStarted = useRef(false);
+  const [autoStartPending, setAutoStartPending] = useState(true);   // hides the manual Dashboard button until (or unless) auto-start fires
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (_autoStarted.current) return;
+      _autoStarted.current = true;
+      try { handleDashboard(); } catch (e) { console.warn("[Step5] auto-start failed:", e?.message); setAutoStartPending(false); }
+    }, 450);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── UI primitives ─────────────────────────────────────────────────────────
   const CardShell = ({ title, icon, children, onClick, isActive = false, ariaLabel }) => (
     <div className="relative h-full">
@@ -1850,7 +1867,7 @@ export default function Step5Slide2({
 
               {/* Instruction */}
               <div className="mt-2 text-center text-[12px] sm:text-[13px] md:text-[14px] text-[var(--muted)]">
-                All set? Click <span className="font-semibold">'Dashboard'</span> to continue.
+                {autoStartPending ? <span className="font-semibold text-[var(--text)]">Starting your analysis…</span> : <>All set? Click <span className="font-semibold">'Dashboard'</span> to continue.</>}
                 <span className="mx-1" />
                 <button onClick={onBack} className="underline hover:no-underline text-[var(--text)]" type="button">
                   Back
@@ -1975,7 +1992,9 @@ export default function Step5Slide2({
             >
               <ArrowLeft size={16} /> Back
             </button>
-            {!loading && (
+            {/* Collection auto-starts when this step mounts (right after Step 6 · competitors), so the
+                manual Dashboard button is hidden. It only appears as a fallback if auto-start didn't fire. */}
+            {!loading && !autoStartPending && (
               <button
                 onClick={handleDashboard}
                 className="inline-flex items-center gap-2 rounded-full bg-[image:var(--infoHighlight-gradient)] px-6 sm:px-8 py-2.5 sm:py-3 text-white hover:opacity-90 shadow-sm text-[13px] md:text-[14px]"
