@@ -1325,11 +1325,13 @@ export default function Step5Slide2({
       let geoBlocked = false, geoBlockReason = "";
       updateStage("geoLlm", { state: "loading", value: "Finalising AI-visibility scan…" }, { force: true });
       try {
-        // The report waits for the FULL scan (every engine, every prompt) so it never shows partial
-        // or dummy data. At 5 concurrent Browserless browsers a complete 5-engine scan finishes in
-        // ~20-25 min; this 40-min cap is only a safety net so a genuinely stuck scan can't hang the
-        // flow forever (was 3h). The report is HELD, not shown with insufficient data, if it is hit.
-        const GEO_MAX_MS = 40 * 60 * 1000, GEO_POLL_MS = 8000, geoStart = Date.now();
+        // Wait for the full scan so the report opens with REAL GEO data. A 6-engine hybrid scan at
+        // GEO_CONCURRENCY=2 now takes ~40-48 min (adding Copilot ~doubled the 5-engine ~23-min time),
+        // so the old 40-min cap was SHORTER than the scan itself — the wait timed out before the scan
+        // finished and the report was wrongly held. 55 min covers a single 6-engine run; if the scan is
+        // still not done by then (e.g., queued behind another run), the data-gate below no longer HOLDS
+        // the report — it ships with the GEO section hydrating live (the report page keeps polling).
+        const GEO_MAX_MS = 55 * 60 * 1000, GEO_POLL_MS = 8000, geoStart = Date.now();
         let geoDone = false;
         while (Date.now() - geoStart < GEO_MAX_MS) {
           const gr = await fetch(`/api/seo/geo/report?domain=${encodeURIComponent(domain)}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
@@ -1353,19 +1355,27 @@ export default function Step5Slide2({
         updateStage("geoLlm", { state: "error", value: "AI-visibility scan incomplete" });
       }
 
-      // ── DATA-GATE before report generation (Phase 1 complete?): the report may NOT proceed
-      // until EVERY core source really returned data — the site crawl, the SEO metrics
-      // (DataForSEO / Moz), and the GEO scan (4 engines). If even one is missing, HOLD the report
-      // entirely — never render on incomplete data. The user retries once the source is back.
-      const _dataMissing = [];
-      if (geoBlocked) _dataMissing.push(`AI-visibility scan (${geoBlockReason})`);
-      if (!crawlJson) _dataMissing.push("site crawl");
-      if (!seoJson || (typeof seoJson === "object" && Object.keys(seoJson).length === 0)) _dataMissing.push("SEO metrics (DataForSEO / Moz)");
-      if (_dataMissing.length) {
-        updateStage("report", { state: "error", value: `Held — data incomplete: ${_dataMissing.join(", ")}` });
+      // ── DATA-GATE before report generation. HOLD only when the SEO CORE is missing — the site crawl
+      // and the SEO metrics (DataForSEO / Moz) — because the report IS mostly SEO and can't render
+      // without them. The GEO scan must NOT hard-block the whole report: a 6-engine scan runs ~45 min
+      // (longer than the wait window, or queued behind another run), and holding the entire report on it
+      // turned a slow-but-fine scan into "no report at all / no redirect". Instead, when GEO isn't
+      // measured yet we SHIP the report — its GEO section opens in the measuring state and hydrates LIVE
+      // as the scan lands (the report page keeps polling /api/seo/geo/report). Honest, never dummy data.
+      const _coreMissing = [];
+      if (!crawlJson) _coreMissing.push("site crawl");
+      if (!seoJson || (typeof seoJson === "object" && Object.keys(seoJson).length === 0)) _coreMissing.push("SEO metrics (DataForSEO / Moz)");
+      if (_coreMissing.length) {
+        updateStage("report", { state: "error", value: `Held — data incomplete: ${_coreMissing.join(", ")}` });
         try { stopFakeProgress(); } catch {}
         try { setProgressPct(100); } catch {}
-        return;   // stop the pipeline; no report is generated until ALL data is collected
+        return;   // stop the pipeline; the SEO core must be present to render anything
+      }
+      if (geoBlocked) {
+        // GEO still collecting / queued / slow — proceed anyway. The report opens with the GEO section
+        // measuring and fills in live; do NOT trap the user on this step waiting for a 45-min scan.
+        console.warn(`[Step5] GEO not measured within the wait window (${geoBlockReason}) — generating the report now; GEO hydrates live.`);
+        updateStage("geoLlm", { state: "done", value: "AI scan still collecting — the report fills it in live" });
       }
 
       // ── Report generation (all-source data-gate passed above) ─────────────
