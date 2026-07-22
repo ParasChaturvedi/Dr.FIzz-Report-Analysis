@@ -864,6 +864,12 @@ ${spine || "- (none captured; build from the metrics above)"}`;
 // ─── Main POST handler ─────────────────────────────────────────────────────────
 
 export async function POST(request) {
+  // Wall-clock start of this invocation. Vercel HARD-KILLS the function at maxDuration (300s); the
+  // heavy Claude steps (main analysis + a possible QA re-analysis + the deck narrative) are sequential,
+  // so we gate the optional ones on how much of that 300s budget is left — a report that ships slightly
+  // less polished but PERSISTS + redirects always beats a 504 that loses the whole run.
+  const _reqStart = Date.now();
+  const _elapsedMs = () => Date.now() - _reqStart;
   try {
     const body = await request.json().catch(() => ({}));
     const {
@@ -1272,12 +1278,25 @@ export async function POST(request) {
         // verified:false hold, never to an endless regen loop.
         const _dataFail = new Set(["Website Validation", "Performance (PSI)", "Domain Metrics", "Website Crawl", "Content Extraction", "On-Page Analysis", "Keyword Rankings", "Local SEO (GMB)", "Competitor Audit", "Keyword Gap"]);
         let _nq = runQaGate(structuredPayload, JSON.stringify(aiSections)), _p = 0;
-        while (!_nq.passed && _p < 1) {   // max ONE regeneration — bounds latency (Vercel 300s) + Claude cost
+        while (!_nq.passed && _p < 1) {   // max ONE regeneration — bounds Claude cost
           const _fix = (_nq.failures || []).filter((f) => !_dataFail.has(f.name)).map((f) => `- ${f.name}${f.detail ? `: ${f.detail}` : ""}`);
           if (!_fix.length) break;   // only missing-data failures remain → not regen-fixable
+          // TIME-BUDGET GATE (the real fix for intermittent "report didn't generate / no redirect"): the
+          // re-analysis is ANOTHER full Claude call. The first pass alone can take ~280s, so blindly firing
+          // a second one blew Vercel's 300s cap → the function was KILLED before the persist → the report
+          // was LOST and the client showed "Report did not finish" with no redirect. Only re-analyse if
+          // enough of the 300s window is left for the regen + deck narrative + persist; otherwise SHIP the
+          // first pass FLAGGED (verified:false → opens for review) so it always persists and redirects.
+          const _regenBudget = 300000 - _elapsedMs() - 70000;   // reserve ~70s for deck narrative + persist
+          if (_regenBudget < 60000) { console.warn(`[generate-analysis] QA re-analysis SKIPPED — only ${Math.round((300000 - _elapsedMs()) / 1000)}s of the 300s budget left; shipping first pass flagged`); break; }
           _p += 1;
-          console.log(`[generate-analysis] QA rejected (${_nq.failures.length} issue(s)) — Claude re-analysing, pass ${_p}`);
-          const _re = await generateWebsiteAnalysis({ ..._genArgs, fixInstructions: _fix.join("\n") });
+          console.log(`[generate-analysis] QA rejected (${_nq.failures.length} issue(s)) — Claude re-analysing, pass ${_p} (≤${Math.round(_regenBudget / 1000)}s)`);
+          // Cap the regen to the remaining budget — if it would run past the window, abandon it and keep
+          // the first pass rather than let the whole function time out.
+          const _re = await Promise.race([
+            generateWebsiteAnalysis({ ..._genArgs, fixInstructions: _fix.join("\n") }),
+            new Promise((r) => setTimeout(() => r(null), _regenBudget)),
+          ]);
           if (_re && Object.keys(_re).length) { aiSections = _re; _nq = runQaGate(structuredPayload, JSON.stringify(aiSections)); } else break;
         }
         qaResult = _nq;   // narrative-aware QA → feeds reportData + the verified gate
@@ -1444,14 +1463,16 @@ export async function POST(request) {
 
     // ── Deck storytelling (the reference-deck voice, from the real data above) ──
     let deckStory = null;
-    if (reportType === "website") {
+    // Only attempt the (optional) deck narrative when enough of the 300s window remains for it + the
+    // persist; on a slow run we skip it so the report still ships (the deck uses a template narrative).
+    if (reportType === "website" && (300000 - _elapsedMs()) > 45000) {
       try {
         const bmv = (k1, k2) => { const o = baselineMetrics?.[k1]; const v = o && typeof o === "object" ? o.value : o; return v != null ? v : (baselineMetrics?.[k2] ?? null); };
         const sp = structuredPayload || {};
         const oppS = sp.v2_additions?.opportunity_summary || {};
         const cp = (sp.content_architecture?.commercial_pages || aiSections.contentArchitecture?.commercial_pages || [])[0] || null;
         const comps = [...(aiSections.competitorLandscape?.localCompetitors || []), ...(aiSections.competitorLandscape?.nationalPlatforms || [])];
-        deckStory = await generateDeckNarrative({
+        deckStory = await Promise.race([ generateDeckNarrative({
           name: businessData?.businessName || businessData?.name || domain,
           domain,
           industry: businessData?.industrySector || businessData?.industry || businessData?.category || "",
@@ -1473,7 +1494,12 @@ export async function POST(request) {
           // the scan had completed (30 prompts x 5 engines). Derive it from the real GEO state:
           // measured when the geo-visibility scan produced answers (mirrors runBusinessLogic's gate).
           geoMeasured: !!(geoViz && (geoViz.measured === true || (Array.isArray(geoViz.responses) && geoViz.responses.length > 0))),
-        });
+        }),
+          // Deck storytelling is optional polish (the deck fills in a template narrative when it's absent).
+          // Never let it push the function past Vercel's 300s window and lose the whole report — cap it to
+          // the budget left (min 20s so a fast run still gets it, never past ~persist-reserve).
+          new Promise((r) => setTimeout(() => r(null), Math.min(55000, Math.max(1000, 300000 - _elapsedMs() - 20000)))),
+        ]);
         if (deckStory && Object.keys(deckStory).length) console.log(`[generate-analysis] deck narrative: ${Object.keys(deckStory).length} storytelling slots generated`);
         // item 5 — the deck narrative renders on 15+ slides, so it MUST be sanitized too:
         // strip OCR markers ("Start of OCR for page 1") and normalize domain-typo tokens,
@@ -1496,7 +1522,9 @@ export async function POST(request) {
         // limit. The cap is only a backstop against a truly stuck state that cannot occur now.
         const audit = await Promise.race([
           siteAuditPromise,
-          new Promise((r) => setTimeout(() => r(null), Number(process.env.EVAL_AWAIT_CAP_MS || 160000))),
+          // Cap the audit wait to the SMALLER of its own cap and the 300s budget left (reserve ~12s for
+          // assemble + persist) so a not-yet-finished audit can never time the whole function out.
+          new Promise((r) => setTimeout(() => r(null), Math.min(Number(process.env.EVAL_AWAIT_CAP_MS || 160000), Math.max(1000, 300000 - _elapsedMs() - 12000)))),
         ]);
         if (audit) {
           const { gradeReport } = await import("@/lib/seo/crawler/technicalEvaluator");
