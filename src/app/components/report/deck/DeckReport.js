@@ -1318,7 +1318,15 @@ export default function DeckReport({ data, live }) {
               return { state: s.ok ? "ok" : "no", text: _base };
             });
           })()} />
-          {(!air.signals || air.signals.length === 0) && <p className="small">Readiness signals populate from the on-site crawl.</p>}
+          {/* E2 — the numeric trust signals ("231 sameAs links", "avg 2569 words/page") were stated
+              without their evidence source. Attribute them to the on-site crawl (rule 9) so they read as
+              measured aggregates over the crawled pages, not invented figures. */}
+          {(() => {
+            const _crawlPages = d.websiteCrawl?.pageCount || (d.websiteCrawl?.pages || []).length || 0;
+            return (air.signals && air.signals.length)
+              ? <p style={{ fontSize: 9, color: C.faint, marginTop: 9, lineHeight: 1.5, fontStyle: "italic" }}>Measured from your on-site crawl{_crawlPages ? ` of ${_crawlPages} pages` : ""} — counts such as sameAs links and average words per page are aggregates across those crawled pages, not estimates.</p>
+              : <p className="small">Readiness signals populate from the on-site crawl.</p>;
+          })()}
         </div>
       </Split>
       <Triad className="mt2">
