@@ -229,6 +229,24 @@ export default function DeckReport({ data, live }) {
       return true;
     });
   })();
+  // CB1 / X1 — ONE canonical competitor registry. The GEO scan stores lowercased brand tokens
+  // ("webchutney", "iprospect", "thesocialstreet"); the SEO module has the display names ("Dentsu
+  // Webchutney", "iProspect", "The Social Street"). Map a GEO token back to the configured display name (by
+  // full-name key, domain stem, OR last word) so both modules read ONE label. Hoisted here so the SoV chart
+  // (11), the intro callout (09) and the mentions table (13A) all use it. Unmatched discovered brands
+  // (pagetraffic, Schbang) pass through unchanged.
+  const [_canonName, _canonTracked] = (() => {
+    const map = new Map();
+    const key = (k) => lc(String(k || "")).replace(/[^a-z0-9]/g, "");
+    const put = (k, v) => { const kk = key(k); if (kk && !map.has(kk)) map.set(kk, v); };
+    for (const c of (comps || [])) {
+      const disp = String(c?.name || c?.domain || "").trim(); if (!disp) continue;
+      put(disp, disp);
+      if (c?.domain) put(String(c.domain).replace(/^www\./, "").split(".")[0], disp);
+      const w = disp.split(/\s+/); if (w.length > 1) put(w[w.length - 1], disp);   // "Dentsu Webchutney" → "webchutney"
+    }
+    return [(nm) => map.get(key(nm)) || nm, (nm) => map.has(key(nm))];   // canonical display name; is-a-registered-competitor
+  })();
 
   // GEO: REAL when a scan finished, else LABELED-ILLUSTRATIVE (same shape, tagged in UI).
   const primaryService = titleCase(_caDF.commercial_pages?.[0]?.keyword_cluster || d.businessData?.category || d.businessData?.offeringType || "").toLowerCase() || "";
@@ -313,7 +331,7 @@ export default function DeckReport({ data, live }) {
   })();
   const leader = [...sov].filter((b) => !b.is_client).sort((a, b) => (b.avg || 0) - (a.avg || 0))[0] || null;
   // G1 — name the top brands actually heard, not just one, so the callout shows the real field.
-  const _topHeard = [...sov].filter((b) => !b.is_client && (b.avg || 0) > 0).sort((a, b) => (b.avg || 0) - (a.avg || 0)).slice(0, 3).map((b) => b.brand).filter(Boolean);
+  const _topHeard = [...sov].filter((b) => !b.is_client && (b.avg || 0) > 0).sort((a, b) => (b.avg || 0) - (a.avg || 0)).slice(0, 3).map((b) => _canonName(b.brand)).filter(Boolean);
   const _heardList = _topHeard.length > 1 ? `${_topHeard.slice(0, -1).join(", ")} and ${_topHeard[_topHeard.length - 1]}` : (_topHeard[0] || "");
 
   // ── Canonical 5-engine framing. The by-platform panels always list all canonical engines:
@@ -898,7 +916,7 @@ export default function DeckReport({ data, live }) {
             ? [...aioCompetitorsFull.sort((a, b) => b.pct - a.pct), aioSovRows.find((s) => s.is_client), ...aioSovRows.filter((s) => s.is_other)].filter(Boolean).map((b, i) => (
                 <CBar key={i} name={b.brand + (b.is_client ? " (you)" : "")} pct={b.pct} you={b.is_client} value={`${Math.round(b.pct)}%`} />))
             : (sov.filter((b) => !b.is_client).length
-              ? sovRows.map((b, i) => (<CBar key={i} name={b.brand + (b.is_client ? " (you)" : (b.discovered ? " (AI-named)" : ""))} pct={b.avg} you={b.is_client} value={b.mentions > 0 ? `${Math.round(b.avg)}% · ${b.mentions}` : `${Math.round(b.avg)}%`} />))
+              ? sovRows.map((b, i) => (<CBar key={i} name={(b.is_client ? b.brand : _canonName(b.brand)) + (b.is_client ? " (you)" : (b.discovered ? " (AI-named)" : ""))} pct={b.avg} you={b.is_client} value={b.mentions > 0 ? `${Math.round(b.avg)}% · ${b.mentions}` : `${Math.round(b.avg)}%`} />))
               : citedDomains.slice(0, 6).map((d, i) => { const mx = citedDomains[0]?.count || 1; return <CBar key={i} name={String(d.domain).replace(/^www\./, "")} pct={Math.round((d.count / mx) * 100)} value={`${d.count}×`} noPctLabel />; }))}
         </div>
         <div>
@@ -918,14 +936,14 @@ export default function DeckReport({ data, live }) {
       <Triad className="mt2">
         <Tc kind="evidence" label="Evidence">{aioMeasured
           ? <>In Google AI Overviews, {aioCompStr || "rivals"} are cited while <b>{name} appears in 0</b> of {aio.total_citations} citations.</>
-          : <><b>{leader?.brand || "The leader"}</b> leads share of voice at {Math.round(leader?.avg || 0)}%; you hold {pctStr(geo.overall?.sov)}{promptsRun ? <> — measured across {promptsRun} prompts × {enginesRun} engine{enginesRun > 1 ? "s" : ""}, so the slice is auditable, not a bare percentage</> : null}.</>}</Tc>
+          : <><b>{_canonName(leader?.brand) || "The leader"}</b> leads share of voice at {Math.round(leader?.avg || 0)}%; you hold {pctStr(geo.overall?.sov)}{promptsRun ? <> — measured across {promptsRun} prompts × {enginesRun} engine{enginesRun > 1 ? "s" : ""}, so the slice is auditable, not a bare percentage</> : null}.</>}</Tc>
         <Tc kind="cost" label="What it costs you">Every AI recommendation that omits you is a <b>warm, high-intent lead</b> handed to a competitor.</Tc>
         <Tc kind="action" label="Do this first">Publish answer-first FAQ pages on your <b>core service questions</b> to enter the answer set where rivals are already cited.</Tc>
       </Triad>
       {/* item 2/8 — when EVERY GEO metric reads 0, say plainly this is a real measured result,
           not a broken scan, and point to the near-miss signal (who WAS named/cited instead). */}
       {(!aioMeasured && measured && (Number(geo.overall?.mention_rate) || 0) === 0 && (Number(geo.overall?.citation_rate) || 0) === 0 && (Number(geo.overall?.sov) || 0) === 0) ? (
-        <Callout className="mt2"><b>Is a flat 0% a scan error? No, it is a real measured result.</b> Across {promptsRun ? `${promptsRun} prompts` : "the full prompt set"} on {enginesRun || CANON_ENGINES.length} AI engines, {name} was named in <b>0</b> answers and cited <b>0</b> times. The scan did run and did capture answers. {citedDomains.length ? <>It found <b>{citedDomains.slice(0, 3).map((d) => String(d.domain).replace(/^www\./, "")).join(", ")}</b>{citedDomains.length > 3 ? " and others" : ""} cited in your place.</> : <>It found rivals named in your place.</>} So this is not a suspicious blank. You are genuinely absent from AI answers today, which is precisely the gap this plan closes.</Callout>
+        <Callout className="mt2"><b>Is a flat 0% a scan error? No, it is a real measured result.</b> Across {promptsRun ? `${promptsRun} prompts` : "the full prompt set"} on {enginesRun || CANON_ENGINES.length} AI engines, {name} was named in <b>0</b> answers and cited <b>0</b> times. The scan did run and did capture answers. {citedDomains.length ? <>On the separate <b>citation axis</b>, the engines cited <b>{citedDomains.slice(0, 3).map((d) => String(d.domain).replace(/^www\./, "")).join(", ")}</b>{citedDomains.length > 3 ? " and others" : ""} instead — the per-prompt breakdown is on slides 13B–13C.</> : <>It found rivals named in your place.</>} So this is not a suspicious blank. You are genuinely absent from AI answers today, which is precisely the gap this plan closes.</Callout>
       ) : null}
       {/* item 2 (AIO-only) — same reassurance when only Google AI Overviews is measured and the
           brand is cited 0 times. Without this, the AIO-only state showed a bare 0% and no context. */}
@@ -935,7 +953,7 @@ export default function DeckReport({ data, live }) {
       {/* discovered competitors — brands AI named that the client never listed. Real, unexpected
           market intel: names to watch that surfaced organically in the answers. */}
       {(!aioMeasured && measured && _discovered.length) ? (
-        <Callout className="mt2"><b>AI also named rivals you didn't list.</b> Beyond your competitor set, the answers surfaced <b>{_discovered.slice(0, 5).map((b) => b.brand).join(", ")}</b>, brands the AI recommends in your space that are worth watching. We measured them the same way, so they appear in the share of voice above, tagged <b>AI-named</b>.</Callout>
+        <Callout className="mt"><b>AI also named rivals beyond your set</b> — <b>{_discovered.slice(0, 5).map((b) => _canonName(b.brand)).join(", ")}</b> — shown above tagged <b>AI-named</b>, measured the same way.</Callout>
       ) : null}
     </Slide>
   );
@@ -1039,6 +1057,15 @@ export default function DeckReport({ data, live }) {
   for (const _p of geoPool) { const _s = new Set(); for (const _b of (Array.isArray(_p.brands_named) ? _p.brands_named : [])) { const _k = lc(String(_b).trim()); if (_k && !_s.has(_k)) { _s.add(_k); _namedCount[_k] = (_namedCount[_k] || 0) + 1; } } }
   const _cfgNamedSet = new Set((comps || []).map((c) => lc(c?.name || c?.domain || "").trim()).filter(Boolean));
   const _corroboratedName = (n) => { const k = lc(String(n).trim()); return _cfgNamedSet.has(k) || (_namedCount[k] || 0) >= 2; };
+  // M1 — render "who it named" with EVERY brand the engine named, the tracked competitors highlighted
+  // (bold + rust) and sorted first, and display names canonicalised. Was a plain join that gave no signal
+  // about which of the named brands is a tracked rival.
+  const _namedRender = (p) => {
+    const b = _namedOf(p); if (!b.length) return _emptyCell(p, "— none named");
+    const tracked = (n) => _canonTracked(n) || _cfgNamedSet.has(lc(String(n).trim()));
+    const sorted = [...b].sort((x, y) => (tracked(y) ? 1 : 0) - (tracked(x) ? 1 : 0));
+    return <span>{sorted.map((n, i) => <span key={i}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}<span style={tracked(n) ? { fontWeight: 700, color: C.rust } : undefined}>{_canonName(n)}</span></span>)}</span>;
+  };
   // 3.5 — a configured rival (business/API competitor) is always a real brand, so it BYPASSES the
   // topic-noise net (which now also drops generic segment/location tokens like "Startups"/"India Sign");
   // only DISCOVERED names must clear _deckTopicNoise. Mirrors the SoV belt.
@@ -1123,9 +1150,28 @@ export default function DeckReport({ data, live }) {
     return sug ? <span style={{ color: "#3C7D5A", fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".02em" }}>&rarr; {sug.kind === "have" ? "cite" : "build"} {clamp(sug.url, 24)}</span> : <span style={{ color: "var(--muted)" }}>—</span>;
   };
   const _thirdPartySrcCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "third_party" || s.type === "unknown" || s.type === "social"); return list.length ? _srcList(list, 3) : (_answeredRow(p) ? <span style={{ color: "var(--muted)" }}>—</span> : "—"); };
+  // CC1 / X2 — mentions (brands named) and citations (URLs cited) are two axes; and a CITATION splits
+  // into a competitor-owned URL vs a third-party (directory/publisher) URL. Route cited_domains into two
+  // SEPARATE columns (was blended under "direct sources = own site, yours + rival"). Deterministic at
+  // render via _classifySrc (matches the configured competitor domains). "owned" (your own page cited) is
+  // a win, so it rides in the competitor column tagged as yours.
+  const _competitorCitedCell = (p) => {
+    const list = _srcsTypedOf(p).filter((s) => s.type === "competitor" || s.type === "owned");
+    if (list.length) return <span>{list.slice(0, 3).map((s, i) => <span key={i} style={{ color: s.type === "owned" ? "#3C7D5A" : C.rust }}>{i > 0 ? <span style={{ color: "var(--muted)" }}>, </span> : null}{s.source}</span>)}{list.length > 3 ? <span style={{ color: "var(--muted)" }}> +{list.length - 3} more</span> : null}</span>;
+    return <span style={{ color: C.faint }}>{_answeredRow(p) ? "no competitor cited" : "—"}</span>;
+  };
+  // CI1 — say "no source cited yet" EXPLICITLY (not a blank) so the reader can tell "genuinely none" from
+  // "not scraped". A true non-answer stays a bare "—".
+  const _thirdPartyCitedCell = (p) => { const list = _srcsTypedOf(p).filter((s) => s.type === "third_party" || s.type === "unknown" || s.type === "social"); return list.length ? _srcList(list, 3) : <span style={{ color: C.faint }}>{_answeredRow(p) ? "no source cited yet" : "—"}</span>; };
+  // CC1 — the "build this page" recommendation is kept, but moved OUT of the sources columns (it is an
+  // action, not an observed citation) onto a sub-line under the prompt so the two citation columns show
+  // only what was actually cited.
+  const _buildRecLine = (p) => { const sug = _suggestClientUrl(p); return sug ? <div style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".02em", color: "#3C7D5A", marginTop: 3 }}>&rarr; {sug.kind === "have" ? "cite" : "build"} {clamp(sug.url, 30)}</div> : null; };
+  const _promptWithBuild = (p) => <>{clamp(p.prompt, 96)}{_buildRecLine(p)}</>;
   const _srcSplitLegend = <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 18px", marginTop: 10, paddingTop: 7, borderTop: "1px solid var(--line)", fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--muted)", whiteSpace: "normal" }}>
-    <span><b style={{ color: C.ink }}>Direct sources</b> = own site (<span style={{ color: "#3C7D5A" }}>●</span> yours · <span style={{ color: C.rust }}>●</span> rival)</span>
-    <span><b style={{ color: C.ink }}>Third-party</b> = directories &amp; publishers (<span style={{ color: "#B07A2E" }}>●</span> social = earn a listing, not a blog)</span>
+    <span><b style={{ color: C.rust }}>●</b> <b style={{ color: C.ink }}>competitor URL cited</b> · <span style={{ color: "#3C7D5A" }}>●</span> your own page cited</span>
+    <span><b style={{ color: C.ink }}>Third-party</b> = directories &amp; publishers cited</span>
+    <span><span style={{ color: "#3C7D5A" }}>&rarr;</span> the page to build/cite is an action, not an observed citation</span>
   </div>;
   // B20 — name the third-party sources AI ACTUALLY cited in this scan, not a generic hardcoded
   // list (Clutch/DesignRush/G2/Reddit). Falls back to unnamed "directories and round-ups" if none.
@@ -1159,7 +1205,7 @@ export default function DeckReport({ data, live }) {
       // borderline prompt as two-line is the safe direction (shows one fewer row, never clips).
       const _rowBudget = srcSplit ? 200 : 340;                       // px of table-body height before the footer must start (srcSplit reserves a row for the legend below the table — CC2)
       const _wrapAt = srcSplit ? 40 : 56;                            // prompt chars that fit on one line in this column
-      const _rowPx = (p) => { const n = String(p.prompt || "").length; const base = n > _wrapAt * 2 ? 82 : (n > _wrapAt ? 60 : 38); return srcSplit ? Math.max(base, 60) : base; }; // 1 / 2 / 3-line row height; srcSplit rows carry multi-domain Direct/Third-party cells that wrap, so never estimate shorter than a 2-line row (stops the table bleeding into the legend)
+      const _rowPx = (p) => { const n = String(p.prompt || "").length; const base = n > _wrapAt * 2 ? 82 : (n > _wrapAt ? 60 : 38); return srcSplit ? Math.max(base, 60) + 16 : base; }; // 1 / 2 / 3-line row height; srcSplit rows carry multi-domain cited-URL cells + a "page to build" sub-line under the prompt (+16px), so never estimate shorter than a 2-line row (stops the table bleeding into the legend)
       const _shownRows = [];
       { let _u = 0; for (const p of group) { const c = _rowPx(p); if (_u + c > _rowBudget && _shownRows.length) break; _u += c; _shownRows.push(p); } }
       const _shown = _shownRows.length;
@@ -1172,10 +1218,10 @@ export default function DeckReport({ data, live }) {
             DIRECT (brand's own domain) vs THIRD-PARTY AGGREGATORS; the §5.4 "cite this page" fix rides
             IN the Direct-sources cell (when empty), so it costs no row height. */}
         <DataTable compact head={srcSplit
-            ? [{ label: "Buyer prompt" }, { label: "Engine" }, { label: "Direct sources · to cite" }, { label: "Third-party aggregators" }, { label: `${name} result`, align: "right" }]
+            ? [{ label: "Buyer prompt · page to build" }, { label: "Engine" }, { label: "Competitor URLs cited" }, { label: "Third-party URLs cited" }, { label: `${name} result`, align: "right" }]
             : [{ label: "Buyer prompt" }, { label: "Engine" }, { label: whoLabel }, { label: `${name} result`, align: "right" }]}
           rows={_shownRows.map((p) => srcSplit
-            ? { cells: [clamp(p.prompt, 110), engName(p.engine), { v: _directSrcCell(p) }, { v: _thirdPartySrcCell(p) }, { align: "right", v: _resCell(p) }] }
+            ? { cells: [{ v: _promptWithBuild(p) }, engName(p.engine), { v: _competitorCitedCell(p) }, { v: _thirdPartyCitedCell(p) }, { align: "right", v: _resCell(p) }] }
             : (() => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 150), engName(p.engine), (typeof _who === "string" ? clamp(_who, 110) : { v: _who }), { align: "right", v: _resCell(p) }] }; })())} />
         {legend || null}
         {group.length
@@ -1189,7 +1235,7 @@ export default function DeckReport({ data, live }) {
     slides.push(_campaignSlide("13a", "geo-prompts-mentions",
       "Mentions: where AI names brands, and who gets picked",
       "Best and top style questions. AI answers these from third-party listicles and directories, naming the brands it trusts. You do not win these with your own page, you earn the mention.",
-      GROUPS.mentions, "Who it named", (p) => { const b = _namedOf(p); return b.length ? b.join(", ") : _emptyCell(p, "— none named"); },
+      GROUPS.mentions, "Who it named (tracked rivals bold)", _namedRender,
       <Triad className="mt">
         <Tc kind="evidence" label="The pattern">On these listicle questions AI names <b>rivals from directories and round-ups</b>{name ? <>, rarely {name}</> : null}.</Tc>
         <Tc kind="cost" label="What it costs you">Buyers act on the <b>names AI returns</b>, so every un-listed prompt is a lead that never hears of you.</Tc>
