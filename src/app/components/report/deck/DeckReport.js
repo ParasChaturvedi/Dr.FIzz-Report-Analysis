@@ -417,7 +417,10 @@ export default function DeckReport({ data, live }) {
   const pg = () => String(++_pg).padStart(2, "0");
   // S27 — carry the data-as-of stamp in EVERY page footer (not just the cover), so any single slide is
   // self-dating. Kept compact (domain · date) so the centered footer never overflows.
-  const _asOf = d.generatedAt ? dateGB(d.generatedAt) : null;
+  // Date stamps are REAL-TIME (the current date at view), NOT the cached generatedAt — a report opened
+  // today always reads today, never a stale cached generation date (Paras: date must be realtime). The
+  // deck renders client-side (DeckReportLive is ssr:false), so new Date() is the viewer's current date.
+  const _asOf = dateGB(new Date().toISOString());
   const foot = (left) => ({ left, mid: _asOf ? `${domain} · ${_asOf}` : domain, pg: pg() });
 
   const traffic0 = mv(bm, "organic_traffic", "organicTraffic");
@@ -437,7 +440,7 @@ export default function DeckReport({ data, live }) {
       title={name.includes(" ") ? <>{name.split(" ")[0]}<br />{name.split(" ").slice(1).join(" ")}</> : name}
       lede={ds.cover_lede || `A data-led plan to make ${name} visible where buyers search. Across Google, and across the new AI answer engines.`}
       meta={[
-        { k: "PREPARED FOR", v: domain }, { k: "DATE", v: dateGB(d.generatedAt) },
+        { k: "PREPARED FOR", v: domain }, { k: "DATE", v: _asOf },
         // Data-provenance note (near the top): states what really backs the report — a completed
         // multi-engine GEO scan (prompts × engines) vs a pending scan — so no figure is mistaken
         // for measured when it is not. SEO figures are always measured (Moz / DataForSEO crawl).
@@ -1736,7 +1739,7 @@ export default function DeckReport({ data, live }) {
   })();
   const _hasWall = _wallBrands.length >= 4;
   slides.push(
-    <Slide key="close" variant="dark" n={null} kicker={_hasWall ? "The Competitive Field" : "Ready When You Are"} title={_hasWall ? "The brands competing for your market" : `Let's make ${name} visible`} contentTop foot={{ left: "DOCTOR FIZZ · doctorfizz.com", mid: `Confidential, data as of ${dateGB(d.generatedAt)}`, pg: pg() }}>
+    <Slide key="close" variant="dark" n={null} kicker={_hasWall ? "The Competitive Field" : "Ready When You Are"} title={_hasWall ? "The brands competing for your market" : `Let's make ${name} visible`} contentTop foot={{ left: "DOCTOR FIZZ · doctorfizz.com", mid: `Confidential, data as of ${_asOf}`, pg: pg() }}>
       {_hasWall ? <CLGrid names={_wallBrands} /> : null}
       <div className="close-band">
         <div className="close-steps">
