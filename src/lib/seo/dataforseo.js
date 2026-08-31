@@ -1059,6 +1059,12 @@ export async function fetchDomainRankOverview(domain, options = {}) {
   const cached = cacheGet(CACHE.seo, cacheKey);
   if (cached) return cached;
 
+  // 30-day Mongo cache (survives across report runs + reused cross-client for shared
+  // competitor domains). Same data → 0% quality change; only skips a repeat live fetch.
+  const dfsRankKey = `df-domain-rank:${options.countryCode || "in"}`;
+  const rankHit = await getCached({ domain: target, dataType: dfsRankKey, ttlDays: 30 });
+  if (rankHit) { cacheSet(CACHE.seo, cacheKey, rankHit, 30 * 60 * 1000); return rankHit; }
+
   const auth = Buffer.from(`${login}:${password}`).toString("base64");
 
   try {
@@ -1106,6 +1112,7 @@ export async function fetchDomainRankOverview(domain, options = {}) {
     if (typeof out.rank === "number" && out.rank > 100) out.rank = Math.round(out.rank / 10);
 
     cacheSet(CACHE.seo, cacheKey, out, 30 * 60 * 1000);
+    try { await putCached({ domain: target, dataType: dfsRankKey, payload: out, source: "dataforseo-labs" }); } catch {}
     return out;
   } catch {
     return null;
@@ -1215,6 +1222,10 @@ export async function fetchCompetitorDomains(domain, options = {}) {
   const cached = cacheGet(CACHE.seo, cacheKey);
   if (cached) return cached;
 
+  const compKey = `df-competitors:${options.countryCode || "in"}`;
+  const compHit = await getCached({ domain: target, dataType: compKey, ttlDays: 30 });
+  if (Array.isArray(compHit) && compHit.length) { cacheSet(CACHE.seo, cacheKey, compHit, 30 * 60 * 1000); return compHit; }
+
   const auth = Buffer.from(`${login}:${password}`).toString("base64");
 
   try {
@@ -1265,6 +1276,7 @@ export async function fetchCompetitorDomains(domain, options = {}) {
       .filter(Boolean);
 
     cacheSet(CACHE.seo, cacheKey, out, 30 * 60 * 1000);
+    if (out.length) { try { await putCached({ domain: target, dataType: compKey, payload: out, source: "dataforseo-labs" }); } catch {} }
     return out;
   } catch {
     return [];
@@ -1294,6 +1306,10 @@ export async function fetchRankedKeywords(domain, options = {}) {
   const cacheKey = `rankedKeywords:${target}`;
   const cached = cacheGet(CACHE.seo, cacheKey);
   if (cached) return cached;
+
+  const rkKey = `df-ranked-kw:${options.countryCode || "in"}`;
+  const rkHit = await getCached({ domain: target, dataType: rkKey, ttlDays: 30 });
+  if (Array.isArray(rkHit) && rkHit.length) { cacheSet(CACHE.seo, cacheKey, rkHit, 30 * 60 * 1000); return rkHit; }
 
   const auth = Buffer.from(`${login}:${password}`).toString("base64");
 
@@ -1368,6 +1384,7 @@ export async function fetchRankedKeywords(domain, options = {}) {
       .filter(Boolean);
 
     cacheSet(CACHE.seo, cacheKey, out, 30 * 60 * 1000);
+    if (out.length) { try { await putCached({ domain: target, dataType: rkKey, payload: out, source: "dataforseo-labs" }); } catch {} }
     return out;
   } catch {
     return [];

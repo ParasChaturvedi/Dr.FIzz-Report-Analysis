@@ -4,7 +4,7 @@ import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
 import { getCached, putCached, cacheConfigured } from "@/lib/cache/mongo";
-import { scoreCompleteness, summarizeUsage } from "@/lib/cache/usage";
+import { scoreCompleteness, summarizeUsage, toINR } from "@/lib/cache/usage";
 import { reportCacheType } from "@/lib/cache/report-key";
 
 import { claudeChatStream } from "@/lib/claude/client";
@@ -1009,6 +1009,22 @@ export async function POST(request) {
       if (dr              == null) dr              = domainRankData.rank             ?? null;
     }
 
+    // ── DATA-ACCURACY GUARD (organic footprint) ──────────────────────────────
+    // DataForSEO's domain_rank_overview UNDER-COUNTS small / newer domains: it returned
+    // organic.count = 1 for acenteus-cca.com, yet our OWN keyword-gap analysis shows the
+    // site actually ranks for 20+ real keywords (positions 4-13, real search volumes).
+    // Reporting "1 keyword / ~0 traffic" understates the client's organic presence — the SEO
+    // analogue of the SoV=0 false-negative. When our measured ranked-keyword evidence exceeds
+    // the overview count, use it (a true LOWER BOUND) + a position-weighted traffic estimate.
+    // Fires ONLY when ranked evidence > overview, so it never lowers a correct value.
+    const _tgtRanked = Array.isArray(prefetchedSeoData?.keywordGap?.targetRanked) ? prefetchedSeoData.keywordGap.targetRanked : [];
+    if (_tgtRanked.length > (Number(organicKeywords) || 0)) {
+      organicKeywords = _tgtRanked.length;
+      const _ctr = (p) => (p <= 1 ? 0.28 : p <= 2 ? 0.15 : p <= 3 ? 0.11 : p <= 5 ? 0.07 : p <= 10 ? 0.03 : 0.012);
+      const _estTraffic = _tgtRanked.reduce((s, k) => s + (Number(k.volume) || 0) * _ctr(Number(k.position) || 100), 0);
+      if (_estTraffic > (Number(organicTraffic) || 0)) organicTraffic = Math.round(_estTraffic);
+    }
+
     // Domain Rating + referring domains + total backlinks come from Moz, the DataForSEO
     // domain overview does NOT carry them, which is why the report was showing them as
     // "unavailable". Same accurate source the Info panel uses (e.g. itzfizz DA 52).
@@ -1578,7 +1594,7 @@ export async function POST(request) {
       const usd = Math.round(usage.totalUSD * 100) / 100;
       reportData.metrics = {
         cost: {
-          usd, inr: Math.round(usd * 84),
+          usd, inr: toINR(usd),
           claudeUSD: Math.round(usage.claudeUSD * 100) / 100,
           apiUSD: Math.round(usage.apiUSD * 1000) / 1000,
           byApi: usage.byApi, calls: usage.calls, cacheHits: usage.cacheHits,

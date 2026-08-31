@@ -10,6 +10,7 @@ import {
   Link2,
   LineChart,
 } from "lucide-react";
+import { useAuthUser } from "./auth/authContext";
 
 function NavItem({ id, label, Icon, onClick, active = false, disabled = false }) {
   return (
@@ -51,6 +52,15 @@ export default function Sidebar({
   infoActive = false,
   variant = "default", // "default" | "editor"
 }) {
+  const auth = useAuthUser();
+  const user = auth?.user;
+  const displayName = user?.name || "Profile";
+  const avatarUrl = user?.avatar || null;
+  const initials = (() => {
+    const s = (user?.name || user?.email || "").trim();
+    const p = s.split(/[.\s@]+/).filter(Boolean);
+    return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || null;
+  })();
   return (
     <aside
       className="fixed left-0 top-0 h-full
@@ -60,8 +70,15 @@ export default function Sidebar({
     >
       {/* Logo */}
       <div className="pt-1.5 pb-4 md:pt-2 md:pb-5">
-        <div className="round-circle rounded-full bg-transparent flex border-6 border-zinc-950">
-          <div className="rounded-full bg-[#111827] flex justify-center items-center place-items-center p-4 m-1"></div>
+        <div className="round-circle rounded-full bg-transparent flex border border-zinc-950">
+          <div className="rounded-full bg-[#111827] flex justify-center items-center place-items-center h-9 w-9 md:h-11 md:w-11 lg:h-12 lg:w-12 overflow-hidden">
+            <img
+              src="/brand/doctorfizz-mark.png"
+              alt="DoctorFizz"
+              draggable="false"
+              className="h-full w-full object-cover select-none"
+            />
+          </div>
         </div>
       </div>
 
@@ -124,28 +141,33 @@ export default function Sidebar({
         <button
           type="button"
           aria-label="Open profile"
-          className="group flex flex-col items-center cursor-pointer outline-none"
+          onClick={() => auth?.openProfile?.()}
+          className="group flex flex-col items-center cursor-pointer outline-none w-full"
         >
           <span
-            className={[
-              "h-10 w-10 md:h-11 md:w-11 rounded-full grid place-items-center shadow-md",
-              "transition-colors duration-300",
-              "bg-[#000] dark:bg-[#000]",
-              "group-hover:bg-[#000] dark:group-hover:bg-[#000]",
-              "focus-visible:ring-2 focus-visible:ring-red-500",
-              "focus-visible:ring-offset-2 focus-visible:ring-offset-white",
-              "dark:focus-visible:ring-offset-[#1f2121]",
-            ].join(" ")}
+            className="h-10 w-10 md:h-11 md:w-11 rounded-full grid place-items-center overflow-hidden shadow-sm
+                       transition-colors duration-300
+                       focus-visible:ring-2 focus-visible:ring-red-500
+                       focus-visible:ring-offset-2 focus-visible:ring-offset-white
+                       dark:focus-visible:ring-offset-[#1f2121]"
+            style={{ border: "1px solid #000", background: "#fff" }}
           >
-            <span className="h-4 w-4 md:h-5 md:w-5 rounded-full bg-white" />
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" draggable="false" className="h-full w-full object-cover" />
+            ) : initials ? (
+              <span className="text-[12px] md:text-[13px] font-semibold" style={{ color: "#000" }}>{initials}</span>
+            ) : (
+              <span className="h-4 w-4 md:h-5 md:w-5 rounded-full" style={{ background: "#000" }} />
+            )}
           </span>
 
           <span
-            className="mt-2 text-[12px] md:text-[14px] text-[#6B7280]
+            className="mt-2 max-w-[68px] truncate text-[12px] md:text-[14px] text-[#6B7280]
                        transition-colors duration-200
                        group-hover:text-[#000] dark:group-hover:text-[#000]"
+            title={displayName}
           >
-            Profile
+            {displayName}
           </span>
         </button>
       </div>

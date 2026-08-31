@@ -17,7 +17,9 @@ import { useEffect } from "react";
 
 export default function DeckAutoFit() {
   useEffect(() => {
-    const READABLE = 0.82;   // below this, scaling makes text too small — grow the slide instead
+    const READABLE = 0.7;   // below this, scaling makes text too small — grow the slide instead.
+    // Kept moderately low so a slightly-tall slide SCALES to fit the fixed 16:9 page (complete,
+    // a touch smaller) rather than growing past 720 and getting clipped in the fixed-height PDF export.
     const fitOne = (content) => {
       const inner = content.querySelector(":scope > .content-fit") || content.querySelector(".content-fit");
       if (!inner) return;

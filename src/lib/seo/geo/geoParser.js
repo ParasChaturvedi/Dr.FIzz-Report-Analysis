@@ -71,6 +71,15 @@ analytics automation optimization optimisation conversion engagement audience tr
 google chatgpt gemini perplexity claude copilot microsoft openai anthropic bing meta amazon apple facebook instagram
 linkedin twitter youtube tiktok pinterest shopify wordpress wix webflow squarespace hubspot mailchimp klaviyo salesforce
 zoho magento woocommerce wordpress ai llm gpt overview overviews
+xero quickbooks sage freshbooks myob netsuite tally wave sap oracle datev sapling
+hmrc icaew acca aat ifrs gaap mtd vat paye cis sme smes outsourcing offshoring bookkeeping payroll
+gdpr eori utr nino outsourced offshore onshore nearshore uk-based cloud-based compliant regulated
+accounting accountancy security show making tax audit taxation advisory bookkeepers accountants fintech
+verify access continue submit review start choose select compare explore learn discover contact
+scalability efficiency flexibility reliability productivity profitability accuracy transparency expertise experience quality affordability
+work works team teams help support staff staffing task tasks project projects data setup onboarding training benefits features pricing overview summary conclusion introduction
+compliance integration automation optimization migration implementation consulting advisory technology innovation growth performance management operations strategy planning reporting analysis assessment evaluation verification validation certification accreditation governance workflow workflows scope scoping standards standard controls control confidentiality privacy protection responsibility accountability
+london manchester birmingham leeds glasgow edinburgh bristol liverpool brighton sheffield cardiff belfast newcastle nottingham leicester coventry reading oxford cambridge york bath surrey kent essex sussex yorkshire scotland wales england britain
 clutch designrush goodfirms sortlist trustpilot capterra yelp glassdoor sitejabber ambitionbox reddit quora medium forbes wikipedia upwork fiverr sulekha justdial indiamart tradeindia g2 techtarget
 profile profiles maps map engine engines search graphic page pages listing listings review reviews rating ratings
 post posts vitals core experience voice keyword keywords backlink backlinks ranking rankings score scores sitemap
@@ -95,7 +104,7 @@ const _GEN_ACRONYMS = new Set("seo sem smm ppc roi roas ctr cta cpc cpm cro ux u
 // send) — when a new engine (esp. Copilot) is scanned, its own interface text leaks into the parse as
 // bogus "brands" ("Copilot Today", "India Message Copilot", "Smart I'm"). An engine name is never an
 // agency competitor, so drop any name containing one.
-const _ARTEFACT = new Set("roas roi ctr cpc cpm cpa aov ltv cac spend spending impressions terms continue submit cancel confirm signin signup logout settings regenerate rewrite upvote downvote message smart send copilot chatgpt gemini claude perplexity aioverviews bing".split(/\s+/));
+const _ARTEFACT = new Set("roas roi ctr cpc cpm cpa aov ltv cac spend spending impressions terms continue submit cancel confirm signin signup logout settings regenerate rewrite upvote downvote message smart send copilot chatgpt gemini claude perplexity aioverviews bing quickbooks quickbook xero sage freshbooks myob netsuite tally dext datev wave".split(/\s+/));
 // split hyphens too so "Full-Service" is seen as two generic words, and flag verb-contraction fragments ("I'm", "you're").
 const _artWords = (words) => words.flatMap((w) => String(w).split(/[-–—]/)).filter(Boolean);
 const _isArtefactName = (words) => _artWords(words).some((w) => { const l = String(w).toLowerCase(); return _ARTEFACT.has(l) || _ARTEFACT.has(l.replace(/s$/, "")); }) || words.some((w) => /['’](m|re|ve|ll|d)$/i.test(String(w)));
@@ -116,6 +125,44 @@ best top leading trusted popular great better various several many different ess
 overall additionally furthermore moreover meanwhile instead therefore finally ultimately importantly notably specifically generally typically usually often sometimes perhaps maybe likely probably certainly clearly obviously interestingly unfortunately fortunately similarly likewise conversely alternatively
 founded headquartered depending prominent notable renowned numerous regarding following specializing nevertheless assuming establishing operating serving ranked listed featured awarded recognized dedicated committed established known trusted proven
 with from into onto over under about above below near then than while when where which whom whose your their they them our its this that these those also just only more less most least very`.split(/\s+/).filter(Boolean));
+
+// ── Brand-name match variants (alias normalisation) ───────────────────────────
+// AI answers name a brand the way people say it, NOT by its legal name: "Acenteus CCA
+// Global Ltd" is said as "Acenteus CCA" or "Acenteus". Matching only the full configured
+// name misses every mention → the client posts 0 mentions → Share of Voice reads 0% even
+// when it is clearly named (the acenteus-cca.com bug). Build ordered match variants — the
+// full name, the name with trailing corporate/legal + generic-industry words stripped, and
+// the distinctive leading token — then count the LONGEST variant that actually appears (so
+// "Acenteus CCA" and "Acenteus" in the same answer are never double-counted).
+const _CORP_SUFFIX = new Set("ltd limited llc inc incorporated plc llp lp pvt private co corp corporation company group holding holdings global international worldwide enterprises enterprise ventures partners associates consulting consultancy".split(/\s+/));
+function brandMatchTerms(rawName) {
+  const canon = canonBrand(rawName);
+  if (!canon) return [];
+  const words = canon.split(/\s+/).filter(Boolean);
+  const terms = [canon];
+  // strip trailing corporate/legal + generic-industry words → the "spoken" brand
+  let core = [...words];
+  while (core.length > 1) {
+    const last = core[core.length - 1].toLowerCase().replace(/[.,]/g, "");
+    if (_CORP_SUFFIX.has(last) || _GENERIC.has(last)) core.pop(); else break;
+  }
+  if (core.length && core.length < words.length) terms.push(core.join(" "));
+  // the distinctive leading token — admitted only when it is not itself a generic/stop word,
+  // so "Acenteus" matches but "Best"/"Digital" from "Best Digital Ltd" never becomes a lone match.
+  const lead = (core[0] || words[0] || "");
+  const leadLc = lead.toLowerCase();
+  if (lead.length >= 4 && !_GENERIC.has(leadLc) && !_STOPWORDS.has(leadLc)) terms.push(lead);
+  return [...new Set(terms)].filter((t) => t && t.length >= 3).sort((a, b) => b.length - a.length);
+}
+// occurrence of the LONGEST match variant that appears (count + first index), or a miss.
+function brandOccurrence(text, rawName, nonAnswer) {
+  if (nonAnswer) return { count: 0, firstIndex: -1 };
+  for (const t of brandMatchTerms(rawName)) {
+    const o = firstOccurrence(text, t);
+    if (o.count > 0) return o;
+  }
+  return { count: 0, firstIndex: -1 };
+}
 
 // MENTION vs CITATION — directory / publisher / review-site / social names the AI ATTRIBUTES to are
 // CITATIONS (sources), never competitor brand MENTIONS. _GENERIC catches the single-word ones (clutch,
@@ -290,8 +337,10 @@ export function parseAnswer(response = {}, ctx = {}) {
   // ── mentions (with first-appearance order) ──
   const entities = [];
   const _occ = (name) => (_nonAnswer ? { count: 0, firstIndex: -1 } : firstOccurrence(text, name));   // non-answer → nothing counts as mentioned
-  if (brand) entities.push({ name: brand, type: "brand", domain: brandDomain, ..._occ(brand) });
-  for (const c of competitors) entities.push({ name: c.name, type: "competitor", domain: c.domain, ..._occ(c.name) });
+  // brand + competitors match on NORMALISED variants (legal-suffix / short-name aware) so
+  // "Acenteus CCA Global Ltd" is found as "Acenteus CCA" or "Acenteus" — the SoV=0 fix.
+  if (brand) entities.push({ name: brand, type: "brand", domain: brandDomain, ...brandOccurrence(text, ctx.brand, _nonAnswer) });
+  for (const c of competitors) entities.push({ name: c.name, type: "competitor", domain: c.domain, ...brandOccurrence(text, c.name, _nonAnswer) });
   const present = entities.filter((e) => e.count > 0).sort((a, b) => a.firstIndex - b.firstIndex);
   present.forEach((e, i) => { e.position = i + 1; });
 
@@ -300,7 +349,12 @@ export function parseAnswer(response = {}, ctx = {}) {
   const competitorMentions = entities.filter((e) => e.type === "competitor" && e.count > 0).map(toMention);
 
   // discovered competitors — brands the AI named that are NOT the client or a configured rival.
-  const _known = new Set([brand, ...competitors.map((c) => c.name)].filter(Boolean).map((s) => s.toLowerCase()));
+  // exclude the brand's + competitors' match VARIANTS from open discovery (so "Acenteus"/"Acenteus
+  // CCA" is counted as the client, never re-surfaced as a separate "discovered" rival).
+  const _known = new Set([
+    brand, ...competitors.map((c) => c.name),
+    ...brandMatchTerms(ctx.brand), ...competitors.flatMap((c) => brandMatchTerms(c.name)),
+  ].filter(Boolean).map((s) => s.toLowerCase()));
   const discoveredBrands = _nonAnswer ? [] : discoverBrands(text, { known: _known, location: clean(ctx.location || ctx.region || "") });
 
   // ── citations (classified by domain) ──

@@ -1,6 +1,10 @@
 // src/lib/seo/psi.js
+import { getOrFetch } from "../cache/mongo";
 
 const PSI_API_KEY = process.env.PSI_API_KEY;
+
+const psiHostOf = (u) =>
+  String(u || "").replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase();
 
 if (!PSI_API_KEY) {
   console.warn("PSI_API_KEY is not set in .env.local");
@@ -34,7 +38,7 @@ if (!PSI_API_KEY) {
  *   raw: any
  * }>}
  */
-export async function fetchPsiForStrategy(url, strategy = "mobile") {
+async function _fetchPsiForStrategyLive(url, strategy = "mobile") {
   if (!url) throw new Error("fetchPsiForStrategy: url is required");
 
   const apiUrl =
@@ -166,6 +170,30 @@ export async function fetchPsiForStrategy(url, strategy = "mobile") {
     issueCounts,
     raw: data,
   };
+}
+
+/**
+ * 30-DAY CACHED wrapper (MongoDB, via getOrFetch). PSI data (perf score + Core
+ * Web Vitals) is slow-moving, so we serve it from the same 30-day cache as the
+ * SEO data instead of re-hitting Google on every report + the Step-1 warmup.
+ * Keyed by domain + strategy (+ path for page-level reports) so mobile/desktop
+ * and different pages never collide. Fail-safe: no DB → live fetch; a PSI failure
+ * throws (unchanged) and is never cached, so a transient error self-heals.
+ */
+export async function fetchPsiForStrategy(url, strategy = "mobile") {
+  if (!url) throw new Error("fetchPsiForStrategy: url is required");
+  const domain = psiHostOf(url);
+  let path = "/";
+  try { path = new URL(url).pathname || "/"; } catch {}
+  const dataType = path === "/" ? `psi:${strategy}` : `psi:${strategy}:${path}`;
+  const { data } = await getOrFetch({
+    domain,
+    dataType,
+    ttlDays: 30,
+    source: "psi",
+    fetchFn: () => _fetchPsiForStrategyLive(url, strategy),
+  });
+  return data;
 }
 
 /**

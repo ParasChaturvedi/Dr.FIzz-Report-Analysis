@@ -126,7 +126,12 @@ async function fetchHtmlDirect(url, { timeoutMs = 15000 } = {}) {
  */
 export async function fetchHtml(url) {
   const token = process.env.BROWSERLESS_TOKEN;
-  if (!token) throw new Error("Missing BROWSERLESS_TOKEN env variable");
+  // Browserless removed: with no token, use the direct-fetch path (same return shape) instead
+  // of throwing. Keeps site-profile / SEO content extraction working without Browserless.
+  if (!token) {
+    const direct = await fetchHtmlDirect(url, { timeoutMs: 15000 });
+    return { ok: direct.ok, status: direct.status || (direct.ok ? 200 : 0), html: direct.html, finalUrl: url, headers: {} };
+  }
 
   const release = await acquireBrowserlessSlot();
   try {

@@ -29,6 +29,11 @@ export const API_COST_USD = {
   report:         0,      // assembly only (Claude logged separately)
 };
 
+// USD -> INR for ALL cost display. One place to change the rate (or set USD_INR_RATE
+// env). Default 100 for clean mental math (1 USD = Rs 100).
+export const USD_INR = Number(process.env.USD_INR_RATE) || 95.77;
+export const toINR = (usd) => Math.round((Number(usd) || 0) * USD_INR);
+
 // Claude list prices, USD per 1M tokens: [input, output].
 const CLAUDE_PRICES = {
   "claude-opus-4-8":   [5, 25],

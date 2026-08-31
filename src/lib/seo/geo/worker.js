@@ -67,19 +67,20 @@ export async function runGeoJob(run, opts = {}) {
   const brandDomain = project.brand_domain || "";
   const competitors = (project.competitors || []).map((c) => (typeof c === "string" ? { name: c, domain: "" } : { name: c.name || c.brand || "", domain: c.domain || "" })).filter((c) => c.name || c.domain);
   const competitorDomains = competitors.map((c) => c.domain).filter(Boolean);
-  const selectedEngines = opts.engineKeys || run.selected_engines || run.engines || ["aioverviews", "perplexity", "claude"];
+  let selectedEngines = opts.engineKeys || run.selected_engines || run.engines || ["aioverviews", "perplexity", "claude"];
   const mode = opts.mode || "live";
 
-  // ── HYBRID transport routing ──────────────────────────────────────────────
-  // The 2 free/reliable engines stay LOCAL (Google AI Overviews = no login, Claude =
-  // Anthropic API). The 4 Cloudflare-gated consumer apps run through hosted Browserless
-  // with a RESIDENTIAL India IP (trusted IP bypasses "Just a moment…" + carries the
-  // captured login session). Each pass resolves its OWN provider and applies/restores
-  // its own env, so the two transports never collide. `hybrid` is the worker default
-  // once BROWSERLESS_TOKEN is present; --local / --browserless force a single transport.
-  const HYBRID_LOCAL = new Set(["aioverviews", "claude"]);
-  const HYBRID_BLESS = new Set(["chatgpt", "gemini", "perplexity", "copilot"]);
-  const hybrid = opts.transport === "hybrid";
+  // ── Transport: LOCAL only (VPS) — Browserless removed ──────────────────────
+  // Every engine runs on the worker host's OWN Chrome (captured .geo-sessions profiles)
+  // or the Anthropic API (Claude). No Browserless, no hosted browsers.
+  //
+  // OPS ALLOWLIST (GEO_WORKER_ENGINES): on the bare VPS datacenter IP the 3 consumer apps
+  // ChatGPT/Perplexity/Copilot are hard-blocked (Cloudflare "verify you are human" /
+  // Microsoft account step-up), so the worker is limited to the reliable set
+  // aioverviews,gemini,claude. To restore all 6, configure a residential India proxy
+  // (GEO_LOCAL_PROXY_SERVER in collector.js) and widen GEO_WORKER_ENGINES.
+  const _allow = String(process.env.GEO_WORKER_ENGINES || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (_allow.length) selectedEngines = selectedEngines.filter((e) => _allow.includes(e));
 
   const sessions = mode === "mock" ? {} : await loadGeoSessions().catch(() => ({}));
   const scanPrompts = prompts.map((p) => ({ id: p.prompt_id, prompt: p.prompt_text || p.prompt, brand }));
@@ -88,17 +89,17 @@ export async function runGeoJob(run, opts = {}) {
   const parsed = [];
   const perEngine = {};
   const allBlocked = [];
-  let saved = 0, failed = 0, cost = 0, stopped = false, readyCount = 0, providerLabel = hybrid ? "hybrid" : "";
+  let saved = 0, failed = 0, cost = 0, stopped = false, readyCount = 0, providerLabel = "";
 
-  await updateGeoRun(runId, { status: "running", started_at: run.started_at || nowIso(), execution_provider: hybrid ? "hybrid (local + browserless-residential)" : "" });
+  await updateGeoRun(runId, { status: "running", started_at: run.started_at || nowIso(), execution_provider: "local-playwright" });
 
   // Run ONE transport pass over a subset of engines (mutates the shared accumulators).
   async function runEnginePass(engineKeys, override) {
     if (!engineKeys.length) return;
     const provider = mode === "mock"
-      ? { provider: "mock", transport: "browserless", residentialProxy: false, proxyCountry: "", enabled: true, reason: "mock pipeline (no browser)" }
+      ? { provider: "mock", transport: "local", residentialProxy: false, proxyCountry: "", enabled: true, reason: "mock pipeline (no browser)" }
       : resolveExecutionProvider(run, { override });
-    if (!hybrid) providerLabel = provider.provider;
+    providerLabel = provider.provider;
     const adapters = await getEngineAdapters({ provider });
     const ready = mode === "mock" ? engineKeys : runnableEngines(adapters, engineKeys);
     const blocked = mode === "mock" ? [] : blockedEngines(adapters, engineKeys);
@@ -151,21 +152,9 @@ export async function runGeoJob(run, opts = {}) {
     } finally { try { restore(); } catch {} }
   }
 
-  if (hybrid) {
-    // Run the two passes CONCURRENTLY — the local pass (AIO + Claude, local Chrome / Anthropic API)
-    // and the Browserless pass (Gemini + Perplexity + ChatGPT, hosted residential, up to 10 parallel
-    // browsers) use SEPARATE infra, so overlapping them cuts the wall-clock to ≈ the slower pass. The
-    // report waits for the FULL scan so every engine runs every prompt (no partial / dummy data).
-    // Safe because: applyExecutionEnv no longer lets the local pass touch the Browserless env, and the
-    // shared accumulators are mutated on JS's single event loop (interleaved, never torn).
-    await Promise.all([
-      runEnginePass(selectedEngines.filter((e) => HYBRID_LOCAL.has(e)), "local-playwright"),
-      runEnginePass(selectedEngines.filter((e) => HYBRID_BLESS.has(e)), "browserless-residential-proxy"),
-    ]);
-  } else {
-    const override = opts.transport === "local" ? "local-playwright" : (opts.transport === "browserless" ? "browserless" : undefined);
-    await runEnginePass(selectedEngines, override);
-  }
+  // Single LOCAL pass over all selected engines. Browserless removed — every transport
+  // (local / hybrid / browserless / unset) resolves to the worker host's own Chrome.
+  await runEnginePass(selectedEngines, "local-playwright");
 
   // nothing runnable across all passes → honest session_required / failed, ZERO cost
   if (readyCount === 0) {

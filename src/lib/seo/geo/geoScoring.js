@@ -140,6 +140,9 @@ function shareOfVoice(byEngine, ctx) {
     Object.entries(discPrompts)
       .filter(([, s]) => s.size >= 2)      // must recur across ≥2 distinct prompts (this guards one-off noise)
       .filter(([n]) => !isTopicNoise(n))   // drop ONLY topic/UI noise (KPIs, GBP, "…Opens") — keep real single-word rivals (Techmagnate, Uplers) so SoV matches the p15 "who it named" column
+      // never surface a discovered row for the CLIENT or a CONFIGURED competitor (case-insensitive) —
+      // else "Bookstime" (AI-named) duplicates the tracked "bookstime" row on the SoV board.
+      .filter(([n]) => { const l = n.toLowerCase(); return l !== String(brandName).toLowerCase() && !_configured.has(l); })
       .sort((a, b) => b[1].size - a[1].size).slice(0, 5).map(([n]) => n)
   );
   for (const n of discSet) tally[n] ||= { brand: n, is_client: false, discovered: true, per_engine: {} };
@@ -161,7 +164,7 @@ function shareOfVoice(byEngine, ctx) {
     }
     for (const name of Object.keys(tally)) tally[name].per_engine[e] = pct(counts[name] || 0, total);
   }
-  const by_brand = Object.values(tally)
+  const by_brand0 = Object.values(tally)
     .filter((b) => b.is_client || _configured.has(String(b.brand).toLowerCase()) || !isTopicNoise(b.brand))   // §5 belt: drop topic/noise "brands" but NEVER a configured competitor (keeps every chosen rival, incl. all-generic-named ones, at ≥0%)
     .map((b) => {
       const vals = engines.map((e) => b.per_engine[e] || 0);
@@ -169,6 +172,25 @@ function shareOfVoice(byEngine, ctx) {
       b.mentions = totalCounts[b.brand] || 0;   // B11 — the underlying mention count behind the %
       return b;
     }).sort((a, b) => b.avg - a.avg);
+  // DEDUP by lowercased brand — a configured competitor ("bookstime") and its canonicalised
+  // parser casing ("Bookstime") are the SAME brand and must be ONE row (keep the higher share,
+  // OR the client/discovered flags, prefer the capitalised display name, sum the mention count).
+  const _seen = {};
+  const by_brand = [];
+  for (const b of by_brand0) {
+    const key = String(b.brand).toLowerCase();
+    const m = _seen[key];
+    if (m) {
+      m.is_client = m.is_client || b.is_client;
+      m.discovered = !!m.discovered && !!b.discovered;
+      m.mentions = (m.mentions || 0) + (b.mentions || 0);
+      if ((b.avg || 0) > (m.avg || 0)) { m.avg = b.avg; m.per_engine = b.per_engine; }
+      if (/[A-Z]/.test(b.brand) && !/[A-Z]/.test(m.brand)) m.brand = b.brand;
+      continue;
+    }
+    _seen[key] = b; by_brand.push(b);
+  }
+  by_brand.sort((a, b) => b.avg - a.avg);
   return { engines, by_brand };
 }
 
@@ -211,7 +233,24 @@ export function computeGeoMetrics(results = [], ctx = {}) {
   overall.engines_tested = engines.length;
   overall.prompts_total = list.length;
 
-  return { overall, by_engine, engines, share_of_voice: shareOfVoice(byEngine, ctx), measured: list.length > 0 };
+  const share_of_voice = shareOfVoice(byEngine, ctx);
+  // SOV2 — the HEADLINE SoV must use the SAME full-set denominator as the by_brand chart (every
+  // brand the AI named), NOT client-vs-tracked-only. Otherwise the title ("you hold 69 of 100")
+  // contradicts the chart ("you 11%"). Adopt the client's share from the full-set chart so the two agree.
+  const _clientRow = (share_of_voice.by_brand || []).find((b) => b.is_client);
+  if (_clientRow) {
+    overall.sov = _clientRow.avg;
+    overall.competitor_sov = Math.max(0, r0(100 - _clientRow.avg));
+    // X3 — the PER-ENGINE sov must ALSO use the full named-brand denominator, NOT client-vs-tracked.
+    // Else the "share of voice by platform" panel shows the client at 100% on an engine where it is
+    // simply the only TRACKED brand that appeared — impossible next to an 8% overall. Adopt the
+    // client's per-engine share straight from the full-set chart so the panel is consistent.
+    for (const e of engines) {
+      if (by_engine[e]) by_engine[e].sov = r0(Number(_clientRow.per_engine?.[e]) || 0);
+    }
+  }
+
+  return { overall, by_engine, engines, share_of_voice, measured: list.length > 0 };
 }
 
 export default computeGeoMetrics;

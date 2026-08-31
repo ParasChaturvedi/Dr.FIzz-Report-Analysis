@@ -119,8 +119,12 @@ export async function POST(req) {
           .slice(0, Math.min(hardCap, maxByBudget));
         const promptObjs = ordered.map((p, i) => ({ id: `gp${i + 1}`, theme: p.cluster || "geo", intent: p.intent || "", neutral: p.neutral !== false, prompt: p.prompt }));
 
+        // NOTE: this legacy inline route has no internal callers — the live GEO flow is
+        // /api/seo/geo/ensure → queue → the VPS worker (local Chrome). Browserless removed,
+        // so transport is local; on serverless (no local Chrome) runGeoScan returns no
+        // responses and this returns null gracefully.
         const scan = await runGeoScan({
-          mode: "live", transport: "browserless",
+          mode: "live", transport: "local",
           brand, clientDomain: domain, competitors, competitorDomains,
           industry, location, regionLabel, proxyCountry,
           engineKeys: allEngines, sessions,
@@ -128,12 +132,11 @@ export async function POST(req) {
         });
         if (!scan?.responses?.length) return null;
 
-        // Cost meter: the GEO scan's Browserless queries aren't otherwise tracked, so log
-        // an estimate (prompts × engines × per-query cost) → the per-report cost meter is
-        // accurate. GEO_QUERY_COST_USD defaults to a conservative $0.02/residential query.
+        // Cost meter: the GEO scan's queries aren't otherwise tracked, so log an estimate
+        // (prompts × engines × per-query cost) → the per-report cost meter stays accurate.
         try {
           const _queries = promptObjs.length * allEngines.length;
-          await logUsage({ domain, api: "geo-browserless", costUSD: _queries * Number(process.env.GEO_QUERY_COST_USD || 0.02), cached: false });
+          await logUsage({ domain, api: "geo-local", costUSD: _queries * Number(process.env.GEO_QUERY_COST_USD || 0.02), cached: false });
         } catch {}
 
         // §25 — ONE Claude deep-analysis pass (cached 30 days with the scan) that

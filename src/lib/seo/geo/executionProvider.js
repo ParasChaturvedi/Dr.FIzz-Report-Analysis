@@ -24,32 +24,15 @@ const LOCALIZED = new Set(["country", "state", "city"]);
  * @returns {{provider, transport, residentialProxy, proxyCountry, enabled, reason}}
  */
 export function resolveExecutionProvider(run = {}, opts = {}) {
-  const requested = String(opts.override || run.execution_provider || "worker-playwright").toLowerCase();
-  const hasToken = !!String(process.env.BROWSERLESS_TOKEN || "").trim();
+  // Browserless REMOVED — every run resolves to local Playwright on the worker host.
+  // The residential IP that Browserless used to provide (for the Cloudflare-gated engines)
+  // is now supplied, when configured, by a direct residential proxy on the local Chrome
+  // (GEO_LOCAL_PROXY_SERVER in collector.js), applied per-engine. proxyCountry stays for
+  // query localization (gl=in etc.); the worker fills it from the project country if empty.
   const locationMode = String(run.location_mode || "country").toLowerCase();
   const localized = LOCALIZED.has(locationMode);
   const proxyCountry = localized ? String(run.location_context?.country || run.country || "in").slice(0, 2).toLowerCase() : "";
-
-  // explicit local Playwright — no Browserless, no cost
-  if (requested.includes("local")) {
-    return { provider: "local-playwright", transport: "local", residentialProxy: false, proxyCountry: "", enabled: true, reason: "local Playwright (captured profiles)" };
-  }
-
-  // residential proxy variant — only meaningful for a localized market
-  const wantsResidential = requested.includes("residential") || (!!run.residential_proxy_enabled && localized);
-  if (wantsResidential) {
-    if (!hasToken) return disabled("BROWSERLESS_TOKEN not set — cannot use Browserless residential proxy");
-    if (!localized) return { provider: "browserless", transport: "browserless", residentialProxy: false, proxyCountry: "", enabled: true, reason: "Browserless (residential skipped — location is global/international)" };
-    return { provider: "browserless-residential-proxy", transport: "browserless", residentialProxy: true, proxyCountry, enabled: true, reason: `Browserless + residential proxy (${proxyCountry || "country"})` };
-  }
-
-  // plain Browserless (the worker-playwright default runs through Browserless when hosted)
-  if (requested.includes("browserless") || requested.includes("worker")) {
-    if (!hasToken) return disabled("BROWSERLESS_TOKEN not set — set it, or run the worker with --local for captured Chrome profiles");
-    return { provider: "browserless", transport: "browserless", residentialProxy: false, proxyCountry: "", enabled: true, reason: "Browserless (hosted)" };
-  }
-
-  return disabled(`unknown execution provider "${requested}"`);
+  return { provider: "local-playwright", transport: "local", residentialProxy: false, proxyCountry, enabled: true, reason: "local Playwright (captured profiles)" };
 }
 
 function disabled(reason) {

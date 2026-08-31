@@ -14,6 +14,8 @@
 // Docs: https://moz.com/products/api  (endpoints under https://lsapi.seomoz.com/v2)
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getOrFetch } from "../../cache/mongo";
+
 const MOZ_BASE = "https://lsapi.seomoz.com/v2";
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -56,7 +58,7 @@ const hostOf = (d) =>
 // Main: returns DataForSEO-shaped backlink/DA data, or null on any failure.
 // opts.withList=false skips the per-domain list call (cheaper — for competitors
 // where only DA + counts are shown, not the full referring-domains table).
-export async function fetchMozMetrics(domain, { listLimit = 25, withList = true } = {}) {
+async function _fetchMozMetricsLive(domain, { listLimit = 25, withList = true } = {}) {
   const host = hostOf(domain);
   if (!host || !mozConfigured()) return null;
 
@@ -124,5 +126,30 @@ export async function fetchMozMetrics(domain, { listLimit = 25, withList = true 
   } catch (err) {
     console.warn("[Moz] metrics fetch failed — will fall back to DataForSEO:", err?.message);
     return null;
+  }
+}
+
+// 30-DAY CACHED wrapper (MongoDB, via getOrFetch). Moz has NO other caching, so
+// the main domain was re-hit on every report (Step-1 warmup + generate-analysis)
+// and every repeat report. This dedupes it per (domain, withList, listLimit) for
+// 30 days. Fail-safe: no DB → live; a Moz miss returns null and is NEVER cached,
+// so the DataForSEO backlinks fallback still kicks in exactly as before.
+export async function fetchMozMetrics(domain, opts = {}) {
+  const host = hostOf(domain);
+  if (!host || !mozConfigured()) return null;
+  const { listLimit = 25, withList = true } = opts || {};
+  const dataType = `moz:l${withList ? 1 : 0}:${Math.min(Number(listLimit) || 25, 50)}`;
+  try {
+    const { data } = await getOrFetch({
+      domain: host,
+      dataType,
+      ttlDays: 30,
+      source: "moz",
+      fetchFn: () => _fetchMozMetricsLive(domain, opts),
+    });
+    return data;
+  } catch {
+    // Cache layer should never throw for a null return, but stay fail-safe.
+    return _fetchMozMetricsLive(domain, opts);
   }
 }

@@ -403,7 +403,7 @@ function AioVisibilityCard({ data, domain }) {
         <div className="mt-1">
           <div style={{ fontFamily: BODY, fontWeight: 700, fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase", color: "#6B6B6B", marginBottom: 6 }}>Per-keyword AI Overview — who Google cites</div>
           <ul className="space-y-1.5">
-            {data.per_keyword.slice(0, 10).map((p, i) => (
+            {data.per_keyword.map((p, i) => (
               <li key={i} style={{ fontFamily: BODY, fontSize: 12, color: "#5A5A5A", lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 600, color: INK }}>{p.keyword}</span>
                 <span style={{ color: "#9A9A9A" }}> → {(p.sources || []).slice(0, 4).join(", ") || "AI Overview cited no sources for this keyword"}</span>
@@ -1009,8 +1009,8 @@ function GeoLiveSection({ domain, fallbackStatus = null, source = null }) {
 
       {live.prompts_executed?.length > 0 && (
         <div className="rounded-lg bg-white p-5" style={cardB}>
-          <Lbl>Top {Math.min(10, live.prompts_executed.length)} prompts we ran &amp; deeply analysed{live.prompts_executed.length > 10 ? ` (of ${live.prompts_executed.length})` : ""} — real AI-engine answers</Lbl>
-          <div className="space-y-3 mt-2">{interleaveByEngine(live.prompts_executed).slice(0, 10).map((p, i) => (
+          <Lbl>All {live.prompts_executed.length} prompt{live.prompts_executed.length === 1 ? "" : "s"} we ran &amp; deeply analysed — real AI-engine answers</Lbl>
+          <div className="space-y-3 mt-2">{interleaveByEngine(live.prompts_executed).map((p, i) => (
             <div key={i} style={{ borderTop: i ? "1px solid #F0F0F0" : "none", paddingTop: i ? 10 : 0 }}>
               <div style={{ fontFamily: BODY, fontSize: "12.5px", fontWeight: 700, color: INK }}>{p.prompt} <span style={{ color: "#8A8A8A", fontWeight: 400 }}>· {engName(p.engine)}</span></div>
               {/* Per-prompt evidence (all real, parsed from THIS answer): were you named, how many

@@ -325,8 +325,12 @@ export default function DeckReport({ data, live }) {
     // drop only genuine topic/UI noise from the AI-discovered brands.
     const kept = _sovAll.filter((b) => b && (b.is_client || _sovCfgNames.has(lc(b.brand).trim()) || !_deckTopicNoise(b.brand))).map((b) => ({ ...b }));
     const nonClient = kept.filter((b) => !b.is_client);
+    const clientAvg = Number(kept.find((b) => b.is_client)?.avg) || 0;
     const sum = nonClient.reduce((s, b) => s + (Number(b.avg) || 0), 0);
-    if (sum > 0) for (const b of nonClient) b.avg = Math.round((Number(b.avg) / sum) * 1000) / 10;
+    // Re-normalise the rivals into the room LEFT BY the client (100 − client%), not to a full 100 —
+    // else the bars sum to >100 (client 8% + rivals 100% = 108%). Client bar stays = the title %.
+    const room = Math.max(0, 100 - clientAvg);
+    if (sum > 0) for (const b of nonClient) b.avg = Math.round((Number(b.avg) / sum) * room * 10) / 10;
     return kept.sort((a, b) => (Number(b.avg) || 0) - (Number(a.avg) || 0));
   })();
   const leader = [...sov].filter((b) => !b.is_client).sort((a, b) => (b.avg || 0) - (a.avg || 0))[0] || null;
@@ -369,7 +373,7 @@ export default function DeckReport({ data, live }) {
   // length (one row per prompt-engine answer) / the run's completed_count, not the full grid.
   const answersRun = (geo.prompts_executed || []).length || Number(geo.run?.completed_count) || (promptsRun && enginesRun ? promptsRun * enginesRun : 0);
   const geoProvenance = (measured && promptsRun && enginesRun)
-    ? `${promptsRun} prompts × ${enginesRun} engine${enginesRun > 1 ? "s" : ""} (${answersRun} answers)`
+    ? `${answersRun} answers · ${promptsRun} prompts · ${enginesRun} engine${enginesRun > 1 ? "s" : ""}`
     : (aioMeasured && aio.keywords_checked ? `${aio.keywords_checked} buyer queries × Google AI Overviews` : null);
   // GS1 — recompute the GEO score with readiness signals GATED to real visibility. Hoisted here (was in the
   // slide-10 block) so the outcome slide (04), the GEO-score slide (10) AND the scoreboard (25) read ONE gated
@@ -596,7 +600,7 @@ export default function DeckReport({ data, live }) {
       <Split bias>
         <div>
           {(topFix.length ? topFix : [{ issue: "Technical foundation", why_it_matters: "Crawl and speed issues keep the site hard to index.", expected_unlock: "Indexable", estimated_effort: "" }]).map((f, i) => (
-            <FixRow key={i} title={clamp(f.issue, 48)} desc={clamp(f.plain || f.why_it_matters || f.action, 120)} goal={clamp(f.expected_unlock || (/high|crit/i.test(f.priority) ? "Unblocks ranking" : "Strengthens the site"), 46)} when={f.estimated_effort || (/high|crit/i.test(f.priority) ? "fix first" : "within 30 days")} />
+            <FixRow key={i} title={clamp(f.issue, 54)} desc={clamp(f.plain || f.why_it_matters || f.action, 158)} goal={clamp(f.expected_unlock || (/high|crit/i.test(f.priority) ? "Unblocks ranking" : "Strengthens the site"), 46)} when={f.estimated_effort || (/high|crit/i.test(f.priority) ? "fix first" : "within 30 days")} />
           ))}
         </div>
         <Card soft title="Already working in your favour">
@@ -614,7 +618,7 @@ export default function DeckReport({ data, live }) {
       {/* Number-critical callout: always compute from the real bindings (traffic, search
           volume, leads) — never Claude's ds.diagnosis_cost, which mis-scaled these on itzfizz
           ("125K" for 1.3K, "$6K" for 56K). Correctness of these figures outranks phrasing. */}
-      <Callout className="mt2"><b>What this costs you today:</b> with {fmtNum(traffic0 ?? 0)} organic visits, the {opp.total_monthly_search_volume ? `roughly ${fmtNum(opp.total_monthly_search_volume)}` : ""} monthly searches in your market go to competitors. Fixing these three things is what turns the site from invisible into found, and unlocks every later move in this plan.{leadsLost ? <> At a conservative <b>5% capture × 2% conversion</b>, that undefended demand is <strong style={{ color: C.rust }}>~{fmtNum(leadsLost)} qualified leads a month</strong> handed to rivals.</> : null}</Callout>
+      <Callout className="mt2"><b>What this costs you today:</b> with {fmtNum(traffic0 ?? 0)} organic visit{(traffic0 ?? 0) === 1 ? "" : "s"}, the {opp.total_monthly_search_volume ? `roughly ${fmtNum(opp.total_monthly_search_volume)}` : ""} monthly searches in your market go to competitors. Fixing these three things is what turns the site from invisible into found, and unlocks every later move in this plan.{leadsLost ? <> At a conservative <b>5% capture × 2% conversion</b>, that undefended demand is <strong style={{ color: C.rust }}>~{fmtNum(leadsLost)} qualified leads a month</strong> handed to rivals.</> : null}</Callout>
     </Slide>
   );
 
@@ -638,7 +642,7 @@ export default function DeckReport({ data, live }) {
         <div>{techLabel(t)}</div>
         {/* Plain-English "what this is" so a non-technical reader understands the jargon (title tag,
             H1, meta description…). Falls back to the affected page paths when no plain gloss exists. */}
-        {t.plain ? <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2, lineHeight: 1.4, fontWeight: 400 }}>{clamp(t.plain, 118)}</div> : null}
+        {t.plain ? <div style={{ fontSize: 10.5, color: C.muted, marginTop: 2, lineHeight: 1.4, fontWeight: 400 }}>{clamp(t.plain, 172)}</div> : null}
         {/* Show the affected pages IN ADDITION to the plain gloss (not either/or), so every finding names its URLs. */}
         {shown.length ? <div style={{ fontFamily: "var(--mono)", fontSize: 9, color: C.muted, marginTop: 2, lineHeight: 1.4 }}>{shown.join("  ·  ")}{more > 0 ? `  +${more} more` : ""}</div> : null}
       </>
@@ -685,7 +689,7 @@ export default function DeckReport({ data, live }) {
           </Tiles>
           <Card soft title="The fix sequence">
             <ul className="checks">
-              {tp.slice(0, 4).map((t, i) => <li key={i}><span className="ic do">{i + 1}</span><span>{clamp(t.action || t.recommended_action || t.issue, 96)}</span></li>)}
+              {tp.slice(0, 4).map((t, i) => <li key={i}><span className="ic do">{i + 1}</span><span>{clamp(t.action || t.recommended_action || t.issue, 124)}</span></li>)}
             </ul>
           </Card>
           {(() => { const _cc = (tp.find((t) => t.cms_cause) || {}).cms_cause; return _cc ? <p className="small" style={{ marginTop: 10, color: C.muted }}><b style={{ color: C.ink }}>Likely cause:</b> {clamp(_cc, 210)}</p> : null; })()}
@@ -754,14 +758,14 @@ export default function DeckReport({ data, live }) {
   /* 10 · WHAT BUYERS TYPE */
   // 3b — `limit` lets Tier 1 render ALL mapped commercial pages so the visible rows equal the
   // "Commercial pages mapped" tile (was a hard slice(0,5) that showed 5 while the tile said 7).
-  const tierCard = (tag, tagKind, heading, desc, items, accent = false, limit = 5) => (
+  const tierCard = (tag, tagKind, heading, desc, items, accent = false, limit = 5, noVolLabel = "n/a") => (
     <Card accent={accent}>
       <span className={`tag ${tagKind}`}>{tag}</span>
       <h4 style={{ margin: "12px 0 2px", fontSize: 14 }}>{heading}</h4>
       <p className="small" style={{ margin: "0 0 12px" }}>{desc}</p>
       {(items || []).slice(0, limit).map((k, i) => (
         <div key={i}>
-          <KV k={k.keyword_cluster || k.page_name || k.proposed_title || k.keyword} v={Number(k.primary_volume) > 0 ? fmtNum(k.primary_volume) : "n/a"} />
+          <KV k={k.keyword_cluster || k.page_name || k.proposed_title || k.keyword} v={Number(k.primary_volume) > 0 ? fmtNum(k.primary_volume) : noVolLabel} />
           {/* RC5/B4 — near-identical variants share ONE demand pool; list them so the reader sees the
               single volume covers the whole cluster (not summed per variant). */}
           {Array.isArray(k.variants) && k.variants.length
@@ -778,7 +782,7 @@ export default function DeckReport({ data, live }) {
       <Row cols={3} style={{ gap: 18 }}>
         {tierCard("Tier 1 · Ready to buy", "new", "Commercial intent", "A landing page each. This is where revenue comes from.", ca.commercial_pages, true, (ca.commercial_pages || []).length || 5)}
         {tierCard("Tier 2 · Local", "pull", "Place-based intent", "The uncontested ground. City in the H1, real local proof.", ca.geography_pages || ca.city_pages, false)}
-        {tierCard("Tier 3 · Learning", "ghost", "Informational intent", "Answer content that feeds AI engines and builds topical authority.", ca.blog_and_guides, false)}
+        {tierCard("Tier 3 · Learning", "ghost", "Informational intent", "Answer content that feeds AI engines and builds topical authority.", ca.blog_and_guides, false, 5, "long-tail")}
       </Row>
       <Tiles cols={4} style={{ marginTop: 24 }}>
         {/* item 3c — the headline total must reconcile with the tier rows. primary_volume === the
@@ -917,9 +921,9 @@ export default function DeckReport({ data, live }) {
           <h3 className="mini">{aioMeasured ? <>Google AI Overview citations, vs competitors {MeasTag}</> : (sov.filter((b) => !b.is_client).length ? <>Overall share of voice, vs competitors {IllusTag}</> : <>Who AI cites instead of you {MeasTag}</>)}</h3>
           {aioMeasured
             ? [...aioCompetitorsFull.sort((a, b) => b.pct - a.pct), aioSovRows.find((s) => s.is_client), ...aioSovRows.filter((s) => s.is_other)].filter(Boolean).map((b, i) => (
-                <CBar key={i} name={b.brand + (b.is_client ? " (you)" : "")} pct={b.pct} you={b.is_client} value={`${Math.round(b.pct)}%`} />))
+                <CBar key={i} name={b.brand + (b.is_client ? " (you)" : "")} pct={b.pct} you={b.is_client} value={`${Math.round(b.pct)}%`} noPctLabel />))
             : (sov.filter((b) => !b.is_client).length
-              ? sovRows.map((b, i) => (<CBar key={i} name={(b.is_client ? b.brand : _canonName(b.brand)) + (b.is_client ? " (you)" : (b.discovered ? " (AI-named)" : ""))} pct={b.avg} you={b.is_client} value={b.mentions > 0 ? `${Math.round(b.avg)}% · ${b.mentions}` : `${Math.round(b.avg)}%`} />))
+              ? sovRows.map((b, i) => (<CBar key={i} name={(b.is_client ? b.brand : _canonName(b.brand)) + (b.is_client ? " (you)" : (b.discovered ? " (AI-named)" : ""))} pct={b.avg} you={b.is_client} value={`${Math.round(b.avg)}%`} noPctLabel />))
               : citedDomains.slice(0, 6).map((d, i) => { const mx = citedDomains[0]?.count || 1; return <CBar key={i} name={String(d.domain).replace(/^www\./, "")} pct={Math.round((d.count / mx) * 100)} value={`${d.count}×`} noPctLabel />; }))}
         </div>
         <div>
@@ -931,7 +935,7 @@ export default function DeckReport({ data, live }) {
           ) : (
             <>
               <h3 className="mini">Your share of voice, by platform {IllusTag}</h3>
-              {engineRows("sov").map((e, i) => <CBar key={i} name={e.engine} pct={e.value} you value={e.scanned ? `${Math.round(e.value)}%` : "N/A"} dim={!e.scanned} />)}
+              {engineRows("sov").map((e, i) => <CBar key={i} name={e.engine} pct={e.value} you value={e.scanned ? `${Math.round(e.value)}%` : "N/A"} dim={!e.scanned} noPctLabel />)}
             </>
           )}
         </div>
@@ -966,7 +970,7 @@ export default function DeckReport({ data, live }) {
     <div className="metric-col">
       <div className="mh"><span className="mt2x">{label}</span><span className="mbig">{pctStr(value)}</span></div>
       <p className="mdesc">{leaderVal != null ? `Leader ${leaderName} sits at ${Math.round(leaderVal)}%.` : (measuredNote || "Measured across the answered prompts.")}</p>
-      {(rows || []).map((e, i) => <CBar key={i} name={e.engine} pct={e.value} you value={e.scanned ? `${Math.round(e.value)}%` : "N/A"} dim={!e.scanned} />)}
+      {(rows || []).map((e, i) => <CBar key={i} name={e.engine} pct={e.value} you value={e.scanned ? `${Math.round(e.value)}%` : "N/A"} dim={!e.scanned} noPctLabel />)}
     </div>
   );
   // When only Google AIO is measured we have no real per-engine mention/citation data or a
@@ -1003,14 +1007,17 @@ export default function DeckReport({ data, live }) {
   // never when the answer merely had citations (p.citation_count>0 counts a rival's source too).
   const resKind = (p) => (p.brand_cited ? "cited" : p.brand_mentioned ? "named" : "absent");
   // REAL Google AI-Overview evidence: each buyer term, the actual domains Google cited, and your result.
-  const aioPromptRows = (aio.per_keyword || []).filter((k) => (k.sources || []).length).slice(0, 10).map((k) => {
+  // AIO fallback: EVERY measured buyer term (was capped at 10). Raw list + a row mapper, so the
+  // slide below can PAGINATE all terms across fixed-height slides instead of truncating to 10.
+  const _aioRaw = (aio.per_keyword || []).filter((k) => (k.sources || []).length);
+  const _aioRowOf = (k) => {
     const cited = (k.sources || []).some((s) => lc(s).includes(lc(String(domain).split(".")[0])));
     return { cells: [
       clamp(k.keyword, 90), <span className="eng-pill" key="e">Google AIO</span>,
       clamp((k.sources || []).map((s) => String(s).replace(/^www\./, "")).join(", "), 110),
       { align: "right", v: <ResCell kind={cited ? "cited" : "absent"}>{cited ? "Cited" : "Not cited"}</ResCell> },
     ] };
-  });
+  };
   // The prompts we ran, SPLIT INTO THE 3 CAMPAIGNS (the architect taxonomy), because each
   // is won a different way:
   //   Mentions            — best/top questions AI answers from third-party listicles (brands named)
@@ -1038,7 +1045,7 @@ export default function DeckReport({ data, live }) {
     }
   }
   // No live multi-engine scan → fall back to the single Google AI-Overview keyword slide.
-  const useAioPrompts = aioMeasured && aioPromptRows.length > 0 && geoPool.length === 0;
+  const useAioPrompts = aioMeasured && _aioRaw.length > 0 && geoPool.length === 0;
   // Classify each prompt into one of the 3 campaigns: the architect cluster if present, else
   // by the wording (informational question vs best/top listicle vs commercial/comparison).
   const _campaignOf = (p) => {
@@ -1183,17 +1190,35 @@ export default function DeckReport({ data, live }) {
   )).slice(0, 4);
 
   if (useAioPrompts) {
-    slides.push(
-      <Slide key="geo-prompts" variant="cream" n="13" kicker="The Prompts We Ran" title="What AI cites for your buyer terms, and where you're absent"
-        sub={<>The real sources Google's AI Overview quotes for your buyer terms today. {MeasTag}</>} foot={foot("13 · GEO · PROMPTS")}>
-        <DataTable compact head={[{ label: "Buyer term" }, { label: "Engine" }, { label: "Sources it cited" }, { label: `${name} result`, align: "right" }]} rows={aioPromptRows} />
-        <Triad className="mt">
-          <Tc kind="evidence" label="The pattern">Across {aio.keywords_checked} buyer terms, Google cites established directories and rivals, <b>never {name}</b>.</Tc>
-          <Tc kind="cost" label="What it costs you">The <b>highest-intent questions</b> are exactly where you are absent, so the best leads never hear your name.</Tc>
-          <Tc kind="action" label="Do this first">Target the terms where rivals are cited with <b>answer-first pages built for those exact questions</b>.</Tc>
-        </Triad>
-      </Slide>
-    );
+    // B19 — show EVERY measured buyer term, paginated across fixed-height slides (was rows capped
+    // at 10). Same conservative budget + triad layout as the campaign slides → no clipping.
+    const _aioRowPx = (k) => { const n = String(k.keyword || "").length; return n > 112 ? 82 : (n > 56 ? 60 : 38); };
+    const _aioPages = [];
+    { let _cur = [], _u = 0;
+      for (const k of _aioRaw) { const c = _aioRowPx(k); if (_u + c > 340 && _cur.length) { _aioPages.push(_cur); _cur = []; _u = 0; } _cur.push(k); _u += c; }
+      if (_cur.length) _aioPages.push(_cur);
+    }
+    if (!_aioPages.length) _aioPages.push([]);
+    const _aioTotal = _aioRaw.length, _aioMulti = _aioPages.length > 1;
+    let _aioSeen = 0;
+    for (let _pi = 0; _pi < _aioPages.length; _pi++) {
+      const _pg = _aioPages[_pi];
+      const _from = _aioSeen + 1, _to = _aioSeen + _pg.length; _aioSeen = _to;
+      const _lab = _aioMulti && _pi > 0 ? `13·${_pi + 1}` : "13";
+      slides.push(
+        <Slide key={_aioMulti ? `geo-prompts-${_pi}` : "geo-prompts"} variant="cream" n={_lab} kicker="The Prompts We Ran"
+          title={`What AI cites for your buyer terms, and where you're absent${_aioMulti ? ` (cont. ${_pi + 1}/${_aioPages.length})` : ""}`}
+          sub={<>The real sources Google's AI Overview quotes for your buyer terms today. {MeasTag}</>} foot={foot(`${_lab} · GEO · PROMPTS`)}>
+          <DataTable compact head={[{ label: "Buyer term" }, { label: "Engine" }, { label: "Sources it cited" }, { label: `${name} result`, align: "right" }]} rows={_pg.map(_aioRowOf)} />
+          {_aioTotal ? <p className="mt" style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>{_aioMulti ? (_from === _to ? `Term ${_from} of ${_aioTotal}` : `Terms ${_from}–${_to} of ${_aioTotal}`) : `All ${_aioTotal} buyer term${_aioTotal > 1 ? "s" : ""}`}</p> : null}
+          <Triad className="mt">
+            <Tc kind="evidence" label="The pattern">Across {aio.keywords_checked} buyer terms, Google cites established directories and rivals, <b>never {name}</b>.</Tc>
+            <Tc kind="cost" label="What it costs you">The <b>highest-intent questions</b> are exactly where you are absent, so the best leads never hear your name.</Tc>
+            <Tc kind="action" label="Do this first">Target the terms where rivals are cited with <b>answer-first pages built for those exact questions</b>.</Tc>
+          </Triad>
+        </Slide>
+      );
+    }
   } else {
     const GROUPS = { mentions: [], commercial: [], informational: [] };
     for (const p of geoPool) GROUPS[_campaignOf(p)].push(p);
@@ -1209,33 +1234,54 @@ export default function DeckReport({ data, live }) {
       const _rowBudget = srcSplit ? 200 : 340;                       // px of table-body height before the footer must start (srcSplit reserves a row for the legend below the table — CC2)
       const _wrapAt = srcSplit ? 40 : 56;                            // prompt chars that fit on one line in this column
       const _rowPx = (p) => { const n = String(p.prompt || "").length; const base = n > _wrapAt * 2 ? 82 : (n > _wrapAt ? 60 : 38); return srcSplit ? Math.max(base, 60) + 16 : base; }; // 1 / 2 / 3-line row height; srcSplit rows carry multi-domain cited-URL cells + a "page to build" sub-line under the prompt (+16px), so never estimate shorter than a 2-line row (stops the table bleeding into the legend)
-      const _shownRows = [];
-      { let _u = 0; for (const p of group) { const c = _rowPx(p); if (_u + c > _rowBudget && _shownRows.length) break; _u += c; _shownRows.push(p); } }
-      const _shown = _shownRows.length;
+      // B19 — show EVERY prompt that ran. Instead of truncating a campaign to the rows that fit one
+      // fixed-height slide (and deferring the rest to "the live dashboard"), PAGINATE: pack rows to
+      // the same conservative budget, then continue onto a follow-on slide for the overflow. Each
+      // page keeps the identical legend + count-line + triad layout, so there is ZERO new clipping
+      // risk — we simply add slides instead of hiding prompts.
+      const _pages = [];
+      { let _cur = [], _u = 0;
+        for (const p of group) {
+          const c = _rowPx(p);
+          if (_u + c > _rowBudget && _cur.length) { _pages.push(_cur); _cur = []; _u = 0; }
+          _cur.push(p); _u += c;
+        }
+        if (_cur.length) _pages.push(_cur);
+      }
+      if (!_pages.length) _pages.push([]);                 // keep the "no prompts of this type" slide
       const _flagged = group.filter((p) => p.needs_review).length;  // MC-7 — low parser-confidence rows (already computed on the run)
-      return (
-      <Slide key={key} variant="cream" n={nLabel} kicker="The Prompts We Ran" title={title}
-        sub={<>{sub} {_promptTag}</>} foot={foot(`${nLabel.toUpperCase()} · GEO · PROMPTS`)}>
-        {/* B17 — full prompt + cited sources (was clamped with an ellipsis). B18 — row-capped so the
-            count line + triad stay on-slide. srcSplit — citation campaigns split the cited SOURCE into
-            DIRECT (brand's own domain) vs THIRD-PARTY AGGREGATORS; the §5.4 "cite this page" fix rides
-            IN the Direct-sources cell (when empty), so it costs no row height. */}
-        <DataTable compact head={srcSplit
-            ? [{ label: "Buyer prompt · page to build" }, { label: "Engine" }, { label: "Competitor URLs cited" }, { label: "Third-party URLs cited" }, { label: `${name} result`, align: "right" }]
-            : [{ label: "Buyer prompt" }, { label: "Engine" }, { label: whoLabel }, { label: `${name} result`, align: "right" }]}
-          rows={_shownRows.map((p) => srcSplit
-            ? { cells: [{ v: _promptWithBuild(p) }, engName(p.engine), { v: _competitorCitedCell(p) }, { v: _thirdPartyCitedCell(p) }, { align: "right", v: _resCell(p) }] }
-            : (() => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 150), engName(p.engine), (typeof _who === "string" ? clamp(_who, 110) : { v: _who }), { align: "right", v: _resCell(p) }] }; })())} />
-        {legend || null}
-        {group.length
-          ? <p className="mt" style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>Showing {_shown} of {group.length} prompt{group.length > 1 ? "s" : ""} in this campaign{group.length > _shown ? " — full set in the live dashboard" : ""}{_flagged ? ` · ${_flagged} flagged for manual review (low parser confidence)` : ""}</p>
-          : <p className="mt" style={{ fontSize: 11, color: "var(--muted)" }}>No prompts of this type surfaced in this run.</p>}
-        {group.length ? triad : null}
-      </Slide>
-      );
+      const _total = group.length;
+      const _multi = _pages.length > 1;
+      let _seen = 0;
+      return _pages.map((_rows, _pi) => {
+        const _from = _seen + 1, _to = _seen + _rows.length; _seen = _to;
+        const _plabel = _multi && _pi > 0 ? `${nLabel}·${_pi + 1}` : nLabel;   // 13b, 13b·2, 13b·3…
+        return (
+        <Slide key={_multi ? `${key}-${_pi}` : key} variant="cream" n={_plabel} kicker="The Prompts We Ran"
+          title={_multi ? `${title} (cont. ${_pi + 1}/${_pages.length})` : title}
+          sub={<>{sub} {_promptTag}</>} foot={foot(`${_plabel.toUpperCase()} · GEO · PROMPTS`)}>
+          {/* B17 — full prompt + cited sources (was clamped with an ellipsis). B19 — paginated: this
+              page's slice of the campaign's prompts; the count line + triad stay on-slide. srcSplit —
+              citation campaigns split the cited SOURCE into DIRECT (brand's own domain) vs THIRD-PARTY
+              AGGREGATORS; the §5.4 "cite this page" fix rides IN the Direct-sources cell (when empty),
+              so it costs no row height. */}
+          <DataTable compact head={srcSplit
+              ? [{ label: "Buyer prompt · page to build" }, { label: "Engine" }, { label: "Competitor URLs cited" }, { label: "Third-party URLs cited" }, { label: `${name} result`, align: "right" }]
+              : [{ label: "Buyer prompt" }, { label: "Engine" }, { label: whoLabel }, { label: `${name} result`, align: "right" }]}
+            rows={_rows.map((p) => srcSplit
+              ? { cells: [{ v: _promptWithBuild(p) }, engName(p.engine), { v: _competitorCitedCell(p) }, { v: _thirdPartyCitedCell(p) }, { align: "right", v: _resCell(p) }] }
+              : (() => { const _who = whoOf(p); return { cells: [clamp(p.prompt, 150), engName(p.engine), (typeof _who === "string" ? clamp(_who, 110) : { v: _who }), { align: "right", v: _resCell(p) }] }; })())} />
+          {legend || null}
+          {_total
+            ? <p className="mt" style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 6 }}>{_multi ? (_from === _to ? `Prompt ${_from} of ${_total}` : `Prompts ${_from}–${_to} of ${_total}`) : `All ${_total} prompt${_total > 1 ? "s" : ""}`} in this campaign{_flagged ? ` · ${_flagged} flagged for manual review (low parser confidence)` : ""}</p>
+            : <p className="mt" style={{ fontSize: 11, color: "var(--muted)" }}>No prompts of this type surfaced in this run.</p>}
+          {_total ? triad : null}
+        </Slide>
+        );
+      });
     };
     // 13a — MENTIONS: best/top, AI names brands from third-party listicles.
-    slides.push(_campaignSlide("13a", "geo-prompts-mentions",
+    slides.push(..._campaignSlide("13a", "geo-prompts-mentions",
       "Mentions: where AI names brands, and who gets picked",
       "Best and top style questions. AI answers these from third-party listicles and directories, naming the brands it trusts. You do not win these with your own page, you earn the mention.",
       GROUPS.mentions, "Who it named (tracked rivals bold)", _namedRender,
@@ -1246,7 +1292,7 @@ export default function DeckReport({ data, live }) {
       </Triad>
     ));
     // 13b — CITATION COMMERCIAL: buying questions where a website is the source.
-    slides.push(_campaignSlide("13b", "geo-prompts-commercial",
+    slides.push(..._campaignSlide("13b", "geo-prompts-commercial",
       "Citation, commercial: questions a page on your site can win",
       "Buying-intent questions (compare, pricing, how to choose) where AI cites a website as the source. Build the answer-first page and you become the cited answer that drives the lead.",
       GROUPS.commercial, "Source it cited", _srcCell,
@@ -1257,7 +1303,7 @@ export default function DeckReport({ data, live }) {
       </Triad>, _srcSplitLegend, true
     ));
     // 13c — CITATION INFORMATION: learning questions, blogs to write.
-    slides.push(_campaignSlide("13c", "geo-prompts-info",
+    slides.push(..._campaignSlide("13c", "geo-prompts-info",
       "Citation, informational: blogs to write for AI visibility",
       "Learning-stage questions where AI cites explainer content. Publish these and AI starts citing you, building the topical authority that feeds the commercial wins.",
       GROUPS.informational, "Source it cited", _srcCell,
@@ -1441,7 +1487,7 @@ export default function DeckReport({ data, live }) {
           <PbHead count={createPages.length} label="service pages to create" />
           {createPages.slice(0, 4).map((p, i) => <PbItem key={`p${i}`} name={p.page || p.page_name || titleCase(p.keyword_cluster)} code={p.url || p.url_slug} value={p.volume || (p.primary_volume ? `${fmtNum(p.primary_volume)}/mo` : null)} />)}
           <PbHead count={createBlogs.length} label="blog posts to create" />
-          {createBlogs.slice(0, 3).map((b, i) => <PbItem key={`b${i}`} name={b.page || b.proposed_title || titleCase(b.keyword_cluster)} value={b.volume || (b.primary_volume ? `${fmtNum(b.primary_volume)}/mo` : null)} />)}
+          {createBlogs.slice(0, 3).map((b, i) => <PbItem key={`b${i}`} name={b.page || b.proposed_title || titleCase(b.keyword_cluster)} value={b.volume || (b.primary_volume ? `${fmtNum(b.primary_volume)}/mo` : "long-tail")} />)}
         </div>
       </Split>
     </Slide>
@@ -1585,7 +1631,7 @@ export default function DeckReport({ data, live }) {
         { color: "#8A4FB2", label: "Listicle Outreach" }, { color: "#A07414", label: "PR & Authority" }, { color: "#1A8A8A", label: "Citations" },
       ]} />
       {actionRows.length ? <>{actionRows.slice(0, _actionCap).map((a, i) => (
-        <ActionRow key={i} accentClass={accentFor(a.channel || a.title)} title={clamp(a.title, 72)} desc={clamp(a.desc || a.description || "", 88)}
+        <ActionRow key={i} accentClass={accentFor(a.channel || a.title)} title={clamp(a.title, 96)} desc={clamp(a.desc || a.description || "", 128)}
           meta={<>{a.priority ? <Tag kind={prioKind(a.priority)}>{titleCase(a.priority)}</Tag> : null}<span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: C.muted, margin: "0 8px", whiteSpace: "nowrap" }}>{ownerFor(a.channel || a.title)}</span>{a.effort ? <span style={{ fontFamily: "var(--mono)", fontSize: 8.5, letterSpacing: ".05em", textTransform: "uppercase", color: C.rust, marginRight: 8, whiteSpace: "nowrap" }}>{String(a.effort).replace(/^≈\s*/, "~")}</span> : null}<Pill>{phaseDays(a.phase, a.priority)}</Pill></>} />
       ))}{actionRows.length > _actionCap ? <p style={{ fontFamily: "var(--mono)", fontSize: 9, letterSpacing: ".05em", textTransform: "uppercase", color: C.faint, marginTop: 8 }}>Showing the top {_actionCap} of {actionRows.length} moves by priority — the full sequence is scheduled on the day-by-day plan.</p> : null}</> : <GapPanel title="Action board pending">Recommendations populate from the strategy build.</GapPanel>}
     </Slide>
@@ -1685,7 +1731,7 @@ export default function DeckReport({ data, live }) {
           <Trend label="GEO score (0 to 100)" now={_geoScore ?? geo.overall?.geo_score} target="45+" />
           <Trend label="Share of voice vs rivals" now={pctStr(geo.overall?.sov)} target="18%" />
           <Trend label="Mention rate" now={pctStr(geo.overall?.mention_rate)} target="35%" />
-          <Trend label="Citation rate" now={pctStr(geo.overall?.citation_rate)} target="15%" />
+          <Trend label="Citation rate" now={pctStr(geo.overall?.citation_rate)} target={`${Math.max(30, Math.ceil((Number(geo.overall?.citation_rate) || 0) + 12))}%`} />
           <Trend label="Engines naming you" now={`${enginesNaming}/${ENGINES_TOTAL}`} target={`${ENGINES_TOTAL}/${ENGINES_TOTAL}`} />
         </div>
       </Split>

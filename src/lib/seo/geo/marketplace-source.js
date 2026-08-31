@@ -98,6 +98,11 @@ async function _readIntel(domain, ttlDays) {
 // no .geo-sessions): Google AI Overviews + Perplexity (browser, no login) + Claude (API).
 // Add chatgpt,gemini via GEO_INLINE_ENGINES once their sessions are available server-side.
 async function _runAndStoreScan({ domain, businessName, competitors = [], proxyCountry = "in" }) {
+  // Browserless removed: the INLINE marketplace scan needs a browser host. On serverless
+  // (Vercel) there is no local Chrome and no captured sessions, so skip the inline scan and
+  // let the caller fall back to DataForSEO. The dedicated GEO worker (VPS) still runs the
+  // full scan out-of-band. Detect serverless via VERCEL; opt back in with GEO_INLINE_SCAN=1.
+  if (process.env.VERCEL && process.env.GEO_INLINE_SCAN !== "1") return null;
   try {
     const { runMarketplaceScan, makeUrlVerifier } = await import("./collector.js");
     const { buildMarketplaceIntelligence } = await import("./marketplace-intelligence.js");
@@ -106,7 +111,7 @@ async function _runAndStoreScan({ domain, businessName, competitors = [], proxyC
     const brand = businessName || domainSlug(domain).split(".")[0];
     console.log(`[marketplace-source] no fresh cache for ${domain} → running inline scan (engines: ${engineKeys.join(",")})`);
     const scan = await runMarketplaceScan({
-      mode: "live", transport: "browserless",
+      mode: "live", transport: "local",
       client: brand, clientDomain: domain, competitors, proxyCountry, engineKeys, sessions: {},
     });
     if (!scan?.responses?.length) return null;

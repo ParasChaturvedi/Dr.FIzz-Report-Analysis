@@ -98,82 +98,6 @@ function _isGlobal(proxyCountry) {
   return c === "" || c === "global" || c === "intl";
 }
 
-// ── Connect Playwright → Browserless (live mode only) ────────────────────────
-async function connectBrowserless(proxyCountry = "") {
-  const token = process.env.BROWSERLESS_TOKEN;
-  if (!token) throw new Error("BROWSERLESS_TOKEN is not set — required for the live GEO scan.");
-  const base = (process.env.BROWSERLESS_ENDPOINT_BASE || "https://production-sfo.browserless.io").replace(/^http/i, "ws");
-  const residential = String(process.env.BROWSERLESS_USE_RESIDENTIAL || "").trim() === "1";
-  // GLOBAL scan → never attach the residential proxy or a country target (plain,
-  // un-localized international IP). Country scan → keep the existing behavior.
-  const global = _isGlobal(proxyCountry);
-  // Country-target the residential IP so AI answers match the report's market
-  // (verified: &proxy=residential&proxyCountry=in → an India IP).
-  const country = global ? "" : String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "").toLowerCase();
-  const proxyQs = (residential && !global) ? `&proxy=residential${country ? `&proxyCountry=${country}` : ""}` : "";
-  // Browserless kills the session after `timeout` — too short for a streamed AI answer. A fresh
-  // connection is made per query, so the whole scan never needs one long session.
-  // NOTE: stealth + solveCaptchas are NOT valid on the /chromium/playwright endpoint (it 400s on
-  // unknown params). CAPTCHA-solving for chatgpt/copilot goes through connectBrowserlessCDP() below.
-  const timeoutMs = Number(process.env.BROWSERLESS_TIMEOUT_MS || 120000);
-  const ws = `${base}/chromium/playwright?token=${encodeURIComponent(token)}${proxyQs}&timeout=${timeoutMs}`;
-  // Dynamic import so build/serverless bundles never pull Playwright unless a
-  // live scan actually runs (the browser itself is hosted on Browserless).
-  let chromium;
-  try { ({ chromium } = await import("playwright-core")); }
-  catch { throw new Error("playwright-core is not installed — run `npm i playwright-core` to enable the live GEO scan."); }
-  // Browserless `/chromium/playwright` endpoint uses the Playwright protocol →
-  // chromium.connect() (NOT connectOverCDP, which is for the /chromium CDP endpoint).
-  // Browserless plans cap CONCURRENT sessions — a burst returns HTTP 429. Retry the CONNECT
-  // with exponential backoff + jitter so a rate-limited query WAITS for a free slot instead
-  // of dropping the prompt. This is what lets a 30-prompt engine complete on a low-concurrency
-  // plan (each query eventually gets a session). Only 429/rate-limit/concurrency errors retry.
-  const attempts = Math.max(1, Number(process.env.BROWSERLESS_CONNECT_ATTEMPTS) || 6);
-  let lastErr;
-  for (let i = 0; i < attempts; i++) {
-    try { return await chromium.connect(ws); }
-    catch (e) {
-      lastErr = e;
-      const rateLimited = /\b429\b|too many requests|rate.?limit|session limit|concurrent|max.*sessions/i.test(String(e?.message || ""));
-      if (!rateLimited || i === attempts - 1) throw e;
-      const backoff = Math.min(25000, 3000 * Math.pow(1.7, i)) + Math.floor(Math.random() * 2000);
-      await new Promise((r) => setTimeout(r, backoff));
-    }
-  }
-  throw lastErr;
-}
-
-// Stealth + CAPTCHA-solving connection for Cloudflare-gated engines (ChatGPT). The plain
-// /chromium/playwright endpoint 400s on &stealth; the /chromium CDP endpoint accepts &stealth
-// &solveCaptchas=true and is reached with connectOverCDP (NOT chromium.connect). Logged-out
-// ChatGPT clears its "Just a moment" wall here, so no login session is needed.
-async function connectBrowserlessCDP(proxyCountry = "") {
-  const token = process.env.BROWSERLESS_TOKEN;
-  if (!token) throw new Error("BROWSERLESS_TOKEN is not set — required for the live GEO scan.");
-  const base = (process.env.BROWSERLESS_ENDPOINT_BASE || "https://production-sfo.browserless.io").replace(/^http/i, "ws");
-  const residential = String(process.env.BROWSERLESS_USE_RESIDENTIAL || "").trim() === "1";
-  const global = _isGlobal(proxyCountry);
-  const country = global ? "" : String(proxyCountry || process.env.BROWSERLESS_PROXY_COUNTRY || "").toLowerCase();
-  const proxyQs = (residential && !global) ? `&proxy=residential${country ? `&proxyCountry=${country}` : ""}` : "";
-  const timeoutMs = Number(process.env.BROWSERLESS_TIMEOUT_MS || 120000);
-  const ws = `${base}/chromium?token=${encodeURIComponent(token)}${proxyQs}&stealth&solveCaptchas=true&timeout=${timeoutMs}`;
-  let chromium;
-  try { ({ chromium } = await import("playwright-core")); }
-  catch { throw new Error("playwright-core is not installed — run `npm i playwright-core` to enable the live GEO scan."); }
-  const attempts = Math.max(1, Number(process.env.BROWSERLESS_CONNECT_ATTEMPTS) || 6);
-  let lastErr;
-  for (let i = 0; i < attempts; i++) {
-    try { return await chromium.connectOverCDP(ws); }
-    catch (e) {
-      lastErr = e;
-      const rateLimited = /\b429\b|too many requests|rate.?limit|session limit|concurrent|max.*sessions/i.test(String(e?.message || ""));
-      if (!rateLimited || i === attempts - 1) throw e;
-      const backoff = Math.min(25000, 3000 * Math.pow(1.7, i)) + Math.floor(Math.random() * 2000);
-      await new Promise((r) => setTimeout(r, backoff));
-    }
-  }
-  throw lastErr;
-}
 
 // ── Per-engine adapter (live) ────────────────────────────────────────────────
 // Generic ask → wait → extract. The selectors below are a STARTING POINT and
@@ -473,35 +397,6 @@ async function askInContext(context, cfg, prompt, proxyCountry = "", regionLabel
 // Market timezone so answers are region-aligned and never time-personalised by drift.
 const _TZ_FOR = { in: "Asia/Kolkata", us: "America/New_York", gb: "Europe/London", au: "Australia/Sydney", ca: "America/Toronto", ae: "Asia/Dubai", sg: "Asia/Singapore", de: "Europe/Berlin", fr: "Europe/Paris" };
 
-// Browserless transport: fresh context seeded with the captured storageState.
-// HISTORY-FREE GUARANTEE: each query runs in a BRAND-NEW context (no state bleeds
-// between queries). For no-login engines there is no account → cookies are cleared so
-// the answer is 100% logged-out and un-personalised. Session engines keep ONLY their
-// auth; ChatGPT additionally uses Temporary Chat and every engine opens a fresh chat,
-// so no chat history or account memory is ever read. Account-level memory/activity
-// (e.g. Gemini Apps Activity) must be turned OFF once on each login account.
-async function askEngine(browser, engineKey, prompt, storageState, proxyCountry = "in", regionLabel = "") {
-  const cfg = ENGINES[engineKey];
-  if (!cfg) throw new Error(`Unknown engine: ${engineKey}`);
-  if (cfg.needsSession && !storageState) throw new Error(`${cfg.name}: no logged-in session provided (needs storageState).`);
-  // #throttle — optional JITTERED delay before each browser query to space requests out
-  // and avoid rate-limit / bot blocks on big runs (GEO_QUERY_DELAY_MS, e.g. 4000 → ~2-6s).
-  const _delay = Number(process.env.GEO_QUERY_DELAY_MS) || 0;
-  if (_delay > 0) await new Promise((r) => setTimeout(r, Math.round(_delay * (0.5 + Math.random()))));
-  // GLOBAL scan → no country locale: keep the default en-US/UTC-ish neutral context
-  // (UTC timezone) instead of pinning a market tz. Country scan → unchanged.
-  const global = _isGlobal(proxyCountry);
-  const context = await browser.newContext({
-    storageState: storageState || undefined,
-    locale: "en-US",
-    timezoneId: global ? "Etc/UTC" : (_TZ_FOR[String(proxyCountry || "in").toLowerCase()] || "Asia/Kolkata"),
-    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-  });
-  // No-login engine → guarantee a clean, logged-out, un-personalised session every query.
-  if (!storageState) { try { await context.clearCookies(); } catch {} }
-  try { return await askInContext(context, cfg, prompt, proxyCountry, regionLabel); }
-  finally { await context.close().catch(() => {}); }
-}
 
 // ── API adapter: Claude via Anthropic SDK + web_search tool ──────────────────
 // Live web access → Claude can actually verify marketplace presence and cite real
@@ -586,88 +481,6 @@ function mockResponses({ brandSet, prompts, engineKeys }) {
   return out;
 }
 
-// ── Transport: Browserless (hosted browser, production) ──────────────────────
-// A FRESH connection per query: each stays well under the Browserless session
-// timeout AND is fully ephemeral (incognito) — no state bleeds between queries.
-async function _runBrowserless({ engineKeys, prompts, sessions, proxyCountry, regionLabel = "" }) {
-  const attempts = Number(process.env.GEO_QUERY_ATTEMPTS) || 2; // one retry by default: absorbs a transient Browserless/Cloudflare blip
-  // §16 region label for the metadata: prefer the explicit STATE/CITY label, else
-  // the country, else "global" for an un-localized international scan.
-  const _regionMeta = String(regionLabel || "").trim() || (_isGlobal(proxyCountry) ? "global" : (proxyCountry || "in"));
-
-  // Build the full (engine × prompt) task list, then run it through a bounded CONCURRENCY
-  // POOL so ~20-25 prompts × up to 6 engines (100-150 queries) finish inside the 300s
-  // limit — sequentially this would take 10-20 min. Each query still uses a FRESH,
-  // ephemeral Browserless connection (no state bleed). Concurrency is capped to the
-  // Browserless plan's parallel-session limit via GEO_CONCURRENCY (default 6).
-  // EVERY engine runs EVERY prompt — no sampling, no dummy data. Speed comes from the concurrency
-  // pool below (up to 10 parallel Browserless browsers), not from cutting the workload.
-  const tasks = [];
-  for (const ek of engineKeys) for (const p of prompts) tasks.push({ ek, p });
-
-  const runOne = async ({ ek, p }) => {
-    const cfg = ENGINES[ek];
-    const tag = { brand: p.brand, theme: p.theme, promptId: p.id };
-    let lastErr = null;
-    for (let a = 0; a < attempts; a++) {
-      let browser;
-      try {
-        // Cloudflare-gated engines (ChatGPT) connect through the stealth + CAPTCHA-solving CDP
-        // endpoint; everything else uses the plain Playwright endpoint.
-        browser = cfg?.cdpStealth ? await connectBrowserlessCDP(proxyCountry) : await connectBrowserless(proxyCountry);
-        const _r = await askEngine(browser, ek, p.prompt, sessions[ek], proxyCountry, regionLabel);
-        // §16 — capture per-run metadata; raw_html/parse_confidence/screenshot ride along via the spread.
-        return {
-          ...(_r), ...tag,
-          region: _regionMeta,
-          timestamp: new Date().toISOString(),
-          answer_length: String(_r?.answerText || "").length,
-          citation_count: Array.isArray(_r?.citations) ? _r.citations.length : 0,
-          attempts: a + 1,
-        };
-      } catch (err) { lastErr = err; }
-      finally { try { await browser?.close(); } catch {} }
-    }
-    return { engine: cfg?.name || ek, prompt: p.prompt, ...tag, error: String(lastErr?.message || lastErr) };
-  };
-
-  // Hosted Browserless caps CONCURRENT sessions per plan — too many parallel connects → 429.
-  // Cap the browserless pass at a safe residential-session concurrency (default 2; override via
-  // BROWSERLESS_MAX_CONCURRENCY) so we stay under the plan limit. The connect-retry handles any
-  // residual bursts. Local transport ignores this cap (no hosted-session limit).
-  // Browserless plan allows ~5 concurrent sessions (live-tested: 10 parallel connects → 5 succeed,
-  // 5 return 429). Run the pool at 5 so every query gets a real slot with no 429 churn; the
-  // connect-retry below still absorbs the occasional burst. Bump both if the plan is upgraded.
-  const _bMax = Math.max(1, Number(process.env.BROWSERLESS_MAX_CONCURRENCY) || 5);
-  const CONCURRENCY = Math.max(1, Math.min(Number(process.env.GEO_CONCURRENCY) || 5, _bMax));
-  // TIME GUARD: stop launching NEW queries past this deadline so the scan always returns
-  // within the 300s function limit. The report then shows REAL (partial) Share-of-Voice
-  // from whatever completed — never a perpetual "Pending live scan" caused by a timeout.
-  const start = Date.now();
-  // Budget the SCAN to leave room for prompt-gen (~30s before) + §25 analysis (~15s after)
-  // + the in-flight tail, inside the 300s function limit. 170s here means the whole route
-  // returns by ~240s and ALWAYS caches the real (partial) Share-of-Voice it collected.
-  const DEADLINE_MS = Number(process.env.GEO_SCAN_DEADLINE_MS || 170000);
-  const responses = new Array(tasks.length);
-  let next = 0;
-  const worker = async () => {
-    while (true) {
-      if (Date.now() - start > DEADLINE_MS) return;        // time-guard hit → stop taking new tasks
-      const i = next++;
-      if (i >= tasks.length) return;
-      responses[i] = await runOne(tasks[i]);
-    }
-  };
-  // HARD cap: the launch-guard above stops TAKING new tasks, but Promise.all still waits for
-  // in-flight queries — and a single hung Browserless connect can block the return past the
-  // 300s function limit (→ the function is killed and nothing caches → "Pending live scan").
-  // This race abandons any stragglers so the scan ALWAYS returns the real responses it has.
-  const workers = Array.from({ length: Math.min(CONCURRENCY, tasks.length || 1) }, worker);
-  const hardCap = new Promise((res) => setTimeout(res, Number(process.env.GEO_SCAN_HARD_MS || 200000)));
-  await Promise.race([Promise.all(workers), hardCap]);
-  return responses.filter(Boolean);   // real responses collected so far (stragglers abandoned)
-}
-
 // ── Transport: LOCAL persistent profiles (.geo-sessions/profile-<engine>) ────
 // Reuses the real Chrome profiles captured by scripts/geo-capture.mjs — already
 // logged in and Cloudflare-cleared. One window per engine, reused across prompts.
@@ -694,6 +507,25 @@ async function _runLocal({ engineKeys, prompts, proxyCountry = "", regionLabel =
   const LAUNCH_HARD_MS = Number(process.env.GEO_LAUNCH_HARD_MS || 60000);
   // §16 region label for the metadata, mirroring the Browserless transport.
   const _regionMeta = String(regionLabel || "").trim() || (_isGlobal(proxyCountry) ? "global" : (proxyCountry || "in"));
+  // ── Residential proxy for the bot-gated engines (replaces Browserless) ─────────
+  // ChatGPT/Perplexity/Copilot are Cloudflare/Microsoft-challenged on this host's
+  // DATACENTER IP (verified: Cloudflare "verify you are human", "performing security
+  // verification", MS "make sure it's you"). Routing ONLY those engines through a
+  // residential India IP clears the walls — exactly what Browserless-residential did,
+  // now without Browserless. Gemini + AI Overviews answer fine on the bare VPS IP, so
+  // they stay DIRECT (no proxy GB burned, no localization drift). Config via env:
+  //   GEO_LOCAL_PROXY_SERVER   e.g. http://in.residential.example.com:7777
+  //   GEO_LOCAL_PROXY_USERNAME / GEO_LOCAL_PROXY_PASSWORD
+  //   GEO_LOCAL_PROXY_ENGINES  comma list (default: chatgpt,perplexity,copilot)
+  // If GEO_LOCAL_PROXY_SERVER is unset, every engine runs direct (bare-IP fallback).
+  const _proxyServer = String(process.env.GEO_LOCAL_PROXY_SERVER || "").trim();
+  const _proxyEngines = new Set(
+    String(process.env.GEO_LOCAL_PROXY_ENGINES || "chatgpt,perplexity,copilot")
+      .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean),
+  );
+  const _proxyFor = (ek) => (_proxyServer && _proxyEngines.has(ek))
+    ? { server: _proxyServer, username: process.env.GEO_LOCAL_PROXY_USERNAME || undefined, password: process.env.GEO_LOCAL_PROXY_PASSWORD || undefined }
+    : undefined;
   for (const ek of engineKeys) {
     const cfg = ENGINES[ek];
     if (!cfg) continue;
@@ -706,11 +538,17 @@ async function _runLocal({ engineKeys, prompts, proxyCountry = "", regionLabel =
     //   2. a PORTABLE storageState — a local <engine>.json, else from Mongo/env (loadGeoSession)
     // (2) lets a session captured on another machine (e.g. a Mac) run on this headless worker.
     const haveProfile = fs.existsSync(profileDir);
+    const haveState = fs.existsSync(stateFile);
     let storageState = null;
-    if (cfg.needsSession && !haveProfile) {
-      if (fs.existsSync(stateFile)) storageState = stateFile;
-      else { try { const { loadGeoSession } = await import("./sessions.js"); const s = await loadGeoSession(ek); if (s) storageState = s; } catch {} }
-      if (!storageState) {
+    // Prefer a captured logged-in session whenever one exists and there is no local profile.
+    // NOTE: chatgpt is technically "no login required", but logged-OUT it trips Cloudflare's
+    // "verify you are human" wall on this host — the logged-in chatgpt.json (kept fresh by the
+    // daily geo-session-refresh cron) sails through, so use it for chatgpt too, not just the
+    // needsSession engines (gemini/copilot).
+    if (!haveProfile && (cfg.needsSession || haveState)) {
+      if (haveState) storageState = stateFile;
+      else if (cfg.needsSession) { try { const { loadGeoSession } = await import("./sessions.js"); const s = await loadGeoSession(ek); if (s) storageState = s; } catch {} }
+      if (cfg.needsSession && !storageState) {
         for (const p of prompts) responses.push({ ...tagFor(p), error: `no session for ${ek} — capture (node scripts/geo-capture.mjs ${ek}) or store one (env GEO_SESSION_${ek.toUpperCase()} / Mongo).` });
         continue;
       }
@@ -719,17 +557,22 @@ async function _runLocal({ engineKeys, prompts, proxyCountry = "", regionLabel =
     // Open this engine's context — persistent profile (Cloudflare-cleared) or a fresh context
     // seeded with the portable storageState. Wrapped in a closure so it can be RECYCLED if a
     // prompt wedges the page (see the per-prompt hard timeout below).
+    const proxy = _proxyFor(ek);   // residential IP for gated engines; undefined = direct
     const _open = async () => {
-      if (haveProfile || !cfg.needsSession) {
+      // Persistent profile when we have one, or for a login-free engine that has no captured
+      // session (e.g. AI Overviews). A captured session (chatgpt/gemini/copilot) uses the
+      // portable-storageState path so the logged-in cookies seed a fresh context.
+      if (haveProfile || (!cfg.needsSession && !storageState)) {
         fs.mkdirSync(profileDir, { recursive: true });
         const context = await chromium.launchPersistentContext(profileDir, {
           headless: false, channel: "chrome", viewport: null, locale: "en-US",
+          ...(proxy ? { proxy } : {}),
           args: ["--disable-blink-features=AutomationControlled", "--start-maximized"],
         });
         return { context, browser: null };
       }
       // Portable storageState path — fresh context seeded with the captured cookies.
-      const browser = await chromium.launch({ headless: false, channel: "chrome", args: ["--disable-blink-features=AutomationControlled", "--start-maximized"] });
+      const browser = await chromium.launch({ headless: false, channel: "chrome", ...(proxy ? { proxy } : {}), args: ["--disable-blink-features=AutomationControlled", "--start-maximized"] });
       const context = await browser.newContext({ storageState, locale: "en-US", viewport: null });
       return { context, browser };
     };
@@ -814,18 +657,15 @@ async function _runApi({ engineKeys, prompts, proxyCountry, regionLabel = "" }) 
 
 // ── Unified runner ───────────────────────────────────────────────────────────
 // Splits engines by type: API engines (Claude) run keyless via the SDK; the rest
-// run through the chosen browser transport. Both contribute to the same response set.
-async function _runPrompts({ mode, transport, engineKeys, prompts, sessions, proxyCountry, brandSet, regionLabel = "" }) {
+// run on the LOCAL host's Chrome (captured .geo-sessions profiles). Browserless removed.
+// `transport` is accepted for back-compat but every value now resolves to local.
+async function _runPrompts({ mode, engineKeys, prompts, brandSet, proxyCountry, regionLabel = "" }) {
   if (mode !== "live") return mockResponses({ brandSet, prompts, engineKeys });
   const apiKeys = engineKeys.filter((k) => ENGINES[k]?.type === "api");
   const browserKeys = engineKeys.filter((k) => ENGINES[k] && ENGINES[k].type !== "api");
   const out = [];
   if (apiKeys.length) out.push(...(await _runApi({ engineKeys: apiKeys, prompts, proxyCountry, regionLabel })));
-  if (browserKeys.length) {
-    out.push(...(transport === "local"
-      ? await _runLocal({ engineKeys: browserKeys, prompts, proxyCountry, regionLabel })
-      : await _runBrowserless({ engineKeys: browserKeys, prompts, sessions, proxyCountry, regionLabel })));
-  }
+  if (browserKeys.length) out.push(...(await _runLocal({ engineKeys: browserKeys, prompts, proxyCountry, regionLabel })));
   return out;
 }
 
@@ -833,7 +673,7 @@ async function _runPrompts({ mode, transport, engineKeys, prompts, sessions, pro
 export async function runGeoScan(opts = {}) {
   const {
     mode = "mock",
-    transport = "browserless",   // "browserless" (hosted) | "local" (captured profiles)
+    transport = "local",   // local captured profiles on the worker host (Browserless removed)
     brand,
     clientDomain = "",
     competitors = [],
@@ -872,7 +712,7 @@ export async function runGeoScan(opts = {}) {
 export async function runMarketplaceScan(opts = {}) {
   const {
     mode = "mock",
-    transport = "browserless",
+    transport = "local",   // Browserless removed — local host Chrome only
     client,
     clientSite = "",
     clientDomain = "",
