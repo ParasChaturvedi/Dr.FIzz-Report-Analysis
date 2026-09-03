@@ -62,6 +62,11 @@ const _DECK_SOURCE = new Set([
   "business insider","search engine journal","search engine land","the manifest","manifest","product hunt","producthunt",
   "hacker news","hackernews","hackernoon","gartner","upwork","fiverr","justdial","indiamart","tradeindia","sulekha","techtarget","crunchbase",
 ].map((s) => s.toLowerCase()));
+// Class E (entity resolution): bare geography leaks into brands_named as fake competitors
+// ("Walmart, Washington, Instacart" — Washington is a US state, not a brand). Only DISCOVERED
+// single/every-word place names are dropped; configured competitors bypass this belt entirely,
+// and any real brand with a distinctive non-place word ("Georgia-Pacific", "West Elm") survives.
+const _DECK_NOISE_GEO = new Set("washington oregon nevada california arizona texas colorado kansas nebraska oklahoma minnesota wisconsin illinois indiana michigan ohio kentucky tennessee alabama mississippi louisiana arkansas missouri iowa georgia florida carolina virginia maryland delaware jersey pennsylvania york connecticut massachusetts vermont hampshire maine montana idaho wyoming utah dakota alaska hawaii seattle portland denver austin dallas houston chicago boston atlanta miami phoenix philadelphia detroit minneapolis columbus cleveland america american usa europe european canada canadian australia asia african north south east west".split(/\s+/).filter(Boolean));
 const _deckTopicNoise = (name) => {
   const words = String(name || "").trim().split(/[\s\-–—]+/).filter(Boolean);   // split hyphens too — "Full-Service" is two generic words, not a brand
   if (!words.length) return true;
@@ -71,7 +76,7 @@ const _deckTopicNoise = (name) => {
   if (_DECK_SOURCE.has(_n) || _DECK_SOURCE.has(_n.replace(/\s+/g, ""))) return true;  // cited source/publisher/directory → not a mention
   if (words.some((w) => /^opens$/i.test(w))) return true;                          // "… Opens in a new tab" (plural only, keeps "Open Influence")
   if (words.some((w) => { const l = w.toLowerCase(); return _DECK_ARTEFACT.has(l) || _DECK_ARTEFACT.has(l.replace(/s$/, "")); })) return true; // any metric/UI artefact word → not a brand
-  if (words.every((w) => { const l = w.toLowerCase(); return _DECK_NOISE_GEN.has(l) || _DECK_STOP.has(l); })) return true; // every word generic/stopword ("With", "In", "For B2B") → not a brand
+  if (words.every((w) => { const l = w.toLowerCase(); return _DECK_NOISE_GEN.has(l) || _DECK_NOISE_GEO.has(l) || _DECK_STOP.has(l); })) return true; // every word generic/stopword/place ("With", "In", "Washington", "North Carolina") → not a brand
   const _a = words[0] ? words[0].toLowerCase() : "";                                // KPIs, SMEs, ROAS — check raw AND plural-stripped
   if (words.length === 1 && (_DECK_NOISE_ACR.has(_a) || _DECK_NOISE_ACR.has(_a.replace(/s$/, "")))) return true;
   return false;
@@ -132,7 +137,10 @@ function projectOutcome(bm, v2) {
   const t12 = up12 != null ? Math.round(t0 + Number(up12)) : null;
   const t3 = up6 != null ? Math.round(t0 + Number(up6) / 2) : null;
   const drBase = dr0 == null ? null : Number(dr0);
-  const drAt = (add) => (drBase == null ? null : Math.min(60, drBase + add));
+  // Class A (impossible target): the DR projection must NEVER fall below the current DR. The min(60,..)
+  // cap is meant to keep LOW-DR sites realistic, but for a site already above 60 it dragged the target
+  // DOWN (a DR-95 site "rising" to 60). Clamp with max(current, ...) so it can only hold or improve.
+  const drAt = (add) => (drBase == null ? null : Math.max(drBase, Math.min(60, drBase + add)));
   return { t0, t3, t6, t12, dr0: drBase, dr3: drAt(3), dr6: drAt(5), dr12: drAt(15) };
 }
 
@@ -1424,7 +1432,7 @@ export default function DeckReport({ data, live }) {
     <Slide key="build" variant="cream" n="15" kicker="What We Build" title={_buildTitle}
       sub={<>{_buildSub} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("15 · WHAT WE BUILD")}>
       {buildCards.length ? (
-        <Row cols={buildCards.length >= 4 ? 4 : 3} style={{ gap: 16 }}>
+        <Row cols={Math.min(Math.max(buildCards.length, 1), 4)} style={{ gap: 16 }}>
           {buildCards.map((p, i) => (
             <Card key={i} accent title={p.page || p.page_name || titleCase(p.keyword_cluster)}>
               <Pill>{p.volume ? p.volume : (p.primary_volume ? `${fmtNum(p.primary_volume)}/mo` : "N/A")}{geoQual(p)}</Pill>
@@ -1464,30 +1472,38 @@ export default function DeckReport({ data, live }) {
   slides.push(
     <Slide key="contentmap" variant="cream" n="16" kicker="The Content Map" title="What to optimise, and what to create"
       sub={<>{ds.contentmap_sub || "We reviewed the pages we crawled. Some are rank-ready and need polish; the rest are gaps to fill."} <Pillar kind="onpage" label="On-Page SEO" /></>} foot={foot("16 · THE CONTENT MAP")}>
+      {/* B20 — each list shows ALL its items up to a height-safe cap; when a list exceeds the cap a
+          "+N more" row keeps what's visible reconciled with the header count (was: header showed the
+          full count while the list was hard-capped at 5/3/4/3 → "5 blog posts" but only 3 rendered,
+          leaving 2 hidden and a blank column). */}
       <Split>
         <div>
           <PbHead count={_optPages.length || (ca.pagesExistingFlagged ?? 0)} label="service pages you have · optimise" />
-          {_optPages.length ? (
-            _optPages.slice(0, 5).map((p, i) => (
+          {_optPages.length ? (<>
+            {_optPages.slice(0, 6).map((p, i) => (
               <PbItem key={`o${i}`} name={p.page || titleCase(p.keyword)} code={p.matched_url} value={_optVal(p)} />
-            ))
-          ) : (
+            ))}
+            {_optPages.length > 6 && <PbItem key="om" name={`+ ${_optPages.length - 6} more`} />}
+          </>) : (
             <Card soft><p className="small">{ca.pagesExistingFlagged > 0 ? "Matched real demand: add H1, FAQ and schema, and expand thin content. Per-page detail lands with the on-page pass." : "No existing pages matched the target keywords."}</p></Card>
           )}
           <PbHead count={_optBlogs.length || 0} label="blog posts you have · optimise" />
-          {_optBlogs.length ? (
-            _optBlogs.slice(0, 3).map((p, i) => (
+          {_optBlogs.length ? (<>
+            {_optBlogs.slice(0, 4).map((p, i) => (
               <PbItem key={`bo${i}`} name={p.page || titleCase(p.keyword)} code={p.matched_url} value={_optVal(p)} />
-            ))
-          ) : (
+            ))}
+            {_optBlogs.length > 4 && <PbItem key="bom" name={`+ ${_optBlogs.length - 4} more`} />}
+          </>) : (
             <Card soft><p className="small">Existing posts that match demand get refreshed with sharper titles, FAQs and internal links. Per-post detail lands with the content pass.</p></Card>
           )}
         </div>
         <div>
           <PbHead count={createPages.length} label="service pages to create" />
-          {createPages.slice(0, 4).map((p, i) => <PbItem key={`p${i}`} name={p.page || p.page_name || titleCase(p.keyword_cluster)} code={p.url || p.url_slug} value={p.volume || (p.primary_volume ? `${fmtNum(p.primary_volume)}/mo` : null)} />)}
+          {createPages.slice(0, 6).map((p, i) => <PbItem key={`p${i}`} name={p.page || p.page_name || titleCase(p.keyword_cluster)} code={p.url || p.url_slug} value={p.volume || (p.primary_volume ? `${fmtNum(p.primary_volume)}/mo` : null)} />)}
+          {createPages.length > 6 && <PbItem key="pm" name={`+ ${createPages.length - 6} more`} />}
           <PbHead count={createBlogs.length} label="blog posts to create" />
-          {createBlogs.slice(0, 3).map((b, i) => <PbItem key={`b${i}`} name={b.page || b.proposed_title || titleCase(b.keyword_cluster)} value={b.volume || (b.primary_volume ? `${fmtNum(b.primary_volume)}/mo` : "long-tail")} />)}
+          {createBlogs.slice(0, 6).map((b, i) => <PbItem key={`b${i}`} name={b.page || b.proposed_title || titleCase(b.keyword_cluster)} value={b.volume || (b.primary_volume ? `${fmtNum(b.primary_volume)}/mo` : "long-tail")} />)}
+          {createBlogs.length > 6 && <PbItem key="bm" name={`+ ${createBlogs.length - 6} more`} />}
         </div>
       </Split>
     </Slide>
@@ -1549,7 +1565,7 @@ export default function DeckReport({ data, live }) {
   const dirs = (gmb.directories || []).slice(0, 12).map((x) => ({ name: x.name, state: x.listed === true ? "have" : x.listed === false ? "miss" : "q" }));
   const citeDirs = dirs.length ? dirs : (lb.citation_links || []).slice(0, 12).map((x) => ({ name: x.platform, state: x.client_listed ? "have" : "miss" }));
   slides.push(
-    <Slide key="backlinks" variant="cream" n="18" kicker="Citations & Backlinks" title={dr != null ? `Raising Domain Rating from ${dr} to ${proj.dr12 ?? 25}` : `Building Domain Rating to ${proj.dr12 ?? 25}`}
+    <Slide key="backlinks" variant="cream" n="18" kicker="Citations & Backlinks" title={dr == null ? `Building Domain Rating to ${proj.dr12 ?? 25}` : (proj.dr12 != null && proj.dr12 > dr ? `Raising Domain Rating from ${dr} to ${proj.dr12}` : `Your Domain Rating of ${dr} is already strong`)}
       sub={<>{ds.backlinks_sub || "Trust is built in three waves: citations for consistency, then earned links, then closing the leader's gap."} <Pillar kind="offpage" label="Off-Page SEO" /></>} foot={foot("18 · CITATIONS & BACKLINKS")}>
       <Split>
         <div>
@@ -1577,7 +1593,7 @@ export default function DeckReport({ data, live }) {
           )}
         </div>
         <div>
-          <h3 className="mini">The three waves to DR {proj.dr12 ?? 25}</h3>
+          <h3 className="mini">{(dr != null && proj.dr12 != null && proj.dr12 <= dr) ? "Three waves to defend and extend your lead" : `The three waves to DR ${proj.dr12 ?? 25}`}</h3>
           <Card style={{ marginTop: 10 }}><h4><span style={{ color: C.rust }}>Wave 1.</span> Citations · months 1 to 2</h4><p className="small">Consistent NAP across the trusted directories for your market.</p></Card>
           <Card style={{ marginTop: 8 }}><h4><span style={{ color: C.rust }}>Wave 2.</span> Earned links · months 2 to 4</h4><p className="small">A free cost calculator, an annual industry report, a white-label template firms cite and share.</p></Card>
           <Card style={{ marginTop: 8 }}><h4><span style={{ color: C.rust }}>Wave 3.</span> Close the leader gap · ongoing</h4><p className="small">Trade publications and partner directories that link to rivals but not yet to you.</p></Card>

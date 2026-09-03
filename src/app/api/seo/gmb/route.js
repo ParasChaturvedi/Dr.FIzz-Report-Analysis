@@ -14,10 +14,12 @@ export const runtime    = "nodejs";
 export const maxDuration = 300; // allows the inline live GEO scan to run on a cache miss
 
 const DIRECTORIES = [
-  { name: "JustDial",      site: "justdial.com",      weight: 3 },
-  { name: "Sulekha",       site: "sulekha.com",        weight: 3 },
-  { name: "IndiaMART",     site: "indiamart.com",      weight: 3 },
-  { name: "TradeIndia",    site: "tradeindia.com",     weight: 2 },
+  // cc: "in" = India-only directory. Class D fix: these are dropped for non-India markets
+  // (a US site like amazon.com must not be checked against / shown JustDial, Sulekha, etc.).
+  { name: "JustDial",      site: "justdial.com",      weight: 3, cc: "in" },
+  { name: "Sulekha",       site: "sulekha.com",        weight: 3, cc: "in" },
+  { name: "IndiaMART",     site: "indiamart.com",      weight: 3, cc: "in" },
+  { name: "TradeIndia",    site: "tradeindia.com",     weight: 2, cc: "in" },
   { name: "Google Maps",   site: "google.com/maps",    weight: 3 },
   { name: "Yelp",          site: "yelp.com",           weight: 2 },
   { name: "Trustpilot",    site: "trustpilot.com",     weight: 3 },
@@ -249,7 +251,7 @@ async function fetchGmbQA(keyword, location, auth) {
 //   "<businessName>" site:<directoryDomain>
 // Then verify the result actually mentions the business name or domain.
 // Falls back to backlinks if SERP quota is tight.
-async function checkDirectoryListings(domain, auth, businessName = "") {
+async function checkDirectoryListings(domain, auth, businessName = "", countryCode = "in") {
   const host = domain.replace(/^https?:\/\//,"").replace(/^www\./,"").split("/")[0];
 
   // Search name variants — CLEAN brand (no legal suffix) FIRST. We never assume a
@@ -331,8 +333,11 @@ async function checkDirectoryListings(domain, auth, businessName = "") {
     }
   }
 
-  // Run all 10 directory checks in parallel
-  const results = await Promise.all(DIRECTORIES.map(dir => searchOneDir(dir)));
+  // Run the (country-scoped) directory checks in parallel. India-only dirs (cc:"in") are dropped
+  // for other markets; default "in" keeps the full set, so India clients behave exactly as before.
+  const _cc = String(countryCode || "in").toLowerCase();
+  const _dirs = DIRECTORIES.filter((d) => !d.cc || d.cc === _cc);
+  const results = await Promise.all(_dirs.map(dir => searchOneDir(dir)));
   return results;
 }
 
@@ -490,24 +495,30 @@ export async function checkGmb(domain, businessName = "", location = "India", op
   const _listingDegraded = !info?.found && listingErrs.length > 0;
   const matchedKeyword = info?.keywordUsed || info?.name || keyword;
 
+  // Class D fix — country-scope the directory set + the marketplace scan's proxy. Default "in"
+  // (opts.countryCode absent) reproduces the previous behaviour exactly, so India clients are
+  // unaffected; a US/UK site now drops India-only dirs and scans with its own market proxy.
+  const _cc = String(opts.countryCode || "in").toLowerCase();
+  const _dirsCC = DIRECTORIES.filter((d) => !d.cc || d.cc === _cc);
+
   const [reviewRes, qaRes, dirRes] = await Promise.allSettled([
     info?.found ? fetchGmbReviews(matchedKeyword, location, auth) : Promise.resolve([]),
     info?.found ? fetchGmbQA(matchedKeyword, location, auth)      : Promise.resolve([]),
     // Competitors skip the ~14-call directory SERP fan-out (not shown in the
     // competitor comparison) → saves DataForSEO credits. Client gets full data.
     opts.skipDirectories
-      ? Promise.resolve(DIRECTORIES.map((d) => ({ ...d, listed: null, listingUrl: null })))
+      ? Promise.resolve(_dirsCC.map((d) => ({ ...d, listed: null, listingUrl: null })))
       // Prefer the multi-LLM Marketplace Intelligence (cross-LLM-validated, cached in
       // MongoDB); falls back to DataForSEO SERP detection when the flag is off / scan fails.
       // allowLiveScan: this is the CLIENT call → on a cache miss it runs the live scan
       // inline + stores to MongoDB (30-day). Competitors use skipDirectories → scan runs once.
-      : loadMarketplaceDirectories({ domain: host, businessName: matchedKeyword, location, allowLiveScan: true })
-          .then((llm) => llm || checkDirectoryListings(host, auth, matchedKeyword)),
+      : loadMarketplaceDirectories({ domain: host, businessName: matchedKeyword, location, allowLiveScan: true, proxyCountry: _cc })
+          .then((llm) => llm || checkDirectoryListings(host, auth, matchedKeyword, _cc)),
   ]);
 
   const reviews = reviewRes.status === "fulfilled" ? reviewRes.value : [];
   const qa      = qaRes.status     === "fulfilled" ? qaRes.value     : [];
-  const dirs    = dirRes.status    === "fulfilled" ? dirRes.value    : DIRECTORIES.map(d => ({ ...d, listed: null }));
+  const dirs    = dirRes.status    === "fulfilled" ? dirRes.value    : _dirsCC.map(d => ({ ...d, listed: null }));
 
   // Review analytics
   const reviewVelocity = computeReviewVelocity(reviews);
@@ -586,7 +597,7 @@ export async function POST(request) {
       dataType: `gmb:${loc}:${skipDirectories ? "nodirs" : "full"}`,
       ttlDays: 30,
       source: "gmb",
-      fetchFn: () => checkGmb(domain, businessName || "", loc, { skipDirectories: !!skipDirectories }),
+      fetchFn: () => checkGmb(domain, businessName || "", loc, { skipDirectories: !!skipDirectories, countryCode }),
     });
     await logUsage({ domain, api: "gmb", costUSD: cached ? 0 : (skipDirectories ? 0.015 : 0.03), cached });
     return NextResponse.json(result);
