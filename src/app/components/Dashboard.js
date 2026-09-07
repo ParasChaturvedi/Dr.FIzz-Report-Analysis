@@ -1,7 +1,7 @@
 // src/components/Dashboard.js
 "use client";
 import Image from "next/image";
-import { Activity, ActivitySquare, AlertTriangle, BarChart3, BookOpen, Check, ChevronRight, Clock3, Eye, FileText, Gauge, Goal, HelpCircle, KeyRound, Lightbulb, Link2, Lock, Maximize2, Monitor, Network, PencilLine, RefreshCw, Rocket, Settings, Share2, ShieldCheck, Skull, SlidersHorizontal, Smartphone, SquareArrowOutUpRight, Star, ThumbsDown, ThumbsUp, TrendingUp, TrendingDown, Wifi, X } from "lucide-react";
+import { Activity, ActivitySquare, AlertTriangle, BarChart3, BookOpen, Check, ChevronRight, Clock3, Eye, FileText, Gauge, Goal, HelpCircle, KeyRound, Lightbulb, Link2, Lock, Maximize2, Monitor, Network, PencilLine, RefreshCw, Rocket, Settings, Share2, ShieldCheck, Skull, SlidersHorizontal, Smartphone, SquareArrowOutUpRight, Star, ThumbsDown, ThumbsUp, TrendingUp, TrendingDown, Users, Wifi, X } from "lucide-react";
 import { useEffect, useRef, useState, useMemo , useCallback} from "react";
 import { useSearchParams } from "next/navigation";
 import OpportunitiesSection from "./OpportunitiesSection";
@@ -2389,7 +2389,7 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Link2 size={16} />
                 </span>
-                <span className="text-[13px] text-gray-700 leading-relaxed">
+                <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
                   Total Backlinks
                 </span>
               </div>
@@ -2470,7 +2470,7 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Activity size={16} />
                 </span>
-                <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">
+                <span className="flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
                   Site Health Score
                 </span>
               </div>
@@ -2757,7 +2757,7 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Rocket size={16} />
                 </span>
-                <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Page Speed Scores</span>
+                <span className="flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Page Speed Scores</span>
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                 <span className="inline-block h-2 w-2 rounded-full" style={{ background: psBadge.color }} />
@@ -3103,9 +3103,9 @@ const seoTableProg = Math.max(0, prog);
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
-                  <BarChart3 size={16} />
+                  <Users size={16} />
                 </span>
-                <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Organic traffic</span>
+                <span className="flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Organic traffic</span>
                 {OT_GROWTH != null && (
                   <span className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                     <span className="h-2 w-2 rounded-full" style={{ background: otBadge.color }} />
@@ -3119,7 +3119,7 @@ const seoTableProg = Math.max(0, prog);
             </div>
 
             <div className="mt-3 flex items-end gap-2">
-              <div className="text-[32px] font-semibold leading-none text-[var(--text)] tabular-nums">
+              <div className="text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums">
                 {otValue != null ? formatCompactNumber(otValue) : "—"}
               </div>
 
@@ -3186,7 +3186,7 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <KeyRound size={16} />
                 </span>
-                <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Organic Keywords</span>
+                <span className="flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Organic Keywords</span>
               </div>
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--muted)]">
                 <SquareArrowOutUpRight size={16} />
@@ -3194,7 +3194,7 @@ const seoTableProg = Math.max(0, prog);
             </div>
 
             <div className="mt-3 flex items-end gap-2">
-              <div className="text-[32px] font-semibold leading-none text-[var(--text)] tabular-nums">
+              <div className="text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums">
                 {okValue != null ? formatCompactNumber(okValue) : "—"}
               </div>
 
@@ -3264,7 +3264,7 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Goal size={16} />
                 </span>
-                <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">
+                <span className="flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
                   Leads
                 </span>
               </div>
@@ -3312,7 +3312,7 @@ const seoTableProg = Math.max(0, prog);
                 <>
                   {/* Total Leads (animated) */}
                   <div className="mt-3 flex items-end gap-2">
-                    <div className="text-[32px] font-semibold leading-none text-[var(--text)] tabular-nums">
+                    <div className="text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums">
                       {totalLeadsAnimated != null ? formatNumber(totalLeadsAnimated) : "—"}
                     </div>
 
