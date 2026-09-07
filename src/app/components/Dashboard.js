@@ -9,6 +9,7 @@ import NewOnPageSEOTable from "./NewOnPageSEOTable";
 import DashboardHeader from "./DashboardHeader";
 import TasksDrawer from "./TasksDrawer";
 import SerpFeatures from "./SerpFeatures";
+import SiteHealth from "./SiteHealth";
 
 // --- Prefill content templates for the 4 "Top On-Page Content Opportunities" cards ---
 const PREFILL_BY_TITLE = {
@@ -659,6 +660,9 @@ const [periodDays, setPeriodDays] = useState(30);
 const [detailsItem, setDetailsItem] = useState(null);
 // Full SERP Features screen (opened from the SERP Feature Opportunities section)
 const [serpScreen, setSerpScreen] = useState(null); // null | { feature }
+// Full Site Health screen (opened from the Site Health Score card / sidebar)
+const [siteHealthOpen, setSiteHealthOpen] = useState(false);
+const [siteHealthIssue, setSiteHealthIssue] = useState(null); // selected issue for detail modal
 
 const fetchGa4Report = async (days = periodDays) => {
   try {
@@ -2423,8 +2427,8 @@ const seoTableProg = Math.max(0, prog);
         <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
           {/* Site Health */}
           <div
-            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
-            title="View technical issues"
+            onClick={(e) => { if (e.target.closest('button, a')) return; setSiteHealthOpen(true); }}
+            title="Open the full Site Health report"
             className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
@@ -4454,6 +4458,32 @@ const seoTableProg = Math.max(0, prog);
       competitors={Array.isArray(seo?.competitorDomains) ? seo.competitorDomains : []}
       initialFeature={serpScreen.feature || "featuredSnippet"}
       onBack={() => setSerpScreen(null)}
+    />
+  )}
+
+  {/* Full Site Health screen (opened from the Site Health Score card) */}
+  {siteHealthOpen && (
+    <SiteHealth
+      data={{
+        domain,
+        siteHealth: SH_SCORE || null,
+        performance: (typeof PS_MOBILE === "number" && typeof PS_DESKTOP === "number" && (PS_MOBILE || PS_DESKTOP))
+          ? Math.round((PS_MOBILE + PS_DESKTOP) / 2)
+          : (PS_MOBILE || PS_DESKTOP || null),
+        pageSpeedMobile: PS_MOBILE || null,
+        pageSpeedDesktop: PS_DESKTOP || null,
+        lcp: LCP_TARGET || null,
+        inp: INP_TARGET || null,
+        cls: CLS_TARGET || null,
+        pagesScanned: SH_PAGES || null,
+        redirects: SH_REDIRECT || null,
+        broken: SH_BROKEN || null,
+        pages404: seo?.onPageAudit?.pages_404 ?? null,
+        issues: selected?.issues || {},
+        periodDays: periodDays,
+      }}
+      onViewIssue={(iss) => setSiteHealthIssue(iss)}
+      onBack={() => setSiteHealthOpen(false)}
     />
   )}
 
