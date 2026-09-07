@@ -60,6 +60,13 @@ export default function CENavbar({
     );
   };
 
+  // AI assist: context-aware entry (blank new blog → topic ideas; existing content → improvement plan).
+  const handleAiAssist = () => {
+    try {
+      window.dispatchEvent(new CustomEvent("content-editor:assist"));
+    } catch {}
+  };
+
   const startEditing = () => {
     setEditing(true);
     requestAnimationFrame(() => {
@@ -116,13 +123,14 @@ export default function CENavbar({
           </button>
 
           <button
+            onClick={handleAiAssist}
             className="inline-flex h-[32px] w-[32px] items-center justify-center rounded-lg text-white shadow-sm"
             style={{
               background:
                 "linear-gradient(135deg, #FF8C2A 0%, #F1761F 45%, #E06416 100%)",
             }}
-            aria-label="Actions"
-            title="Actions"
+            aria-label="AI assist"
+            title="AI assist"
           >
             <Sparkles size={13} />
           </button>
@@ -253,7 +261,10 @@ export default function CENavbar({
               <span>New document</span>
             </button>
 
-            <button className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-[13px] font-semibold text-white shadow-sm bg-[image:var(--infoHighlight-gradient)] hover:opacity-90 transition">
+            <button
+              onClick={handleAiAssist}
+              className="inline-flex items-center gap-2 rounded-full px-5 py-2 text-[13px] font-semibold text-white shadow-sm bg-[image:var(--infoHighlight-gradient)] hover:opacity-90 transition"
+            >
               <span>Chat with AI</span>
               <Sparkles size={16} />
             </button>

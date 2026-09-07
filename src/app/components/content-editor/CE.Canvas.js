@@ -332,6 +332,27 @@ const CECanvas = forwardRef(function CECanvas(
     scheduleHighlights,
   ]);
 
+  // Direct programmatic set (AI generation etc.): reliably replace the editor DOM
+  // and commit up, bypassing the once-only seed guard.
+  useEffect(() => {
+    const onSetHtml = (e) => {
+      const html = e?.detail?.html;
+      const el = editorRef.current;
+      if (!el || typeof html !== "string") return;
+      suppressInputRef.current = true;
+      const clean = sanitizeToHtml(html);
+      el.innerHTML = clean;
+      lastLocalHtmlRef.current = clean;
+      seededRef.current = true;
+      try { setContent?.(clean); } catch {}
+      try { undoStack.current = [clean]; redoStack.current = []; } catch {}
+      try { scheduleHighlights?.(); } catch {}
+      queueMicrotask(() => { suppressInputRef.current = false; });
+    };
+    window.addEventListener("content-editor:set-html", onSetHtml);
+    return () => window.removeEventListener("content-editor:set-html", onSetHtml);
+  }, [setContent, scheduleHighlights]);
+
   /** =========================
    * External sync
    * ========================= */
@@ -539,23 +560,35 @@ const CECanvas = forwardRef(function CECanvas(
       {showStarter && (
         <div className="mb-6 text-[var(--text)]">
           <ul className="space-y-3">
-            <li className="flex items-center gap-3 text-[14px] md:text-[15px]">
+            <li
+              onClick={() => { try { window.dispatchEvent(new CustomEvent("content-editor:generate", { detail: { action: "empty" } })); } catch {} }}
+              className="flex items-center gap-3 text-[14px] md:text-[15px] cursor-pointer rounded-md px-2 py-1 -mx-2 hover:bg-[var(--hover)] hover:text-[var(--text-primary)] transition-colors"
+            >
               <FileText size={18} className="opacity-70" />
               <span>Empty page</span>
             </li>
-            <li className="flex items-center gap-3 text-[14px] md:text-[15px]">
+            <li
+              onClick={() => { try { window.dispatchEvent(new CustomEvent("content-editor:generate", { detail: { action: "ai", mode: "new" } })); } catch {} }}
+              className="flex items-center gap-3 text-[14px] md:text-[15px] cursor-pointer rounded-md px-2 py-1 -mx-2 hover:bg-[var(--hover)] hover:text-[var(--text-primary)] transition-colors"
+            >
               <Sparkles size={18} className="opacity-70" />
               <span>Start with AI...</span>
             </li>
-            <li className="flex items-center gap-3 text-[14px] md:text-[15px]">
+            <li
+              onClick={() => { try { window.dispatchEvent(new CustomEvent("content-editor:generate", { detail: { action: "brief", mode: "new" } })); } catch {} }}
+              className="flex items-center gap-3 text-[14px] md:text-[15px] cursor-pointer rounded-md px-2 py-1 -mx-2 hover:bg-[var(--hover)] hover:text-[var(--text-primary)] transition-colors"
+            >
               <ScrollText size={18} className="opacity-70" />
               <span>Generate content brief</span>
             </li>
-            <li className="flex items-center gap-3 text-[14px] md:text-[15px]">
+            <li
+              onClick={() => { const url = window.prompt("Paste the URL to import content from:"); if (url) { try { window.dispatchEvent(new CustomEvent("content-editor:import-url", { detail: { url } })); } catch {} } }}
+              className="flex items-center gap-3 text-[14px] md:text-[15px] cursor-pointer rounded-md px-2 py-1 -mx-2 hover:bg-[var(--hover)] hover:text-[var(--text-primary)] transition-colors"
+            >
               <Link2 size={18} className="opacity-70" />
               <span>Import content from URL</span>
             </li>
-            <li className="flex items-center gap-3 text-[14px] md:text-[15px]">
+            <li className="flex items-center gap-3 text-[14px] md:text-[15px] opacity-60">
               <Shapes size={18} className="opacity-70" />
               <span>Import template</span>
             </li>

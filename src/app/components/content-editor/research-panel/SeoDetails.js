@@ -396,6 +396,9 @@ export default function SeoDetails({
   const [pillar, setPillar] = useState(false);
   const primaryKeyword = keywords[0] || "";
 
+  // AI meta generation ("Generate title" / "Generate description")
+  const [metaGen, setMetaGen] = useState({ title: false, desc: false });
+
   // live SEO slices
   const technical = seoData?.technicalSeo || null;
   const authority = seoData?.authority || null;
@@ -408,6 +411,31 @@ export default function SeoDetails({
   const lastUrlRef = useRef(null);
 
   const seoUrl = seoData?._meta?.url || seoData?.meta?.url || seoData?.url || "";
+
+  // Resolve the business domain for the AI prompt: prefer the fetched seoData
+  // URL, else the onboarding websiteData saved in localStorage.
+  const resolveDomain = useCallback(() => {
+    if (domain) return domain;
+    const fromSeo = (() => {
+      try {
+        return new URL(
+          /^https?:\/\//.test(seoUrl) ? seoUrl : `https://${seoUrl}`
+        ).hostname;
+      } catch {
+        return "";
+      }
+    })();
+    if (fromSeo) return fromSeo;
+    try {
+      const wd = JSON.parse(localStorage.getItem("websiteData") || "{}");
+      const raw = wd?.website || wd?.url || wd?.domain || wd?.site || "";
+      if (!raw) return "";
+      return new URL(/^https?:\/\//.test(raw) ? raw : `https://${raw}`).hostname;
+    } catch {
+      return "";
+    }
+  }, [domain, seoUrl]);
+
   useEffect(() => {
     // When a new fetch kicks off, clear state and allow re-init.
     // This prevents old-domain values from flashing.
@@ -488,13 +516,37 @@ export default function SeoDetails({
     [primaryKeyword]
   );
 
-  // --- Generators (local heuristics)
-  const generateTitle = () => {
-    const base = titleCase(
-      `${primaryKeyword || "Blogging"} Platforms Compared: ${new Date().getFullYear()} Guide`
+  // --- Generators
+  // Local heuristics — used as an instant fallback when the AI call fails.
+  const heuristicTitle = () =>
+    titleCase(
+      `${primaryKeyword || title.value || "Complete"} Guide (${new Date().getFullYear()})`
     );
-    title.set(base);
-  };
+
+  const generateTitle = useCallback(async () => {
+    if (metaGen.title) return;
+    setMetaGen((s) => ({ ...s, title: true }));
+    try {
+      const res = await fetch("/api/content/meta", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "title",
+          keyword: primaryKeyword,
+          title: title.value,
+          domain: resolveDomain(),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (json?.ok && json.metaTitle) title.set(json.metaTitle);
+      else title.set(heuristicTitle());
+    } catch {
+      title.set(heuristicTitle());
+    } finally {
+      setMetaGen((s) => ({ ...s, title: false }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metaGen.title, primaryKeyword, title.value, resolveDomain]);
 
   const improveTitle = () => {
     const t = title.value;
@@ -509,14 +561,38 @@ export default function SeoDetails({
     permalink.set(s);
   };
 
-  const generateDescription = () => {
-    const year = new Date().getFullYear();
+  const heuristicDescription = () => {
     const kw = primaryKeyword ? `${primaryKeyword.toLowerCase()} ` : "";
-    const crafted = sentenceCase(
-      `Discover the best ${kw}platforms in ${year} with pros, cons, pricing, and ideal use cases — including WordPress, Wix, Squarespace, and more`
+    return sentenceCase(
+      `A practical ${kw}guide with clear steps, real examples, and the details you need to get results fast.`
     );
-    description.set(crafted);
   };
+
+  const generateDescription = useCallback(async () => {
+    if (metaGen.desc) return;
+    setMetaGen((s) => ({ ...s, desc: true }));
+    try {
+      const res = await fetch("/api/content/meta", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "description",
+          keyword: primaryKeyword,
+          title: title.value,
+          description: description.value,
+          domain: resolveDomain(),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (json?.ok && json.metaDescription) description.set(json.metaDescription);
+      else description.set(heuristicDescription());
+    } catch {
+      description.set(heuristicDescription());
+    } finally {
+      setMetaGen((s) => ({ ...s, desc: false }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metaGen.desc, primaryKeyword, title.value, description.value, resolveDomain]);
 
   // --- Lint: Title corrections
   const titleIssues = useMemo(() => {
@@ -889,9 +965,13 @@ export default function SeoDetails({
                       <Wand2 className="h-4 w-4" />
                       Improve
                     </IconButton>
-                    <IconButton title="Generate new" onClick={generateTitle}>
-                      <Sparkles className="h-4 w-4" />
-                      Generate
+                    <IconButton title="Generate new" onClick={generateTitle} disabled={metaGen.title}>
+                      {metaGen.title ? (
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      {metaGen.title ? "Writing…" : "Generate"}
                     </IconButton>
                   </div>
                 </div>
@@ -1006,9 +1086,13 @@ export default function SeoDetails({
                 <Wand2 className="h-4 w-4" />
                 Improve
               </IconButton>
-              <IconButton title="Generate new description" onClick={generateDescription}>
-                <Sparkles className="h-4 w-4" />
-                Generate
+              <IconButton title="Generate new description" onClick={generateDescription} disabled={metaGen.desc}>
+                {metaGen.desc ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {metaGen.desc ? "Writing…" : "Generate"}
               </IconButton>
             </div>
 

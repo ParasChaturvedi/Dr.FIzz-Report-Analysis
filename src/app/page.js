@@ -162,11 +162,12 @@ export default function Home() {
     if (hash === "#editor") setCurrentStep("contentEditor");
   }, []);
 
+  // The editor is opened with REAL payloads (title/keyword/type/content from the
+  // report + dashboard) and driven by /api/seo. The old /data/contenteditor.json
+  // was a demo catalog whose content got merged into real docs, so it is no longer
+  // loaded — no dummy content is injected on open.
   useEffect(() => {
-    fetch("/data/contenteditor.json")
-      .then((r) => r.json())
-      .then(setCatalog)
-      .catch(() => setCatalog([]));
+    setCatalog([]);
   }, []);
 
   useEffect(() => {

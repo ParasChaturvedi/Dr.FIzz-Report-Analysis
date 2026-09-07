@@ -241,19 +241,19 @@ function StartModal({
 }) {
   const STYLES = [
     {
-      id: "wander",
-      title: "Wander & Wonder",
-      desc: "A journal of curious thoughts, quiet travels, and unexpected discoveries.",
+      id: "blog",
+      title: "Blog post",
+      desc: "A full, SEO-optimised article. Opens blank, then AI researches topics and writes to the house standard.",
     },
     {
-      id: "bytesized",
-      title: "ByteSized Mind",
-      desc: "Quick, sharp takes on tech, life, and learning. Small posts, big ideas—delivered fresh.",
+      id: "guide",
+      title: "Guide / pillar page",
+      desc: "A long-form, in-depth guide that targets a high-value keyword and links to related posts.",
     },
     {
-      id: "lazycompass",
-      title: "The Lazy Compass",
-      desc: "Travel stories for slow movers and deep thinkers. Wander less, feel more.",
+      id: "listicle",
+      title: "List post",
+      desc: "A scannable, ranked list article (best-of, tips, common mistakes) built to earn links and answer boxes.",
     },
   ];
   const [hover, setHover] = useState(STYLES[0].id);
@@ -787,25 +787,10 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
   /* ---------- Start Flow helpers ---------- */
 
   const styleTemplate = useCallback((id) => {
-    if (id === "wander")
-      return {
-        title: "Wander & Wonder — New Post",
-        content:
-          "<h1>Wander & Wonder</h1><p>A journal of curious thoughts, quiet travels, and unexpected discoveries.</p><h2>Opening</h2><p>Share a quiet observation or a poetic snapshot.</p><h2>Reflection</h2><p>Connect a place with an idea.</p><h2>Closing</h2><p>Invite the reader to slow down.</p>",
-      };
-    if (id === "bytesized")
-      return {
-        title: "ByteSized Mind — Quick Take",
-        content:
-          "<h1>ByteSized Mind</h1><ul><li>One strong idea</li><li>One practical tip</li><li>One link to explore</li></ul>",
-      };
-    if (id === "lazycompass")
-      return {
-        title: "The Lazy Compass — Field Notes",
-        content:
-          "<h1>The Lazy Compass</h1><h2>Route</h2><p>Where are we going?</p><h2>Texture</h2><p>What does it feel like?</p><h2>Keepsake</h2><p>A takeaway for the reader.</p>",
-      };
-    return { title: "Untitled", content: "" };
+    // Real, neutral starters. Content is intentionally BLANK so the editor's AI
+    // flow (topic research + house-standard writing) produces the real draft
+    // instead of any placeholder sample text.
+    return { title: "Untitled", content: "", styleId: id };
   }, []);
 
   const dispatchOpen = (payload) => {

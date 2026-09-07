@@ -12,7 +12,9 @@ import dynamic from "next/dynamic";
 import CENavbar from "./content-editor/CE.Navbar";
 import CEMetricsStrip from "./content-editor/CE.MetricsStrip";
 import CEContentArea from "./content-editor/CE.ContentArea";
-import { AlertTriangle, X } from "lucide-react";
+import CEBlogSuggestions from "./content-editor/CE.BlogSuggestions";
+import CEImprovePanel from "./content-editor/CE.ImprovePanel";
+import { AlertTriangle, X, Sparkles } from "lucide-react";
 
 /* utils */
 function isBlankHtml(html) {
@@ -47,28 +49,13 @@ const CEResearchPanel = dynamic(
 );
 
 export default function ContentEditor({ data, onBackToDashboard }) {
-  /* load contenteditor.json (optional for downstream comps) */
-  const [config, setConfig] = useState(null);
-  const [configError, setConfigError] = useState(null);
-
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch("/data/contenteditor.json", {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        if (mounted) setConfig(json);
-      } catch (e) {
-        if (mounted) setConfigError(String(e));
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  /* Previously loaded /data/contenteditor.json — a DEMO catalog whose page
+     content/keywords leaked into real docs. The editor now runs purely on the
+     real `data` payload (from the report + dashboard) and live /api/seo data,
+     so no demo config is loaded. pageConfig resolves to null and every consumer
+     falls back to real data. */
+  const [config] = useState(null);
+  const [configError] = useState(null);
 
   /* page config lookup key(s) */
   const rawPageKey = data?.slug || data?.page || data?.id || data?.title || "";
@@ -215,6 +202,96 @@ export default function ContentEditor({ data, onBackToDashboard }) {
 
   // ✅ New document mode: prevents SEO fetch + loader overlays on blank docs
   const [isNewDoc, setIsNewDoc] = useState(false);
+
+  // ── AI content generation (Start with AI / Generate brief / existing-improve) ──
+  const [genLoading, setGenLoading] = useState(false);
+  const [genError, setGenError] = useState("");
+  // "New blog" topic-suggestion screen (5 research-based ideas → pick → generate)
+  const [blogSuggestOpen, setBlogSuggestOpen] = useState(false);
+  // "Existing content" improvement plan (flows 2 & 4)
+  const [improveOpen, setImproveOpen] = useState(false);
+
+  // Resolve the current business domain (onboarding websiteData or the editor data).
+  const resolveDomain = useCallback(() => {
+    let d = "";
+    try {
+      const wd = JSON.parse(localStorage.getItem("websiteData") || "{}");
+      d = wd?.site || wd?.website || wd?.url || wd?.domain || "";
+    } catch {}
+    if (!d) d = data?.domain || "";
+    return String(d || "").replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  }, [data]);
+
+  const generateContent = useCallback(async (detail = {}) => {
+    const action = detail.action || "ai";
+    if (action === "empty") { setContent(""); return; }
+
+    const type = (data?.type === "page" || pageConfig?.type === "page") ? "page" : "blog";
+    const isExisting = detail.mode === "existing"
+      || (detail.mode !== "new" && data?.title && !isBlankHtml(content));
+    const mode = isExisting ? "existing" : "new";
+    const keyword = detail.keyword || data?.keyword || data?.primaryKeyword || pageConfig?.primaryKeyword || query || "";
+    const kwTitle = detail.title || ((title && title !== "Untitled") ? title : (data?.title || ""));
+    const domain = resolveDomain();
+
+    setGenError(""); setGenLoading(true);
+    try {
+      const res = await fetch("/api/content/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type, mode, keyword, title: kwTitle, domain,
+          businessContext: data?.businessContext || "",
+          existingContent: mode === "existing" ? content : "",
+          wordTarget: action === "brief" ? 700 : undefined,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error || `Generation failed (${res.status})`);
+      if (json.contentHtml) {
+        setContent(json.contentHtml);
+        // Reliably push the HTML straight into the editor DOM (bypasses the once-only seed guard).
+        try { window.dispatchEvent(new CustomEvent("content-editor:set-html", { detail: { html: json.contentHtml } })); } catch {}
+      }
+      if (json.meta?.metaTitle && (!title || title === "Untitled")) setTitle(json.meta.metaTitle);
+      try { window.dispatchEvent(new CustomEvent("content-editor:meta", { detail: json.meta })); } catch {}
+    } catch (e) {
+      setGenError(e?.message || "Generation failed");
+    } finally {
+      setGenLoading(false);
+    }
+  }, [data, pageConfig, content, query, title, resolveDomain]);
+
+  // Is this a brand-new blog (not an existing page/blog opened from the report)?
+  const isNewBlogFlow = useCallback(() => {
+    const type = (data?.type === "page" || pageConfig?.type === "page") ? "page" : "blog";
+    const noTitle = !data?.title || data.title === "Untitled";
+    return type === "blog" && noTitle && isBlankHtml(content);
+  }, [data, pageConfig, content]);
+
+  useEffect(() => {
+    const onGen = (e) => {
+      const detail = e?.detail || {};
+      // For a fresh blog, "Start with AI" first shows 5 research-based topic ideas.
+      if (detail.action === "ai" && detail.mode === "new" && isNewBlogFlow()) {
+        setBlogSuggestOpen(true);
+        return;
+      }
+      generateContent(detail);
+    };
+    window.addEventListener("content-editor:generate", onGen);
+    return () => window.removeEventListener("content-editor:generate", onGen);
+  }, [generateContent, isNewBlogFlow]);
+
+  // AI assist (navbar "Chat with AI"): context-aware.
+  useEffect(() => {
+    const onAssist = () => {
+      if (isBlankHtml(content) && isNewBlogFlow()) setBlogSuggestOpen(true);
+      else setImproveOpen(true);
+    };
+    window.addEventListener("content-editor:assist", onAssist);
+    return () => window.removeEventListener("content-editor:assist", onAssist);
+  }, [content, isNewBlogFlow]);
 
   /* ---------------------------
      ✅ Plagiarism helpers
@@ -858,6 +935,25 @@ hydratedFromSeoRef.current = false;
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] transition-colors duration-300">
       <main className="bg-[var(--bg-panel)] px-2 py-6 sm:px-1 lg:px-2 xl:px-3 transition-colors duration-300">
+        {genLoading && (
+          <div className="fixed inset-0 z-[9000] flex flex-col items-center justify-center bg-white/85 dark:bg-black/80 backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-4 px-8 text-center">
+              <div className="h-14 w-14 rounded-full bg-gradient-to-br from-[#d45427] to-[#ffa615] flex items-center justify-center shadow-xl animate-pulse">
+                <Sparkles size={24} className="text-white" />
+              </div>
+              <div>
+                <div className="text-[15px] font-bold text-gray-900 dark:text-white">Writing your content…</div>
+                <div className="mt-1 text-[12px] text-gray-500">A 20-year expert AI is researching and drafting to the house standard. This can take 30-90 seconds.</div>
+              </div>
+            </div>
+          </div>
+        )}
+        {genError && (
+          <div className="mb-3 flex items-center gap-2 rounded-[10px] border border-[#FCA5A5] bg-[#FEF2F2] px-4 py-2.5 text-[12px] text-[#B91C1C]">
+            <AlertTriangle size={14} /> {genError}
+            <button type="button" onClick={() => setGenError("")} className="ml-auto text-[#B91C1C] hover:text-[#7F1D1D]">✕</button>
+          </div>
+        )}
         <CENavbar
           title={title}
           onBack={handleBackToDashboard}
@@ -922,6 +1018,35 @@ hydratedFromSeoRef.current = false;
           </p>
         )}
       </main>
+
+      {/* New-blog entry: 5 research-based topic suggestions → pick → generate */}
+      <CEBlogSuggestions
+        open={blogSuggestOpen}
+        domain={resolveDomain()}
+        businessContext={data?.businessContext || ""}
+        onClose={() => setBlogSuggestOpen(false)}
+        onStartBlank={() => {
+          setBlogSuggestOpen(false);
+          setContent("");
+        }}
+        onPick={(s) => {
+          setBlogSuggestOpen(false);
+          if (s?.title) setTitle(s.title);
+          generateContent({ action: "ai", mode: "new", keyword: s?.primaryKeyword || "", title: s?.title || "" });
+        }}
+      />
+
+      {/* Existing content: AI improvement plan (add / replace / remove) */}
+      <CEImprovePanel
+        open={improveOpen}
+        type={(data?.type === "page" || pageConfig?.type === "page") ? "page" : "blog"}
+        title={(title && title !== "Untitled") ? title : (data?.title || "")}
+        keyword={data?.keyword || data?.primaryKeyword || pageConfig?.primaryKeyword || query || ""}
+        domain={resolveDomain()}
+        businessContext={data?.businessContext || ""}
+        content={content}
+        onClose={() => setImproveOpen(false)}
+      />
 
       {/* ===== MOBILE-ONLY Research FAB (bottom-right symbol) ===== */}
       <button
