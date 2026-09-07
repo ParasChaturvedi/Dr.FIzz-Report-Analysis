@@ -17,7 +17,8 @@ import {
   Download, Share2, Network, Gauge, HardDrive, Timer, Server, ClipboardList,
   CheckCircle2, Loader2, AlertTriangle, AlertOctagon, Eye, Plus, X, ChevronDown,
   Lightbulb, Stethoscope, Table2, FileSearch, Search, ExternalLink, ShieldCheck,
-  Database, FileText, ListChecks, XCircle,
+  Database, FileText, ListChecks, XCircle, Calendar, Users, UserPlus, Bell, Clock,
+  Check,
 } from "lucide-react";
 
 /* ---- issue status store (per domain, persisted) ---- */
@@ -39,6 +40,43 @@ function saveSnap(d, id, snap) {
     const all = loadSnaps(d);
     if (!all[id]) { all[id] = { ...snap, at: Date.now() }; localStorage.setItem(snapKey(d), JSON.stringify(all)); }
   } catch {}
+}
+
+/* ---- task assignment per issue (team / assignee / due / priority / criteria) ---- */
+const assignKey = (d) => `df:sh-assign:v1:${(d || "default").toLowerCase()}`;
+function loadAssigns(d) {
+  try { return JSON.parse(localStorage.getItem(assignKey(d)) || "{}") || {}; } catch { return {}; }
+}
+function saveAssign(d, id, a) {
+  try {
+    const all = loadAssigns(d);
+    all[id] = { ...a, at: Date.now() };
+    localStorage.setItem(assignKey(d), JSON.stringify(all));
+  } catch {}
+}
+
+const TEAM_OPTIONS = ["Frontend Team", "Backend Team", "SEO / Web Team", "Content Team", "DevOps Team"];
+function suggestTeam(id) {
+  if (/lcp|cls|perf|render/i.test(id)) return "Frontend Team";
+  if (/redirect|broken|404/i.test(id)) return "SEO / Web Team";
+  if (/image/i.test(id)) return "Content Team";
+  return "Frontend Team";
+}
+function defaultCriteria(iss) {
+  const base = [];
+  if (/lcp|perf|render/i.test(iss.id)) {
+    base.push("P75 LCP < 2.5s on mobile (CrUX field data)", "Verify PageSpeed score improvement > 10 points", "Eliminate render-blocking CSS and JavaScript");
+  } else if (/cls/i.test(iss.id)) {
+    base.push("Reserve space for media and embeds", "CLS < 0.1 in field data");
+  } else if (/redirect/i.test(iss.id)) {
+    base.push("Point internal links to the final URL", "Remove all redirect chains");
+  } else if (/broken|404/i.test(iss.id)) {
+    base.push("Restore or 301-redirect affected URLs", "Re-crawl shows no broken links");
+  } else if (/image/i.test(iss.id)) {
+    base.push("Serve next-gen image formats", "Add descriptive alt text");
+  }
+  base.push("Deploy the fix to production", "Re-test and verify the result");
+  return base;
 }
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -464,6 +502,166 @@ function RetestModal({ issue, before = {}, after = {}, domain = "", onVerify, on
   );
 }
 
+/* ---- Assign & Create Task modal ---- */
+const PRIORITY_OPTIONS = {
+  High: "High - Significant performance impact",
+  Medium: "Medium - Moderate impact",
+  Low: "Low - Minor impact",
+};
+function AssignTaskModal({ issue, domain = "", onClose, onCreate }) {
+  const [team, setTeam] = useState(suggestTeam(issue?.id || ""));
+  const [assignee, setAssignee] = useState("");
+  const [due, setDue] = useState(() => {
+    const d = new Date(Date.now() + 14 * 864e5);
+    return d.toISOString().slice(0, 10);
+  });
+  const [priority, setPriority] = useState(issue?.impact || "Medium");
+  const [criteria, setCriteria] = useState(() =>
+    defaultCriteria(issue || {}).map((label) => ({ label, checked: false }))
+  );
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose?.();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (!issue) return null;
+
+  const toggleC = (i) => setCriteria((c) => c.map((x, j) => (j === i ? { ...x, checked: !x.checked } : x)));
+
+  return (
+    <div className="fixed inset-0 z-[92] grid place-items-center bg-black/45 p-4" onClick={onClose}>
+      <div className="flex max-h-[92vh] w-[min(760px,100vw)] flex-col overflow-hidden rounded-[16px] border border-[var(--border)] bg-[var(--bg-panel,#fff)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+          <div className="text-[16px] font-bold text-[var(--text)]">Issue Summary</div>
+          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-lg text-[var(--muted)] hover:bg-[var(--hover,#f3f4f6)] hover:text-[var(--text)]"><X size={18} /></button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {/* Issue summary card */}
+          <div className="rounded-[14px] border border-[#F5D9C4] bg-gradient-to-br from-[#FDEEE1] to-[#FCE3D2] p-4">
+            <div className="text-[15px] font-bold text-[#1A1A1A]">{issue.title}</div>
+            <div className="mt-0.5 text-[12px] text-[#7c5a44]"><span className="font-semibold">Created from:</span> {issue.source}</div>
+            <div className="mt-1 text-[12.5px] text-[#1A1A1A]">{issue.potential}</div>
+            <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+              {[["Severity", issue.severity], ["Exposure", issue.exposure], ["Effort", issue.effort], ["Score", issue.score]].map(([l, v]) => (
+                <div key={l}><div className="text-[18px] font-bold tabular-nums text-[#1A1A1A]">{v}</div><div className="text-[10px] text-[#7c5a44]">{l}</div></div>
+              ))}
+            </div>
+          </div>
+
+          {/* Team */}
+          <div className="mt-4">
+            <label className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-[var(--muted)]"><Users size={13} /> Team</label>
+            <select value={team} onChange={(e) => setTeam(e.target.value)}
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none focus:border-[#D45427]">
+              {TEAM_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <div className="mt-1 text-[11px] text-[var(--muted)]">Auto-suggested based on the issue type.</div>
+          </div>
+
+          {/* Assignee */}
+          <div className="mt-4">
+            <label className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-[var(--muted)]"><UserPlus size={13} /> Assigned to</label>
+            <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Type a name, or leave blank to assign to yourself"
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[#D45427]" />
+          </div>
+
+          {/* Due date */}
+          <div className="mt-4">
+            <label className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-[var(--muted)]"><Calendar size={13} /> Due date</label>
+            <input type="date" value={due} onChange={(e) => setDue(e.target.value)}
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none focus:border-[#D45427]" />
+          </div>
+
+          {/* Priority */}
+          <div className="mt-4">
+            <label className="mb-1 text-[12px] font-medium text-[var(--muted)]">Priority</label>
+            <select value={priority} onChange={(e) => setPriority(e.target.value)}
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none focus:border-[#D45427]">
+              {Object.entries(PRIORITY_OPTIONS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            </select>
+          </div>
+
+          {/* Acceptance criteria */}
+          <div className="mt-4">
+            <div className="mb-1.5 text-[12.5px] font-semibold text-[var(--text)]">Acceptance Criteria (Definition of Done)</div>
+            <div className="space-y-1.5">
+              {criteria.map((c, i) => (
+                <label key={i} className="flex cursor-pointer items-start gap-2 text-[12.5px] text-[var(--text)]">
+                  <button type="button" onClick={() => toggleC(i)} aria-label={c.checked ? "Uncheck" : "Check"}
+                    className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border transition ${c.checked ? "border-[#D45427] bg-[#D45427] text-white" : "border-gray-300 text-transparent"}`}>
+                    <Check size={11} />
+                  </button>
+                  <span>{c.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-[var(--border)] px-5 py-3">
+          <button onClick={onClose} className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[12.5px] font-medium text-[var(--muted)] hover:text-[var(--text)]"><X size={14} /> Cancel</button>
+          <button onClick={() => onCreate?.({ team, assignee: assignee.trim() || "You", due, priority, criteria: criteria.map((c) => ({ ...c })) })}
+            className="inline-flex items-center gap-2 rounded-[10px] bg-[image:var(--infoHighlight-gradient)] px-4 py-2 text-[12.5px] font-semibold text-white shadow-sm hover:opacity-90">
+            <CheckCircle2 size={15} /> Assign &amp; Create Task
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---- Task Created confirmation ---- */
+function TaskCreatedModal({ issue, assignment = {}, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose?.();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (!issue) return null;
+  const dueFmt = assignment.due ? new Date(assignment.due).toLocaleDateString() : "—";
+  const actions = [
+    "Added to your Tasks list",
+    `Due date set for ${dueFmt}`,
+    "Re-test is available from the issue card once deployed",
+    "Progress will update on the Site Health dashboard",
+  ];
+  return (
+    <div className="fixed inset-0 z-[96] grid place-items-center bg-black/45 p-4" onClick={onClose}>
+      <div className="w-[min(520px,100vw)] overflow-hidden rounded-[16px] border border-[var(--border)] bg-[var(--bg-panel,#fff)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 pt-6 text-center">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-emerald-600"><CheckCircle2 size={30} /></div>
+          <div className="mt-3 text-[17px] font-bold text-[var(--text)]">Task Created</div>
+          <div className="mt-1 text-[12.5px] text-[var(--muted)]">The fix has been assigned and added to your task list.</div>
+        </div>
+        <div className="px-6 py-4">
+          <div className="rounded-[12px] border border-[var(--border)] bg-[var(--input)] p-4">
+            <div className="text-[12px] font-semibold text-[var(--text)]">Issue Summary</div>
+            <div className="mt-2 space-y-1 text-[12.5px]">
+              <div className="flex justify-between gap-3"><span className="text-[var(--muted)]">Task</span><span className="text-right font-medium text-[var(--text)]">{issue.title}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-[var(--muted)]">Assigned to</span><span className="font-medium text-[var(--text)]">{assignment.assignee || "You"}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-[var(--muted)]">Team</span><span className="font-medium text-[var(--text)]">{assignment.team || "—"}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-[var(--muted)]">Due date</span><span className="font-medium text-[var(--text)]">{dueFmt}</span></div>
+              <div className="flex justify-between gap-3"><span className="text-[var(--muted)]">Priority</span><span className="font-medium text-[var(--text)]">{assignment.priority || "—"}</span></div>
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="mb-1.5 flex items-center gap-1.5 text-[12px] font-semibold text-[var(--text)]"><Bell size={13} /> Automated Actions</div>
+            <ul className="space-y-1">
+              {actions.map((a) => (
+                <li key={a} className="flex items-start gap-2 text-[12.5px] text-[var(--muted)]"><CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-500" /> {a}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="flex justify-end border-t border-[var(--border)] px-6 py-3">
+          <button onClick={onClose} className="inline-flex items-center gap-2 rounded-[10px] bg-[image:var(--infoHighlight-gradient)] px-6 py-2 text-[12.5px] font-semibold text-white shadow-sm hover:opacity-90">OK</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
   const {
     domain = "", siteHealth = null, performance = null, pageSpeedMobile = null, pageSpeedDesktop = null,
@@ -475,6 +673,8 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
   const [statuses, setStatuses] = useState({});
   const [detailIssue, setDetailIssue] = useState(null);
   const [retestIssue, setRetestIssue] = useState(null);
+  const [assignModal, setAssignModal] = useState(null); // issue being assigned
+  const [createdModal, setCreatedModal] = useState(null); // { issue, assignment }
   useEffect(() => { setStatuses(loadStatuses(domain)); }, [domain]);
 
   const issueList = useMemo(
@@ -751,7 +951,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
                         <RefreshCw size={14} /> Re-test
                       </button>
                     )}
-                    <button onClick={() => cycle(iss.id)}
+                    <button onClick={() => { if (st === "not-started") setAssignModal(iss); else cycle(iss.id); }}
                       className="inline-flex items-center gap-1.5 rounded-[10px] bg-[image:var(--infoHighlight-gradient)] px-3 py-2 text-[12px] font-semibold text-white shadow-sm hover:opacity-90">
                       <Plus size={14} /> {meta.cta}
                     </button>
@@ -859,6 +1059,41 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
           />
         );
       })()}
+
+      {/* Assign & Create Task modal */}
+      {assignModal && (
+        <AssignTaskModal
+          issue={assignModal}
+          domain={domain}
+          onClose={() => setAssignModal(null)}
+          onCreate={(assignment) => {
+            const iss = assignModal;
+            saveAssign(domain, iss.id, assignment);
+            saveSnap(domain, iss.id, { perf: num(performance), lcp: num(lcp), inp: num(inp), cls: num(cls) });
+            setStatus(iss.id, "in-progress");
+            try {
+              window.dispatchEvent(new CustomEvent("dashboard:add-task", {
+                detail: {
+                  title: iss.title,
+                  detail: `${assignment.team} · ${assignment.priority} priority · due ${assignment.due}`,
+                  source: "Site Health",
+                },
+              }));
+            } catch {}
+            setAssignModal(null);
+            setCreatedModal({ issue: iss, assignment });
+          }}
+        />
+      )}
+
+      {/* Task Created confirmation */}
+      {createdModal && (
+        <TaskCreatedModal
+          issue={createdModal.issue}
+          assignment={createdModal.assignment}
+          onClose={() => setCreatedModal(null)}
+        />
+      )}
     </div>
   );
 }
