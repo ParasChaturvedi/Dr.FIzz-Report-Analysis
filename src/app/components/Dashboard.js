@@ -8,6 +8,7 @@ import OpportunitiesSection from "./OpportunitiesSection";
 import NewOnPageSEOTable from "./NewOnPageSEOTable";
 import DashboardHeader from "./DashboardHeader";
 import TasksDrawer from "./TasksDrawer";
+import SerpFeatures from "./SerpFeatures";
 
 // --- Prefill content templates for the 4 "Top On-Page Content Opportunities" cards ---
 const PREFILL_BY_TITLE = {
@@ -656,6 +657,8 @@ const [periodDays, setPeriodDays] = useState(30);
 
 // "View Details" pop-up for an opportunity card (flow §3: opens a modal with more context).
 const [detailsItem, setDetailsItem] = useState(null);
+// Full SERP Features screen (opened from the SERP Feature Opportunities section)
+const [serpScreen, setSerpScreen] = useState(null); // null | { feature }
 
 const fetchGa4Report = async (days = periodDays) => {
   try {
@@ -4207,16 +4210,31 @@ const seoTableProg = Math.max(0, prog);
 
       {/* SERP Feature Opportunities */}
       <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
-        <div className="text-[12px] font-semibold text-[var(--muted)] mb-4">SERP Feature Opportunities</div>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-[12px] font-semibold text-[var(--muted)]">SERP Feature Opportunities</div>
+          <button
+            type="button"
+            onClick={() => setSerpScreen({ feature: "featuredSnippet" })}
+            className="text-[11px] font-semibold text-[#D45427] hover:underline"
+          >
+            View all details →
+          </button>
+        </div>
         <div className="space-y-3">
           {[
-            { feature: "Featured Snippet", count: selected?.serp?.featuredSnippets ?? null, opportunity: "Structure content with Q&A format", icon: "⭐" },
-            { feature: "People Also Ask", count: selected?.serp?.peopleAlsoAsk ?? null, opportunity: "Target FAQ-style questions", icon: "❓" },
-            { feature: "Image Pack", count: selected?.serp?.imagePack ?? null, opportunity: "Add optimized images with alt text", icon: "🖼️" },
-            { feature: "Video Results", count: selected?.serp?.videoResults ?? null, opportunity: "Create YouTube/embedded videos", icon: "▶️" },
-            { feature: "Knowledge Panel", count: selected?.serp?.knowledgePanel ?? null, opportunity: "Build brand entity signals", icon: "📋" },
+            { key: "featuredSnippet", feature: "Featured Snippet", count: selected?.serp?.featuredSnippets ?? null, opportunity: "Structure content with Q&A format", icon: "⭐" },
+            { key: "peopleAlsoAsk", feature: "People Also Ask", count: selected?.serp?.peopleAlsoAsk ?? null, opportunity: "Target FAQ-style questions", icon: "❓" },
+            { key: "imagePack", feature: "Image Pack", count: selected?.serp?.imagePack ?? null, opportunity: "Add optimized images with alt text", icon: "🖼️" },
+            { key: "videoCarousel", feature: "Video Carousel", count: selected?.serp?.videoResults ?? null, opportunity: "Create YouTube/embedded videos", icon: "▶️" },
+            { key: "localPack", feature: "Local Pack", count: selected?.serp?.localPack ?? null, opportunity: "Strengthen your Google Business Profile", icon: "📍" },
           ].map((f, i) => (
-            <div key={i} className="flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2">
+            <button
+              key={i}
+              type="button"
+              onClick={() => setSerpScreen({ feature: f.key })}
+              title="View details"
+              className="flex w-full items-center justify-between rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-left cursor-pointer hover:border-[#D45427]/40 transition"
+            >
               <div className="flex items-center gap-2">
                 <span className="text-[14px]">{f.icon}</span>
                 <div>
@@ -4227,7 +4245,7 @@ const seoTableProg = Math.max(0, prog);
               <span className={`shrink-0 text-[13px] font-bold tabular-nums ml-2 ${f.count != null && f.count > 0 ? "text-[#178A5D]" : "text-[var(--muted)]"}`}>
                 {f.count != null ? f.count : "—"}
               </span>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -4427,6 +4445,17 @@ const seoTableProg = Math.max(0, prog);
 
   {/* Saved-tasks drawer + floating trigger (fed by dashboard:add-task events) */}
   <TasksDrawer domain={domain} />
+
+  {/* Full SERP Features screen (opened from the SERP Feature Opportunities section) */}
+  {serpScreen && (
+    <SerpFeatures
+      serp={selected?.serp || null}
+      domain={domain}
+      competitors={Array.isArray(seo?.competitorDomains) ? seo.competitorDomains : []}
+      initialFeature={serpScreen.feature || "featuredSnippet"}
+      onBack={() => setSerpScreen(null)}
+    />
+  )}
 
   {/* AI Loading state */}
   {aiLoading && (

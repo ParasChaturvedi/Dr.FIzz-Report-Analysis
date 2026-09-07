@@ -78,7 +78,14 @@ export default function TasksDrawer({ domain }) {
       onAdd._t = window.setTimeout(() => setJustAdded(false), 2200);
     };
     window.addEventListener("dashboard:add-task", onAdd);
-    return () => window.removeEventListener("dashboard:add-task", onAdd);
+    // "Save to Content Plan" persists into the same list, tagged as a plan item.
+    const onPlan = (e) =>
+      onAdd({ detail: { ...(e?.detail || {}), source: e?.detail?.source ? `Content Plan · ${e.detail.source}` : "Content Plan" } });
+    window.addEventListener("dashboard:add-content-plan", onPlan);
+    return () => {
+      window.removeEventListener("dashboard:add-task", onAdd);
+      window.removeEventListener("dashboard:add-content-plan", onPlan);
+    };
   }, [domain]);
 
   const openCount = useMemo(() => tasks.filter((t) => t.status === "open").length, [tasks]);
