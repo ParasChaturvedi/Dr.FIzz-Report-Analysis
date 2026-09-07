@@ -1,7 +1,7 @@
 // src/components/Dashboard.js
 "use client";
 import Image from "next/image";
-import { Activity, ActivitySquare, AlertTriangle, BarChart3, BookOpen, Check, ChevronRight, Clock3, Eye, FileText, Gauge, Goal, HelpCircle, KeyRound, Lightbulb, Link2, Lock, Maximize2, Monitor, Network, PencilLine, RefreshCw, Rocket, Settings, ShieldCheck, Skull, SlidersHorizontal, Smartphone, SquareArrowOutUpRight, Star, ThumbsDown, ThumbsUp, TrendingUp, TrendingDown, Wifi, X } from "lucide-react";
+import { Activity, ActivitySquare, AlertTriangle, BarChart3, BookOpen, Check, ChevronRight, Clock3, Eye, FileText, Gauge, Goal, HelpCircle, KeyRound, Lightbulb, Link2, Lock, Maximize2, Monitor, Network, PencilLine, RefreshCw, Rocket, Settings, Share2, ShieldCheck, Skull, SlidersHorizontal, Smartphone, SquareArrowOutUpRight, Star, ThumbsDown, ThumbsUp, TrendingUp, TrendingDown, Wifi, X } from "lucide-react";
 import { useEffect, useRef, useState, useMemo , useCallback} from "react";
 import { useSearchParams } from "next/navigation";
 import OpportunitiesSection from "./OpportunitiesSection";
@@ -2247,9 +2247,9 @@ const seoTableProg = Math.max(0, prog);
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
-                  <ShieldCheck size={16} />
+                  <Star size={16} />
                 </span>
-                <span className="text-[13px] text-gray-700 leading-relaxed">
+                <span className="text-[13px] font-semibold text-[#111827] dark:text-[var(--text)] leading-relaxed">
                   Domain Rating
                 </span>
               </div>
@@ -2260,10 +2260,10 @@ const seoTableProg = Math.max(0, prog);
             </div>
 
             <div className="mt-3 flex items-end gap-2">
-              <div className="text-[32px] font-semibold leading-none text-[var(--text)] tabular-nums">
+              <div className="text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums">
                 {drValue != null ? drValue.toFixed(1) : "—"}
               </div>
-              {drValue != null && <div className="pb-1 text-[13px] text-[var(--muted)]">/ 100</div>}
+              {drValue != null && <div className="pb-0.5 text-[11px] text-[var(--muted)]">/ 100</div>}
               {drTrendText && (
                 <div
                   className={`mb-0.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
@@ -2272,6 +2272,7 @@ const seoTableProg = Math.max(0, prog);
                       : "border-[#FCA5A5] bg-[#FEF2F2] text-[#EF4444]"
                   }`}
                 >
+                  {drTrendUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
                   {drTrendText}
                 </div>
               )}
@@ -2304,9 +2305,13 @@ const seoTableProg = Math.max(0, prog);
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
-                  <Network size={16} />
+                  <svg viewBox="0 0 14.5381 14.5381" fill="none" className="h-[15px] w-[15px]">
+                    <path d="M1.81726 9.69207C1.81726 10.174 2.00873 10.6363 2.34953 10.9771C2.69033 11.3179 3.15256 11.5093 3.63453 11.5093C4.1165 11.5093 4.57872 11.3179 4.91953 10.9771C5.26033 10.6363 5.45179 10.174 5.45179 9.69207C5.45179 9.21011 5.26033 8.74788 4.91953 8.40707C4.57872 8.06627 4.1165 7.87481 3.63453 7.87481C3.15256 7.87481 2.69033 8.06627 2.34953 8.40707C2.00873 8.74788 1.81726 9.21011 1.81726 9.69207Z" fill="currentColor" stroke="currentColor" strokeWidth="1.21151" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M8.48057 11.5093C8.48057 11.8307 8.60821 12.1388 8.83541 12.366C9.06261 12.5932 9.37076 12.7208 9.69207 12.7208C10.0134 12.7208 10.3215 12.5932 10.5487 12.366C10.7759 12.1388 10.9036 11.8307 10.9036 11.5093C10.9036 11.188 10.7759 10.8799 10.5487 10.6527C10.3215 10.4255 10.0134 10.2978 9.69207 10.2978C9.37076 10.2978 9.06261 10.4255 8.83541 10.6527C8.60821 10.8799 8.48057 11.188 8.48057 11.5093Z" fill="currentColor" stroke="currentColor" strokeWidth="1.21151" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M6.05755 4.54316C6.05755 5.26611 6.34474 5.95945 6.85594 6.47066C7.36715 6.98186 8.06049 7.26906 8.78344 7.26906C9.5064 7.26906 10.1997 6.98186 10.7109 6.47066C11.2221 5.95945 11.5093 5.26611 11.5093 4.54316C11.5093 3.82021 11.2221 3.12687 10.7109 2.61566C10.1997 2.10446 9.5064 1.81726 8.78344 1.81726C8.06049 1.81726 7.36715 2.10446 6.85594 2.61566C6.34474 3.12687 6.05755 3.82021 6.05755 4.54316Z" fill="currentColor" stroke="currentColor" strokeWidth="1.21151" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
                 </span>
-                <span className="text-[13px] text-gray-700 leading-relaxed">
+                <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
                   Referring Domains
                 </span>
               </div>
@@ -2319,15 +2324,15 @@ const seoTableProg = Math.max(0, prog);
                   type="button"
                   title="Open referring-domains details"
                   onClick={() => document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#F0782E]/50 text-[#F0782E] hover:bg-[#FFF3EA] transition"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#CA5223] bg-[#F5F4F2] dark:bg-[var(--input)] text-[#CA5223] hover:bg-[#CA5223]/10 transition"
                 >
-                  <SquareArrowOutUpRight size={15} />
+                  <Share2 size={14} />
                 </button>
               </div>
             </div>
 
             <div className="mt-3 flex items-end gap-2">
-              <div className="text-[32px] font-semibold leading-none text-[var(--text)] tabular-nums">
+              <div className="text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums">
                 {rdValue != null ? formatCompactNumber(rdValue) : "—"}
               </div>
             </div>
@@ -2397,43 +2402,41 @@ const seoTableProg = Math.max(0, prog);
                   type="button"
                   title="Open backlink details"
                   onClick={() => document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#F0782E]/50 text-[#F0782E] hover:bg-[#FFF3EA] transition"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#CA5223] bg-[#F5F4F2] dark:bg-[var(--input)] text-[#CA5223] hover:bg-[#CA5223]/10 transition"
                 >
-                  <SquareArrowOutUpRight size={15} />
+                  <Maximize2 size={14} />
                 </button>
               </div>
             </div>
 
             <div className="mt-3 flex items-end gap-2">
-              <div className="text-[32px] font-semibold leading-none text-[var(--text)] tabular-nums">
+              <div className="text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums">
                 {tbValue != null ? formatCompactNumber(tbValue) : "—"}
               </div>
             </div>
 
             <div className="mt-3 grid gap-3 text-[12px]">
-              <div className="relative grid h-16 grid-cols-[1fr_auto] items-center rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3">
-                <span className="absolute left-0 top-0 h-full w-[4px] rounded-l-[10px] bg-[#1CC88A]" />
+              <div className="relative grid h-[52px] grid-cols-[1fr_auto] items-center overflow-hidden rounded-[8px] border border-[#D1D5DB] dark:border-[var(--border)] border-l-[4px] border-l-[#58CEA7] bg-[var(--card)] pl-3 pr-3">
                 <div className="flex flex-col">
-                  <div className="text-[var(--muted)]">DoFollow</div>
-                  <div className="mt-0.5 text-[20px] font-semibold text-[var(--text)]">
+                  <div className="text-[10px] text-[var(--muted)]">DoFollow</div>
+                  <div className="mt-0.5 text-[15px] font-semibold text-[#4B5563] dark:text-[var(--text)]">
                     {selected?.dofollowPct != null ? `${selected.dofollowPct}%` : "—"}
                   </div>
                 </div>
-                <div className="text-right text-[11px] text-[var(--muted)]">
-                  Link that give <span className="font-medium text-[var(--text)]">SEO</span> credit
+                <div className="self-end pb-1.5 text-right text-[10px] text-[var(--muted)]">
+                  Link that give <span className="font-semibold text-[var(--text)]">SEO credit</span>
                 </div>
               </div>
 
-              <div className="relative grid h-16 grid-cols-[1fr_auto] items-center rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3">
-                <span className="absolute left-0 top-0 h-full w-[4px] rounded-l-[10px] bg-[#EF4444]" />
+              <div className="relative grid h-[52px] grid-cols-[1fr_auto] items-center overflow-hidden rounded-[8px] border border-[#D1D5DB] dark:border-[var(--border)] border-l-[4px] border-l-[#EA617F] bg-[var(--card)] pl-3 pr-3">
                 <div className="flex flex-col">
-                  <div className="text-[var(--muted)]">NoFollow</div>
-                  <div className="mt-0.5 text-[20px] font-semibold text-[var(--text)]">
+                  <div className="text-[10px] text-[var(--muted)]">NoFollow</div>
+                  <div className="mt-0.5 text-[15px] font-semibold text-[#4B5563] dark:text-[var(--text)]">
                     {selected?.nofollowPct != null ? `${selected.nofollowPct}%` : "—"}
                   </div>
                 </div>
-                <div className="text-right text-[11px] text-[var(--muted)]">
-                  Link that just mention, no <span className="font-medium text-[var(--text)]">SEO</span> value
+                <div className="self-end pb-1.5 text-right text-[10px] text-[var(--muted)]">
+                  Link that just mention, <span className="font-semibold text-[var(--text)]">no SEO value</span>
                 </div>
               </div>
             </div>
@@ -2483,10 +2486,10 @@ const seoTableProg = Math.max(0, prog);
             </div>
 
             <div className="mt-3 flex items-end gap-2">
-              <div className="text-[32px] font-semibold leading-none text-[var(--text)] tabular-nums">
+              <div className="text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums">
                 {shValue.toFixed(1)}
               </div>
-              <div className="pb-1 text-[13px] text-[var(--muted)]">/ 100</div>
+              <div className="pb-0.5 text-[11px] text-[var(--muted)]">/ 100</div>
             </div>
 
             <ul className="mt-3 space-y-2 text-[13px]">
