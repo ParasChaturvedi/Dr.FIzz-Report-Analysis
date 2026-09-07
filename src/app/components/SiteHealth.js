@@ -29,6 +29,18 @@ function saveStatuses(d, s) {
   try { localStorage.setItem(shKey(d), JSON.stringify(s)); } catch {}
 }
 
+/* ---- "before" performance snapshot per issue (captured when a fix is assigned) ---- */
+const snapKey = (d) => `df:sh-snap:v1:${(d || "default").toLowerCase()}`;
+function loadSnaps(d) {
+  try { return JSON.parse(localStorage.getItem(snapKey(d)) || "{}") || {}; } catch { return {}; }
+}
+function saveSnap(d, id, snap) {
+  try {
+    const all = loadSnaps(d);
+    if (!all[id]) { all[id] = { ...snap, at: Date.now() }; localStorage.setItem(snapKey(d), JSON.stringify(all)); }
+  } catch {}
+}
+
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const fmt = (v, suffix = "") => (num(v) != null ? `${v}${suffix}` : "—");
 
@@ -350,6 +362,108 @@ function IssueDetailModal({ issue, cwv = {}, domain = "", onClose, onAddTask }) 
   );
 }
 
+/* ---- Re-test Result modal (before/after verification after a fix) ---- */
+function fmtInpVal(v) {
+  if (num(v) == null) return "—";
+  return v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${Math.round(v)}ms`;
+}
+function RetestModal({ issue, before = {}, after = {}, domain = "", onVerify, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose?.();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  if (!issue) return null;
+
+  // lowerBetter: improvement is a decrease (LCP/INP/CLS). Performance: higher better.
+  const rows = [
+    { label: "Performance Score", b: before.perf, a: after.perf, lowerBetter: false, fmt: (x) => (num(x) != null ? `${Math.round(x)}` : "—"), dfmt: (d) => `${d > 0 ? "+" : ""}${Math.round(d)}` },
+    { label: "LCP (Largest Contentful Paint)", b: before.lcp, a: after.lcp, lowerBetter: true, fmt: (x) => (num(x) != null ? `${x.toFixed(1)}s` : "—"), dfmt: (d) => `${d > 0 ? "+" : ""}${d.toFixed(1)}s` },
+    { label: "INP (Interaction to Next Paint)", b: before.inp, a: after.inp, lowerBetter: true, fmt: fmtInpVal, dfmt: (d) => (Math.abs(d) >= 1000 ? `${d > 0 ? "+" : ""}${(d / 1000).toFixed(1)}s` : `${d > 0 ? "+" : ""}${Math.round(d)}ms`) },
+    { label: "CLS (Cumulative Layout Shift)", b: before.cls, a: after.cls, lowerBetter: true, fmt: (x) => (num(x) != null ? x.toFixed(2) : "—"), dfmt: (d) => `${d > 0 ? "+" : ""}${d.toFixed(2)}` },
+  ];
+
+  const perfGain = num(after.perf) != null && num(before.perf) != null ? after.perf - before.perf : null;
+  const lcpOk = num(after.lcp) != null && after.lcp <= 2.5;
+  const cwvGood = lcpOk && (num(after.cls) == null || after.cls <= 0.1);
+  const improved = rows.some((r) => {
+    if (num(r.a) == null || num(r.b) == null) return false;
+    const d = r.a - r.b;
+    return r.lowerBetter ? d < 0 : d > 0;
+  });
+
+  const criteria = [
+    { label: "P75 LCP ≤ 2.5s", val: num(after.lcp) != null ? (lcpOk ? `Achieved (${after.lcp.toFixed(1)}s)` : `Not met (${after.lcp.toFixed(1)}s)`) : "No data", ok: lcpOk },
+    { label: "Performance Score Improvement ≥10 points", val: perfGain != null ? (perfGain >= 10 ? `Achieved (+${Math.round(perfGain)})` : `Pending (${perfGain >= 0 ? "+" : ""}${Math.round(perfGain)})`) : "No baseline", ok: perfGain != null && perfGain >= 10 },
+    { label: "Core Web Vitals Status", val: num(after.lcp) != null ? (cwvGood ? "Good" : "Needs work") : "No data", ok: cwvGood },
+    { label: "Field Data", val: improved ? "Shows improvement vs baseline" : "No change since baseline", ok: improved },
+  ];
+
+  const verDate = new Date().toLocaleDateString();
+
+  return (
+    <div className="fixed inset-0 z-[95] grid place-items-center bg-black/45 p-4" onClick={onClose}>
+      <div className="flex max-h-[92vh] w-[min(760px,100vw)] flex-col overflow-hidden rounded-[16px] border border-[var(--border)] bg-[var(--bg-panel,#fff)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+          <div className="text-[16px] font-bold text-[var(--text)]">Re-test Result</div>
+          <button onClick={onClose} aria-label="Close" className="grid h-8 w-8 place-items-center rounded-lg text-[var(--muted)] hover:bg-[var(--hover,#f3f4f6)] hover:text-[var(--text)]"><X size={18} /></button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <div className="text-[13px] font-semibold text-[var(--text)]">Performance Comparison</div>
+          <div className="mt-2 overflow-hidden rounded-[12px] border border-[var(--border)]">
+            <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr] gap-2 bg-[var(--input)] px-4 py-2 text-[11px] font-semibold text-[var(--muted)]">
+              <span>Metric</span><span>Before</span><span>After</span><span>Changes</span>
+            </div>
+            {rows.map((r) => {
+              const hasBoth = num(r.a) != null && num(r.b) != null;
+              const d = hasBoth ? r.a - r.b : null;
+              const good = d != null && (r.lowerBetter ? d < 0 : d > 0);
+              const neutral = d === 0;
+              return (
+                <div key={r.label} className="grid grid-cols-[1.6fr_1fr_1fr_1fr] items-center gap-2 border-t border-[var(--border)] bg-[var(--bg-panel,#fff)] px-4 py-2.5 text-[12.5px]">
+                  <span className="text-[var(--text)]">{r.label}</span>
+                  <span className="tabular-nums text-[var(--text)]">{r.fmt(r.b)}</span>
+                  <span className="tabular-nums text-[var(--text)]">{r.fmt(r.a)}</span>
+                  <span className={`tabular-nums font-medium ${d == null || neutral ? "text-[var(--muted)]" : good ? "text-emerald-600" : "text-rose-600"}`}>
+                    {d == null ? "—" : neutral ? "0" : r.dfmt(d)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 text-[13px] font-semibold text-[var(--text)]">Acceptance Criteria Status</div>
+          <ul className="mt-2 space-y-1.5">
+            {criteria.map((c) => (
+              <li key={c.label} className="flex items-start gap-2 text-[12.5px]">
+                {c.ok ? <CheckCircle2 size={15} className="mt-0.5 shrink-0 text-emerald-500" /> : <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" />}
+                <span><span className="font-semibold text-[var(--text)]">{c.label}:</span> <span className="text-[var(--muted)]">{c.val}</span></span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-5 text-[13px] font-semibold text-[var(--text)]">Technical Details</div>
+          <div className="mt-2 space-y-1 text-[12.5px]">
+            <div className="flex gap-3"><span className="w-36 font-medium text-[var(--text)]">Verification Date:</span><span className="text-[var(--muted)]">{verDate}</span></div>
+            <div className="flex gap-3"><span className="w-36 font-medium text-[var(--text)]">Test Environment:</span><span className="text-[var(--muted)]">Production</span></div>
+            <div className="flex gap-3"><span className="w-36 font-medium text-[var(--text)]">Data Source:</span><span className="text-[var(--muted)]">PageSpeed Insights API + Search Console</span></div>
+            {domain && <div className="flex gap-3"><span className="w-36 font-medium text-[var(--text)]">Scope:</span><span className="text-[var(--muted)]">{domain}</span></div>}
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 border-t border-[var(--border)] px-5 py-3">
+          <button onClick={onClose} className="rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[12.5px] font-medium text-[var(--muted)] hover:text-[var(--text)]">Close</button>
+          <button onClick={() => { onVerify?.(); onClose?.(); }}
+            className="inline-flex items-center gap-2 rounded-[10px] bg-[image:var(--infoHighlight-gradient)] px-4 py-2 text-[12.5px] font-semibold text-white shadow-sm hover:opacity-90">
+            <CheckCircle2 size={15} /> Mark as Verified
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
   const {
     domain = "", siteHealth = null, performance = null, pageSpeedMobile = null, pageSpeedDesktop = null,
@@ -360,6 +474,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
   const [device, setDevice] = useState("desktop");
   const [statuses, setStatuses] = useState({});
   const [detailIssue, setDetailIssue] = useState(null);
+  const [retestIssue, setRetestIssue] = useState(null);
   useEffect(() => { setStatuses(loadStatuses(domain)); }, [domain]);
 
   const issueList = useMemo(
@@ -382,6 +497,8 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
     setStatus(id, next);
     if (next === "in-progress") {
       const iss = issueList.find((x) => x.id === id);
+      // Capture a "before" performance snapshot the first time a fix is assigned.
+      saveSnap(domain, id, { perf: num(performance), lcp: num(lcp), inp: num(inp), cls: num(cls) });
       try {
         window.dispatchEvent(new CustomEvent("dashboard:add-task", {
           detail: { title: iss?.title || "Site Health fix", detail: iss?.potential || "", source: "Site Health" },
@@ -603,6 +720,12 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
                       className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:text-[var(--text)] hover:border-[#D45427]/40">
                       <Eye size={14} /> View details
                     </button>
+                    {(st === "in-progress" || st === "qa") && (
+                      <button onClick={() => setRetestIssue(iss)}
+                        className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:text-[var(--text)] hover:border-[#D45427]/40">
+                        <RefreshCw size={14} /> Re-test
+                      </button>
+                    )}
                     <button onClick={() => cycle(iss.id)}
                       className="inline-flex items-center gap-1.5 rounded-[10px] bg-[image:var(--infoHighlight-gradient)] px-3 py-2 text-[12px] font-semibold text-white shadow-sm hover:opacity-90">
                       <Plus size={14} /> {meta.cta}
@@ -688,6 +811,29 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
           }}
         />
       )}
+
+      {/* Re-test result modal */}
+      {retestIssue && (() => {
+        const snap = loadSnaps(domain)[retestIssue.id] || {};
+        const now = { perf: num(performance), lcp: num(lcp), inp: num(inp), cls: num(cls) };
+        // If no baseline was captured, fall back to current values as the baseline.
+        const before = {
+          perf: num(snap.perf) != null ? snap.perf : now.perf,
+          lcp: num(snap.lcp) != null ? snap.lcp : now.lcp,
+          inp: num(snap.inp) != null ? snap.inp : now.inp,
+          cls: num(snap.cls) != null ? snap.cls : now.cls,
+        };
+        return (
+          <RetestModal
+            issue={retestIssue}
+            before={before}
+            after={now}
+            domain={domain}
+            onVerify={() => setStatus(retestIssue.id, "completed")}
+            onClose={() => setRetestIssue(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
