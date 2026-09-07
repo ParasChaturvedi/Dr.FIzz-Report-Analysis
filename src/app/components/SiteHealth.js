@@ -686,7 +686,16 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
                 <div key={iss.id} className="rounded-[16px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-[14.5px] font-semibold text-[var(--text)]">{iss.title}</div>
-                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${meta.cls}`}>{meta.label}</span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span
+                        title={`${iss.impact} priority`}
+                        className="grid h-6 w-6 place-items-center rounded-full text-[11px] font-bold text-white"
+                        style={{ background: iss.impact === "High" ? "#EF4444" : iss.impact === "Medium" ? "#F59E0B" : "#9CA3AF" }}
+                      >
+                        {iss.impact?.[0] || "M"}
+                      </span>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${meta.cls}`}>{meta.label}</span>
+                    </div>
                   </div>
                   <div className="mt-1 text-[12px] text-[var(--muted)]">{iss.impact} · {iss.potential}</div>
                   <div className="mt-2 inline-block rounded-md bg-[#FFF3EA] px-2.5 py-1 text-[11px] font-medium text-[#B4531B]">{iss.source}</div>
@@ -701,6 +710,22 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
                   </div>
 
                   <p className="mt-3 text-[12px] leading-relaxed text-[var(--muted)]">{iss.desc}</p>
+
+                  {/* Assignment — real: populated when the fix is assigned (no placeholder names) */}
+                  {(() => {
+                    const snap = loadSnaps(domain)[iss.id];
+                    const assigned = st !== "not-started";
+                    const dueDate = snap?.at ? new Date(snap.at + 7 * 864e5).toLocaleDateString() : null;
+                    return (
+                      <div className="mt-3 text-[12px]">
+                        <div>
+                          <span className="font-semibold text-[var(--text)]">Assigned to: </span>
+                          <span className="text-[var(--muted)]">{assigned ? "You" : "Unassigned"}</span>
+                        </div>
+                        {dueDate && <div className="mt-0.5 text-[11px] text-[var(--muted)]">Due: {dueDate}</div>}
+                      </div>
+                    );
+                  })()}
 
                   {/* Fix progress (derived from status) */}
                   {(() => {
