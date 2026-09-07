@@ -2264,8 +2264,10 @@ const seoTableProg = Math.max(0, prog);
               {drValue != null && <div className="pb-1 text-[13px] text-[var(--muted)]">/ 100</div>}
               {drTrendText && (
                 <div
-                  className={`ml-auto text-[12px] font-medium ${
-                    drTrendUp ? "text-[#1BA97A]" : "text-[#EF4444]"
+                  className={`mb-0.5 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+                    drTrendUp
+                      ? "border-[#9FE3CD] bg-[#EAF8F1] text-[#0D9467]"
+                      : "border-[#FCA5A5] bg-[#FEF2F2] text-[#EF4444]"
                   }`}
                 >
                   {drTrendText}
