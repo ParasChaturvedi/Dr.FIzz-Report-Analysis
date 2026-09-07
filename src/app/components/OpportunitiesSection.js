@@ -11,6 +11,7 @@ import {
   Check,
   PencilLine,
   X,
+  ListTodo,
 } from "lucide-react";
 
 /* ============================================================
@@ -1119,7 +1120,28 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex items-center justify-between gap-2">
+         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            title="Save this opportunity to your tasks"
+            onClick={() => {
+              try {
+                window.dispatchEvent(
+                  new CustomEvent("dashboard:add-task", {
+                    detail: {
+                      title: realTitle || displayTitle,
+                      detail: `${type === "page" ? "Page" : "Blog"} opportunity`,
+                      source: "Opportunity",
+                    },
+                  })
+                );
+              } catch {}
+            }}
+            className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-2.5 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
+          >
+            <ListTodo size={14} /> Add to Tasks
+          </button>
           <button
             type="button"
             onClick={() =>
@@ -1136,6 +1158,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
           >
             <Eye size={14} /> View Details
           </button>
+         </div>
 
           <button
             onClick={() => {

@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import OpportunitiesSection from "./OpportunitiesSection";
 import NewOnPageSEOTable from "./NewOnPageSEOTable";
 import DashboardHeader from "./DashboardHeader";
+import TasksDrawer from "./TasksDrawer";
 
 // --- Prefill content templates for the 4 "Top On-Page Content Opportunities" cards ---
 const PREFILL_BY_TITLE = {
@@ -4383,9 +4384,29 @@ const seoTableProg = Math.max(0, prog);
           <button
             type="button"
             onClick={() => setDetailsItem(null)}
-            className="rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[13px] font-medium text-[var(--muted)] hover:text-[var(--text)] transition"
+            className="mr-auto rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[13px] font-medium text-[var(--muted)] hover:text-[var(--text)] transition"
           >
             Close
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                window.dispatchEvent(
+                  new CustomEvent("dashboard:add-task", {
+                    detail: {
+                      title: detailsItem.title,
+                      detail: detailsItem.status ? `Status: ${detailsItem.status}` : "",
+                      source: "Opportunity",
+                    },
+                  })
+                );
+              } catch {}
+              setDetailsItem(null);
+            }}
+            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[13px] font-semibold text-[var(--text)] hover:border-[#F0782E]/50 transition"
+          >
+            <Check size={15} /> Add to Tasks
           </button>
           <button
             type="button"
@@ -4403,6 +4424,9 @@ const seoTableProg = Math.max(0, prog);
       </div>
     </div>
   )}
+
+  {/* Saved-tasks drawer + floating trigger (fed by dashboard:add-task events) */}
+  <TasksDrawer domain={domain} />
 
   {/* AI Loading state */}
   {aiLoading && (
