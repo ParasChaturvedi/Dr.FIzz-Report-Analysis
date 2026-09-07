@@ -1759,10 +1759,11 @@ const drTrendText = drDiffPct != null
   : null;
 
 let drBadgeLabel = "No Data";
+let drBadgeColor = "#6B7280";
 if (DR_TARGET != null && INDUSTRY_AVG != null) {
-  if (DR_TARGET >= INDUSTRY_AVG * 1.2) drBadgeLabel = "Above Average";
-  else if (DR_TARGET <= INDUSTRY_AVG * 0.8) drBadgeLabel = "Below Average";
-  else drBadgeLabel = "Average";
+  if (DR_TARGET >= INDUSTRY_AVG * 1.2) { drBadgeLabel = "Above Average"; drBadgeColor = "#178A5D"; }
+  else if (DR_TARGET <= INDUSTRY_AVG * 0.8) { drBadgeLabel = "Below Average"; drBadgeColor = "#DC2626"; }
+  else { drBadgeLabel = "Average"; drBadgeColor = "#B98500"; }
 }
 
 const rdValue = RD_TARGET != null ? Math.max(0, RD_TARGET * prog) : null;
@@ -2252,7 +2253,8 @@ const seoTableProg = Math.max(0, prog);
                   Domain Rating
                 </span>
               </div>
-              <span className="rounded-full bg-[#EAF8F1] px-2 py-0.5 text-[11px] font-medium text-[#178A5D]">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
+                <span className="inline-block h-2 w-2 rounded-full" style={{ background: drBadgeColor }} />
                 {drBadgeLabel}
               </span>
             </div>
@@ -2309,7 +2311,7 @@ const seoTableProg = Math.max(0, prog);
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: rdBadge.color, background: rdBadge.bg }}>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: rdBadge.color }} />
                   {rdBadge.label}
                 </span>
@@ -2387,7 +2389,7 @@ const seoTableProg = Math.max(0, prog);
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: tbBadge.color, background: tbBadge.bg }}>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: tbBadge.color }} />
                   {tbBadge.label}
                 </span>
@@ -2470,7 +2472,7 @@ const seoTableProg = Math.max(0, prog);
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: shBadge.color, background: shBadge.bg }}>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: shBadge.color }} />
                   {shBadge.label}
                 </span>
@@ -2652,14 +2654,7 @@ const seoTableProg = Math.max(0, prog);
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-                        style={{
-                          backgroundColor: overallStyles.bg,
-                          border: `1px solid ${overallStyles.border}`,
-                          color: overallStyles.text,
-                        }}
-                      >
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                         <span
                           className="inline-block h-2 w-2 rounded-full"
                           style={{ backgroundColor: STATUS_STYLES[overallLevel]?.dot || "#9CA3AF" }}
@@ -2777,7 +2772,7 @@ const seoTableProg = Math.max(0, prog);
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Page Speed Scores</span>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: psBadge.color, background: psBadge.bg }}>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                 <span className="inline-block h-2 w-2 rounded-full" style={{ background: psBadge.color }} />
                 {psBadge.label}
               </span>
