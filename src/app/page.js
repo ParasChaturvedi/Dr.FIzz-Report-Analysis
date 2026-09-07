@@ -218,11 +218,16 @@ export default function Home() {
       setCurrentStep("dashboard");
     };
 
+    // Info panel is now opened from the header scope (ⓘ) instead of a sidebar item.
+    const toggleInfo = () => setIsInfoOpen((prev) => !prev);
+
     window.addEventListener("content-editor:open", toEditor);
     window.addEventListener("content-editor:back", toDashboard);
+    window.addEventListener("app:toggle-info", toggleInfo);
     return () => {
       window.removeEventListener("content-editor:open", toEditor);
       window.removeEventListener("content-editor:back", toDashboard);
+      window.removeEventListener("app:toggle-info", toggleInfo);
     };
   }, [catalog]);
 

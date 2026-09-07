@@ -80,7 +80,10 @@ export default function DashboardHeader({ onChatWithAi, aiLoading = false, canCh
 
             <button
               type="button"
-              aria-label="Help"
+              id="sidebar-info-btn"
+              aria-label="Project info"
+              title="View project info (website, business, keywords, competitors)"
+              onClick={() => { try { window.dispatchEvent(new Event("app:toggle-info")); } catch {} }}
               className="
                 inline-flex h-7 w-7 items-center justify-center
                 rounded-full border border-[#E5E7EB] dark:border-[#374151]

@@ -85,21 +85,24 @@ export default function Sidebar({
       {/* Menu */}
       <nav className="w-full px-1.5 md:px-2">
         {variant === "default" ? (
+          // Dashboard nav — matches Figma (Dashboard / Site Health / Backlinks /
+          // Comp analysis / Reports). Backlinks, Comp analysis and Reports are
+          // shown but inactive until their screens ship (greyed, as in Figma).
           <>
             <NavItem
-              id="sidebar-info-btn"
-              onClick={onInfoClick}
-              label="Info"
-              Icon={BarChart2}
-              active={infoActive}
+              label="Dashboard"
+              Icon={LayoutDashboard}
+              active
+              onClick={() => { try { window.dispatchEvent(new Event("content-editor:back")); } catch {} }}
             />
-            <NavItem label="New" Icon={PlusSquare} />
-            <NavItem label="History" Icon={Clock} />
-
-            {/* divider */}
-            <div className="mx-2 md:mx-3 my-5 md:my-6 h-px bg-[#e6e9ec] dark:bg-[#374151]" />
-
-            <NavItem label="Others" Icon={Grid} />
+            <NavItem
+              label="Site Health"
+              Icon={Activity}
+              onClick={() => { try { window.dispatchEvent(new Event("app:open-site-health")); } catch {} }}
+            />
+            <NavItem label="Backlinks" Icon={Link2} disabled />
+            <NavItem label="Comp analysis" Icon={LineChart} disabled />
+            <NavItem label="Reports" Icon={BarChart2} disabled />
           </>
         ) : (
           // editor variant

@@ -664,6 +664,13 @@ const [serpScreen, setSerpScreen] = useState(null); // null | { feature }
 const [siteHealthOpen, setSiteHealthOpen] = useState(false);
 const [siteHealthIssue, setSiteHealthIssue] = useState(null); // selected issue for detail modal
 
+// Sidebar "Site Health" nav opens the full Site Health screen.
+useEffect(() => {
+  const open = () => setSiteHealthOpen(true);
+  window.addEventListener("app:open-site-health", open);
+  return () => window.removeEventListener("app:open-site-health", open);
+}, []);
+
 const fetchGa4Report = async (days = periodDays) => {
   try {
     setGa4Loading(true);
