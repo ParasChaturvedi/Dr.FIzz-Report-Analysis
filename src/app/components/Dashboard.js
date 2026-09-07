@@ -3120,7 +3120,7 @@ const seoTableProg = Math.max(0, prog);
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Organic traffic</span>
                 {OT_GROWTH != null && (
-                  <span className="ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: otBadge.color, background: otBadge.bg }}>
+                  <span className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                     <span className="h-2 w-2 rounded-full" style={{ background: otBadge.color }} />
                     {otBadge.label}
                   </span>
