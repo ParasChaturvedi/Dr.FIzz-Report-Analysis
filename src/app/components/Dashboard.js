@@ -2526,7 +2526,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View technical issues"
-            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="flex flex-col rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             {(() => {
               // Google CWV thresholds
@@ -2733,7 +2733,7 @@ const seoTableProg = Math.max(0, prog);
                     })}
                   </div>
 
-                  <div className="mt-3 flex items-center justify-center gap-1 text-[11px] text-[var(--muted)]">
+                  <div className="mt-auto pt-4 flex items-center justify-center gap-1 text-[11px] text-[var(--muted)]">
                     <span className="text-[#C5CBD6]">•</span> Data from{" "}
                     <span className="font-semibold text-[var(--text)]">Page Speed Insights</span>
                   </div>
