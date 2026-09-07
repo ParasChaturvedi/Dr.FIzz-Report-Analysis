@@ -2246,7 +2246,7 @@ const seoTableProg = Math.max(0, prog);
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <ShieldCheck size={16} />
                 </span>
                 <span className="text-[13px] text-gray-700 leading-relaxed">
@@ -2303,7 +2303,7 @@ const seoTableProg = Math.max(0, prog);
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Network size={16} />
                 </span>
                 <span className="text-[13px] text-gray-700 leading-relaxed">
@@ -2381,7 +2381,7 @@ const seoTableProg = Math.max(0, prog);
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Link2 size={16} />
                 </span>
                 <span className="text-[13px] text-gray-700 leading-relaxed">
@@ -2464,7 +2464,7 @@ const seoTableProg = Math.max(0, prog);
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Activity size={16} />
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">
@@ -2646,15 +2646,18 @@ const seoTableProg = Math.max(0, prog);
                 <>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
-                        <ActivitySquare size={16} />
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
+                        <svg viewBox="0 0 14.5381 14.5381" fill="none" className="h-[18px] w-[18px]">
+                          <path d="M2.95366 8.24432C2.59641 8.46819 2.30375 8.7814 2.10461 9.153C1.90547 9.52461 1.80673 9.94174 1.81815 10.3632C1.82958 10.7846 1.95077 11.1958 2.16976 11.5561C2.38874 11.9163 2.69794 12.2132 3.0668 12.4174C3.43565 12.6216 3.8514 12.726 4.27296 12.7203C4.69452 12.7146 5.10731 12.599 5.47052 12.385C5.83374 12.1709 6.13481 11.8658 6.344 11.4998C6.55319 11.1337 6.66325 10.7194 6.6633 10.2978H10.2978M9.1263 12.4192C9.44994 12.5978 9.81016 12.7 10.1794 12.718C10.5486 12.736 10.917 12.6692 11.2565 12.5228C11.5959 12.3765 11.8974 12.1544 12.1378 11.8736C12.3782 11.5928 12.5512 11.2607 12.6435 10.9027C12.7357 10.5447 12.7449 10.1704 12.6702 9.80838C12.5955 9.44634 12.439 9.10618 12.2126 8.81395C11.9863 8.52172 11.696 8.28516 11.3641 8.12238C11.0322 7.9596 10.6675 7.87491 10.2978 7.87481C9.87017 7.87481 9.43523 7.98324 9.08632 8.17769L7.26906 4.84604M9.69207 4.84604C9.69207 4.20341 9.43679 3.58711 8.98239 3.1327C8.52798 2.6783 7.91168 2.42302 7.26906 2.42302C6.62643 2.42302 6.01013 2.6783 5.55572 3.1327C5.10132 3.58711 4.84604 4.20341 4.84604 4.84604C4.84604 5.7583 5.31247 6.55305 6.05755 6.96618L4.24028 10.2978" stroke="currentColor" strokeWidth="1.21151" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
                       </span>
-                      <span className="text-[13px] text-gray-700 leading-relaxed">
+                      <span className="text-[15px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
                         Core web vitals
                       </span>
+                      <HelpCircle size={15} className="text-[#9CA3AF]" />
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2.5 py-1 text-[12px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                         <span
                           className="inline-block h-2 w-2 rounded-full"
                           style={{ backgroundColor: STATUS_STYLES[overallLevel]?.dot || "#9CA3AF" }}
@@ -2665,7 +2668,7 @@ const seoTableProg = Math.max(0, prog);
                         type="button"
                         title="View Core Web Vitals in Site Health"
                         onClick={() => { try { window.dispatchEvent(new Event("app:open-site-health")); } catch {} }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--text)] hover:bg-[var(--card)] transition"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#CA5223] bg-[#F5F4F2] dark:bg-[var(--input)] text-[#CA5223] hover:bg-[#CA5223]/10 transition"
                       >
                         <Maximize2 size={15} />
                       </button>
@@ -2673,80 +2676,61 @@ const seoTableProg = Math.max(0, prog);
                   </div>
 
                   <div className="mt-4 grid grid-cols-3 gap-3">
-                    {/* LCP */}
-                    <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-3">
-                      <div className="flex items-center justify-between">
-                        <div className="text-[11px] font-medium text-[var(--muted)]">LCP</div>
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                          style={{
-                            backgroundColor: lcpStyles.badgeBg,
-                            border: `1px solid ${lcpStyles.badgeBorder}`,
-                            color: lcpStyles.badgeText,
-                          }}
-                        >
-                          <span
-                            className="inline-block h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: lcpStyles.dot }}
-                          />
-                          {lcpStyles.label}
-                        </span>
-                      </div>
-                      <div className="mt-2 text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums">
-                        {formatSeconds(lcp)}
-                      </div>
-                      <div className="mt-1 text-[11px] text-[var(--muted)]">{lcpThresholdText}</div>
-                    </div>
-
-                    {/* INP */}
-                    <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-3">
-                      <div className="flex items-center justify-between">
-                        <div className="text-[11px] font-medium text-[var(--muted)]">INP</div>
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                          style={{
-                            backgroundColor: inpStyles.badgeBg,
-                            border: `1px solid ${inpStyles.badgeBorder}`,
-                            color: inpStyles.badgeText,
-                          }}
-                        >
-                          <span
-                            className="inline-block h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: inpStyles.dot }}
-                          />
-                          {inpStyles.label}
-                        </span>
-                      </div>
-                      <div className="mt-2 text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums">
-                        {formatMs(inp)}
-                      </div>
-                      <div className="mt-1 text-[11px] text-[var(--muted)]">{inpThresholdText}</div>
-                    </div>
-
-                    {/* CLS */}
-                    <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-3">
-                      <div className="flex items-center justify-between">
-                        <div className="text-[11px] font-medium text-[var(--muted)]">CLS</div>
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                          style={{
-                            backgroundColor: clsStyles.badgeBg,
-                            border: `1px solid ${clsStyles.badgeBorder}`,
-                            color: clsStyles.badgeText,
-                          }}
-                        >
-                          <span
-                            className="inline-block h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: clsStyles.dot }}
-                          />
-                          {clsStyles.label}
-                        </span>
-                      </div>
-                      <div className="mt-2 text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums">
-                        {cls?.toFixed ? cls.toFixed(2) : (Number(cls) || 0).toFixed(2)}
-                      </div>
-                      <div className="mt-1 text-[11px] text-[var(--muted)]">{clsThresholdText}</div>
-                    </div>
+                    {[
+                      {
+                        key: "lcp", label: "LCP", value: formatSeconds(lcp), threshold: lcpThresholdText, st: lcpStyles,
+                        icon: (
+                          <path d="M11.1233 6.6265C11.1803 5.6038 10.9066 4.58992 10.3427 3.73484C9.77875 2.87977 8.95458 2.22891 7.99208 1.87855C7.02957 1.5282 5.97986 1.49695 4.99822 1.78944C4.01659 2.08192 3.15516 2.6826 2.54138 3.50262C1.9276 4.32264 1.59406 5.31844 1.59011 6.34272C1.58615 7.367 1.91199 8.36535 2.51943 9.19008C3.12686 10.0148 3.98362 10.6221 4.96297 10.9222C5.94232 11.2222 6.99224 11.1991 7.95742 10.8562M6.36042 3.71025V6.36042L7.95053 7.95053M10.0707 8.48057V10.0707M10.0707 11.6608V11.6661" stroke="currentColor" strokeWidth="1.21151" strokeLinecap="round" strokeLinejoin="round" />
+                        ),
+                      },
+                      {
+                        key: "inp", label: "INP", value: formatMs(inp), threshold: inpThresholdText, st: inpStyles,
+                        icon: (
+                          <path d="M2.12014 4.24028L3.18021 3.71025L8.48057 10.6007L10.6007 9.54064V3.18021L8.48057 2.12014L3.18021 9.0106L2.12014 8.48057V4.24028Z" stroke="currentColor" strokeWidth="1.21151" strokeLinecap="round" strokeLinejoin="round" />
+                        ),
+                      },
+                      {
+                        key: "cls", label: "CLS",
+                        value: (cls?.toFixed ? cls.toFixed(2) : (Number(cls) || 0).toFixed(2)), threshold: clsThresholdText, st: clsStyles,
+                        icon: (
+                          <>
+                            <path d="M4.77032 3.18021C4.77032 3.60193 4.93785 4.00638 5.23605 4.30459C5.53425 4.60279 5.9387 4.77032 6.36042 4.77032C6.78215 4.77032 7.1866 4.60279 7.4848 4.30459C7.783 4.00638 7.95053 3.60193 7.95053 3.18021C7.95053 2.75849 7.783 2.35404 7.4848 2.05584C7.1866 1.75763 6.78215 1.59011 6.36042 1.59011C5.9387 1.59011 5.53425 1.75763 5.23605 2.05584C4.93785 2.35404 4.77032 2.75849 4.77032 3.18021Z" stroke="currentColor" strokeWidth="1.21151" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M3.62281 4.77032H9.09807C9.2222 4.7703 9.3424 4.81385 9.43771 4.89337C9.53303 4.9729 9.59741 5.08335 9.61963 5.20548L10.4873 9.9758C10.5012 10.0522 10.4981 10.1307 10.4783 10.2058C10.4586 10.2809 10.4225 10.3507 10.3727 10.4103C10.323 10.4699 10.2608 10.5179 10.1904 10.5508C10.1201 10.5837 10.0434 10.6007 9.96574 10.6007H2.75514C2.67749 10.6007 2.60079 10.5837 2.53046 10.5508C2.46013 10.5179 2.39788 10.4699 2.34813 10.4103C2.29837 10.3507 2.26233 10.2809 2.24253 10.2058C2.22274 10.1307 2.21968 10.0522 2.23358 9.9758L3.10125 5.20548C3.12347 5.08335 3.18785 4.9729 3.28316 4.89337C3.37847 4.81385 3.49867 4.7703 3.62281 4.77032Z" stroke="currentColor" strokeWidth="1.21151" strokeLinecap="round" strokeLinejoin="round" />
+                          </>
+                        ),
+                      },
+                    ].map((m) => {
+                      const good = /good/i.test(m.st?.label || "");
+                      return (
+                        <div key={m.key} className="relative flex min-h-[148px] flex-col rounded-[12px] border border-[#D1D5DB] dark:border-[var(--border)] bg-[var(--card)] p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <svg viewBox="0 0 12.7208 12.7208" fill="none" className="h-[19px] w-[19px] shrink-0 text-[#374151] dark:text-[var(--muted)]">
+                                {m.icon}
+                              </svg>
+                              <span className="text-[14px] font-medium text-[#374151] dark:text-[var(--text)]">{m.label}</span>
+                            </div>
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                              style={{
+                                backgroundColor: m.st.badgeBg,
+                                border: `1px solid ${m.st.badgeBorder}`,
+                                color: m.st.badgeText,
+                              }}
+                            >
+                              {good ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                              {m.st.label}
+                            </span>
+                          </div>
+                          <div className="flex flex-1 items-center justify-center py-2">
+                            <span className="text-[24px] font-semibold leading-none text-[#363940] dark:text-[var(--text)] tabular-nums">
+                              {m.value}
+                            </span>
+                          </div>
+                          <div className="text-center text-[12px] text-[var(--muted)]">{m.threshold}</div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div className="mt-3 flex items-center justify-center gap-1 text-[11px] text-[var(--muted)]">
@@ -2767,7 +2751,7 @@ const seoTableProg = Math.max(0, prog);
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Rocket size={16} />
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Page Speed Scores</span>
@@ -2873,7 +2857,7 @@ const seoTableProg = Math.max(0, prog);
               </h2>
               <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                     <AlertTriangle size={16} />
                   </span>
                   <span className="text-[13px] font-semibold text-gray-700">
@@ -3115,7 +3099,7 @@ const seoTableProg = Math.max(0, prog);
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <BarChart3 size={16} />
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Organic traffic</span>
@@ -3196,7 +3180,7 @@ const seoTableProg = Math.max(0, prog);
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <KeyRound size={16} />
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Organic Keywords</span>
@@ -3274,7 +3258,7 @@ const seoTableProg = Math.max(0, prog);
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Goal size={16} />
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">
@@ -3450,7 +3434,7 @@ const seoTableProg = Math.max(0, prog);
                 {dro && (
                   <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                         <TrendingUp size={16} />
                       </span>
                       <span className="text-[13px] font-semibold text-gray-700">Domain Rank Overview</span>
@@ -3489,7 +3473,7 @@ const seoTableProg = Math.max(0, prog);
                 {competitors.length > 0 && (
                   <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                         <Network size={16} />
                       </span>
                       <span className="text-[13px] font-semibold text-gray-700">Search Competitor Landscape</span>
@@ -3531,7 +3515,7 @@ const seoTableProg = Math.max(0, prog);
               {rankedKws.length > 0 && (
                 <section className="mb-6 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-4">
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                       <KeyRound size={16} />
                     </span>
                     <span className="text-[13px] font-semibold text-gray-700">Ranked Keywords (DataForSEO)</span>
@@ -3585,7 +3569,7 @@ const seoTableProg = Math.max(0, prog);
           <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Star size={16} strokeWidth={2} />
                 </span>
                 <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">SERP feature</span>
@@ -3636,7 +3620,7 @@ const seoTableProg = Math.max(0, prog);
 <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
   <div className="flex items-start justify-between">
     <div className="flex items-center gap-2">
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+      <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
         <Star size={16} strokeWidth={2} />
       </span>
       <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Ai SEO Matrix</span>
@@ -3894,7 +3878,7 @@ const seoTableProg = Math.max(0, prog);
     </h2>
     <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
           <BarChart3 size={16} />
         </span>
         <span className="text-[13px] font-semibold text-gray-700">Baseline Metrics</span>
@@ -3953,7 +3937,7 @@ const seoTableProg = Math.max(0, prog);
       <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Technical Foundation — Issues Table</h2>
       <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 p-4 border-b border-[var(--border)]">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
             <AlertTriangle size={16} />
           </span>
           <span className="text-[13px] font-semibold text-gray-700">Priority Issue Breakdown</span>
@@ -4286,69 +4270,8 @@ const seoTableProg = Math.max(0, prog);
 {/* ─────────────────────────────────────────────────────────────────────
     AI DEEP ANALYZE + GENERATE REPORT
     ───────────────────────────────────────────────────────────────────── */}
-<section className="mt-8 mb-6">
-  {/* Action Bar */}
-  <div className="flex flex-wrap items-center gap-3 mb-4">
-    <h2 className="text-[16px] font-bold text-[var(--text)] flex-1">
-      AI Intelligence
-    </h2>
-
-    {/* AI Deep Analyze Button */}
-    <button
-      onClick={handleAiAnalyze}
-      disabled={aiLoading || !seo}
-      className={`inline-flex items-center gap-2 rounded-[12px] px-5 py-2.5 text-[13px] font-semibold shadow-sm transition-all
-        ${aiLoading || !seo
-          ? "bg-[#E5E7EB] text-[#9CA3AF] cursor-not-allowed"
-          : "bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] text-white hover:from-[#4338ca] hover:to-[#6d28d9] hover:shadow-md"
-        }`}
-    >
-      {aiLoading ? (
-        <>
-          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-          </svg>
-          Analyzing…
-        </>
-      ) : (
-        <>
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 2a10 10 0 0 1 10 10"/><circle cx="12" cy="12" r="3"/>
-          </svg>
-          🤖 AI Deep Analyze
-        </>
-      )}
-    </button>
-
-    {/* Generate Report Button */}
-    <button
-      onClick={handleGenerateReport}
-      disabled={reportLoading || !domain}
-      className={`inline-flex items-center gap-2 rounded-[12px] px-5 py-2.5 text-[13px] font-semibold shadow-sm transition-all border
-        ${reportLoading || !domain
-          ? "bg-[#F9FAFB] border-[#E5E7EB] text-[#9CA3AF] cursor-not-allowed"
-          : "bg-white border-[#E5E7EB] text-[#374151] hover:bg-[#F3F4F6] hover:border-[#D1D5DB] hover:shadow-md"
-        }`}
-    >
-      {reportLoading ? (
-        <>
-          <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-          </svg>
-          Generating PDF…
-        </>
-      ) : (
-        <>
-          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
-          </svg>
-          📄 Generate Report
-        </>
-      )}
-    </button>
-  </div>
+<section className="contents">
+  {/* AI Intelligence action bar (AI Deep Analyze + Generate Report) removed — not in Figma flow */}
 
   {/* Error states */}
   {aiError && (
