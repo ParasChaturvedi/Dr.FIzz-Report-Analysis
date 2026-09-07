@@ -115,7 +115,7 @@ export default function CENavbar({
         <div className="flex items-center justify-between">
           <button
             onClick={() => onBack?.()}
-            className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-md text-[var(--muted)] hover:bg-[var(--input)]"
+            className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-md text-[var(--muted)] hover:bg-[var(--card)]"
             aria-label="Menu"
             title="Menu"
           >
@@ -171,7 +171,7 @@ export default function CENavbar({
             <button
               title={editing ? "Save (Enter) / Cancel (Esc)" : "Rename"}
               onClick={editing ? commitTitle : startEditing}
-              className="p-0.5 rounded text-[var(--muted)] hover:bg-[var(--input)] align-baseline"
+              className="p-0.5 rounded text-[var(--muted)] hover:bg-[var(--card)] align-baseline"
               aria-label="Rename"
             >
               <Edit3 size={12} />
@@ -233,7 +233,7 @@ export default function CENavbar({
             <button
               title={editing ? "Save (Enter) / Cancel (Esc)" : "Rename"}
               onClick={editing ? commitTitle : startEditing}
-              className="p-1 rounded text-[var(--muted)] hover:bg-[var(--input)]"
+              className="p-1 rounded text-[var(--muted)] hover:bg-[var(--card)]"
             >
               <Edit3 size={16} />
             </button>

@@ -1,7 +1,7 @@
 // src/components/Dashboard.js
 "use client";
 import Image from "next/image";
-import { Activity, ActivitySquare, AlertTriangle, BarChart3, BookOpen, Check, ChevronRight, Clock3, Eye, FileText, Gauge, Goal, HelpCircle, KeyRound, Lightbulb, Link2, Lock, Maximize2, Monitor, Network, PencilLine, RefreshCw, Rocket, Settings, ShieldCheck, Skull, SlidersHorizontal, Smartphone, SquareArrowOutUpRight, ThumbsDown, ThumbsUp, TrendingUp, TrendingDown, Wifi, X } from "lucide-react";
+import { Activity, ActivitySquare, AlertTriangle, BarChart3, BookOpen, Check, ChevronRight, Clock3, Eye, FileText, Gauge, Goal, HelpCircle, KeyRound, Lightbulb, Link2, Lock, Maximize2, Monitor, Network, PencilLine, RefreshCw, Rocket, Settings, ShieldCheck, Skull, SlidersHorizontal, Smartphone, SquareArrowOutUpRight, Star, ThumbsDown, ThumbsUp, TrendingUp, TrendingDown, Wifi, X } from "lucide-react";
 import { useEffect, useRef, useState, useMemo , useCallback} from "react";
 import { useSearchParams } from "next/navigation";
 import OpportunitiesSection from "./OpportunitiesSection";
@@ -2674,7 +2674,7 @@ const seoTableProg = Math.max(0, prog);
 
                   <div className="mt-4 grid grid-cols-3 gap-3">
                     {/* LCP */}
-                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 py-3">
+                    <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-3">
                       <div className="flex items-center justify-between">
                         <div className="text-[11px] font-medium text-[var(--muted)]">LCP</div>
                         <span
@@ -2699,7 +2699,7 @@ const seoTableProg = Math.max(0, prog);
                     </div>
 
                     {/* INP */}
-                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 py-3">
+                    <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-3">
                       <div className="flex items-center justify-between">
                         <div className="text-[11px] font-medium text-[var(--muted)]">INP</div>
                         <span
@@ -2724,7 +2724,7 @@ const seoTableProg = Math.max(0, prog);
                     </div>
 
                     {/* CLS */}
-                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 py-3">
+                    <div className="rounded-[12px] border border-[var(--border)] bg-white px-3 py-3">
                       <div className="flex items-center justify-between">
                         <div className="text-[11px] font-medium text-[var(--muted)]">CLS</div>
                         <span
@@ -2963,7 +2963,7 @@ const seoTableProg = Math.max(0, prog);
               {!googleStatus.connected ? (
                 <button
                   onClick={connectGoogle}
-                  className="inline-flex items-center justify-center gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--text)] px-4 py-2 text-[12px] font-semibold text-[var(--bg)] transition hover:opacity-90"
+                  className="inline-flex items-center justify-center gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--text)] px-4 py-2 text-[12px] font-semibold text-[var(--app-bg)] transition hover:opacity-90"
                 >
                   <ShieldCheck size={16} />
                   Connect Google
@@ -3450,32 +3450,32 @@ const seoTableProg = Math.max(0, prog);
                 {dro && (
                   <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#EAF4FF] bg-[#EAF4FF] text-[#3B82F6]">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                         <TrendingUp size={16} />
                       </span>
                       <span className="text-[13px] font-semibold text-gray-700">Domain Rank Overview</span>
                       <span className="ml-auto text-[11px] text-[var(--muted)]">DataForSEO Labs</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
+                      <div className="rounded-[12px] border border-[var(--border)] bg-white px-4 py-3">
                         <div className="text-[11px] text-[var(--muted)]">Organic Keywords</div>
                         <div className="mt-1 text-[26px] font-bold leading-none text-[var(--text)] tabular-nums">
                           {(dro.organicKeywords || 0).toLocaleString()}
                         </div>
                       </div>
-                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
+                      <div className="rounded-[12px] border border-[var(--border)] bg-white px-4 py-3">
                         <div className="text-[11px] text-[var(--muted)]">Organic Traffic (ETV)</div>
                         <div className="mt-1 text-[26px] font-bold leading-none text-[var(--text)] tabular-nums">
                           {formatCompactNumber(dro.organicTraffic || 0)}
                         </div>
                       </div>
-                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
+                      <div className="rounded-[12px] border border-[var(--border)] bg-white px-4 py-3">
                         <div className="text-[11px] text-[var(--muted)]">Paid Keywords</div>
                         <div className="mt-1 text-[26px] font-bold leading-none text-[var(--text)] tabular-nums">
                           {(dro.paidKeywords || 0).toLocaleString()}
                         </div>
                       </div>
-                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
+                      <div className="rounded-[12px] border border-[var(--border)] bg-white px-4 py-3">
                         <div className="text-[11px] text-[var(--muted)]">Domain Rank</div>
                         <div className="mt-1 text-[26px] font-bold leading-none text-[var(--text)] tabular-nums">
                           {dro.rank ? `#${dro.rank.toLocaleString()}` : "—"}
@@ -3489,7 +3489,7 @@ const seoTableProg = Math.max(0, prog);
                 {competitors.length > 0 && (
                   <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#FFF5D9] bg-[#FFF5D9] text-[#B98500]">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                         <Network size={16} />
                       </span>
                       <span className="text-[13px] font-semibold text-gray-700">Search Competitor Landscape</span>
@@ -3531,7 +3531,7 @@ const seoTableProg = Math.max(0, prog);
               {rankedKws.length > 0 && (
                 <section className="mb-6 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-4">
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#EAF8F1] bg-[#EAF8F1] text-[#178A5D]">
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                       <KeyRound size={16} />
                     </span>
                     <span className="text-[13px] font-semibold text-gray-700">Ranked Keywords (DataForSEO)</span>
@@ -3585,12 +3585,10 @@ const seoTableProg = Math.max(0, prog);
           <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#FDE7B8] bg-[#FFF5D9] text-[#B98500]">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 3l2.2 5.1 5.6.5-4.2 3.7 1.3 5.5L12 14.9 7.1 17.8l1.3-5.5-4.2-3.7 5.6-.5L12 3z" fill="#F4B740"/>
-                  </svg>
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+                  <Star size={16} strokeWidth={2} />
                 </span>
-                <span className="text-[13px] text-gray-700 leading-relaxed">SERP feature</span>
+                <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">SERP feature</span>
               </div>
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--muted)]">
                 <SlidersHorizontal size={16} />
@@ -3611,25 +3609,21 @@ const seoTableProg = Math.max(0, prog);
               )}
             </div>
 
-            <div className="mt-4 space-y-2">
+            <div className="mt-4 space-y-1.5">
               {[
-                { label: "Featured Snippet",  val: serpCounts[0], bgC: "#FFF5D9", bdC: "#FDE7B8", fill: "#F4B740" },
-                { label: "People Also Ask",   val: serpCounts[1], bgC: "#EAF4FF", bdC: "var(--border)", fill: "#3B82F6" },
-                { label: "Image Pack",        val: serpCounts[2], bgC: "#EAF8F1", bdC: "var(--border)", fill: "#22C55E" },
-                { label: "Video Result",      val: serpCounts[3], bgC: "#FFF0F4", bdC: "#FFE1EA",       fill: "#D12C2C" },
-                { label: "Knowledge Panel",   val: serpCounts[4], bgC: "#F5EAFE", bdC: "#E7D7FB",       fill: "#8B5CF6" },
-              ].map(({ label, val, bgC, bdC, fill }) => (
-                <div key={label} className="flex items-center justify-between rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-md"
-                      style={{ background: bgC, border: `1px solid ${bdC}` }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24">
-                        <path d="M12 3l2.2 5.1 5.6.5-4.2 3.7 1.3 5.5L12 14.9 7.1 17.8l1.3-5.5-4.2-3.7 5.6-.5L12 3z" fill={fill}/>
-                      </svg>
-                    </span>
-                    <span className="text-[13px] text-[var(--text)]">{label}</span>
+                { label: "Featured Snippet",  val: serpCounts[0], tint: "rgba(245,158,11,0.05)", fill: "#F59E0B" },
+                { label: "People Also Ask",   val: serpCounts[1], tint: "rgba(59,130,246,0.05)", fill: "#3B82F6" },
+                { label: "Image Pack",        val: serpCounts[2], tint: "rgba(16,185,129,0.05)", fill: "#10B981" },
+                { label: "Video Result",      val: serpCounts[3], tint: "rgba(225,29,72,0.05)",  fill: "#E11D48" },
+                { label: "Knowledge Panel",   val: serpCounts[4], tint: "rgba(171,16,185,0.05)", fill: "#AB10B9" },
+              ].map(({ label, val, tint, fill }) => (
+                <div key={label} className="flex items-center justify-between rounded-[8px] border border-[#E8EAED] dark:border-[var(--border)] px-3 py-2.5"
+                  style={{ background: tint }}>
+                  <div className="flex items-center gap-2.5">
+                    <Star size={15} strokeWidth={2} style={{ color: fill }} />
+                    <span className="text-[13px] text-[var(--muted)]">{label}</span>
                   </div>
-                  <span className="text-[13px] font-semibold text-[var(--text)] tabular-nums">
+                  <span className="text-[13px] font-medium text-[var(--text)] tabular-nums">
                     {val != null ? val : "—"}
                   </span>
                 </div>
@@ -3642,12 +3636,10 @@ const seoTableProg = Math.max(0, prog);
 <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
   <div className="flex items-start justify-between">
     <div className="flex items-center gap-2">
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#FDE7B8] bg-[#FFF5D9] text-[#B98500]">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <path d="M12 3l2.2 5.1 5.6.5-4.2 3.7 1.3 5.5L12 14.9 7.1 17.8l1.3-5.5-4.2-3.7 5.6-.5L12 3z" fill="#F4B740"/>
-        </svg>
+      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
+        <Star size={16} strokeWidth={2} />
       </span>
-      <span className="text-[13px] text-gray-700 leading-relaxed">Ai SEO Matrix</span>
+      <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Ai SEO Matrix</span>
     </div>
     <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--muted)]">
       <SlidersHorizontal size={16} />
@@ -3673,7 +3665,7 @@ const seoTableProg = Math.max(0, prog);
     return (
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-5">
         {tools.map((tool) => (
-          <div key={tool.name} className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 text-center">
+          <div key={tool.name} className="rounded-[12px] border border-[var(--border)] bg-white p-4 text-center">
             <Image src={tool.src || "/assets/placeholder.svg"} alt={tool.name} width={36} height={36} className="mx-auto mb-2" />
             <div className="text-[12px] text-[var(--muted)]">{tool.name}</div>
             <div className="mt-1 text-[22px] font-semibold leading-none text-[var(--text)] tabular-nums">
@@ -3902,7 +3894,7 @@ const seoTableProg = Math.max(0, prog);
     </h2>
     <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#EAF4FF] bg-[#EAF4FF] text-[#3B82F6]">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
           <BarChart3 size={16} />
         </span>
         <span className="text-[13px] font-semibold text-gray-700">Baseline Metrics</span>
@@ -3961,7 +3953,7 @@ const seoTableProg = Math.max(0, prog);
       <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Technical Foundation — Issues Table</h2>
       <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 p-4 border-b border-[var(--border)]">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#FFF0F4] bg-[#FFF0F4] text-[#D12C2C]">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
             <AlertTriangle size={16} />
           </span>
           <span className="text-[13px] font-semibold text-gray-700">Priority Issue Breakdown</span>

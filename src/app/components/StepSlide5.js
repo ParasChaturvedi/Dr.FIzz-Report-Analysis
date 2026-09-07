@@ -492,7 +492,7 @@ export default function StepSlide5({
                                 onChange={(e) => setBizInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter") addCustomBusiness(); }}
                                 placeholder="Add business competitor"
-                                className="w-full sm:w-[240px] px-3 sm:px-4 py-2 border border-[#d45427] rounded-xl bg-[var(--input)] text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[#d45427]"
+                                className="w-full sm:w-[240px] px-3 sm:px-4 py-2 border border-[#d45427] rounded-xl bg-[var(--card)] text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[#d45427]"
                               />
                               <button
                                 onClick={addCustomBusiness}
@@ -545,7 +545,7 @@ export default function StepSlide5({
                                 onChange={(e) => setSearchInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter") addCustomSearch(); }}
                                 placeholder="Add search competitor"
-                                className="w-full sm:w-[240px] px-3 sm:px-4 py-2 border border-[#d45427] rounded-xl bg-[var(--input)] text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[#d45427]"
+                                className="w-full sm:w-[240px] px-3 sm:px-4 py-2 border border-[#d45427] rounded-xl bg-[var(--card)] text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[#d45427]"
                               />
                               <button
                                 onClick={addCustomSearch}
@@ -604,7 +604,7 @@ export default function StepSlide5({
             <button
               onClick={onBack}
               type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--input)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:bg-[var(--input)] shadow-sm border border-[#d45427]"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--card)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:bg-[var(--card)] shadow-sm border border-[#d45427]"
             >
               <ArrowLeft size={16} /> Back
             </button>

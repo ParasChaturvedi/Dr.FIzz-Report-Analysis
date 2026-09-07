@@ -393,7 +393,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
   // shared dropdown menu renderer
   const renderMenu = (options, onSelect, loading) => (
     <div
-      className="absolute top-full left-0 right-0 bg-[var(--input)] border border-[var(--border)] rounded-lg mt-1 shadow-2xl max-h-56 overflow-y-auto"
+      className="absolute top-full left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded-lg mt-1 shadow-2xl max-h-56 overflow-y-auto"
       style={{ zIndex: 1001 }}
     >
       {loading && (
@@ -417,7 +417,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
   // shared MULTI-select menu — checkmarks the chosen options and stays open on click
   const renderMultiMenu = (options, selected, onToggle, loading) => (
     <div
-      className="absolute top-full left-0 right-0 bg-[var(--input)] border border-[var(--border)] rounded-lg mt-1 shadow-2xl max-h-56 overflow-y-auto"
+      className="absolute top-full left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded-lg mt-1 shadow-2xl max-h-56 overflow-y-auto"
       style={{ zIndex: 1001 }}
     >
       {loading && (
@@ -498,7 +498,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                   value={businessName}
                   onChange={e => setBusinessName(e.target.value)}
                   placeholder="e.g. Itzfizz Digital Private Limited"
-                  className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors"
+                  className="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors"
                 />
                 <p className="text-[11px] text-[var(--muted)] mt-1">
                   Used to find your Google Business Profile. Use your exact registered name.
@@ -510,18 +510,18 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                 <div>
                   <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Core Services / Products <span className="text-[var(--muted)] normal-case">(optional, comma-separated)</span></label>
                   <input type="text" value={coreServices} onChange={e => setCoreServices(e.target.value)} placeholder="e.g. SEO, web design, paid ads, branding"
-                    className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
+                    className="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
                   <p className="text-[11px] text-[var(--muted)] mt-1">Sharpens keyword relevance filtering so only on-topic terms enter the report.</p>
                 </div>
                 <div>
                   <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Revenue-Driving Offers <span className="text-[var(--muted)] normal-case">(optional)</span></label>
                   <input type="text" value={revenueOffers} onChange={e => setRevenueOffers(e.target.value)} placeholder="e.g. monthly retainers, audits, one-off projects"
-                    className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
+                    className="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
                 </div>
                 <div>
                   <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Customer / Buyer Type <span className="text-[var(--muted)] normal-case">(optional)</span></label>
                   <input type="text" value={buyerType} onChange={e => setBuyerType(e.target.value)} placeholder="e.g. SMBs, enterprise marketing teams, homeowners"
-                    className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
+                    className="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
                 </div>
                 <div>
                   <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Business-Model Scope <span className="text-[var(--muted)] normal-case">(select all that apply)</span></label>
@@ -530,7 +530,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                       const active = businessScopes.includes(s);
                       return (
                       <button key={s} type="button" onClick={() => toggleBusinessScope(s)}
-                        className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors ${active ? "bg-[#d45427] text-white border-[#d45427]" : "bg-[var(--input)] text-[var(--text)] border-[var(--border)] hover:border-[#d45427]"}`}>
+                        className={`px-3 py-1.5 rounded-full text-[12px] border transition-colors ${active ? "bg-[#d45427] text-white border-[#d45427]" : "bg-[var(--card)] text-[var(--text)] border-[var(--border)] hover:border-[#d45427]"}`}>
                         {s}
                       </button>
                       );
@@ -542,7 +542,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
 
               {/* Summary (when all selected) */}
               {showSummary && (
-                <div className="bg-[var(--input)] max-w-[360px] w-full rounded-2xl shadow-sm border border-[var(--border)] px-4 sm:px-5 md:px-6 py-3 sm:py-4 my-1 text-left self-end">
+                <div className="bg-[var(--card)] max-w-[360px] w-full rounded-2xl shadow-sm border border-[var(--border)] px-4 sm:px-5 md:px-6 py-3 sm:py-4 my-1 text-left self-end">
                   <div className="space-y-2 text-[13px] sm:text-[14px] md:text-[15px]">
                     {businessName.trim() && (
                       <div className="text-[var(--text)]">
@@ -595,7 +595,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                     <button
                       onClick={() => handleDropdownToggle("industry")}
                       type="button"
-                      className="w-full bg-[var(--input)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-left flex items-center justify-between hover:border-[var(--border)] focus:outline-none focus:border-[var(--border)] transition-colors"
+                      className="w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-left flex items-center justify-between hover:border-[var(--border)] focus:outline-none focus:border-[var(--border)] transition-colors"
                     >
                       <span
                         className={`${
@@ -622,7 +622,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                         placeholder="Describe your sector"
                         value={customIndustry}
                         onChange={(e) => setCustomIndustry(e.target.value)}
-                        className="w-full mt-2 bg-[var(--input)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--border)]"
+                        className="w-full mt-2 bg-[var(--card)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--border)]"
                       />
                     )}
                   </div>
@@ -636,7 +636,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                       onClick={() => (selectedIndustry ? handleDropdownToggle("category") : null)}
                       disabled={!selectedIndustry}
                       type="button"
-                      className={`w-full bg-[var(--input)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-left flex items-center justify-between focus:outline-none transition-colors ${
+                      className={`w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-left flex items-center justify-between focus:outline-none transition-colors ${
                         selectedIndustry
                           ? "hover:border-[var(--border)] cursor-pointer focus:border-[var(--border)]"
                           : "opacity-50 cursor-not-allowed"
@@ -669,7 +669,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
                         placeholder="Describe your service"
                         value={customCategory}
                         onChange={(e) => setCustomCategory(e.target.value)}
-                        className="w-full mt-2 bg-[var(--input)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--border)]"
+                        className="w-full mt-2 bg-[var(--card)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[var(--border)]"
                       />
                     )}
                   </div>
@@ -713,7 +713,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
           <div className="py-5 sm:py-6 md:py-7 flex justify-center gap-3 sm:gap-4">
             <button
               onClick={handleBack}
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--input)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:bg-[var(--input)] shadow-sm border border-[#d45427]"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--card)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:bg-[var(--card)] shadow-sm border border-[#d45427]"
             >
               <ArrowLeft size={16} /> Back
             </button>

@@ -275,7 +275,7 @@ export default function StepSlideGeoPrompts({
             ) : (
               <>
                 {/* selected counter — gate is per-campaign (>= 5 in each), not just a total */}
-                <div className="mt-5 mb-3 flex items-center justify-between rounded-lg bg-[var(--input)] px-3 py-2 border border-[var(--border)]">
+                <div className="mt-5 mb-3 flex items-center justify-between rounded-lg bg-[var(--card)] px-3 py-2 border border-[var(--border)]">
                   <span className="text-[13px] font-semibold text-[var(--text)]">{totalChosen} selected</span>
                   <span className={`text-[12px] font-medium ${campaignsReady ? "text-emerald-600" : "text-[#d45427]"}`}>
                     {emptyCampaigns.length ? (
@@ -303,7 +303,7 @@ export default function StepSlideGeoPrompts({
                         const on = selected.has(p.prompt_id);
                         return (
                           <button key={p.prompt_id} type="button" onClick={() => toggle(p.prompt_id)}
-                            className={`w-full flex items-start gap-2.5 text-left rounded-lg border px-3 py-2 transition-colors ${on ? "border-[#d45427] bg-[#d45427]/10" : "border-[var(--border)] bg-[var(--input)] hover:border-[#d45427]/50"}`}>
+                            className={`w-full flex items-start gap-2.5 text-left rounded-lg border px-3 py-2 transition-colors ${on ? "border-[#d45427] bg-[#d45427]/10" : "border-[var(--border)] bg-[var(--card)] hover:border-[#d45427]/50"}`}>
                             <span className={`mt-0.5 grid place-items-center h-4 w-4 rounded shrink-0 border ${on ? "bg-[#d45427] border-[#d45427] text-white" : "border-[var(--muted)]"}`}>
                               {on ? <Check size={12} /> : null}
                             </span>
@@ -335,7 +335,7 @@ export default function StepSlideGeoPrompts({
                     <input value={customInput} onChange={(e) => setCustomInput(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustom(); } }}
                       placeholder="Type a prompt buyers might ask an AI…"
-                      className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[13px] text-[var(--text)] outline-none focus:border-[#d45427]" />
+                      className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[13px] text-[var(--text)] outline-none focus:border-[#d45427]" />
                     <button type="button" onClick={addCustom} disabled={customInput.trim().length < 6}
                       className="inline-flex items-center gap-1 rounded-lg bg-[#d45427] px-3 py-2 text-[13px] font-semibold text-white disabled:opacity-40">
                       <Plus size={14} /> Add
@@ -364,7 +364,7 @@ export default function StepSlideGeoPrompts({
         <div className="mx-auto w-full max-w-[1120px] px-3 sm:px-4 md:px-6">
           <div className="py-5 sm:py-6 md:py-7 flex justify-center gap-3 sm:gap-4">
             <button onClick={onBack} type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--input)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:opacity-90 shadow-sm border border-[#d45427]">
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--card)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:opacity-90 shadow-sm border border-[#d45427]">
               <ArrowLeft size={16} /> Back
             </button>
             <button onClick={handleNext} disabled={!canContinue} type="button"

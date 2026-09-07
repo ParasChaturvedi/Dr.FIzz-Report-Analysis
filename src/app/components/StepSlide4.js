@@ -397,7 +397,7 @@ export default function StepSlide4({
                             value={customKeyword}
                             onChange={(e) => setCustomKeyword(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            className="w-full sm:w-[220px] px-3 sm:px-4 py-2 border border-[#d45427] rounded-xl bg-[var(--input)] text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[#d45427]"
+                            className="w-full sm:w-[220px] px-3 sm:px-4 py-2 border border-[#d45427] rounded-xl bg-[var(--card)] text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[#d45427]"
                           />
                           <button
                             onClick={handleAddCustom}
@@ -462,14 +462,14 @@ export default function StepSlide4({
                   <div className="mt-4 max-w-[480px]">
                     <label className="block text-[12px] font-semibold text-[var(--muted)] mb-1.5 uppercase tracking-wide">Negative / Exclude Terms <span className="text-[var(--muted)] normal-case">(optional, comma-separated)</span></label>
                     <input type="text" value={negativeTerms} onChange={(e) => setNegativeTerms(e.target.value)} placeholder="e.g. jobs, free, cracked, login"
-                      className="w-full bg-[var(--input)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
+                      className="w-full bg-[var(--card)] border border-[var(--border)] rounded-xl px-4 py-2.5 text-[13px] sm:text-[14px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427] transition-colors" />
                     <p className="text-[11px] text-[var(--muted)] mt-1">Any keyword containing these terms is suppressed from the final report.</p>
                   </div>
 
                   <button
                     type="button"
                     onClick={handleReset}
-                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--input)] px-4 py-2 text-[12px] text-[var(--text)] border border-[#d45427]"
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--card)] px-4 py-2 text-[12px] text-[var(--text)] border border-[#d45427]"
                   >
                     Reset
                   </button>
@@ -490,7 +490,7 @@ export default function StepSlide4({
             <button
               onClick={onBack}
               type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--input)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:bg-[var(--input)] shadow-sm border border-[#d45427]"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--card)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:bg-[var(--card)] shadow-sm border border-[#d45427]"
             >
               <ArrowLeft size={16} /> Back
             </button>

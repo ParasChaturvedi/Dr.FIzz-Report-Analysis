@@ -1080,7 +1080,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
       "SEO Opportunity";
 
     return (
-      <div className="relative rounded-[18px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+      <div className="relative rounded-[18px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="group absolute right-4 top-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-full text-[14px] font-semibold shadow-sm tabular-nums bg-[#FFF5D9] border border-[#FDE7B8] text-[#B98500] dark:bg-yellow-900/30 dark:border-yellow-700/50 dark:text-yellow-300">
             {Math.round(score * prog)}
@@ -1103,7 +1103,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
           </span>
         </div>
 
-        <div className="mt-4 rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-4 py-3">
+        <div className="mt-4 rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
           <div className="grid grid-cols-2 gap-6">
             <div>
               <div className="text-[12px] text-[var(--muted)]">Word Count</div>
@@ -1138,7 +1138,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
                 );
               } catch {}
             }}
-            className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-2.5 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
+            className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-2.5 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
           >
             <ListTodo size={14} /> Add to Tasks
           </button>
@@ -1154,7 +1154,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
                 type,
               })
             }
-            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
+            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
           >
             <Eye size={14} /> View Details
           </button>
@@ -1220,7 +1220,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
       ) : null}
 
       <section className="mb-10 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="rounded-[16px] border border-[var(--border)] bg-[var(--input)] p-4">
+        <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4">
           <div className="mb-3 flex items-center gap-2">
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#FDE7B8] bg-[#FFF5D9] text-[#B98500] dark:bg-yellow-900/30 dark:border-yellow-700/50 dark:text-yellow-300">
               <BookOpen size={14} />
@@ -1234,7 +1234,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
           </div>
         </div>
 
-        <div className="rounded-[16px] border border-[var(--border)] bg-[var(--input)] p-4">
+        <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4">
           <div className="mb-3 flex items-center gap-2">
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#D1FAE5] bg-[#EAF8F1] text-[#178A5D] dark:bg-emerald-900/30 dark:border-emerald-700/50 dark:text-emerald-300">
               <FileText size={14} />

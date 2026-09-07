@@ -167,9 +167,9 @@ export default function NewOnPageSEOTable({ rows, progress = 1, onOpenContentEdi
         feel free to generate content based on your personal choice.
       </p>
 
-      <div className="overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--input)] shadow-sm">
+      <div className="overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--card)] shadow-sm">
         {/* Header — hidden on mobile, shown from md */}
-        <div className="hidden md:grid grid-cols-[1.4fr_1.3fr_1.1fr_1.3fr_1.9fr_1fr_1fr_1.4fr] px-4 py-3 text-[12px] font-semibold text-[var(--muted)] text-center bg-[var(--input)]">
+        <div className="hidden md:grid grid-cols-[1.4fr_1.3fr_1.1fr_1.3fr_1.9fr_1fr_1fr_1.4fr] px-4 py-3 text-[12px] font-semibold text-[var(--muted)] text-center bg-[var(--card)]">
           <div className="text-left"><SortHeader label="Keywords" colKey="keyword" /></div>
           <div className="flex justify-center"><SortHeader label="Type" colKey="type" /></div>
           <div className="flex justify-center"><SortHeader label="Search Volume" colKey="volume" /></div>
@@ -181,7 +181,7 @@ export default function NewOnPageSEOTable({ rows, progress = 1, onOpenContentEdi
         </div>
 
         {/* Rows */}
-        <div className="px-2 md:px-3 lg:px-4 bg-[var(--input)]">
+        <div className="px-2 md:px-3 lg:px-4 bg-[var(--card)]">
           <ul className="divide-y divide-[var(--border)] bg-[var(--border)]/20">
             {sortedData.length === 0 && (
               <li className="px-4 py-12 text-center text-[13px] text-[var(--muted)]">
@@ -198,7 +198,7 @@ export default function NewOnPageSEOTable({ rows, progress = 1, onOpenContentEdi
 
                 {/* KEYWORD CELL */}
                 <div className="flex items-start gap-2 justify-start text-[var(--text)]">
-                  <span className="mt-[2px] inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--input)] text-[var(--muted)]">
+                  <span className="mt-[2px] inline-flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-[var(--card)] text-[var(--muted)]">
                     <Wifi size={14} />
                   </span>
                   <span className="min-w-0 whitespace-normal break-words leading-snug text-left">
@@ -261,7 +261,7 @@ export default function NewOnPageSEOTable({ rows, progress = 1, onOpenContentEdi
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end border-t border-[var(--border)] bg-[var(--input)] px-4 py-3">
+        <div className="flex justify-end border-t border-[var(--border)] bg-[var(--card)] px-4 py-3">
           <ViewAllPill onClick={() => onViewAll?.()}>
             View all page issue <ChevronRight size={14} />
           </ViewAllPill>

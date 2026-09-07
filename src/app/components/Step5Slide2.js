@@ -1640,7 +1640,7 @@ export default function Step5Slide2({
         onClick={onClick}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick?.(e)}
         className={[
-          "h-full flex flex-col rounded-2xl bg-[var(--input)] border shadow-sm focus:outline-none transition-colors",
+          "h-full flex flex-col rounded-2xl bg-[var(--card)] border shadow-sm focus:outline-none transition-colors",
           isActive ? "border-[#ff8a2a] ring-1 ring-[#ff8a2a]/40" : "border-[var(--border)]",
         ].join(" ")}
       >
@@ -1667,7 +1667,7 @@ export default function Step5Slide2({
   const Field = ({ label, value }) => (
     <div className="space-y-1.5">
       <div className="text-[13px] sm:text-[14px] md:text-[15px] font-medium opacity-80">{label}</div>
-      <div className="rounded-xl bg-[var(--input)] px-4 py-2.5 text-[13px] sm:text-[14px] md:text-[15px] text-[var(--text)]">
+      <div className="rounded-xl bg-[var(--card)] px-4 py-2.5 text-[13px] sm:text-[14px] md:text-[15px] text-[var(--text)]">
         {value || "—"}
       </div>
     </div>
@@ -1791,7 +1791,7 @@ export default function Step5Slide2({
               {/* ── FINAL ACCURACY CHECK (advisory) ─────────────────────────── */}
               {!loading && (accuracyLoading || accuracy) && (
                 <div className="mt-1 mb-6 w-full max-w-[880px] mx-auto">
-                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--input)] px-4 sm:px-5 py-4">
+                  <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] px-4 sm:px-5 py-4">
                     {accuracyLoading ? (
                       <div className="flex items-center gap-2 text-[13px] sm:text-[14px] text-[var(--muted)]">
                         <Loader2 size={16} className="animate-spin" />
@@ -1910,7 +1910,7 @@ export default function Step5Slide2({
 
                   {/* DATA COLLECTION block */}
                   <div className="rounded-2xl border border-[var(--border)] overflow-hidden">
-                    <div className="px-4 py-2.5 flex items-center gap-2 bg-[var(--input)] border-b border-[var(--border)]">
+                    <div className="px-4 py-2.5 flex items-center gap-2 bg-[var(--card)] border-b border-[var(--border)]">
                       <svg className="w-3.5 h-3.5 text-[#d45427]" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
                         <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
@@ -1936,7 +1936,7 @@ export default function Step5Slide2({
                   {/* CROSS-CHECKS block — appears after collecting phase */}
                   {(loadingPhase === "checking" || loadingPhase === "redirecting") && (
                     <div className="mt-4 rounded-2xl border border-[var(--border)] overflow-hidden">
-                      <div className="px-4 py-2.5 flex items-center gap-2 bg-[var(--input)] border-b border-[var(--border)]">
+                      <div className="px-4 py-2.5 flex items-center gap-2 bg-[var(--card)] border-b border-[var(--border)]">
                         <svg className="w-3.5 h-3.5 text-[#d45427]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
@@ -1988,7 +1988,7 @@ export default function Step5Slide2({
           <div className="py-5 sm:py-6 md:py-7 flex justify-center gap-3 sm:gap-4">
             <button
               onClick={onBack}
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--input)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:bg-[var(--input)] shadow-sm border border-[#d45427]"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--card)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:bg-[var(--card)] shadow-sm border border-[#d45427]"
             >
               <ArrowLeft size={16} /> Back
             </button>

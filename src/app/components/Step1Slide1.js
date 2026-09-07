@@ -205,7 +205,7 @@ export default function Step1Slide1({ onNext, onWebsiteSubmit }) {
 
               {messages.map((msg, i) => (
                 <div key={i} className="flex justify-end">
-                  <div className="bg-[var(--input)] text-gray-800 rounded-2xl shadow-sm border border-gray-200 px-4 sm:px-5 py-3 my-1 text-[13px] sm:text-[14px] font-medium w-fit max-w-full sm:max-w-[440px] break-words">
+                  <div className="bg-[var(--card)] text-gray-800 rounded-2xl shadow-sm border border-gray-200 px-4 sm:px-5 py-3 my-1 text-[13px] sm:text-[14px] font-medium w-fit max-w-full sm:max-w-[440px] break-words">
                     {msg}
                   </div>
                 </div>

@@ -237,7 +237,7 @@ function StatusTag({ status }) {
 
 function Card({ icon: Icon, title, subtitle, children }) {
   return (
-    <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+    <div className="rounded-[14px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
       <div className="flex items-start gap-3">
         {Icon && (
           <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-[#FFF3EA] text-[#D45427]">
@@ -345,7 +345,7 @@ export default function SerpFeatures({
             <button
               onClick={onToggleTheme}
               aria-label="Toggle theme"
-              className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)]"
+              className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--muted)] hover:text-[var(--text)]"
             >
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
@@ -370,7 +370,7 @@ export default function SerpFeatures({
                 <button
                   key={f.key}
                   onClick={() => setActiveKey(f.key)}
-                  className={`w-full rounded-[14px] border bg-[var(--input)] p-4 text-left shadow-sm transition ${
+                  className={`w-full rounded-[14px] border bg-[var(--card)] p-4 text-left shadow-sm transition ${
                     activeCard ? "border-[#D45427] ring-1 ring-[#D45427]/20" : "border-[var(--border)] hover:border-[#D45427]/40"
                   }`}
                 >
@@ -429,7 +429,7 @@ export default function SerpFeatures({
                 <div className="flex items-center gap-2 text-[11px] font-medium text-[var(--muted)]">
                   <Sparkles size={12} className="text-[#D45427]" /> Live SERP Preview
                 </div>
-                <div className="mt-2 rounded-md border border-[var(--border)] bg-[var(--input)] p-3">
+                <div className="mt-2 rounded-md border border-[var(--border)] bg-[var(--card)] p-3">
                   <div className="flex items-center gap-2">
                     <span className="grid h-4 w-4 place-items-center rounded-full bg-[#4285F4] text-[9px] font-bold text-white">G</span>
                     <div className="h-2.5 flex-1 rounded bg-[var(--border)]" />
@@ -523,7 +523,7 @@ export default function SerpFeatures({
               </button>
               <button
                 onClick={addTask}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-4 py-2.5 text-[13px] font-semibold text-[var(--text)] hover:border-[#D45427]/50"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-2.5 text-[13px] font-semibold text-[var(--text)] hover:border-[#D45427]/50"
               >
                 <ListTodo size={16} /> Add to Tasks
               </button>

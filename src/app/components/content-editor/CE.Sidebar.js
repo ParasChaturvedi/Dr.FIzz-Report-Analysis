@@ -10,7 +10,7 @@ export default function CESidebar() {
       ? "text-gray-400 cursor-not-allowed"
       : active
       ? "text-[var(--text-primary)] font-semibold"
-      : "text-[var(--muted)] hover:bg-[var(--input)]";
+      : "text-[var(--muted)] hover:bg-[var(--card)]";
     return (
       <button className={`${base} ${state}`} disabled={disabled} title={label}>
         <Icon size={18} />

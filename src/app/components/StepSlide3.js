@@ -301,10 +301,10 @@ try {
   }, []);
 
   const btnBase =
-    "w-full bg-[var(--input)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-left flex items-center justify-between transition-colors";
+    "w-full bg-[var(--card)] border border-[var(--border)] rounded-lg px-4 py-2.5 sm:py-3 text-left flex items-center justify-between transition-colors";
   const labelCls = "text-[12px] sm:text-[13px] md:text-[14px]";
   const ddListCls =
-    "absolute top-full left-0 right-0 bg-[var(--input)] border border-[var(--border)] rounded-lg mt-1 shadow-2xl max-h-56 overflow-y-auto z-20";
+    "absolute top-full left-0 right-0 bg-[var(--card)] border border-[var(--border)] rounded-lg mt-1 shadow-2xl max-h-56 overflow-y-auto z-20";
 
   // Shared multi-select button label: "Select X" → the single value → "N selected".
   const multiLabel = (arr, placeholder, noun) =>
@@ -480,19 +480,19 @@ try {
               {selectedCountries.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 -mt-2 max-w-[880px]">
                   {selectedCountries.map((c) => (
-                    <span key={`country-${c}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--input)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--text)]">
+                    <span key={`country-${c}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--text)]">
                       {c}
                       <button type="button" onClick={() => onToggleCountry(c)} className="text-[var(--muted)] hover:text-[#d45427] font-bold leading-none">×</button>
                     </span>
                   ))}
                   {selectedStates.map((s) => (
-                    <span key={`state-${s}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--input)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--muted)]">
+                    <span key={`state-${s}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--muted)]">
                       {s}
                       <button type="button" onClick={() => onToggleState(s)} className="hover:text-[#d45427] font-bold leading-none">×</button>
                     </span>
                   ))}
                   {selectedCities.map((ct) => (
-                    <span key={`city-${ct}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--input)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--muted)]">
+                    <span key={`city-${ct}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--muted)]">
                       {ct}
                       <button type="button" onClick={() => onToggleCity(ct)} className="hover:text-[#d45427] font-bold leading-none">×</button>
                     </span>
@@ -521,7 +521,7 @@ try {
                       <div className={ddListCls}>
                         {DIRECTORY_GROUPS.map((group) => (
                           <div key={group.label}>
-                            <div className="px-4 pt-2.5 pb-1 text-[10px] uppercase tracking-wide font-semibold text-[var(--muted)] bg-[var(--input)] sticky top-0">
+                            <div className="px-4 pt-2.5 pb-1 text-[10px] uppercase tracking-wide font-semibold text-[var(--muted)] bg-[var(--card)] sticky top-0">
                               {group.label}
                             </div>
                             {group.items.map((d) => {
@@ -546,7 +546,7 @@ try {
                       onChange={(e) => setCustomDirectory(e.target.value)}
                       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomDirectory(); } }}
                       placeholder="Add another directory…"
-                      className="flex-1 bg-[var(--input)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-[12px] sm:text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[#d45427]"
+                      className="flex-1 bg-[var(--card)] border border-[var(--border)] rounded-lg px-3 py-2.5 text-[12px] sm:text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] focus:outline-none focus:border-[#d45427]"
                     />
                     <button type="button" onClick={addCustomDirectory}
                       className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#d45427] text-[#d45427] px-3 py-2.5 text-[12px] font-semibold hover:bg-[#FDF1EB]">
@@ -557,7 +557,7 @@ try {
                 {selectedDirectories.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2 mt-3">
                     {selectedDirectories.map((d) => (
-                      <span key={`dir-${d}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--input)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--text)]">
+                      <span key={`dir-${d}`} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--card)] border border-[var(--border)] px-3 py-1 text-[12px] text-[var(--text)]">
                         {d}
                         <button type="button" onClick={() => onToggleDirectory(d)} className="text-[var(--muted)] hover:text-[#d45427] font-bold leading-none">×</button>
                       </span>
@@ -594,7 +594,7 @@ try {
             <button
               onClick={handleBack}
               type="button"
-              className="inline-flex items-center gap-2 rounded-full bg-[var(--input)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:bg-[var(--input)] shadow-sm border border-[#d45427]"
+              className="inline-flex items-center gap-2 rounded-full bg-[var(--card)] px-5 sm:px-6 py-2.5 sm:py-3 text-[12px] sm:text-[13px] md:text-[14px] text-[var(--text)] hover:bg-[var(--card)] shadow-sm border border-[#d45427]"
             >
               <ArrowLeft size={16} /> Back
             </button>

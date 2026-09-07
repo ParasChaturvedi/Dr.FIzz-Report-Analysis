@@ -162,7 +162,7 @@ function Donut({ segments, size = 150, stroke = 22 }) {
 
 function MetricCard({ Icon, label, value, unit }) {
   return (
-    <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+    <div className="rounded-[14px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
       <div className="flex items-center gap-2 text-[12px] text-[var(--muted)]">
         <Icon size={14} /> {label}
       </div>
@@ -176,7 +176,7 @@ function MetricCard({ Icon, label, value, unit }) {
 
 function ProgressStat({ Icon, label, value, tone }) {
   return (
-    <div className="flex-1 rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-4 py-3">
+    <div className="flex-1 rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
       <div className="flex items-center gap-1.5 text-[11px] text-[var(--muted)]">
         <Icon size={13} className={tone} /> {label}
       </div>
@@ -200,7 +200,7 @@ const cwvBadge = (s) =>
 
 function EmptyNote({ children }) {
   return (
-    <div className="rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--input)] px-4 py-5 text-center text-[12px] text-[var(--muted)]">
+    <div className="rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--card)] px-4 py-5 text-center text-[12px] text-[var(--muted)]">
       {children}
     </div>
   );
@@ -251,7 +251,7 @@ function IssueDetailModal({ issue, cwv = {}, domain = "", onClose, onAddTask }) 
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-[var(--border)] bg-[var(--input)] px-3 py-2">
+        <div className="flex gap-1 border-b border-[var(--border)] bg-[var(--card)] px-3 py-2">
           {TABS.map(([k, label, Icon]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition ${
@@ -289,7 +289,7 @@ function IssueDetailModal({ issue, cwv = {}, domain = "", onClose, onAddTask }) 
           {tab === "diagnostics" && (
             <div className="space-y-2">
               {diagnostics.map((d, i) => (
-                <div key={i} className="flex items-start gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--input)] p-3">
+                <div key={i} className="flex items-start gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--card)] p-3">
                   {d.pass ? <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-500" /> : <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-500" />}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
@@ -311,7 +311,7 @@ function IssueDetailModal({ issue, cwv = {}, domain = "", onClose, onAddTask }) 
                 <div className="mb-2 text-[13px] font-semibold text-[var(--text)]">Core Web Vitals — Field Data</div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {vitals.map((v) => (
-                    <div key={v.k} className="rounded-[10px] border border-[var(--border)] bg-[var(--input)] p-3">
+                    <div key={v.k} className="rounded-[10px] border border-[var(--border)] bg-[var(--card)] p-3">
                       <div className="text-[10.5px] text-[var(--muted)]">{v.label}</div>
                       <div className="mt-1 flex items-center gap-2">
                         <span className="text-[20px] font-bold tabular-nums text-[var(--text)]">{v.value}</span>
@@ -368,17 +368,17 @@ function IssueDetailModal({ issue, cwv = {}, domain = "", onClose, onAddTask }) 
                 <div className="flex flex-wrap gap-2">
                   {domain && (
                     <a href={`https://search.google.com/search-console`} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--text)] hover:border-[#D45427]/40">
+                      className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--text)] hover:border-[#D45427]/40">
                       <ExternalLink size={13} /> View GSC Data
                     </a>
                   )}
                   {domain && (
                     <a href={`https://pagespeed.web.dev/report?url=${encodeURIComponent(/^https?:\/\//.test(domain) ? domain : `https://${domain}`)}`} target="_blank" rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--text)] hover:border-[#D45427]/40">
+                      className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--text)] hover:border-[#D45427]/40">
                       <ExternalLink size={13} /> Open PageSpeed Report
                     </a>
                   )}
-                  <span className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] opacity-60">
+                  <span className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] opacity-60">
                     <Download size={13} /> Download HAR (after analysis)
                   </span>
                 </div>
@@ -450,7 +450,7 @@ function RetestModal({ issue, before = {}, after = {}, domain = "", onVerify, on
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <div className="text-[13px] font-semibold text-[var(--text)]">Performance Comparison</div>
           <div className="mt-2 overflow-hidden rounded-[12px] border border-[var(--border)]">
-            <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr] gap-2 bg-[var(--input)] px-4 py-2 text-[11px] font-semibold text-[var(--muted)]">
+            <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr] gap-2 bg-[var(--card)] px-4 py-2 text-[11px] font-semibold text-[var(--muted)]">
               <span>Metric</span><span>Before</span><span>After</span><span>Changes</span>
             </div>
             {rows.map((r) => {
@@ -491,7 +491,7 @@ function RetestModal({ issue, before = {}, after = {}, domain = "", onVerify, on
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-[var(--border)] px-5 py-3">
-          <button onClick={onClose} className="rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[12.5px] font-medium text-[var(--muted)] hover:text-[var(--text)]">Close</button>
+          <button onClick={onClose} className="rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-[12.5px] font-medium text-[var(--muted)] hover:text-[var(--text)]">Close</button>
           <button onClick={() => { onVerify?.(); onClose?.(); }}
             className="inline-flex items-center gap-2 rounded-[10px] bg-[image:var(--infoHighlight-gradient)] px-4 py-2 text-[12.5px] font-semibold text-white shadow-sm hover:opacity-90">
             <CheckCircle2 size={15} /> Mark as Verified
@@ -553,7 +553,7 @@ function AssignTaskModal({ issue, domain = "", onClose, onCreate }) {
           <div className="mt-4">
             <label className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-[var(--muted)]"><Users size={13} /> Team</label>
             <select value={team} onChange={(e) => setTeam(e.target.value)}
-              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none focus:border-[#D45427]">
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none focus:border-[#D45427]">
               {TEAM_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
             <div className="mt-1 text-[11px] text-[var(--muted)]">Auto-suggested based on the issue type.</div>
@@ -563,21 +563,21 @@ function AssignTaskModal({ issue, domain = "", onClose, onCreate }) {
           <div className="mt-4">
             <label className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-[var(--muted)]"><UserPlus size={13} /> Assigned to</label>
             <input value={assignee} onChange={(e) => setAssignee(e.target.value)} placeholder="Type a name, or leave blank to assign to yourself"
-              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[#D45427]" />
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none placeholder:text-[var(--muted)] focus:border-[#D45427]" />
           </div>
 
           {/* Due date */}
           <div className="mt-4">
             <label className="mb-1 flex items-center gap-1.5 text-[12px] font-medium text-[var(--muted)]"><Calendar size={13} /> Due date</label>
             <input type="date" value={due} onChange={(e) => setDue(e.target.value)}
-              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none focus:border-[#D45427]" />
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none focus:border-[#D45427]" />
           </div>
 
           {/* Priority */}
           <div className="mt-4">
             <label className="mb-1 text-[12px] font-medium text-[var(--muted)]">Priority</label>
             <select value={priority} onChange={(e) => setPriority(e.target.value)}
-              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none focus:border-[#D45427]">
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-[13px] text-[var(--text)] outline-none focus:border-[#D45427]">
               {Object.entries(PRIORITY_OPTIONS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
             </select>
           </div>
@@ -600,7 +600,7 @@ function AssignTaskModal({ issue, domain = "", onClose, onCreate }) {
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-[var(--border)] px-5 py-3">
-          <button onClick={onClose} className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[12.5px] font-medium text-[var(--muted)] hover:text-[var(--text)]"><X size={14} /> Cancel</button>
+          <button onClick={onClose} className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-[12.5px] font-medium text-[var(--muted)] hover:text-[var(--text)]"><X size={14} /> Cancel</button>
           <button onClick={() => onCreate?.({ team, assignee: assignee.trim() || "You", due, priority, criteria: criteria.map((c) => ({ ...c })) })}
             className="inline-flex items-center gap-2 rounded-[10px] bg-[image:var(--infoHighlight-gradient)] px-4 py-2 text-[12.5px] font-semibold text-white shadow-sm hover:opacity-90">
             <CheckCircle2 size={15} /> Assign &amp; Create Task
@@ -635,7 +635,7 @@ function TaskCreatedModal({ issue, assignment = {}, onClose }) {
           <div className="mt-1 text-[12.5px] text-[var(--muted)]">The fix has been assigned and added to your task list.</div>
         </div>
         <div className="px-6 py-4">
-          <div className="rounded-[12px] border border-[var(--border)] bg-[var(--input)] p-4">
+          <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4">
             <div className="text-[12px] font-semibold text-[var(--text)]">Issue Summary</div>
             <div className="mt-2 space-y-1 text-[12.5px]">
               <div className="flex justify-between gap-3"><span className="text-[var(--muted)]">Task</span><span className="text-right font-medium text-[var(--text)]">{issue.title}</span></div>
@@ -763,7 +763,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
         </div>
         <div className="ml-auto flex items-center gap-2">
           {onPeriodChange && (
-            <div className="hidden items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--input)] px-3 py-1.5 text-[12px] text-[var(--muted)] sm:flex">
+            <div className="hidden items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-[12px] text-[var(--muted)] sm:flex">
               Last {periodDays} days <ChevronDown size={13} />
             </div>
           )}
@@ -771,7 +771,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
             Chat with Ai <Sparkles size={14} />
           </button>
           {onToggleTheme && (
-            <button onClick={onToggleTheme} aria-label="Toggle theme" className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] bg-[var(--input)] text-[var(--muted)] hover:text-[var(--text)]">
+            <button onClick={onToggleTheme} aria-label="Toggle theme" className="grid h-9 w-9 place-items-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--muted)] hover:text-[var(--text)]">
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
           )}
@@ -781,7 +781,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
       <div className="mx-auto max-w-[1200px] px-6 py-6">
         {/* Device tabs + tools */}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex rounded-[10px] border border-[var(--border)] bg-[var(--input)] p-1">
+          <div className="inline-flex rounded-[10px] border border-[var(--border)] bg-[var(--card)] p-1">
             {[["desktop", Monitor, "Desktop"], ["mobile", Smartphone, "Mobile"]].map(([k, Icon, lbl]) => (
               <button key={k} onClick={() => setDevice(k)}
                 className={`inline-flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition ${
@@ -799,7 +799,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
 
         {/* Performance preview + Scan results */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
-          <div className="grid min-h-[200px] place-items-center rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-6 text-center shadow-sm">
+          <div className="grid min-h-[200px] place-items-center rounded-[14px] border border-[var(--border)] bg-[var(--card)] p-6 text-center shadow-sm">
             <div>
               <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-lg">
                 <Play size={22} />
@@ -811,7 +811,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
             </div>
           </div>
 
-          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
             <div className="text-[13px] font-semibold text-[var(--text)]">Scan Results</div>
             {hasScan ? (
               <div className="mt-3 flex items-center gap-4">
@@ -860,7 +860,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
             <Info size={14} className="text-[var(--muted)]" />
           </h2>
           <div className="flex items-center gap-2">
-            <button className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-1.5 text-[12px] font-medium text-[var(--muted)] hover:text-[var(--text)]">
+            <button className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-1.5 text-[12px] font-medium text-[var(--muted)] hover:text-[var(--text)]">
               <RefreshCw size={13} /> Refresh
             </button>
             <button
@@ -872,7 +872,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
         </div>
 
         {active.length === 0 ? (
-          <div className="rounded-[14px] border border-dashed border-[var(--border)] bg-[var(--input)] p-8 text-center">
+          <div className="rounded-[14px] border border-dashed border-[var(--border)] bg-[var(--card)] p-8 text-center">
             <CheckCircle2 size={26} className="mx-auto text-emerald-500" />
             <div className="mt-2 text-[13px] font-semibold text-[var(--text)]">No outstanding issues</div>
             <div className="text-[12px] text-[var(--muted)]">Run a report to surface technical issues, or you have resolved them all.</div>
@@ -883,7 +883,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
               const st = statusOf(iss.id);
               const meta = STATUS_META[st];
               return (
-                <div key={iss.id} className="rounded-[16px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+                <div key={iss.id} className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div className="text-[14.5px] font-semibold text-[var(--text)]">{iss.title}</div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -942,12 +942,12 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
 
                   <div className="mt-3 flex items-center gap-2">
                     <button onClick={() => { setDetailIssue(iss); onViewIssue?.(iss); }}
-                      className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:text-[var(--text)] hover:border-[#D45427]/40">
+                      className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:text-[var(--text)] hover:border-[#D45427]/40">
                       <Eye size={14} /> View details
                     </button>
                     {(st === "in-progress" || st === "qa") && (
                       <button onClick={() => setRetestIssue(iss)}
-                        className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:text-[var(--text)] hover:border-[#D45427]/40">
+                        className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:text-[var(--text)] hover:border-[#D45427]/40">
                         <RefreshCw size={14} /> Re-test
                       </button>
                     )}
@@ -967,7 +967,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
           <div>
             <h2 className="mb-3 text-[16px] font-bold text-[var(--text)]">Resolved issues</h2>
             <div className="overflow-hidden rounded-[14px] border border-[var(--border)]">
-              <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[11px] font-semibold text-[var(--muted)]">
+              <div className="grid grid-cols-[1fr_auto_auto] gap-3 border-b border-[var(--border)] bg-[var(--card)] px-4 py-2 text-[11px] font-semibold text-[var(--muted)]">
                 <span>Complete</span><span>Grade</span><span>Score</span>
               </div>
               {resolved.length ? resolved.map((r) => (
@@ -987,7 +987,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
           <div>
             <h2 className="mb-3 text-[16px] font-bold text-[var(--text)]">Response Codes</h2>
             <div className="overflow-hidden rounded-[14px] border border-[var(--border)]">
-              <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[11px] font-semibold text-[var(--muted)]">
+              <div className="grid grid-cols-[1fr_auto] gap-3 border-b border-[var(--border)] bg-[var(--card)] px-4 py-2 text-[11px] font-semibold text-[var(--muted)]">
                 <span>Code</span><span>Pages</span>
               </div>
               {[
@@ -1013,7 +1013,7 @@ export default function SiteHealth({ data = {}, onBack, onViewIssue }) {
 
         {/* Content type breakdown (needs live analysis) */}
         <h2 className="mt-8 mb-3 text-[16px] font-bold text-[var(--text)]">Content Breakdown</h2>
-        <div className="rounded-[14px] border border-dashed border-[var(--border)] bg-[var(--input)] p-8 text-center text-[12.5px] text-[var(--muted)]">
+        <div className="rounded-[14px] border border-dashed border-[var(--border)] bg-[var(--card)] p-8 text-center text-[12.5px] text-[var(--muted)]">
           The content-type breakdown (images, scripts, CSS, fonts and their sizes) populates after a live PageSpeed / HAR analysis of the site.
         </div>
 
