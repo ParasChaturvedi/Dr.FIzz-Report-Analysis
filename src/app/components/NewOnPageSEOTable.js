@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Wifi, FileText, Link2, ChevronRight, ThumbsUp, ThumbsDown } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Wifi, FileText, Link2, ChevronRight, ChevronUp, ChevronDown, ThumbsUp, ThumbsDown } from "lucide-react";
 
 /** Small thumbs up/down animation */
 function LikeDislike() {
@@ -76,68 +76,91 @@ function DemoPill({ active, onToggle, children }) {
 }
 
 /** View-all pill button (class-based for dark mode) */
-function ViewAllPill({ children }) {
+function ViewAllPill({ children, onClick }) {
   return (
-    <button className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold bg-gradient-to-b from-[#FFF6EB] to-[#FFEAD5] dark:from-[#78350f]/30 dark:to-[#92400e]/30 border border-[#FDBA74] dark:border-[#d97706]/50 text-[#F97316] dark:text-[#fb923c] hover:opacity-80 transition-opacity">
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold bg-gradient-to-b from-[#FFF6EB] to-[#FFEAD5] dark:from-[#78350f]/30 dark:to-[#92400e]/30 border border-[#FDBA74] dark:border-[#d97706]/50 text-[#F97316] dark:text-[#fb923c] hover:opacity-80 transition-opacity"
+    >
       {children}
     </button>
   );
 }
 
 /** Main Table */
-export default function NewOnPageSEOTable({ rows, progress = 1 }) {
-  // Stable fallback
-  const fallback = useMemo(
-    () => [
-      { keyword: "How to fix slow Wi-Fi", type: "Informational", volume: 7032, difficulty: 98, suggested: "The information shown here..." },
-      { keyword: "Best laptop under $1000", type: "Transactional", volume: 5500, difficulty: 72, suggested: "Comparison of popular laptops..." },
-      { keyword: "SEO tools 2025", type: "Informational", volume: 12000, difficulty: 45, suggested: "List of free SEO tools..." },
-      { keyword: "Fix Chrome crashes", type: "Informational", volume: 8900, difficulty: 60, suggested: "Steps to resolve frequent crashes..." },
-      { keyword: "Website not indexing", type: "Transactional", volume: 3200, difficulty: 30, suggested: "Indexing troubleshooting..." },
-    ],
-    []
+export default function NewOnPageSEOTable({ rows, progress = 1, onOpenContentEditor, onViewAll }) {
+  // Real rows only — NO demo/placeholder fallback. Empty → show an empty state.
+  const data = useMemo(
+    () => (Array.isArray(rows) && rows.length ? rows.slice(0, 7) : []),
+    [rows]
   );
 
-  // ✅ Memoize data so the reference is stable between renders
-  const data = useMemo(() => {
-    const base = Array.isArray(rows) && rows.length ? rows : fallback;
-    return base.slice(0, 7);
-  }, [rows, fallback]);
+  // ── Sorting (flow §4: "Column Headers → Sorts the entire list") ──────────────
+  const [sort, setSort] = useState({ key: null, dir: "asc" });
+  const toggleSort = (key) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  const sortedData = useMemo(() => {
+    if (!sort.key) return data;
+    const dir = sort.dir === "asc" ? 1 : -1;
+    const val = (r) => {
+      switch (sort.key) {
+        case "keyword": return String(r.keyword || "").toLowerCase();
+        case "type": return String(r.type || "").toLowerCase();
+        case "volume": return Number(r.volume) || 0;
+        case "difficulty": return Number(r.difficulty) || 0;
+        default: return 0;
+      }
+    };
+    return [...data].sort((a, b) => {
+      const va = val(a), vb = val(b);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+  }, [data, sort]);
 
-  // Active map state
-  const [activeMap, setActiveMap] = useState(() =>
-    Array.from({ length: data.length }, () => ({
-      blog: Math.random() < 0.45,
-      page: Math.random() < 0.45,
-    }))
+  // Which "Generate" pills the user has clicked — keyed by keyword so state survives sorting.
+  const [activeMap, setActiveMap] = useState({});
+
+  // Real action: mark the pill active and open the Content Editor pre-loaded with this
+  // keyword — same flow the "Start" buttons on the opportunity cards use.
+  const handleGenerate = (kind, row) => {
+    const kw = row?.keyword || "Untitled";
+    setActiveMap((prev) => ({ ...prev, [kw]: { ...prev[kw], [kind]: true } }));
+    const payload = {
+      title: kw,
+      keyword: row?.keyword || "",
+      type: kind, // "blog" | "page"
+    };
+    try {
+      window.dispatchEvent(new CustomEvent("content-editor:open", { detail: payload }));
+    } catch {}
+    onOpenContentEditor?.(payload);
+  };
+
+  // Small clickable, sortable header cell.
+  const SortHeader = ({ label, colKey, className = "" }) => (
+    <button
+      type="button"
+      onClick={() => toggleSort(colKey)}
+      className={`inline-flex items-center gap-1 hover:text-[var(--text)] transition-colors ${sort.key === colKey ? "text-[var(--text)]" : ""} ${className}`}
+      aria-sort={sort.key === colKey ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      {label}
+      {sort.key === colKey
+        ? (sort.dir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />)
+        : <span className="opacity-40">↑↓</span>}
+    </button>
   );
-
-  // ✅ Only re-randomize when the LENGTH changes (prevents infinite loop)
-  const dataLen = data.length;
-  useEffect(() => {
-    setActiveMap((prev) => {
-      const next = Array.from({ length: dataLen }, (_, i) =>
-        prev[i] ?? { blog: Math.random() < 0.45, page: Math.random() < 0.45 }
-      );
-      return next;
-    });
-  }, [dataLen]);
-
-  // Toggle both ways
-  const toggle = (index, key) =>
-    setActiveMap((prev) => {
-      const next = [...prev];
-      next[index] = { ...next[index], [key]: !next[index]?.[key] };
-      return next;
-    });
 
   return (
     <section aria-labelledby="new-on-page-seo-opportunity">
-      <h2 className="text-[20px] font-semibold leading-[24px] text-gray-900 mb-2 ml-1">
+      <h2 className="text-[20px] font-semibold leading-[24px] text-[var(--text)] mb-2 ml-1">
         New on page SEO opportunity
       </h2>
       <p
-        className="ml-1 mb-4 text-[16px] font-normal text-gray-600"
+        className="ml-1 mb-4 text-[16px] font-normal text-[var(--muted)]"
         style={{ letterSpacing: "-0.02em" }}
       >
         While it&apos;s highly recommended to follow the AI&apos;s suggested plan for optimal results,
@@ -147,10 +170,10 @@ export default function NewOnPageSEOTable({ rows, progress = 1 }) {
       <div className="overflow-hidden rounded-[18px] border border-[var(--border)] bg-[var(--input)] shadow-sm">
         {/* Header — hidden on mobile, shown from md */}
         <div className="hidden md:grid grid-cols-[1.4fr_1.3fr_1.1fr_1.3fr_1.9fr_1fr_1fr_1.4fr] px-4 py-3 text-[12px] font-semibold text-[var(--muted)] text-center bg-[var(--input)]">
-          <div className="text-left">Keywords</div>
-          <div>Type <span className="opacity-50">↑↓</span></div>
-          <div>Search Volume</div>
-          <div>SEO Difficulty</div>
+          <div className="text-left"><SortHeader label="Keywords" colKey="keyword" /></div>
+          <div className="flex justify-center"><SortHeader label="Type" colKey="type" /></div>
+          <div className="flex justify-center"><SortHeader label="Search Volume" colKey="volume" /></div>
+          <div className="flex justify-center"><SortHeader label="SEO Difficulty" colKey="difficulty" /></div>
           <div>Suggested topic</div>
           <div>Blog</div>
           <div>Page</div>
@@ -158,11 +181,16 @@ export default function NewOnPageSEOTable({ rows, progress = 1 }) {
         </div>
 
         {/* Rows */}
-        <div className="px-2 md:px-3 lg:px-4 bg-white">
+        <div className="px-2 md:px-3 lg:px-4 bg-[var(--input)]">
           <ul className="divide-y divide-[var(--border)] bg-[var(--border)]/20">
-            {data.map((row, i) => (
+            {sortedData.length === 0 && (
+              <li className="px-4 py-12 text-center text-[13px] text-[var(--muted)]">
+                No on-page keyword opportunities to show yet — run a scan or connect Search Console to see real opportunities here.
+              </li>
+            )}
+            {sortedData.map((row, i) => (
               <li
-                key={i}
+                key={`${row.keyword}-${i}`}
                 className="grid grid-cols-1 md:grid-cols-[1.4fr_1.3fr_1.1fr_1.3fr_1.9fr_1fr_1fr_1.4fr] items-center gap-3 px-4 py-3 text-[13px] text-center"
               >
                 {/* Mobile label — only shown on small screens */}
@@ -212,13 +240,13 @@ export default function NewOnPageSEOTable({ rows, progress = 1 }) {
                 {/* Blog / Page buttons */}
                 <div className="flex items-center gap-2 md:justify-center">
                   <span className="md:hidden text-[11px] font-semibold text-[var(--muted)]">Blog:</span>
-                  <DemoPill active={!!activeMap[i]?.blog} onToggle={() => toggle(i, "blog")}>
+                  <DemoPill active={!!activeMap[row.keyword]?.blog} onToggle={() => handleGenerate("blog", row)}>
                     Generate
                   </DemoPill>
                 </div>
                 <div className="flex items-center gap-2 md:justify-center">
                   <span className="md:hidden text-[11px] font-semibold text-[var(--muted)]">Page:</span>
-                  <DemoPill active={!!activeMap[i]?.page} onToggle={() => toggle(i, "page")}>
+                  <DemoPill active={!!activeMap[row.keyword]?.page} onToggle={() => handleGenerate("page", row)}>
                     Generate
                   </DemoPill>
                 </div>
@@ -234,7 +262,7 @@ export default function NewOnPageSEOTable({ rows, progress = 1 }) {
 
         {/* Footer */}
         <div className="flex justify-end border-t border-[var(--border)] bg-[var(--input)] px-4 py-3">
-          <ViewAllPill>
+          <ViewAllPill onClick={() => onViewAll?.()}>
             View all page issue <ChevronRight size={14} />
           </ViewAllPill>
         </div>

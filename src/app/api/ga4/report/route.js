@@ -14,6 +14,11 @@ export async function GET(req) {
   try {
     const saved = readTokensFromRequest(req);
 
+    // Optional period selector (?days=N) — defaults to 28 (previous fixed behaviour).
+    const _daysReq = parseInt(new URL(req.url).searchParams.get("days") || "", 10);
+    const days = Number.isFinite(_daysReq) && _daysReq >= 1 && _daysReq <= 365 ? _daysReq : 28;
+    const startDate = `${days}daysAgo`;
+
     if (!saved?.ga4_property_id) {
       return NextResponse.json(
         { ok: false, error: "GA4 property not selected" },
@@ -34,7 +39,7 @@ export async function GET(req) {
     const organicRes = await analyticsData.properties.runReport({
       property,
       requestBody: {
-        dateRanges: [{ startDate: "28daysAgo", endDate: "today" }],
+        dateRanges: [{ startDate, endDate: "today" }],
         metrics: [{ name: "sessions" }, { name: "conversions" }],
         dimensions: [{ name: "sessionDefaultChannelGroup" }],
         dimensionFilter: {
@@ -54,7 +59,7 @@ export async function GET(req) {
     const totalRes = await analyticsData.properties.runReport({
       property,
       requestBody: {
-        dateRanges: [{ startDate: "28daysAgo", endDate: "today" }],
+        dateRanges: [{ startDate, endDate: "today" }],
         metrics: [{ name: "sessions" }],
       },
     });

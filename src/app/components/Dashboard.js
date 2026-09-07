@@ -650,11 +650,17 @@ const runOncePerKey = (key, fn) => {
     }
   };
 
-const fetchGa4Report = async () => {
+// Selected time window for live metrics (flow §1: "Last 30 Days" dropdown).
+const [periodDays, setPeriodDays] = useState(30);
+
+// "View Details" pop-up for an opportunity card (flow §3: opens a modal with more context).
+const [detailsItem, setDetailsItem] = useState(null);
+
+const fetchGa4Report = async (days = periodDays) => {
   try {
     setGa4Loading(true);
     setGa4Error("");
-    const res = await fetch("/api/ga4/report", { cache: "no-store" });
+    const res = await fetch(`/api/ga4/report?days=${days}`, { cache: "no-store" });
     const json = await res.json();
     if (!res.ok || json?.ok === false) throw new Error(json?.error || `GA4 report failed: ${res.status}`);
     setGa4Metrics(json);
@@ -668,11 +674,11 @@ const fetchGa4Report = async () => {
   }
 };
 
-const fetchGscKeywords = async () => {
+const fetchGscKeywords = async (days = periodDays) => {
   try {
     setGscLoading(true);
     setGscError("");
-    const res = await fetch("/api/gsc/keywords", { cache: "no-store" });
+    const res = await fetch(`/api/gsc/keywords?days=${days}`, { cache: "no-store" });
     const json = await res.json();
     if (!res.ok || json?.ok === false) throw new Error(json?.error || `GSC keywords failed: ${res.status}`);
     setGscMetrics(json);
@@ -684,6 +690,14 @@ const fetchGscKeywords = async () => {
   } finally {
     setGscLoading(false);
   }
+};
+
+// Change the dashboard time window and re-pull live metrics for it.
+// Only refetches sources that are actually connected (otherwise demo/fallback data stays).
+const changePeriod = (days) => {
+  setPeriodDays(days);
+  if (ga4Metrics) fetchGa4Report(days);
+  if (gscMetrics) fetchGscKeywords(days);
 };
 
 
@@ -886,7 +900,12 @@ useEffect(() => {
     // even if seoRows are absent, e.g. when arriving from the Report page).
     const cacheHot = cacheAge < 5 * 60 * 1000;
 
-    if (cacheFresh && (seo || seoHydratedFromCacheRef.current) && (hasOnpageRows || cacheHot)) return;
+    if (cacheFresh && (seo || seoHydratedFromCacheRef.current) && (hasOnpageRows || cacheHot)) {
+      // We already have fresh data (cache/hydration) — clear the loading overlay so it
+      // never sticks when arriving with a warm cache (e.g. back from the Content Editor).
+      if (seo) setSeoLoading(false);
+      return;
+    }
 
     const background = !!seo; // if we have cached/old data, refresh quietly
 
@@ -911,17 +930,17 @@ const keyword = domain; // TODO: wire actual keyword later from onboarding
 
         console.log("[Dashboard] Calling /api/seo with payload:", payload);
 
-        const res = await runOncePerKey(`seo:${domain}`, () => fetch("/api/seo", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }));
-
-        if (!res.ok) {
-          throw new Error(`Failed to load /api/seo: ${res.status}`);
-        }
-
-        const json = await res.json();
+        // Read the body INSIDE the dedupe fn so concurrent callers share the parsed
+        // JSON (not a single Response whose stream can only be read once).
+        const json = await runOncePerKey(`seo:${domain}`, async () => {
+          const r = await fetch("/api/seo", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!r.ok) throw new Error(`Failed to load /api/seo: ${r.status}`);
+          return r.json();
+        });
         console.log("[Dashboard] /api/seo raw response:", json);
 
         if (alive) {
@@ -1041,6 +1060,7 @@ const keyword = domain; // TODO: wire actual keyword later from onboarding
     const dataForSeo = seo.dataForSeo || {};
     const backlinksSummary = dataForSeo.backlinksSummary || {};
     const content = seo.content || {};
+    const audit = seo.onPageAudit || {};
     // SERP features — real data only (DataForSEO SERP Advanced or Serper.dev)
     const serpFeaturesFromDataForSeo = dataForSeo.serpFeatures || {};
     const serpFeaturesFromSerper = serp.serpFeatures || {};
@@ -1177,18 +1197,7 @@ const keyword = domain; // TODO: wire actual keyword later from onboarding
         if (spamScore <= 30) return { h: 35, m: 35, l: 30 };
         return { h: 25, m: 35, l: 40 };
       }
-      const jh = fallbackSelected?.trustBar;
-      const jm = fallbackSelected?.medQuality;
-      const jl = fallbackSelected?.lowQuality;
-      const jsum = (jh ?? 0) + (jm ?? 0) + (jl ?? 0);
-      if (typeof jsum === "number" && jsum > 0) {
-        return {
-          h: Math.round((jh ?? 0) * 100 / jsum),
-          m: Math.round((jm ?? 0) * 100 / jsum),
-          l: Math.max(0, 100 - Math.round((jh ?? 0) * 100 / jsum) - Math.round((jm ?? 0) * 100 / jsum)),
-        };
-      }
-      return null; // No real data
+      return null; // No demo fallback — real (spam-derived) quality only, else "—"
     })();
 
     // Performance — real API data only (GA4 organic traffic, GSC keywords, DataForSEO ETV)
@@ -1203,7 +1212,7 @@ const keyword = domain; // TODO: wire actual keyword later from onboarding
         keywordsTop10: seo.gsc?.organicKeywords?.top10  ?? undefined,
         keywordsTop100:seo.gsc?.organicKeywords?.top100 ?? undefined,
       },
-      jsonRow: fallbackSelected,
+      jsonRow: null, // demo seo-data.json fallback removed — real API data only
     });
 
     const linksFallback = buildLinksFallback({
@@ -1213,7 +1222,7 @@ const keyword = domain; // TODO: wire actual keyword later from onboarding
         backlinks: typeof backlinksSummary?.backlinks === "number" && backlinksSummary.backlinks > 0
           ? backlinksSummary.backlinks : undefined,
       },
-      jsonRow: fallbackSelected,
+      jsonRow: null, // demo seo-data.json fallback removed — real API data only
     });
 
 
@@ -1235,27 +1244,8 @@ const keyword = domain; // TODO: wire actual keyword later from onboarding
       return null;
     })();
 
-    const doNoFromJson = (() => {
-      const d = fallbackSelected?.dofollowPct;
-      const n = fallbackSelected?.nofollowPct;
-      if (typeof d === "number" && d > 0 && d <= 100 && typeof n === "number" && n >= 0 && n <= 100) {
-        const sum = d + n;
-        if (sum === 100) return { doPct: d, noPct: n };
-        // Normalize if the JSON isn't perfectly summing to 100
-        const doPct = Math.round((d * 100) / (sum || 100));
-        const noPct = Math.max(0, 100 - doPct);
-        return { doPct, noPct };
-      }
-      if (typeof d === "number" && d > 0 && d <= 100) {
-        return { doPct: d, noPct: Math.max(0, 100 - d) };
-      }
-      if (typeof n === "number" && n > 0 && n <= 100) {
-        return { doPct: Math.max(0, 100 - n), noPct: n };
-      }
-      return null;
-    })();
-
-    const doNoFinal = doNoFromApi || doNoFromJson || null; // null when no real data
+    // Demo seo-data.json DoFollow/NoFollow fallback removed — real DataForSEO only.
+    const doNoFinal = doNoFromApi || null; // null when no real data → shows "—"
 const mapped = {
       domain: seo._meta?.domain || domain,
       dateAnalyzed: seo._meta?.generatedAt || "",
@@ -1286,10 +1276,15 @@ const mapped = {
         typeof backlinksSummary.crawled_pages === "number"
           ? backlinksSummary.crawled_pages
           : 0,
-      redirects: 0,
+      redirects:
+        typeof audit.redirect_chains === "number"
+          ? audit.redirect_chains
+          : 0,
       broken:
         typeof backlinksSummary.broken_pages === "number"
           ? backlinksSummary.broken_pages
+          : typeof audit.broken_links === "number"
+          ? audit.broken_links
           : 0,
       cwvScores: {
         LCP_Score:
@@ -1474,13 +1469,14 @@ const mapped = {
         keywordsTop10: typeof gscTop10 === "number" ? gscTop10 : undefined,
         keywordsTop100: typeof gscTop100 === "number" ? gscTop100 : undefined,
       },
-      jsonRow: fallbackSelected,
+      jsonRow: null, // demo seo-data.json fallback removed — real API data only
     });
   }, [seo, domain, fallbackSelected, ga4Metrics, gscMetrics, googleStatus.connected, ga4Error, gscError, ga4Properties, gscSites]);
 
   // ---------------- NEW: Base performance numbers (Big values) ----------------
-  // Big values in the Performance cards should come from seo-data.json (fallbackSelected) or realistic randoms.
-  // Google (GA4/GSC) values are shown as small badges beside the big values.
+  // Big values in the Performance cards come from REAL data only (DataForSEO domain-rank
+  // overview); Google (GA4/GSC) values are shown as small badges beside the big values.
+  // No seo-data.json demo fallback — missing values render as "—".
   const basePerf = useMemo(() => {
     const d = seo?._meta?.domain || domain || "example.com";
     const dro = seo?.domainRankOverview || {};
@@ -1490,9 +1486,9 @@ const mapped = {
         trafficMonthly: (typeof dro.organicTraffic === "number" && dro.organicTraffic > 0) ? dro.organicTraffic : undefined,
         keywordsTotal: (typeof dro.organicKeywords === "number" && dro.organicKeywords > 0) ? dro.organicKeywords : undefined,
       },
-      jsonRow: fallbackSelected
+      jsonRow: null
     });
-  }, [seo, domain, fallbackSelected]);
+  }, [seo, domain]);
 
   // Small "Google" numbers (for badges beside the big values)
   const googlePerf = useMemo(() => {
@@ -1773,6 +1769,39 @@ const psProgress = Math.max(0, prog);
 const otValue = OT_TARGET != null ? Math.max(0, OT_TARGET * prog) : null;
 const otProg = Math.max(0, prog);
 
+// ── Data-driven status badges (computed from REAL values — no hardcoded labels) ──
+const _badgeTier = {
+  good: { color: "#178A5D", bg: "#EAF8F1" },
+  mid:  { color: "#B98500", bg: "#FFF5D9" },
+  bad:  { color: "#DC2626", bg: "#FEE2E2" },
+  none: { color: "#6B7280", bg: "#F3F4F6" },
+};
+const OT_GROWTH = basePerf?.organicTraffic?.growth ?? null;
+const _psAvg = (PS_DESKTOP || PS_MOBILE)
+  ? Math.round(((PS_DESKTOP || 0) + (PS_MOBILE || 0)) / ((PS_DESKTOP ? 1 : 0) + (PS_MOBILE ? 1 : 0) || 1))
+  : 0;
+const shBadge = SH_SCORE == null ? { label: "No Data", ..._badgeTier.none }
+  : SH_SCORE >= 90 ? { label: "Excellent", ..._badgeTier.good }
+  : SH_SCORE >= 75 ? { label: "Good", ..._badgeTier.good }
+  : SH_SCORE >= 50 ? { label: "Fair", ..._badgeTier.mid }
+  : { label: "Poor", ..._badgeTier.bad };
+const psBadge = !_psAvg ? { label: "No Data", ..._badgeTier.none }
+  : _psAvg >= 90 ? { label: "Fast", ..._badgeTier.good }
+  : _psAvg >= 50 ? { label: "Average", ..._badgeTier.mid }
+  : { label: "Slow", ..._badgeTier.bad };
+const tbBadge = DR_TARGET == null ? { label: "No Data", ..._badgeTier.none }
+  : DR_TARGET >= 50 ? { label: "Strong Profile", ..._badgeTier.good }
+  : DR_TARGET >= 25 ? { label: "Moderate", ..._badgeTier.mid }
+  : { label: "Weak", ..._badgeTier.bad };
+const rdBadge = RD_TARGET == null ? { label: "No Data", ..._badgeTier.none }
+  : RD_TARGET >= 1000 ? { label: "Strong", ..._badgeTier.good }
+  : RD_TARGET >= 100 ? { label: "Growing", ..._badgeTier.good }
+  : { label: "Building", ..._badgeTier.mid };
+const otBadge = OT_GROWTH == null ? { label: "No Data", ..._badgeTier.none }
+  : OT_GROWTH > 0 ? { label: "Positive Growth", ..._badgeTier.good }
+  : OT_GROWTH < 0 ? { label: "Declining", ..._badgeTier.bad }
+  : { label: "Flat", ..._badgeTier.mid };
+
 const okValue = OK_TOTAL != null ? Math.max(0, OK_TOTAL * prog) : null;
 const okProg = Math.max(0, prog);
 
@@ -1920,7 +1949,11 @@ const seoTableProg = Math.max(0, prog);
         </div>
 
         <div className="mt-4 flex items-center justify-between">
-          <button className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)]">
+          <button
+            type="button"
+            onClick={() => setDetailsItem({ title, score, wordCount, keywords, status })}
+            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
+          >
             <Eye size={14} /> View Details
           </button>
 <button
@@ -1943,6 +1976,11 @@ const seoTableProg = Math.max(0, prog);
     const pct = Math.max(0, Math.min(100, target * progress));
     const angle = (pct / 100) * 360;
     const bg = `conic-gradient(${color} ${angle}deg, #E5E7EB 0deg)`;
+    const tier = target >= 90
+      ? { label: "Excellent", color: "#178A5D", bg: "#EAF8F1", border: "#BEE7D6", up: true }
+      : target >= 50
+      ? { label: "Average", color: "#B98500", bg: "#FFF5D9", border: "#FDE7B8", up: true }
+      : { label: "Poor", color: "#DC2626", bg: "#FEE2E2", border: "#FECACA", up: false };
     return (
       <div className="flex flex-col items-center ">
         <div className="relative h-32 w-32 rounded-full" style={{ background: bg }}>
@@ -1957,9 +1995,9 @@ const seoTableProg = Math.max(0, prog);
             </div>
           </div>
         </div>
-        <span className="mt-3 inline-flex items-center gap-1 rounded-full border border-[#BEE7D6] bg-[#EAF8F1] px-2.5 py-1 text-[12px] font-medium text-[#178A5D]">
-          Excellent
-          <TrendingUp size={14} />
+        <span className="mt-3 inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-medium" style={{ color: tier.color, background: tier.bg, borderColor: tier.border }}>
+          {tier.label}
+          {tier.up ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
         </span>
       </div>
     );
@@ -2149,8 +2187,8 @@ const seoTableProg = Math.max(0, prog);
   return (
     <main className="min-h-screen bg-[var(--bg-panel)] px-4 py-6 sm:px-6 lg:px-8 overflow-x-hidden">
 
-      {/* ── Initial SEO data loading overlay ── */}
-      {seoLoading && (
+      {/* ── Initial SEO data loading overlay (hidden as soon as real data is ready) ── */}
+      {seoLoading && !selected && (
         <div className="fixed inset-0 z-[9000] flex flex-col items-center justify-center bg-white/90 dark:bg-black/85 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-5 w-full max-w-xs px-8">
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#d45427] to-[#ffa615] flex items-center justify-center shadow-xl animate-pulse">
@@ -2170,7 +2208,13 @@ const seoTableProg = Math.max(0, prog);
       )}
 
       <div className="mx-auto max-w-[100%] mt-1">
-        <DashboardHeader />
+        <DashboardHeader
+          onChatWithAi={handleAiAnalyze}
+          aiLoading={aiLoading}
+          canChat={!!seo && !!domain}
+          periodDays={periodDays}
+          onPeriodChange={changePeriod}
+        />
         {/* Row 1 */}
         <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">
           Off-Page SEO Metrics
@@ -2178,10 +2222,15 @@ const seoTableProg = Math.max(0, prog);
 
         <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
           {/* Domain Rating */}
-          <div id="df-google-panel" className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div
+            id="df-google-panel"
+            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
+            title="View domain authority details"
+            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--input)] text-[var(--muted)]">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                   <ShieldCheck size={16} />
                 </span>
                 <span className="text-[13px] text-gray-700 leading-relaxed">
@@ -2216,29 +2265,35 @@ const seoTableProg = Math.max(0, prog);
               </span>
             </div>
 
-            <div className="mt-3 text-[12px] text-[var(--muted)]">Trust score</div>
-            <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
-              <div
-                className="h-2 rounded-full bg-[#1CC88A]"
-                style={{ width: `${drTrustWidth}%` }}
-              />
+            <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-3">
+              <div className="text-[12px] text-[var(--muted)]">Trust score</div>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
+                <div
+                  className="h-2 rounded-full bg-[#1CC88A]"
+                  style={{ width: `${drTrustWidth}%` }}
+                />
+              </div>
             </div>
-          </div> 
+          </div>
 
           {/* Referring Domains */}
-          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div
+            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
+            title="View referring-domains details"
+            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--input)] text-[var(--muted)]">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                   <Network size={16} />
                 </span>
                 <span className="text-[13px] text-gray-700 leading-relaxed">
                   Referring Domains
                 </span>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#FFF6E7] px-2 py-0.5 text-[11px] font-medium text-[#B67200]">
-                <span className="inline-block h-2 w-2 rounded-full bg-[#F59E0B]" />
-                Growing
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: rdBadge.color, background: rdBadge.bg }}>
+                <span className="inline-block h-2 w-2 rounded-full" style={{ background: rdBadge.color }} />
+                {rdBadge.label}
               </span>
             </div>
 
@@ -2282,22 +2337,31 @@ const seoTableProg = Math.max(0, prog);
                 </div>
               )}
             </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--muted)]">
+              <span>{tbValue != null ? formatCompactNumber(tbValue) : "—"} backlinks</span>
+              <span>· Unique websites linking to you</span>
+            </div>
           </div>
 
           {/* Total Backlinks */}
-          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div
+            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
+            title="View backlinks details"
+            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--input)] text-[var(--muted)]">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                   <Link2 size={16} />
                 </span>
                 <span className="text-[13px] text-gray-700 leading-relaxed">
                   Total Backlinks
                 </span>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#EEF0FF] px-2 py-0.5 text-[11px] font-medium text-[#4C53D8]">
-                <span className="inline-block h-2 w-2 rounded-full bg-[#3B82F6]" />
-                Strong Profile
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: tbBadge.color, background: tbBadge.bg }}>
+                <span className="inline-block h-2 w-2 rounded-full" style={{ background: tbBadge.color }} />
+                {tbBadge.label}
               </span>
             </div>
 
@@ -2338,16 +2402,30 @@ const seoTableProg = Math.max(0, prog);
         </section>
 
         {/* Row 2 */}
-        <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">
-          Technical SEO
-        </h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-[16px] font-bold text-[var(--text)] ml-1">
+            Technical SEO
+          </h2>
+          <button
+            type="button"
+            onClick={() => document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#F97316] bg-[#FFF7ED] dark:bg-[#F97316]/10 px-3.5 py-1.5 text-[12px] font-semibold text-[#C05621] dark:text-[#FB923C] hover:bg-[#FFE7D1] dark:hover:bg-[#F97316]/20 transition whitespace-nowrap"
+          >
+            <SlidersHorizontal size={14} />
+            Switch to Technical SEO
+          </button>
+        </div>
 
         <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
           {/* Site Health */}
-          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div
+            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
+            title="View technical issues"
+            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--input)] text-[#178A5D]">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                   <Activity size={16} />
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">
@@ -2355,9 +2433,9 @@ const seoTableProg = Math.max(0, prog);
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-[#EAF4FF] px-2 py-0.5 text-[11px] font-medium text-[#3178C6]">
-                  <span className="inline-block h-2 w-2 rounded-full bg-[#3B82F6]" />
-                  Excellent
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: shBadge.color, background: shBadge.bg }}>
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: shBadge.color }} />
+                  {shBadge.label}
                 </span>
                 <span className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-[var(--border)] text-[var(--muted)]">
                   <RefreshCw size={14} />
@@ -2406,7 +2484,11 @@ const seoTableProg = Math.max(0, prog);
           </div>
 
           {/* Core Web Vitals */}
-          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div
+            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
+            title="View technical issues"
+            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+          >
             {(() => {
               // Google CWV thresholds
               const classify = (value, goodLimit, niLimit, invert = false) => {
@@ -2525,7 +2607,7 @@ const seoTableProg = Math.max(0, prog);
                 <>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--input)] text-[var(--muted)]">
+                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                         <ActivitySquare size={16} />
                       </span>
                       <span className="text-[13px] text-gray-700 leading-relaxed">
@@ -2636,17 +2718,21 @@ const seoTableProg = Math.max(0, prog);
 
           
 {/* Page Speed Scores */}
-          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div
+            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
+            title="View technical issues"
+            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--input)] text-[#178A5D]">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                   <Rocket size={16} />
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Page Speed Scores</span>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#EAF4FF] px-2 py-0.5 text-[11px] font-medium text-[#3178C6]">
-                <span className="inline-block h-2 w-2 rounded-full bg-[#3B82F6]" />
-                Fast
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: psBadge.color, background: psBadge.bg }}>
+                <span className="inline-block h-2 w-2 rounded-full" style={{ background: psBadge.color }} />
+                {psBadge.label}
               </span>
             </div>
 
@@ -2745,7 +2831,7 @@ const seoTableProg = Math.max(0, prog);
               </h2>
               <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--input)] text-[var(--muted)]">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                     <AlertTriangle size={16} />
                   </span>
                   <span className="text-[13px] font-semibold text-gray-700">
@@ -2980,17 +3066,21 @@ const seoTableProg = Math.max(0, prog);
 
 <section className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3">
           {/* Organic Traffic */}
-          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div
+            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
+            title="View keyword & content opportunities"
+            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--input)] text-[var(--muted)]">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                   <BarChart3 size={16} />
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Organic traffic</span>
-                {(basePerf?.organicTraffic?.growth ?? null) != null && basePerf.organicTraffic.growth > 0 && (
-                  <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#EAF8F1] px-2 py-0.5 text-[11px] font-medium text-[#178A5D]">
-                    <span className="h-2 w-2 rounded-full bg-[#22C55E]" />
-                    Positive Growth
+                {OT_GROWTH != null && (
+                  <span className="ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: otBadge.color, background: otBadge.bg }}>
+                    <span className="h-2 w-2 rounded-full" style={{ background: otBadge.color }} />
+                    {otBadge.label}
                   </span>
                 )}
               </div>
@@ -3057,10 +3147,14 @@ const seoTableProg = Math.max(0, prog);
           </div>
 
           {/* Organic Keywords */}
-          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div
+            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
+            title="View keyword & content opportunities"
+            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#FDE7B8] bg-[#FFF5D9] text-[#B98500]">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                   <KeyRound size={16} />
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Organic Keywords</span>
@@ -3131,10 +3225,14 @@ const seoTableProg = Math.max(0, prog);
           </div>
 
           {/* Leads */}
-          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div
+            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
+            title="View keyword & content opportunities"
+            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+          >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#FFD8C7] bg-[#FFEFE8] text-[#D14B1F]">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                   <Goal size={16} />
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">
@@ -3616,7 +3714,11 @@ const seoTableProg = Math.max(0, prog);
 
         <section className="mb-10 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           {/* Card 1: Critical Issue */}
-          <div className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] bg-[var(--input)] px-4 py-3 shadow-sm">
+          <div
+            onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
+            title="View critical issues"
+            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--input)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#EF3E5C]/50 hover:shadow-md transition"
+          >
             <div className="flex items-center gap-3 min-w-0">
               <span className="flex shrink-0 aspect-square h-10 w-10 items-center justify-center rounded-full bg-[#EF3E5C] text-white">
                 <Skull size={20} />
@@ -3641,7 +3743,11 @@ const seoTableProg = Math.max(0, prog);
           </div>
 
           {/* Card 2: Waring Issue */}
-          <div className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] bg-[var(--input)] px-4 py-3 shadow-sm">
+          <div
+            onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
+            title="View warning issues"
+            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--input)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#F59E0B]/50 hover:shadow-md transition"
+          >
             <div className="flex items-center gap-3 min-w-0">
               <span className="flex shrink-0 aspect-square h-10 w-10 items-center justify-center rounded-full bg-[#F59E0B] text-white">
                 <AlertTriangle size={20} />
@@ -3666,7 +3772,11 @@ const seoTableProg = Math.max(0, prog);
           </div>
 
           {/* Card 3: Recommendations */}
-          <div className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] bg-[var(--input)] px-4 py-3 shadow-sm">
+          <div
+            onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
+            title="View recommendations"
+            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--input)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#10B981]/50 hover:shadow-md transition"
+          >
             <div className="flex items-center gap-3 min-w-0">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#10B981] text-white">
                 <Lightbulb size={20} />
@@ -3691,7 +3801,11 @@ const seoTableProg = Math.max(0, prog);
           </div>
 
           {/* Card 4: Content Opportunities */}
-          <div className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] bg-[var(--input)] px-4 py-3 shadow-sm">
+          <div
+            onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
+            title="View content opportunities"
+            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--input)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#3B82F6]/50 hover:shadow-md transition"
+          >
             <div className="flex items-center gap-3 min-w-0">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#3B82F6] text-white">
                 <FileText size={18} />
@@ -3710,16 +3824,29 @@ const seoTableProg = Math.max(0, prog);
                 )}
               </div>
             </div>
-            <button className="ml-4 inline-flex items-center gap-1 text-[11px] font-medium text-[#8D96A8] shrink-0 whitespace-nowrap">
+            <button
+              type="button"
+              onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
+              className="ml-4 inline-flex items-center gap-1 text-[11px] font-medium text-[#8D96A8] shrink-0 whitespace-nowrap hover:text-[var(--text)] transition-colors"
+            >
               View All <ChevronRight size={12} />
             </button>
           </div>
         </section>
 
-        <OpportunitiesSection onOpenContentEditor={onOpenContentEditor} />
+        <div id="onpage-opportunities">
+          <OpportunitiesSection onOpenContentEditor={onOpenContentEditor} onViewDetails={setDetailsItem} />
+        </div>
 
 {/* New on page SEO opportunity (table) */}
-<NewOnPageSEOTable rows={seoRowsForTable} progress={seoTableProg} />
+<div id="onpage-table">
+<NewOnPageSEOTable
+  rows={seoRowsForTable}
+  progress={seoTableProg}
+  onOpenContentEditor={onOpenContentEditor}
+  onViewAll={() => document.getElementById('onpage-opportunities')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
+/>
+</div>
 
 {/* ─────────────────────────────────────────────────────────────────────
     SEO STRATEGY BLUEPRINT — Comprehensive Metrics from Reference PDF
@@ -3788,7 +3915,7 @@ const seoTableProg = Math.max(0, prog);
   };
 
   return (
-    <section className="mb-6">
+    <section id="technical-issues" className="mb-6 scroll-mt-4">
       <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Technical Foundation — Issues Table</h2>
       <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 p-4 border-b border-[var(--border)]">
@@ -3841,7 +3968,7 @@ const seoTableProg = Math.max(0, prog);
 
 {/* AUTHORITY & LINK BUILDING SECTION */}
 {seo && (
-  <section className="mb-6">
+  <section id="authority-link-building" className="mb-6 scroll-mt-4">
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Authority & Link Building</h2>
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       {/* DR Progress */}
@@ -4187,6 +4314,93 @@ const seoTableProg = Math.max(0, prog);
       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       {reportError}
       <button onClick={() => setReportError("")} className="ml-auto text-[#B91C1C] hover:text-[#7F1D1D]">✕</button>
+    </div>
+  )}
+
+  {/* View Details modal (flow §3: opens a pop-up with more context / steps) */}
+  {detailsItem && (
+    <div
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4"
+      onClick={() => setDetailsItem(null)}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="w-full max-w-lg rounded-[16px] border border-[var(--border)] bg-[var(--input)] shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Opportunity details</div>
+            <h3 className="mt-0.5 text-[18px] font-bold leading-snug text-[var(--text)]">{detailsItem.title}</h3>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDetailsItem(null)}
+            aria-label="Close"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--muted)] hover:bg-[var(--hover)] transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-[10px] border border-[var(--border)] bg-[var(--app-bg)] p-3">
+              <div className="text-[11px] text-[var(--muted)]">Priority score</div>
+              <div className="mt-1 text-[20px] font-semibold tabular-nums text-[var(--text)]">{detailsItem.score ?? "—"}</div>
+            </div>
+            <div className="rounded-[10px] border border-[var(--border)] bg-[var(--app-bg)] p-3">
+              <div className="text-[11px] text-[var(--muted)]">Word count</div>
+              <div className="mt-1 text-[20px] font-semibold tabular-nums text-[var(--text)]">{Number(detailsItem.wordCount || 0).toLocaleString()}</div>
+            </div>
+            <div className="rounded-[10px] border border-[var(--border)] bg-[var(--app-bg)] p-3">
+              <div className="text-[11px] text-[var(--muted)]">Keywords</div>
+              <div className="mt-1 text-[20px] font-semibold tabular-nums text-[var(--text)]">{detailsItem.keywords}</div>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-1 text-[12px] font-semibold text-[var(--text)]">Status</div>
+            <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2.5 py-0.5 text-[12px] text-[var(--muted)]">
+              {detailsItem.status || "—"}
+            </span>
+          </div>
+
+          {getPrefillFor(detailsItem.title) ? (
+            <div>
+              <div className="mb-1 text-[12px] font-semibold text-[var(--text)]">Suggested outline / steps</div>
+              <pre className="whitespace-pre-wrap rounded-[10px] border border-[var(--border)] bg-[var(--app-bg)] p-3 text-[12px] leading-relaxed text-[var(--muted)] font-sans">{getPrefillFor(detailsItem.title)}</pre>
+            </div>
+          ) : (
+            <div className="text-[12px] text-[var(--muted)]">
+              A tailored content brief will be generated when you start fixing this opportunity.
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-[var(--border)] px-5 py-3">
+          <button
+            type="button"
+            onClick={() => setDetailsItem(null)}
+            className="rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[13px] font-medium text-[var(--muted)] hover:text-[var(--text)] transition"
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const payload = { title: detailsItem.title };
+              try { window.dispatchEvent(new CustomEvent("content-editor:open", { detail: payload })); } catch {}
+              onOpenContentEditor?.(payload);
+              setDetailsItem(null);
+            }}
+            className="inline-flex items-center gap-2 rounded-[10px] px-4 py-2 text-[13px] font-semibold text-white shadow-sm bg-[image:var(--infoHighlight-gradient)] hover:opacity-90 transition"
+          >
+            Start fixing <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
     </div>
   )}
 

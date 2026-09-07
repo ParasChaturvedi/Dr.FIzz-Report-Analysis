@@ -14,6 +14,10 @@ export async function GET(req) {
   try {
     const saved = readTokensFromRequest(req);
 
+    // Optional period selector (?days=N) — defaults to 28 (previous fixed behaviour).
+    const _daysReq = parseInt(new URL(req.url).searchParams.get("days") || "", 10);
+    const days = Number.isFinite(_daysReq) && _daysReq >= 1 && _daysReq <= 365 ? _daysReq : 28;
+
     if (!saved?.gsc_site) {
       return NextResponse.json(
         { ok: false, error: "GSC site not selected" },
@@ -33,7 +37,7 @@ export async function GET(req) {
     const res = await searchConsole.searchanalytics.query({
       siteUrl: saved.gsc_site,
       requestBody: {
-        startDate: "28daysAgo",
+        startDate: `${days}daysAgo`,
         endDate: "today",
         dimensions: ["query"],
         rowLimit,
@@ -70,7 +74,7 @@ export async function GET(req) {
       top100,
       keywords,
       debug: {
-        range: "28daysAgo → today",
+        range: `${days}daysAgo → today`,
         rowLimit,
         note:
           "keywordsTotal/top3/top10/top100 are computed from the returned rows only (rowLimit capped).",

@@ -612,7 +612,11 @@ export default function InfoPanel({
         loading: infoStatsLoading,
       };
 
-  const displayWebsite = rawWebsite || "yourcompany.com";
+  // Prefer the real site (prop → localStorage); never fall back to a fake placeholder domain.
+  const displayWebsite = rawWebsite || (() => {
+    if (typeof window === "undefined") return "";
+    try { return (JSON.parse(localStorage.getItem("websiteData") || "{}")?.site || "").replace(/^https?:\/\//, ""); } catch { return ""; }
+  })() || "—";
 
   /* -------------------- STEP VIEWS -------------------- */
 

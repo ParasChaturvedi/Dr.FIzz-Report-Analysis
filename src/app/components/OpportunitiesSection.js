@@ -435,7 +435,7 @@ function StartModal({
    Opportunities Section
 ============================================================ */
 
-export default function OpportunitiesSection({ onOpenContentEditor }) {
+export default function OpportunitiesSection({ onOpenContentEditor, onViewDetails }) {
   const searchParams = useSearchParams();
   const [domain, setDomain] = useState("example.com");
 
@@ -1135,7 +1135,20 @@ export default function OpportunitiesSection({ onOpenContentEditor }) {
         </div>
 
         <div className="mt-4 flex items-center justify-between">
-          <button className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)]">
+          <button
+            type="button"
+            onClick={() =>
+              onViewDetails?.({
+                title: realTitle || displayTitle,
+                wordCount: wc,
+                keywords: kws,
+                score: Math.round(score),
+                status: data?.status,
+                type,
+              })
+            }
+            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
+          >
             <Eye size={14} /> View Details
           </button>
 
