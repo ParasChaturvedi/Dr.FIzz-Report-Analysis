@@ -551,6 +551,8 @@ export default function CEResearchPanel({
         cfgLoading={cfgLoading}
         cfgError={cfgError}
         basicsData={basicsData}
+        editorContent={editorContent}
+        seoData={safeSeoData}
       />
     );
   }

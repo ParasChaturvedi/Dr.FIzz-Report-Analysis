@@ -169,24 +169,6 @@ export default function SeoAdvancedFaqs({
   const loading = !!seoLoading;
   const error = seoError || "";
 
-  // ✅ DEBUG (ADDED): inspect what we actually receive
-  useMemo(() => {
-    if (typeof window === "undefined") return;
-
-    const paa = seoData?.faqs?.peopleAlsoAsk;
-    const paaLen = Array.isArray(paa) ? paa.length : "NOT_ARRAY";
-    const sample = Array.isArray(paa) && paa.length ? paa[0] : null;
-
-    console.log("=== [SeoAdvancedFaqs DEBUG] ===");
-    console.log("[Faqs] seoLoading:", seoLoading);
-    console.log("[Faqs] seoError:", seoError);
-    console.log("[Faqs] seoData?.faqs:", seoData?.faqs);
-    console.log("[Faqs] seoData?.faqs?.peopleAlsoAsk length:", paaLen);
-    console.log("[Faqs] sample peopleAlsoAsk[0]:", sample);
-    console.log("[Faqs] received `faqs` prop (should be ignored):", faqs);
-    console.log("===============================");
-  }, [seoData, seoLoading, seoError, faqs]);
-
   // ✅ CHANGED: Claude AI-only. Ignore `faqs` prop completely (no fallback).
   const effectiveFaqs = useMemo(() => {
     if (seoData?.faqs && typeof seoData.faqs === "object") return seoData.faqs;

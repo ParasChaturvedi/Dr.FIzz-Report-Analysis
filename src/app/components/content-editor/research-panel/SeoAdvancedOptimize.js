@@ -238,10 +238,12 @@ function KPI({ label, value, delta, up }) {
         <div className="text-[16px] font-semibold text-gray-900 dark:text-[var(--text-primary)]">
           {value}
         </div>
-        <span className={`inline-flex items-center gap-0.5 text-[10px] ${tone}`}>
-          <Icon size={13} />
-          {delta}
-        </span>
+        {delta != null && (
+          <span className={`inline-flex items-center gap-0.5 text-[10px] ${tone}`}>
+            <Icon size={13} />
+            {delta}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -640,11 +642,19 @@ export default function SeoAdvancedOptimize({
   editorContent = "",
   seoData,
 }) {
-  const KPIS = [
-    { label: "HEADINGS", value: 2, delta: 29, up: false },
-    { label: "LINKS", value: 5, delta: 29, up: false },
-    { label: "IMAGES", value: 3, delta: 1, up: true },
-  ];
+  // Real counts computed from the actual editor content (no placeholders).
+  const KPIS = useMemo(() => {
+    const html = String(editorContent || "");
+    const headings = (html.match(/<h[1-6][\s>]/gi) || []).length;
+    const links = (html.match(/<a\s[^>]*href/gi) || []).length;
+    const images = (html.match(/<img[\s>]/gi) || []).length;
+    // No fake benchmark target: show the true count (delta null hides the arrow).
+    return [
+      { label: "HEADINGS", value: headings, delta: null },
+      { label: "LINKS", value: links, delta: null },
+      { label: "IMAGES", value: images, delta: null },
+    ];
+  }, [editorContent]);
 
   const pageCtx = useMemo(() => getPageContext(seoData), [seoData]);
   const promptText = useMemo(() => htmlToText(editorContent), [editorContent]);

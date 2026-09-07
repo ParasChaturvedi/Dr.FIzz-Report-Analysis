@@ -136,6 +136,58 @@ function ResultItem({ type = "success", children, onFix }) {
 }
 /* ---------- /ATOMS ---------- */
 
+/**
+ * Derive REAL basic-SEO checks from the actual editor content (no placeholder
+ * data). Returns { basicSEO: string[] (passing), additional: string[] (to fix) }.
+ * When the document is empty, both are empty so the panel shows "No Data".
+ */
+function computeBasicChecks(html, keyword, seoData) {
+  const src = String(html || "");
+  const text = src.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+  if (!text) return { basicSEO: [], additional: [] };
+
+  const words = text.split(/\s+/).filter(Boolean).length;
+  const kw = String(keyword || "").trim().toLowerCase();
+  const h1s = src.match(/<h1[\s>]/gi) || [];
+  const subheads = (src.match(/<h[23][\s>]/gi) || []).length;
+  const imgs = (src.match(/<img[\s>]/gi) || []).length;
+  const imgsNoAlt = (src.match(/<img(?![^>]*\balt=)[^>]*>/gi) || []).length;
+  const links = (src.match(/<a\s[^>]*href/gi) || []).length;
+  const h1m = src.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const h1text = h1m ? h1m[1].replace(/<[^>]+>/g, "").toLowerCase() : "";
+  const metaDesc =
+    seoData?._meta?.metaDescription || seoData?.meta?.metaDescription || seoData?.metaDescription || "";
+
+  const basicSEO = [];
+  const additional = [];
+
+  if (h1s.length === 1) basicSEO.push("Exactly one H1 heading is present.");
+  else if (h1s.length === 0) additional.push("No H1 heading found. Add a single, descriptive H1.");
+  else additional.push(`Found ${h1s.length} H1 headings. Use only one H1 per page.`);
+
+  if (kw && h1text) {
+    if (h1text.includes(kw)) basicSEO.push("Primary keyword appears in the H1 title.");
+    else additional.push(`Primary keyword "${keyword}" is missing from the H1 title.`);
+  }
+
+  if (subheads >= 2) basicSEO.push(`Content uses ${subheads} H2/H3 subheadings for structure.`);
+  else additional.push("Add H2/H3 subheadings to structure the content.");
+
+  if (words >= 300) basicSEO.push(`Content length is ${words} words.`);
+  else additional.push(`Content is short (${words} words). Aim for a fuller, more useful piece.`);
+
+  if (imgs > 0 && imgsNoAlt > 0) additional.push(`${imgsNoAlt} image(s) missing alt text. Add descriptive alt text.`);
+  else if (imgs > 0) basicSEO.push(`All ${imgs} image(s) have alt text.`);
+
+  if (links === 0) additional.push("No links found. Add relevant internal and external links.");
+  else basicSEO.push(`Content includes ${links} link(s).`);
+
+  if (metaDesc) basicSEO.push("A meta description is set.");
+  else additional.push("No meta description set. Add one with a clear benefit and CTA.");
+
+  return { basicSEO, additional };
+}
+
 export default function SeoBasics({
   query,
   onQueryChange,
@@ -148,12 +200,20 @@ export default function SeoBasics({
   currentPage,
   cfgLoading,
   cfgError,
-  basicsData, // ← currentPage?.seoBasics from JSON
+  basicsData, // ← legacy JSON shape (may be null)
+  editorContent = "",
+  seoData,
 }) {
-  // Fallbacks in case JSON is missing pieces
+  // Real, content-derived basic-SEO checks (no placeholder/demo data).
+  const computed = useMemo(
+    () => computeBasicChecks(editorContent, query, seoData),
+    [editorContent, query, seoData]
+  );
+
+  // Prefer real supplied data; else fall back to the live content-derived checks.
   const safeBasics = basicsData || {
-    basicSEO: [],
-    additional: [],
+    basicSEO: computed.basicSEO,
+    additional: computed.additional,
     titleReadability: { score: null, notes: [], expansion: "" },
     contentReadability: { score: null, notes: [], expansion: "" },
     steps: [],
@@ -352,18 +412,17 @@ export default function SeoBasics({
             defaultOpen
           >
             <div className="space-y-1.5">
-              {(safeBasics.basicSEO?.length
-                ? safeBasics.basicSEO
-                : [
-                    "Write a unique, descriptive title with the primary keyword once.",
-                    "Use one H1, logical H2/H3 hierarchy, and scannable lists.",
-                    "Add meta description with clear benefit and CTA.",
-                  ]
-              ).map((line, i) => (
-                <ResultItem key={i} type="success">
-                  {line}
-                </ResultItem>
-              ))}
+              {safeBasics.basicSEO?.length ? (
+                safeBasics.basicSEO.map((line, i) => (
+                  <ResultItem key={i} type="success">
+                    {line}
+                  </ResultItem>
+                ))
+              ) : (
+                <div className="px-1 py-1 text-[12px] text-[var(--muted)]">
+                  Start writing to see live basic-SEO checks.
+                </div>
+              )}
             </div>
           </Section>
 
@@ -378,39 +437,21 @@ export default function SeoBasics({
             defaultOpen
           >
             <div className="space-y-1.5">
-              {(safeBasics.additional || []).map((line, i) => (
-                <ResultItem
-                  key={i}
-                  type="warning"
-                  onFix={onFix ? () => onFix(`additional-${i}`) : undefined}
-                >
-                  {line}
-                </ResultItem>
-              ))}
-
-              {/* explicit “Fix Now” examples kept */}
-              <ResultItem type="error" onFix={() => onFix?.("title-dup-keyword")}>
-                The focus keyword appears twice in the title, which may look spammy. —{" "}
-                <span className="font-medium">Revise to use it only once.</span>
-              </ResultItem>
-              <ResultItem type="error" onFix={() => onFix?.("meta-variation-missing")}>
-                Missing Keyword Variation in Meta Description.
-              </ResultItem>
-              <ResultItem type="error" onFix={() => onFix?.("slug-shorten")}>
-                Your URL includes unnecessary words:{" "}
-                <span className="font-mono text-[12px]">
-                  /best-seo-tools-2025-for-digital-marketing-guide/
-                </span>
-                . Shorten it.
-              </ResultItem>
-              <ResultItem
-                type="error"
-                onFix={() =>
-                  onPasteToEditor?.("Add a clear statement about how these tools improve rankings.")
-                }
-              >
-                The first paragraph does not directly address the user’s search intent.
-              </ResultItem>
+              {safeBasics.additional?.length ? (
+                safeBasics.additional.map((line, i) => (
+                  <ResultItem
+                    key={i}
+                    type="warning"
+                    onFix={onFix ? () => onFix(`additional-${i}`) : undefined}
+                  >
+                    {line}
+                  </ResultItem>
+                ))
+              ) : (
+                <div className="px-1 py-1 text-[12px] text-[var(--muted)]">
+                  No issues found in the current draft.
+                </div>
+              )}
             </div>
           </Section>
 
