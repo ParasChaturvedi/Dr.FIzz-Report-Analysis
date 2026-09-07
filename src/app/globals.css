@@ -112,6 +112,8 @@
   --border: #e5e7eb;
   --sidebar: #e5e7eb;
   --input:#fff;
+  /* Dashboard card surface — Figma card cream (#faf9f6) in light; dark unchanged */
+  --card:#faf9f6;
 
   --sb-hover: #ffffff;
   --profile-hover:#E9652C;
@@ -149,6 +151,7 @@ html.dark {
   --border: #374151;
   --sidebar: #191a1a;
 --input:#303030;
+  --card:#303030;
   --sb-hover: #303030;
   --profile-hover:#3182ce;
   --bg-panel-sidebar:#191a1a;

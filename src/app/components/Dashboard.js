@@ -221,7 +221,7 @@ function SourcePill({ value, source }) {
   return (
     <div className="relative group">
       <div
-        className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)] cursor-help tabular-nums"
+        className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[var(--muted)] cursor-help tabular-nums"
         aria-label={source}
         title={source}
       >
@@ -1907,7 +1907,7 @@ const seoTableProg = Math.max(0, prog);
     const keyAnim   = Math.max(0, Math.round(keywords * progress));
     const pri = getPriority(score);
     return (
-      <div className="relative rounded-[18px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+      <div className="relative rounded-[18px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="group absolute right-4 top-4">
           <div
             className="flex h-9 w-9 items-center justify-center rounded-full text-[14px] font-semibold shadow-sm tabular-nums"
@@ -1947,7 +1947,7 @@ const seoTableProg = Math.max(0, prog);
           </span>
         </div>
 
-        <div className="mt-4 rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-4 py-3">
+        <div className="mt-4 rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
           <div className="grid grid-cols-2 gap-6">
             <div>
               <div className="text-[12px] text-[var(--muted)]">Word Count</div>
@@ -1968,7 +1968,7 @@ const seoTableProg = Math.max(0, prog);
           <button
             type="button"
             onClick={() => setDetailsItem({ title, score, wordCount, keywords, status })}
-            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
+            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
           >
             <Eye size={14} /> View Details
           </button>
@@ -1978,7 +1978,7 @@ const seoTableProg = Math.max(0, prog);
     window.dispatchEvent(new CustomEvent("content-editor:open", { detail: payload }));
     onOpenContentEditor?.(payload);
   }}
-  className="inline-flex items-center gap-2 rounded-[14px] px-4 py-2 text-[13px] font-semibold text-white shadow-sm bg-[image:var(--infoHighlight-gradient)] hover:opacity-90 transition"
+  className="inline-flex items-center gap-2 rounded-[16px] px-4 py-2 text-[13px] font-semibold text-white shadow-sm bg-[image:var(--infoHighlight-gradient)] hover:opacity-90 transition"
 >
   Start <ChevronRight size={16} />
 </button>
@@ -2000,7 +2000,7 @@ const seoTableProg = Math.max(0, prog);
     return (
       <div className="flex flex-col items-center ">
         <div className="relative h-32 w-32 rounded-full" style={{ background: bg }}>
-          <div className="absolute inset-3 rounded-full bg-[var(--input)]" />
+          <div className="absolute inset-3 rounded-full bg-[var(--card)]" />
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
             <div className="text-[28px] font-semibold leading-none text-[var(--text)] tabular-nums">
               {Math.round(pct)}
@@ -2242,7 +2242,7 @@ const seoTableProg = Math.max(0, prog);
             id="df-google-panel"
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View domain authority details"
-            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2253,7 +2253,7 @@ const seoTableProg = Math.max(0, prog);
                   Domain Rating
                 </span>
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                 <span className="inline-block h-2 w-2 rounded-full" style={{ background: drBadgeColor }} />
                 {drBadgeLabel}
               </span>
@@ -2284,7 +2284,7 @@ const seoTableProg = Math.max(0, prog);
               </span>
             </div>
 
-            <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-3">
+            <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-3">
               <div className="text-[12px] text-[var(--muted)]">Trust score</div>
               <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[var(--border)]">
                 <div
@@ -2299,7 +2299,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View referring-domains details"
-            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2311,7 +2311,7 @@ const seoTableProg = Math.max(0, prog);
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: rdBadge.color }} />
                   {rdBadge.label}
                 </span>
@@ -2333,7 +2333,7 @@ const seoTableProg = Math.max(0, prog);
             </div>
 
             <div className="mt-4">
-              <div className="mb-1 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] text-[var(--muted)]">
+              <div className="mb-1 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] text-[var(--muted)]">
                 Quality Distribution
               </div>
 
@@ -2377,7 +2377,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View backlinks details"
-            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2389,7 +2389,7 @@ const seoTableProg = Math.max(0, prog);
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: tbBadge.color }} />
                   {tbBadge.label}
                 </span>
@@ -2411,7 +2411,7 @@ const seoTableProg = Math.max(0, prog);
             </div>
 
             <div className="mt-3 grid gap-3 text-[12px]">
-              <div className="relative grid h-16 grid-cols-[1fr_auto] items-center rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3">
+              <div className="relative grid h-16 grid-cols-[1fr_auto] items-center rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3">
                 <span className="absolute left-0 top-0 h-full w-[4px] rounded-l-[10px] bg-[#1CC88A]" />
                 <div className="flex flex-col">
                   <div className="text-[var(--muted)]">DoFollow</div>
@@ -2424,7 +2424,7 @@ const seoTableProg = Math.max(0, prog);
                 </div>
               </div>
 
-              <div className="relative grid h-16 grid-cols-[1fr_auto] items-center rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3">
+              <div className="relative grid h-16 grid-cols-[1fr_auto] items-center rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3">
                 <span className="absolute left-0 top-0 h-full w-[4px] rounded-l-[10px] bg-[#EF4444]" />
                 <div className="flex flex-col">
                   <div className="text-[var(--muted)]">NoFollow</div>
@@ -2460,7 +2460,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; setSiteHealthOpen(true); }}
             title="Open the full Site Health report"
-            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2472,7 +2472,7 @@ const seoTableProg = Math.max(0, prog);
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                   <span className="inline-block h-2 w-2 rounded-full" style={{ background: shBadge.color }} />
                   {shBadge.label}
                 </span>
@@ -2490,9 +2490,9 @@ const seoTableProg = Math.max(0, prog);
             </div>
 
             <ul className="mt-3 space-y-2 text-[13px]">
-              <li className="flex items-center justify-between rounded-[10px] border border-[#DFF1E7] bg-[var(--input)] px-3 py-3">
+              <li className="flex items-center justify-between rounded-[10px] border border-[#DFF1E7] bg-[var(--card)] px-3 py-3">
                 <span className="flex items-center gap-2 text-[#178A5D]">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[#DFF1E7] bg-[var(--input)]">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[#DFF1E7] bg-[var(--card)]">
                     <Check size={14} />
                   </span>
                   Page Scanned
@@ -2502,7 +2502,7 @@ const seoTableProg = Math.max(0, prog);
 
               <li className="flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-[#FFF9EC] px-3 py-3">
                 <span className="flex items-center gap-2 text-[#B67200]">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--input)]">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--card)]">
                     <AlertTriangle size={14} />
                   </span>
                   Redirect
@@ -2512,7 +2512,7 @@ const seoTableProg = Math.max(0, prog);
 
               <li className="flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-[#FFF6F6] px-3 py-3">
                 <span className="flex items-center gap-2 text-[#D12C2C]">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--input)]">
+                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--card)]">
                     <X size={14} />
                   </span>
                   Broken
@@ -2526,7 +2526,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View technical issues"
-            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             {(() => {
               // Google CWV thresholds
@@ -2654,7 +2654,7 @@ const seoTableProg = Math.max(0, prog);
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                         <span
                           className="inline-block h-2 w-2 rounded-full"
                           style={{ backgroundColor: STATUS_STYLES[overallLevel]?.dot || "#9CA3AF" }}
@@ -2665,7 +2665,7 @@ const seoTableProg = Math.max(0, prog);
                         type="button"
                         title="View Core Web Vitals in Site Health"
                         onClick={() => { try { window.dispatchEvent(new Event("app:open-site-health")); } catch {} }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--text)] hover:bg-[var(--input)] transition"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--text)] hover:bg-[var(--card)] transition"
                       >
                         <Maximize2 size={15} />
                       </button>
@@ -2674,7 +2674,7 @@ const seoTableProg = Math.max(0, prog);
 
                   <div className="mt-4 grid grid-cols-3 gap-3">
                     {/* LCP */}
-                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-3 py-3">
+                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 py-3">
                       <div className="flex items-center justify-between">
                         <div className="text-[11px] font-medium text-[var(--muted)]">LCP</div>
                         <span
@@ -2699,7 +2699,7 @@ const seoTableProg = Math.max(0, prog);
                     </div>
 
                     {/* INP */}
-                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-3 py-3">
+                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 py-3">
                       <div className="flex items-center justify-between">
                         <div className="text-[11px] font-medium text-[var(--muted)]">INP</div>
                         <span
@@ -2724,7 +2724,7 @@ const seoTableProg = Math.max(0, prog);
                     </div>
 
                     {/* CLS */}
-                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-3 py-3">
+                    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 py-3">
                       <div className="flex items-center justify-between">
                         <div className="text-[11px] font-medium text-[var(--muted)]">CLS</div>
                         <span
@@ -2763,7 +2763,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View technical issues"
-            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2772,7 +2772,7 @@ const seoTableProg = Math.max(0, prog);
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Page Speed Scores</span>
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                 <span className="inline-block h-2 w-2 rounded-full" style={{ background: psBadge.color }} />
                 {psBadge.label}
               </span>
@@ -2871,7 +2871,7 @@ const seoTableProg = Math.max(0, prog);
               <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">
                 On-Page Health Metrics
               </h2>
-              <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+              <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#F0782E] to-[#FBA43C] text-white shadow-sm">
                     <AlertTriangle size={16} />
@@ -2913,10 +2913,10 @@ const seoTableProg = Math.max(0, prog);
         <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Performance (SEO Metrics)</h2>
 
         {/* Google connection (GA4 + Search Console) */}
-        <div className="mb-4 rounded-[14px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+        <div className="mb-4 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
-              <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--input)] text-[var(--muted)]">
+              <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--muted)]">
                 <KeyRound size={16} />
               </span>
               <div>
@@ -2933,11 +2933,11 @@ const seoTableProg = Math.max(0, prog);
                         {googleStatus.email || "your Google account"}
                       </span>
                       {googleStatus.hasRefreshToken ? (
-                        <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--input)] px-2 py-0.5 text-[11px] text-[var(--muted)]">
+                        <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[11px] text-[var(--muted)]">
                           <Check size={13} /> refresh token saved
                         </span>
                       ) : (
-                        <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--input)] px-2 py-0.5 text-[11px] text-[var(--muted)]">
+                        <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--card)] px-2 py-0.5 text-[11px] text-[var(--muted)]">
                           <AlertTriangle size={13} /> no refresh token
                         </span>
                       )}
@@ -2976,7 +2976,7 @@ const seoTableProg = Math.max(0, prog);
                       loadGa4Properties();
                       loadGscSites();
                     }}
-                    className="inline-flex items-center justify-center gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-semibold text-[var(--text)] transition hover:bg-[var(--hover)]"
+                    className="inline-flex items-center justify-center gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-semibold text-[var(--text)] transition hover:bg-[var(--hover)]"
                     title="Refresh connection + lists"
                   >
                     <RefreshCw size={16} />
@@ -2988,7 +2988,7 @@ const seoTableProg = Math.max(0, prog);
                     <select
                       value={ga4PropertyId}
                       onChange={(e) => selectGa4Property(e.target.value)}
-                      className="h-9 min-w-[240px] rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-3 text-[12px] text-[var(--text)] outline-none"
+                      className="h-9 min-w-[240px] rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 text-[12px] text-[var(--text)] outline-none"
                       disabled={ga4Loading || !ga4Properties.length}
                     >
                       {!ga4Properties.length ? (
@@ -3011,7 +3011,7 @@ const seoTableProg = Math.max(0, prog);
                     <select
                       value={gscSiteUrl}
                       onChange={(e) => selectGscSite(e.target.value)}
-                      className="h-9 min-w-[240px] rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-3 text-[12px] text-[var(--text)] outline-none"
+                      className="h-9 min-w-[240px] rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 text-[12px] text-[var(--text)] outline-none"
                       disabled={gscLoading || !gscSites.length}
                     >
                       {!gscSites.length ? (
@@ -3040,7 +3040,7 @@ const seoTableProg = Math.max(0, prog);
 
           {/* Quick debug bubble (optional) */}
           {false ? (
-            <div className="mt-3 rounded-[12px] border border-[var(--border)] bg-[var(--input)] p-3 text-[12px] text-[var(--muted)]">
+            <div className="mt-3 rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-3 text-[12px] text-[var(--muted)]">
               <div className="mb-1 font-semibold text-[var(--text)]">Debug</div>
               {ga4Metrics?.debug ? (
                 <div className="mb-1">
@@ -3061,7 +3061,7 @@ const seoTableProg = Math.max(0, prog);
 
 {analyticsNotice ? (
   <div
-    className="mb-4 flex flex-col gap-2 rounded-[16px] border border-[var(--border)] bg-[var(--input)] p-4 md:flex-row md:items-center md:justify-between"
+    className="mb-4 flex flex-col gap-2 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 md:flex-row md:items-center md:justify-between"
     role="status"
     aria-live="polite"
   >
@@ -3096,7 +3096,7 @@ const seoTableProg = Math.max(0, prog);
             fetchGa4Report();
             fetchGscKeywords();
           }}
-          className="inline-flex h-9 items-center gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-3 text-[12px] font-semibold text-[var(--text)] hover:bg-[#F6F8FB]"
+          className="inline-flex h-9 items-center gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 text-[12px] font-semibold text-[var(--text)] hover:bg-[#F6F8FB]"
         >
           <RefreshCw size={14} />
           Retry
@@ -3111,7 +3111,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View keyword & content opportunities"
-            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -3120,7 +3120,7 @@ const seoTableProg = Math.max(0, prog);
                 </span>
                 <span className="flex items-center gap-1 text-[13px] text-gray-700 leading-relaxed">Organic traffic</span>
                 {OT_GROWTH != null && (
-                  <span className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--input)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
+                  <span className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                     <span className="h-2 w-2 rounded-full" style={{ background: otBadge.color }} />
                     {otBadge.label}
                   </span>
@@ -3181,7 +3181,7 @@ const seoTableProg = Math.max(0, prog);
                   // Always open Google OAuth (lets user reconnect / switch accounts)
                   return connectGoogle();
                 }}
-                className="inline-flex items-center gap-1 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:opacity-90"
+                className="inline-flex items-center gap-1 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:opacity-90"
               >
                 {!googleStatus.connected ? "Connect to Google Analytics" : "Manage Google connection"} <ChevronRight size={14} />
               </button>
@@ -3192,7 +3192,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View keyword & content opportunities"
-            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -3227,8 +3227,8 @@ const seoTableProg = Math.max(0, prog);
               ].map((row) => {
                 const pct = row.v && row.t ? Math.round((row.v / row.t) * 100) : 0;
                 return (
-                  <div key={row.label} className="grid grid-cols-[88px_auto_1fr] items-center  gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 rounded-tr-2xl">
-                    <span className="inline-flex items-center justify-center rounded-md bg-[var(--input)] px-2 py-1 text-[12px] text-[var(--muted)]">{row.label}</span>
+                  <div key={row.label} className="grid grid-cols-[88px_auto_1fr] items-center  gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 rounded-tr-2xl">
+                    <span className="inline-flex items-center justify-center rounded-md bg-[var(--card)] px-2 py-1 text-[12px] text-[var(--muted)]">{row.label}</span>
                     <span className="text-[12px] font-semibold text-[var(--text)] tabular-nums">
                       {row.v ? formatCompactNumber(row.v) : "—"}
                     </span>
@@ -3247,9 +3247,9 @@ const seoTableProg = Math.max(0, prog);
                   // Always open Google OAuth (lets user reconnect / switch accounts)
                   return connectGoogle();
                 }}
-                className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:opacity-90"
+                className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:opacity-90"
               >
-                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--input)]">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--card)]">
                   <FileText size={12} className="text-[#3178C6]" />
                 </span>
                 {!googleStatus.connected ? (
@@ -3270,7 +3270,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View keyword & content opportunities"
-            className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -3395,7 +3395,7 @@ const seoTableProg = Math.max(0, prog);
                     {/* Newsletter */}
                     <li className="grid grid-cols-[1fr_auto_160px] items-center gap-3">
                       <span className="flex items-center gap-2 text-[var(--muted)]">
-                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--input)]">
+                        <span className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)]">
                           <span className="h-2 w-2 rounded-full bg-[#3B82F6]" />
                         </span>
                         Newsletter
@@ -3448,7 +3448,7 @@ const seoTableProg = Math.max(0, prog);
 
                 {/* Domain Rank Overview */}
                 {dro && (
-                  <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+                  <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#EAF4FF] bg-[#EAF4FF] text-[#3B82F6]">
                         <TrendingUp size={16} />
@@ -3457,25 +3457,25 @@ const seoTableProg = Math.max(0, prog);
                       <span className="ml-auto text-[11px] text-[var(--muted)]">DataForSEO Labs</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-4 py-3">
+                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
                         <div className="text-[11px] text-[var(--muted)]">Organic Keywords</div>
                         <div className="mt-1 text-[26px] font-bold leading-none text-[var(--text)] tabular-nums">
                           {(dro.organicKeywords || 0).toLocaleString()}
                         </div>
                       </div>
-                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-4 py-3">
+                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
                         <div className="text-[11px] text-[var(--muted)]">Organic Traffic (ETV)</div>
                         <div className="mt-1 text-[26px] font-bold leading-none text-[var(--text)] tabular-nums">
                           {formatCompactNumber(dro.organicTraffic || 0)}
                         </div>
                       </div>
-                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-4 py-3">
+                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
                         <div className="text-[11px] text-[var(--muted)]">Paid Keywords</div>
                         <div className="mt-1 text-[26px] font-bold leading-none text-[var(--text)] tabular-nums">
                           {(dro.paidKeywords || 0).toLocaleString()}
                         </div>
                       </div>
-                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-4 py-3">
+                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
                         <div className="text-[11px] text-[var(--muted)]">Domain Rank</div>
                         <div className="mt-1 text-[26px] font-bold leading-none text-[var(--text)] tabular-nums">
                           {dro.rank ? `#${dro.rank.toLocaleString()}` : "—"}
@@ -3487,7 +3487,7 @@ const seoTableProg = Math.max(0, prog);
 
                 {/* Competitor Landscape */}
                 {competitors.length > 0 && (
-                  <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+                  <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#FFF5D9] bg-[#FFF5D9] text-[#B98500]">
                         <Network size={16} />
@@ -3497,9 +3497,9 @@ const seoTableProg = Math.max(0, prog);
                     </div>
                     <div className="space-y-2 max-h-[260px] overflow-y-auto">
                       {competitors.map((comp, i) => (
-                        <div key={comp.domain} className="flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2">
+                        <div key={comp.domain} className="flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2">
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--input)] text-[11px] font-bold text-[var(--muted)]">
+                            <span className="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[11px] font-bold text-[var(--muted)]">
                               {i + 1}
                             </span>
                             <span className="truncate text-[13px] font-medium text-[var(--text)]">
@@ -3529,7 +3529,7 @@ const seoTableProg = Math.max(0, prog);
 
               {/* Ranked Keywords Table */}
               {rankedKws.length > 0 && (
-                <section className="mb-6 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+                <section className="mb-6 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-4">
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#EAF8F1] bg-[#EAF8F1] text-[#178A5D]">
                       <KeyRound size={16} />
@@ -3582,7 +3582,7 @@ const seoTableProg = Math.max(0, prog);
 
         <section className="mb-10 grid grid-cols-1 gap-4 md:grid-cols-2">
           {/* SERP feature */}
-          <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+          <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#FDE7B8] bg-[#FFF5D9] text-[#B98500]">
@@ -3619,7 +3619,7 @@ const seoTableProg = Math.max(0, prog);
                 { label: "Video Result",      val: serpCounts[3], bgC: "#FFF0F4", bdC: "#FFE1EA",       fill: "#D12C2C" },
                 { label: "Knowledge Panel",   val: serpCounts[4], bgC: "#F5EAFE", bdC: "#E7D7FB",       fill: "#8B5CF6" },
               ].map(({ label, val, bgC, bdC, fill }) => (
-                <div key={label} className="flex items-center justify-between rounded-[12px] border border-[var(--border)] bg-[var(--input)] px-3 py-3">
+                <div key={label} className="flex items-center justify-between rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-3 py-3">
                   <div className="flex items-center gap-3">
                     <span className="inline-flex h-6 w-6 items-center justify-center rounded-md"
                       style={{ background: bgC, border: `1px solid ${bdC}` }}>
@@ -3639,7 +3639,7 @@ const seoTableProg = Math.max(0, prog);
 
           {/* Ai SEO Matrix (dynamic from JSON) */}
 {/* Ai SEO Matrix (dynamic from JSON) */}
-<div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+<div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
   <div className="flex items-start justify-between">
     <div className="flex items-center gap-2">
       <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#FDE7B8] bg-[#FFF5D9] text-[#B98500]">
@@ -3673,7 +3673,7 @@ const seoTableProg = Math.max(0, prog);
     return (
       <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-5">
         {tools.map((tool) => (
-          <div key={tool.name} className="rounded-[12px] border border-[var(--border)] bg-[var(--input)] p-4 text-center">
+          <div key={tool.name} className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 text-center">
             <Image src={tool.src || "/assets/placeholder.svg"} alt={tool.name} width={36} height={36} className="mx-auto mb-2" />
             <div className="text-[12px] text-[var(--muted)]">{tool.name}</div>
             <div className="mt-1 text-[22px] font-semibold leading-none text-[var(--text)] tabular-nums">
@@ -3716,7 +3716,7 @@ const seoTableProg = Math.max(0, prog);
               <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Keyword Strategy — Tier Breakdown</h2>
               <section className="mb-10 grid grid-cols-1 gap-4 md:grid-cols-3">
                 {tierData.map(tier => (
-                  <div key={tier.label} className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+                  <div key={tier.label} className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                     <div className="mb-3 flex items-start justify-between">
                       <div>
                         <div className="text-[13px] font-semibold" style={{ color: tier.color }}>{tier.label}</div>
@@ -3759,7 +3759,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
             title="View critical issues"
-            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--input)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#EF3E5C]/50 hover:shadow-md transition"
+            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#EF3E5C]/50 hover:shadow-md transition"
           >
             <div className="flex items-center gap-3 min-w-0">
               <span className="flex shrink-0 aspect-square h-10 w-10 items-center justify-center rounded-full bg-[#EF3E5C] text-white">
@@ -3788,7 +3788,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
             title="View warning issues"
-            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--input)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#F59E0B]/50 hover:shadow-md transition"
+            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#F59E0B]/50 hover:shadow-md transition"
           >
             <div className="flex items-center gap-3 min-w-0">
               <span className="flex shrink-0 aspect-square h-10 w-10 items-center justify-center rounded-full bg-[#F59E0B] text-white">
@@ -3817,7 +3817,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
             title="View recommendations"
-            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--input)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#10B981]/50 hover:shadow-md transition"
+            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#10B981]/50 hover:shadow-md transition"
           >
             <div className="flex items-center gap-3 min-w-0">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#10B981] text-white">
@@ -3846,7 +3846,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
             title="View content opportunities"
-            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--input)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#3B82F6]/50 hover:shadow-md transition"
+            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#3B82F6]/50 hover:shadow-md transition"
           >
             <div className="flex items-center gap-3 min-w-0">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#3B82F6] text-white">
@@ -3900,7 +3900,7 @@ const seoTableProg = Math.max(0, prog);
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">
       SEO Baseline — Full Snapshot
     </h2>
-    <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+    <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
         <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#EAF4FF] bg-[#EAF4FF] text-[#3B82F6]">
           <BarChart3 size={16} />
@@ -3959,7 +3959,7 @@ const seoTableProg = Math.max(0, prog);
   return (
     <section id="technical-issues" className="mb-6 scroll-mt-4">
       <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Technical Foundation — Issues Table</h2>
-      <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] shadow-sm overflow-hidden">
+      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 p-4 border-b border-[var(--border)]">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-[#FFF0F4] bg-[#FFF0F4] text-[#D12C2C]">
             <AlertTriangle size={16} />
@@ -4014,7 +4014,7 @@ const seoTableProg = Math.max(0, prog);
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Authority & Link Building</h2>
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       {/* DR Progress */}
-      <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="text-[12px] font-semibold text-[var(--muted)] mb-3">Domain Rating Progress</div>
         {(() => {
           const currentDR = selected?.domainRating != null ? Math.round(selected.domainRating) : 0;
@@ -4035,7 +4035,7 @@ const seoTableProg = Math.max(0, prog);
         })()}
       </div>
       {/* Referring Domains */}
-      <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="text-[12px] font-semibold text-[var(--muted)] mb-3">Referring Domains</div>
         <div className="text-[32px] font-bold leading-none text-[#178A5D] tabular-nums mb-1">
           {selected?.referringDomains ? formatCompactNumber(selected.referringDomains) : "—"}
@@ -4057,7 +4057,7 @@ const seoTableProg = Math.max(0, prog);
         </div>
       </div>
       {/* Citation Building Plan */}
-      <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="text-[12px] font-semibold text-[var(--muted)] mb-3">Citation Building Plan</div>
         <div className="space-y-2">
           {[
@@ -4067,7 +4067,7 @@ const seoTableProg = Math.max(0, prog);
             { month: "Month 4+", action: "Ongoing outreach & monitoring", status: "todo" },
           ].map((step, i) => (
             <div key={i} className="flex items-start gap-2 text-[12px]">
-              <span className="mt-0.5 shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--input)] text-[10px] font-bold text-[var(--muted)]">{i + 1}</span>
+              <span className="mt-0.5 shrink-0 inline-flex h-5 w-5 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[10px] font-bold text-[var(--muted)]">{i + 1}</span>
               <div>
                 <div className="font-semibold text-[var(--text)]">{step.month}</div>
                 <div className="text-[var(--muted)]">{step.action}</div>
@@ -4084,7 +4084,7 @@ const seoTableProg = Math.max(0, prog);
 {seo && (
   <section className="mb-6">
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Quick Wins — 180 Day Execution Plan</h2>
-    <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+    <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[
           {
@@ -4154,7 +4154,7 @@ const seoTableProg = Math.max(0, prog);
 {seo && (
   <section className="mb-6">
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Measuring Success — KPI Tracker</h2>
-    <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] shadow-sm overflow-hidden">
+    <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
@@ -4217,7 +4217,7 @@ const seoTableProg = Math.max(0, prog);
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">GEO & AI Visibility</h2>
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {/* AI Platform Visibility */}
-      <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="text-[12px] font-semibold text-[var(--muted)] mb-4">AI Platform Coverage</div>
         <div className="space-y-3">
           {[
@@ -4247,7 +4247,7 @@ const seoTableProg = Math.max(0, prog);
       </div>
 
       {/* SERP Feature Opportunities */}
-      <div className="rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-4 shadow-sm">
+      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <div className="text-[12px] font-semibold text-[var(--muted)]">SERP Feature Opportunities</div>
           <button
@@ -4271,7 +4271,7 @@ const seoTableProg = Math.max(0, prog);
               type="button"
               onClick={() => setSerpScreen({ feature: f.key })}
               title="View details"
-              className="flex w-full items-center justify-between rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-3 py-2 text-left cursor-pointer hover:border-[#D45427]/40 transition"
+              className="flex w-full items-center justify-between rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-left cursor-pointer hover:border-[#D45427]/40 transition"
             >
               <div className="flex items-center gap-2">
                 <span className="text-[14px]">{f.icon}</span>
@@ -4383,7 +4383,7 @@ const seoTableProg = Math.max(0, prog);
       aria-modal="true"
     >
       <div
-        className="w-full max-w-lg rounded-[16px] border border-[var(--border)] bg-[var(--input)] shadow-2xl overflow-hidden"
+        className="w-full max-w-lg rounded-[16px] border border-[var(--border)] bg-[var(--card)] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
@@ -4440,7 +4440,7 @@ const seoTableProg = Math.max(0, prog);
           <button
             type="button"
             onClick={() => setDetailsItem(null)}
-            className="mr-auto rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[13px] font-medium text-[var(--muted)] hover:text-[var(--text)] transition"
+            className="mr-auto rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-[13px] font-medium text-[var(--muted)] hover:text-[var(--text)] transition"
           >
             Close
           </button>
@@ -4460,7 +4460,7 @@ const seoTableProg = Math.max(0, prog);
               } catch {}
               setDetailsItem(null);
             }}
-            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--input)] px-4 py-2 text-[13px] font-semibold text-[var(--text)] hover:border-[#F0782E]/50 transition"
+            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-[13px] font-semibold text-[var(--text)] hover:border-[#F0782E]/50 transition"
           >
             <Check size={15} /> Add to Tasks
           </button>
@@ -4523,7 +4523,7 @@ const seoTableProg = Math.max(0, prog);
 
   {/* AI Loading state */}
   {aiLoading && (
-    <div className="rounded-[14px] border border-[#E0E7FF] bg-gradient-to-br from-[#EEF2FF] to-[#F5F3FF] p-6 text-center">
+    <div className="rounded-[16px] border border-[#E0E7FF] bg-gradient-to-br from-[#EEF2FF] to-[#F5F3FF] p-6 text-center">
       <div className="flex flex-col items-center gap-3">
         <svg className="animate-spin h-8 w-8 text-[#4f46e5]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -4710,7 +4710,7 @@ const seoTableProg = Math.max(0, prog);
           ADVANCED SECTION: Website Crawl & Audit
       ══════════════════════════════════════════════════════════════════════ */}
       {seo?.websiteCrawl && (
-        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
+        <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
           <h2 className="text-[16px] font-bold text-[var(--text)] mb-1 flex items-center gap-2">
             <svg className="w-4 h-4 text-[#d45427]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
@@ -4776,7 +4776,7 @@ const seoTableProg = Math.max(0, prog);
 
       {/* ── GMB & Directory Listings ──────────────────────────────────────── */}
       {seo?.gmbCheck && (
-        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
+        <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
           <h2 className="text-[16px] font-bold text-[var(--text)] mb-1 flex items-center gap-2">
             <svg className="w-4 h-4 text-[#d45427]" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
@@ -4879,7 +4879,7 @@ const seoTableProg = Math.max(0, prog);
 
       {/* ── Competitor Audit ──────────────────────────────────────────────── */}
       {seo?.competitorAudit?.competitors?.length > 0 && (
-        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
+        <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
           <h2 className="text-[16px] font-bold text-[var(--text)] mb-4 flex items-center gap-2">
             <svg className="w-4 h-4 text-[#d45427]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -4967,7 +4967,7 @@ const seoTableProg = Math.max(0, prog);
 
       {/* ── Keyword Gap Analysis ─────────────────────────────────────────── */}
       {seo?.keywordGap && (
-        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] p-5 shadow-sm">
+        <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-[16px] font-bold text-[var(--text)] flex items-center gap-2">
@@ -5064,7 +5064,7 @@ const seoTableProg = Math.max(0, prog);
 
       {/* ── Strategic Plan ────────────────────────────────────────────────── */}
       {seo?.strategicPlan?.plan && (
-        <section className="mb-8 rounded-[14px] border border-[var(--border)] bg-[var(--input)] overflow-hidden shadow-sm">
+        <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] overflow-hidden shadow-sm">
           <div className="px-5 py-4 bg-gradient-to-r from-[#1a0a00] to-[#2d1200] flex items-center justify-between">
             <div>
               <h2 className="text-[16px] font-bold text-white flex items-center gap-2">
