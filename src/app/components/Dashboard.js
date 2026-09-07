@@ -1,7 +1,7 @@
 // src/components/Dashboard.js
 "use client";
 import Image from "next/image";
-import { Activity, ActivitySquare, AlertTriangle, BarChart3, BookOpen, Check, ChevronRight, Clock3, Eye, FileText, Gauge, Goal, HelpCircle, KeyRound, Lightbulb, Link2, Lock, Monitor, Network, PencilLine, RefreshCw, Rocket, Settings, ShieldCheck, Skull, SlidersHorizontal, Smartphone, SquareArrowOutUpRight, ThumbsDown, ThumbsUp, TrendingUp, TrendingDown, Wifi, X } from "lucide-react";
+import { Activity, ActivitySquare, AlertTriangle, BarChart3, BookOpen, Check, ChevronRight, Clock3, Eye, FileText, Gauge, Goal, HelpCircle, KeyRound, Lightbulb, Link2, Lock, Maximize2, Monitor, Network, PencilLine, RefreshCw, Rocket, Settings, ShieldCheck, Skull, SlidersHorizontal, Smartphone, SquareArrowOutUpRight, ThumbsDown, ThumbsUp, TrendingUp, TrendingDown, Wifi, X } from "lucide-react";
 import { useEffect, useRef, useState, useMemo , useCallback} from "react";
 import { useSearchParams } from "next/navigation";
 import OpportunitiesSection from "./OpportunitiesSection";
@@ -2306,10 +2306,20 @@ const seoTableProg = Math.max(0, prog);
                   Referring Domains
                 </span>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: rdBadge.color, background: rdBadge.bg }}>
-                <span className="inline-block h-2 w-2 rounded-full" style={{ background: rdBadge.color }} />
-                {rdBadge.label}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: rdBadge.color, background: rdBadge.bg }}>
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: rdBadge.color }} />
+                  {rdBadge.label}
+                </span>
+                <button
+                  type="button"
+                  title="Open referring-domains details"
+                  onClick={() => document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#F0782E]/50 text-[#F0782E] hover:bg-[#FFF3EA] transition"
+                >
+                  <SquareArrowOutUpRight size={15} />
+                </button>
+              </div>
             </div>
 
             <div className="mt-3 flex items-end gap-2">
@@ -2374,10 +2384,20 @@ const seoTableProg = Math.max(0, prog);
                   Total Backlinks
                 </span>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: tbBadge.color, background: tbBadge.bg }}>
-                <span className="inline-block h-2 w-2 rounded-full" style={{ background: tbBadge.color }} />
-                {tbBadge.label}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium" style={{ color: tbBadge.color, background: tbBadge.bg }}>
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: tbBadge.color }} />
+                  {tbBadge.label}
+                </span>
+                <button
+                  type="button"
+                  title="Open backlink details"
+                  onClick={() => document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#F0782E]/50 text-[#F0782E] hover:bg-[#FFF3EA] transition"
+                >
+                  <SquareArrowOutUpRight size={15} />
+                </button>
+              </div>
             </div>
 
             <div className="mt-3 flex items-end gap-2">
@@ -2629,20 +2649,30 @@ const seoTableProg = Math.max(0, prog);
                         Core web vitals
                       </span>
                     </div>
-                    <span
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
-                      style={{
-                        backgroundColor: overallStyles.bg,
-                        border: `1px solid ${overallStyles.border}`,
-                        color: overallStyles.text,
-                      }}
-                    >
+                    <div className="flex items-center gap-2">
                       <span
-                        className="inline-block h-2 w-2 rounded-full"
-                        style={{ backgroundColor: STATUS_STYLES[overallLevel]?.dot || "#9CA3AF" }}
-                      />
-                      {overallStyles.label}
-                    </span>
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+                        style={{
+                          backgroundColor: overallStyles.bg,
+                          border: `1px solid ${overallStyles.border}`,
+                          color: overallStyles.text,
+                        }}
+                      >
+                        <span
+                          className="inline-block h-2 w-2 rounded-full"
+                          style={{ backgroundColor: STATUS_STYLES[overallLevel]?.dot || "#9CA3AF" }}
+                        />
+                        {overallStyles.label}
+                      </span>
+                      <button
+                        type="button"
+                        title="View Core Web Vitals in Site Health"
+                        onClick={() => { try { window.dispatchEvent(new Event("app:open-site-health")); } catch {} }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--text)] hover:bg-[var(--input)] transition"
+                      >
+                        <Maximize2 size={15} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-4 grid grid-cols-3 gap-3">
