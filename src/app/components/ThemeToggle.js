@@ -3,22 +3,26 @@
 import { useTheme } from "./ThemeContext";
 import { Moon, Sun } from "lucide-react";
 
-export default function ThemeToggle() {
+/**
+ * Theme toggle — matches Figma "Light Dark Toggle" (node 1:23107):
+ * orange gradient pill (rgba(212,84,39,.5) → rgba(245,158,11,.5)), rounded,
+ * moon (left) + sun (right) on the track, white knob showing the active icon.
+ *
+ * `inline` → sits inside a flex row (e.g. the dashboard header).
+ * default → fixed floating control (used on non-dashboard views).
+ */
+export default function ThemeToggle({ inline = false }) {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === "dark";
 
-  // Sizing tuned for a compact control
-  const trackW = 84;
-  const trackH = 40;
-  const thumb = 32;
-  const pad = 4;
-  const translateX = trackW - (thumb + pad * 2);
-  const topOffset = (trackH - thumb) / 2;
+  const W = 54;
+  const H = 28;
+  const KNOB = 22;
+  const PAD = 3;
+  const translateX = W - (KNOB + PAD * 2); // travel distance
 
-  // Gradient with black veil. Uses CSS var if present, falls back to the requested colors.
   const gradient =
-    "linear-gradient(rgba(0,0,0,0.45), rgba(0,0,0,0.45)), " +
-    "var(--app-gradient-strong, linear-gradient(to right, #d45427 0%, #ffa615 100%))";
+    "linear-gradient(118deg, rgba(212,84,39,0.5) 11%, rgba(245,158,11,0.5) 88%)";
 
   return (
     <button
@@ -26,57 +30,47 @@ export default function ThemeToggle() {
       aria-label="Toggle dark/light mode"
       aria-pressed={isDark}
       onClick={toggleTheme}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          toggleTheme();
-        }
-      }}
-      // Smaller on phones/tablets; unchanged on desktop
-      className="fixed z-50 right-2 sm:right-4 md:right-6
-           top-3 sm:top-10 md:top-12 lg:top-5
-           scale-[0.72] sm:scale-[0.84] md:scale-100"
-
-      style={{ width: trackW, height: trackH }}
       title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+      className={
+        inline
+          ? "relative shrink-0"
+          : "fixed z-50 right-2 sm:right-4 md:right-6 top-3 sm:top-10 md:top-12 lg:top-5"
+      }
+      style={{ width: W, height: H }}
     >
       <div
-        className="relative w-full h-full rounded-full bg-no-repeat bg-cover border shadow-sm"
-        style={{
-          backgroundImage: gradient,
-          borderColor: "rgba(0,0,0,0.35)",
-        }}
+        className="relative w-full h-full rounded-full overflow-hidden"
+        style={{ backgroundImage: gradient }}
       >
-        {/* Static icons (white in light, grey in dark) */}
+        {/* Track icons */}
         <Moon
-          size={18}
-          className="absolute left-3 top-1/2 -translate-y-1/2"
-          color={isDark ? "#A5A8B3" : "#FFFFFF"}
+          size={14}
           strokeWidth={2}
+          className="absolute left-[6px] top-1/2 -translate-y-1/2"
+          color={isDark ? "rgba(255,255,255,0.55)" : "#FFFFFF"}
         />
         <Sun
-          size={18}
-          className="absolute right-3 top-1/2 -translate-y-1/2"
-          color={isDark ? "#A5A8B3" : "#FFFFFF"}
+          size={14}
           strokeWidth={2}
+          className="absolute right-[6px] top-1/2 -translate-y-1/2"
+          color={isDark ? "#FFFFFF" : "rgba(255,255,255,0.55)"}
         />
 
-        {/* Sliding thumb: show the OPPOSITE icon to avoid duplicate glyphs */}
+        {/* White knob with the active-mode icon */}
         <div
-          className="absolute rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.35)] ring-1 ring-white/20 flex items-center justify-center transition-transform duration-300 ease-out"
+          className="absolute rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] flex items-center justify-center transition-transform duration-300 ease-out"
           style={{
-            width: thumb,
-            height: thumb,
-            top: topOffset,
-            left: pad,
+            width: KNOB,
+            height: KNOB,
+            top: PAD,
+            left: PAD,
             transform: `translateX(${isDark ? translateX : 0}px)`,
-            background: "#000000",
           }}
         >
           {isDark ? (
-            <Sun size={16} color="#FFFFFF" strokeWidth={2} />
+            <Moon size={13} strokeWidth={2} color="#D45427" />
           ) : (
-            <Moon size={16} color="#FFFFFF" strokeWidth={2} />
+            <Sun size={13} strokeWidth={2} color="#D45427" />
           )}
         </div>
       </div>

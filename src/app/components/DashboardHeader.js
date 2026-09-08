@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { Sparkles, HelpCircle, Calendar, ChevronDown, Check } from "lucide-react";
+import ThemeToggle from "./ThemeToggle";
 
 function greetingForNow() {
   const h = new Date().getHours();
@@ -52,8 +53,13 @@ export default function DashboardHeader({ onChatWithAi, aiLoading = false, canCh
   return (
     <header
       className="
-        flex flex-col 
-        gap-3 
+        sticky top-0 z-30
+        bg-[var(--bg-panel)]
+        -mx-4 sm:-mx-6 lg:-mx-8
+        px-4 sm:px-6 lg:px-8
+        pt-3 pb-3
+        flex flex-col
+        gap-3
         sm:flex-row sm:items-center sm:justify-between
         mb-4 sm:mb-6
       "
@@ -180,11 +186,10 @@ export default function DashboardHeader({ onChatWithAi, aiLoading = false, canCh
           <Sparkles size={16} className={aiLoading ? "animate-pulse" : ""} />
         </button>
 
-        {/*
-          RESERVED SPACE FOR YOUR EXISTING THEME TOGGLE
-          Hidden on very small screens to avoid crowding; shows from `sm` upwards.
-        */}
-        <div className="hidden sm:block sm:w-[68px] md:w-[72px]" />
+        {/* Theme toggle — inside the header (Figma Upper bar) */}
+        <div className="flex items-center">
+          <ThemeToggle inline />
+        </div>
       </div>
     </header>
   );

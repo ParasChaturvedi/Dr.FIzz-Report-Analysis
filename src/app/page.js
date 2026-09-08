@@ -496,7 +496,8 @@ export default function Home() {
         variant={sidebarVariant}
       />
 
-      <ThemeToggle />
+      {/* Dashboard has its own theme toggle inside the header (Figma) */}
+      {currentStep !== "dashboard" && <ThemeToggle />}
 
       <main className={`flex-1 min-w-0 flex flex-col min-h-0 transition-all duration-300 ${mainOffsetClass}`}>
         {currentStep !== "5b" && currentStep !== "dashboard" && currentStep !== "contentEditor" && (
