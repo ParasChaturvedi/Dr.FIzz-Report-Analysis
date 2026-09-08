@@ -108,7 +108,7 @@ export default function DashboardHeader({ onChatWithAi, aiLoading = false, canCh
       <div
         className="
           flex flex-wrap
-          items-stretch
+          items-center
           justify-start sm:justify-end
           gap-2 sm:gap-3
           mt-2 sm:mt-0
