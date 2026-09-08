@@ -9,6 +9,7 @@ import {
   Activity,
   Link2,
   LineChart,
+  User,
 } from "lucide-react";
 import { useAuthUser } from "./auth/authContext";
 
@@ -21,7 +22,7 @@ function NavItem({ id, label, Icon, onClick, active = false, disabled = false })
       aria-current={active ? "page" : undefined}
       aria-disabled={disabled}
       className={`group relative w-full mb-6 flex flex-col items-center gap-1 outline-none
-                  text-[#000000] dark:text-[#000000]
+                  text-[var(--text)]
                   ${disabled ? "opacity-30 cursor-not-allowed" : ""}`}
     >
       {/* Icon */}
@@ -31,12 +32,12 @@ function NavItem({ id, label, Icon, onClick, active = false, disabled = false })
         }`}
       >
         {/* Use class-based sizing so it scales per breakpoint */}
-        <Icon className="text-[#000000] h-[20px] w-[20px] md:h-[22px] md:w-[22px] lg:h-[26px] lg:w-[26px]" />
+        <Icon className="h-[20px] w-[20px] md:h-[22px] md:w-[22px] lg:h-[26px] lg:w-[26px]" />
       </span>
 
       {/* Label */}
       <span
-        className={`leading-none mt-1 text-[#000000] transition-opacity duration-200
+        className={`leading-none mt-1 transition-opacity duration-200
                     text-[10px] md:text-[12px] lg:text-[14px] ${
                       active ? "opacity-100" : "opacity-40 group-hover:opacity-100"
                     }`}
@@ -65,7 +66,8 @@ export default function Sidebar({
     <aside
       className="fixed left-0 top-0 h-full
                  w-[56px] md:w-[72px] lg:w-[80px]
-                 bg-[image:var(--sidebar-gradient)] dark:bg-[image:var(--sidebar-gradient)]
+                 bg-[var(--card)] border-r border-[var(--border)]
+                 shadow-[1px_0_4px_0_rgba(12,12,13,0.05)]
                  flex flex-col items-center py-5 md:py-6 z-50"
     >
       {/* Logo */}
@@ -129,7 +131,7 @@ export default function Sidebar({
       {/* Bottom actions */}
       <div className="w-full pb-5 md:pb-6 flex flex-col items-center">
         {/* Upgrade with hover animation */}
-        <div className="flex flex-col items-center mb-3 md:mb-4 text-[#000] cursor-pointer group select-none">
+        <div className="flex flex-col items-center mb-3 md:mb-4 text-[#D45427] cursor-pointer group select-none">
           <div
             className="text-xl md:text-2xl leading-none
                        transform transition-transform duration-300
@@ -153,21 +155,21 @@ export default function Sidebar({
                        focus-visible:ring-2 focus-visible:ring-red-500
                        focus-visible:ring-offset-2 focus-visible:ring-offset-white
                        dark:focus-visible:ring-offset-[#1f2121]"
-            style={{ border: "1px solid #000", background: "#fff" }}
+            style={{ background: avatarUrl ? "#fff" : "#D45427" }}
           >
             {avatarUrl ? (
               <img src={avatarUrl} alt="" draggable="false" className="h-full w-full object-cover" />
             ) : initials ? (
-              <span className="text-[12px] md:text-[13px] font-semibold" style={{ color: "#000" }}>{initials}</span>
+              <span className="text-[12px] md:text-[13px] font-semibold" style={{ color: "#fff" }}>{initials}</span>
             ) : (
-              <span className="h-4 w-4 md:h-5 md:w-5 rounded-full" style={{ background: "#000" }} />
+              <User className="h-5 w-5 md:h-6 md:w-6 text-white" />
             )}
           </span>
 
           <span
-            className="mt-2 max-w-[68px] truncate text-[12px] md:text-[14px] text-[#6B7280]
+            className="mt-2 max-w-[68px] truncate text-[12px] md:text-[14px] text-[var(--muted)]
                        transition-colors duration-200
-                       group-hover:text-[#000] dark:group-hover:text-[#000]"
+                       group-hover:text-[var(--text)]"
             title={displayName}
           >
             {displayName}
