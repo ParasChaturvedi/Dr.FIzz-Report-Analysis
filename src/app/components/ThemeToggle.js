@@ -42,21 +42,24 @@ export default function ThemeToggle({ inline = false }) {
         className="relative w-full h-full rounded-full overflow-hidden"
         style={{ backgroundImage: gradient }}
       >
-        {/* Track icons */}
-        <Moon
-          size={14}
-          strokeWidth={2}
-          className="absolute left-[6px] top-1/2 -translate-y-1/2"
-          color={isDark ? "rgba(255,255,255,0.55)" : "#FFFFFF"}
-        />
-        <Sun
-          size={14}
-          strokeWidth={2}
-          className="absolute right-[6px] top-1/2 -translate-y-1/2"
-          color={isDark ? "#FFFFFF" : "rgba(255,255,255,0.55)"}
-        />
+        {/* Inactive icon on the track: dark -> faded sun (right), light -> faded moon (left) */}
+        {isDark ? (
+          <Sun
+            size={13}
+            strokeWidth={2}
+            className="absolute right-[7px] top-1/2 -translate-y-1/2"
+            color="rgba(255,255,255,0.7)"
+          />
+        ) : (
+          <Moon
+            size={13}
+            strokeWidth={2}
+            className="absolute left-[7px] top-1/2 -translate-y-1/2"
+            color="rgba(255,255,255,0.7)"
+          />
+        )}
 
-        {/* White knob with the active-mode icon */}
+        {/* White knob with the ACTIVE-mode icon: dark -> moon (left), light -> sun (right) */}
         <div
           className="absolute rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] flex items-center justify-center transition-transform duration-300 ease-out"
           style={{
@@ -64,7 +67,7 @@ export default function ThemeToggle({ inline = false }) {
             height: KNOB,
             top: PAD,
             left: PAD,
-            transform: `translateX(${isDark ? translateX : 0}px)`,
+            transform: `translateX(${isDark ? 0 : translateX}px)`,
           }}
         >
           {isDark ? (

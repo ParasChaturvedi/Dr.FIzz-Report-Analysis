@@ -7,13 +7,10 @@ export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState("light");
 
   useEffect(() => {
+    // Light is the default; only an explicit stored choice can switch to dark
+    // (we intentionally ignore the OS prefers-color-scheme here).
     const stored = typeof window !== "undefined" ? localStorage.getItem("theme") : null;
-    const prefersDark =
-      typeof window !== "undefined" &&
-      window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-    const next = stored ? stored : (prefersDark ? "dark" : "light");
+    const next = stored === "dark" || stored === "light" ? stored : "light";
     setTheme(next);
     document.documentElement.classList.toggle("dark", next === "dark");
   }, []);
