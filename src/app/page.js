@@ -475,7 +475,7 @@ export default function Home() {
   const sidebarVariant = currentStep === "contentEditor" ? "editor" : "default";
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[image:var(--brand-gradient)] bg-no-repeat bg-[size:100%_100%] p-2 sm:p-3">
+    <div className="flex h-screen overflow-hidden bg-[var(--app-bg)]">
       <SidebarInfoPanel
         ref={infoRef}
         onInfoClick={() => {

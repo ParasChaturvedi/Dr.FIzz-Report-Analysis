@@ -1227,7 +1227,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
       ) : null}
 
       <section className="mb-10 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4">
+        <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4">
           <div className="mb-3 flex items-center gap-2">
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#FFA615] text-white shadow-sm">
               <BookOpen size={14} />
@@ -1241,7 +1241,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
           </div>
         </div>
 
-        <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4">
+        <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4">
           <div className="mb-3 flex items-center gap-2">
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#FFA615] text-white shadow-sm">
               <FileText size={14} />

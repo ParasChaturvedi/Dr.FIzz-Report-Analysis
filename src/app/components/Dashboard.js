@@ -2241,7 +2241,7 @@ const seoTableProg = Math.max(0, prog);
             id="df-google-panel"
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View domain authority details"
-            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2299,7 +2299,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View referring-domains details"
-            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2381,7 +2381,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View backlinks details"
-            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2462,7 +2462,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; setSiteHealthOpen(true); }}
             title="Open the full Site Health report"
-            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2528,7 +2528,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View technical issues"
-            className="flex flex-col rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="flex flex-col rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             {(() => {
               // Google CWV thresholds
@@ -2749,7 +2749,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View technical issues"
-            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2857,7 +2857,7 @@ const seoTableProg = Math.max(0, prog);
               <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">
                 On-Page Health Metrics
               </h2>
-              <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+              <section className="mb-8 rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                     <AlertTriangle size={16} />
@@ -2899,7 +2899,7 @@ const seoTableProg = Math.max(0, prog);
         <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Performance (SEO Metrics)</h2>
 
         {/* Google connection (GA4 + Search Console) */}
-        <div className="mb-4 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+        <div className="mb-4 rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--card)] text-[var(--muted)]">
@@ -3047,7 +3047,7 @@ const seoTableProg = Math.max(0, prog);
 
 {analyticsNotice ? (
   <div
-    className="mb-4 flex flex-col gap-2 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 md:flex-row md:items-center md:justify-between"
+    className="mb-4 flex flex-col gap-2 rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 md:flex-row md:items-center md:justify-between"
     role="status"
     aria-live="polite"
   >
@@ -3097,7 +3097,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View keyword & content opportunities"
-            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -3167,7 +3167,7 @@ const seoTableProg = Math.max(0, prog);
                   // Always open Google OAuth (lets user reconnect / switch accounts)
                   return connectGoogle();
                 }}
-                className="inline-flex items-center gap-1 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:opacity-90"
+                className="inline-flex items-center gap-1 rounded-[10px] border border-[#CA5223] bg-[#FCFCFC] dark:bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[#D45427] hover:bg-[#CA5223]/5 transition"
               >
                 {!googleStatus.connected ? "Connect to Google Analytics" : "Manage Google connection"} <ChevronRight size={14} />
               </button>
@@ -3178,7 +3178,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View keyword & content opportunities"
-            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -3233,7 +3233,7 @@ const seoTableProg = Math.max(0, prog);
                   // Always open Google OAuth (lets user reconnect / switch accounts)
                   return connectGoogle();
                 }}
-                className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:opacity-90"
+                className="inline-flex items-center gap-2 rounded-[10px] border border-[#CA5223] bg-[#FCFCFC] dark:bg-[var(--input)] px-3 py-2 text-[12px] font-medium text-[#D45427] hover:bg-[#CA5223]/5 transition"
               >
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-md border border-[var(--border)] bg-[var(--card)]">
                   <FileText size={12} className="text-[#3178C6]" />
@@ -3256,7 +3256,7 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
             title="View keyword & content opportunities"
-            className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -3434,7 +3434,7 @@ const seoTableProg = Math.max(0, prog);
 
                 {/* Domain Rank Overview */}
                 {dro && (
-                  <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+                  <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                         <TrendingUp size={16} />
@@ -3473,7 +3473,7 @@ const seoTableProg = Math.max(0, prog);
 
                 {/* Competitor Landscape */}
                 {competitors.length > 0 && (
-                  <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+                  <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-4">
                       <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                         <Network size={16} />
@@ -3515,7 +3515,7 @@ const seoTableProg = Math.max(0, prog);
 
               {/* Ranked Keywords Table */}
               {rankedKws.length > 0 && (
-                <section className="mb-6 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+                <section className="mb-6 rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                   <div className="flex items-center gap-2 mb-4">
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                       <KeyRound size={16} />
@@ -3568,7 +3568,7 @@ const seoTableProg = Math.max(0, prog);
 
         <section className="mb-10 grid grid-cols-1 gap-4 md:grid-cols-2">
           {/* SERP feature */}
-          <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+          <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
@@ -3619,7 +3619,7 @@ const seoTableProg = Math.max(0, prog);
 
           {/* Ai SEO Matrix (dynamic from JSON) */}
 {/* Ai SEO Matrix (dynamic from JSON) */}
-<div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+<div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
   <div className="flex items-start justify-between">
     <div className="flex items-center gap-2">
       <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
@@ -3694,7 +3694,7 @@ const seoTableProg = Math.max(0, prog);
               <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Keyword Strategy — Tier Breakdown</h2>
               <section className="mb-10 grid grid-cols-1 gap-4 md:grid-cols-3">
                 {tierData.map(tier => (
-                  <div key={tier.label} className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+                  <div key={tier.label} className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
                     <div className="mb-3 flex items-start justify-between">
                       <div>
                         <div className="text-[13px] font-semibold" style={{ color: tier.color }}>{tier.label}</div>
@@ -3878,7 +3878,7 @@ const seoTableProg = Math.max(0, prog);
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">
       SEO Baseline — Full Snapshot
     </h2>
-    <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
       <div className="flex items-center gap-2 mb-4">
         <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
           <BarChart3 size={16} />
@@ -3937,7 +3937,7 @@ const seoTableProg = Math.max(0, prog);
   return (
     <section id="technical-issues" className="mb-6 scroll-mt-4">
       <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Technical Foundation — Issues Table</h2>
-      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
+      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 p-4 border-b border-[var(--border)]">
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
             <AlertTriangle size={16} />
@@ -3992,7 +3992,7 @@ const seoTableProg = Math.max(0, prog);
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Authority & Link Building</h2>
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       {/* DR Progress */}
-      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="text-[12px] font-semibold text-[var(--muted)] mb-3">Domain Rating Progress</div>
         {(() => {
           const currentDR = selected?.domainRating != null ? Math.round(selected.domainRating) : 0;
@@ -4013,7 +4013,7 @@ const seoTableProg = Math.max(0, prog);
         })()}
       </div>
       {/* Referring Domains */}
-      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="text-[12px] font-semibold text-[var(--muted)] mb-3">Referring Domains</div>
         <div className="text-[32px] font-bold leading-none text-[#178A5D] tabular-nums mb-1">
           {selected?.referringDomains ? formatCompactNumber(selected.referringDomains) : "—"}
@@ -4035,7 +4035,7 @@ const seoTableProg = Math.max(0, prog);
         </div>
       </div>
       {/* Citation Building Plan */}
-      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="text-[12px] font-semibold text-[var(--muted)] mb-3">Citation Building Plan</div>
         <div className="space-y-2">
           {[
@@ -4062,7 +4062,7 @@ const seoTableProg = Math.max(0, prog);
 {seo && (
   <section className="mb-6">
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Quick Wins — 180 Day Execution Plan</h2>
-    <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[
           {
@@ -4132,7 +4132,7 @@ const seoTableProg = Math.max(0, prog);
 {seo && (
   <section className="mb-6">
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">Measuring Success — KPI Tracker</h2>
-    <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
+    <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
@@ -4195,7 +4195,7 @@ const seoTableProg = Math.max(0, prog);
     <h2 className="text-[16px] font-bold text-[var(--text)] mb-3 ml-1">GEO & AI Visibility</h2>
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {/* AI Platform Visibility */}
-      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="text-[12px] font-semibold text-[var(--muted)] mb-4">AI Platform Coverage</div>
         <div className="space-y-3">
           {[
@@ -4225,7 +4225,7 @@ const seoTableProg = Math.max(0, prog);
       </div>
 
       {/* SERP Feature Opportunities */}
-      <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
+      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <div className="text-[12px] font-semibold text-[var(--muted)]">SERP Feature Opportunities</div>
           <button
@@ -4300,7 +4300,7 @@ const seoTableProg = Math.max(0, prog);
       aria-modal="true"
     >
       <div
-        className="w-full max-w-lg rounded-[16px] border border-[var(--border)] bg-[var(--card)] shadow-2xl overflow-hidden"
+        className="w-full max-w-lg rounded-[12px] border border-[var(--border)] bg-[var(--card)] shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 border-b border-[var(--border)] px-5 py-4">
@@ -4440,7 +4440,7 @@ const seoTableProg = Math.max(0, prog);
 
   {/* AI Loading state */}
   {aiLoading && (
-    <div className="rounded-[16px] border border-[#E0E7FF] bg-gradient-to-br from-[#EEF2FF] to-[#F5F3FF] p-6 text-center">
+    <div className="rounded-[12px] border border-[#E0E7FF] bg-gradient-to-br from-[#EEF2FF] to-[#F5F3FF] p-6 text-center">
       <div className="flex flex-col items-center gap-3">
         <svg className="animate-spin h-8 w-8 text-[#4f46e5]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
@@ -4456,7 +4456,7 @@ const seoTableProg = Math.max(0, prog);
 
   {/* AI Analysis Results Panel */}
   {aiAnalysis && !aiLoading && aiPanelOpen && (
-    <div className="rounded-[16px] border border-[#E0E7FF] bg-white shadow-lg overflow-hidden">
+    <div className="rounded-[12px] border border-[#E0E7FF] bg-white shadow-lg overflow-hidden">
       {/* Panel Header */}
       <div className="flex items-center justify-between bg-gradient-to-r from-[#4f46e5] to-[#7c3aed] px-5 py-4">
         <div className="flex items-center gap-3">
@@ -4627,7 +4627,7 @@ const seoTableProg = Math.max(0, prog);
           ADVANCED SECTION: Website Crawl & Audit
       ══════════════════════════════════════════════════════════════════════ */}
       {seo?.websiteCrawl && (
-        <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
+        <section className="mb-8 rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
           <h2 className="text-[16px] font-bold text-[var(--text)] mb-1 flex items-center gap-2">
             <svg className="w-4 h-4 text-[#d45427]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" />
@@ -4693,7 +4693,7 @@ const seoTableProg = Math.max(0, prog);
 
       {/* ── GMB & Directory Listings ──────────────────────────────────────── */}
       {seo?.gmbCheck && (
-        <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
+        <section className="mb-8 rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
           <h2 className="text-[16px] font-bold text-[var(--text)] mb-1 flex items-center gap-2">
             <svg className="w-4 h-4 text-[#d45427]" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
@@ -4796,7 +4796,7 @@ const seoTableProg = Math.max(0, prog);
 
       {/* ── Competitor Audit ──────────────────────────────────────────────── */}
       {seo?.competitorAudit?.competitors?.length > 0 && (
-        <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
+        <section className="mb-8 rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
           <h2 className="text-[16px] font-bold text-[var(--text)] mb-4 flex items-center gap-2">
             <svg className="w-4 h-4 text-[#d45427]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -4884,7 +4884,7 @@ const seoTableProg = Math.max(0, prog);
 
       {/* ── Keyword Gap Analysis ─────────────────────────────────────────── */}
       {seo?.keywordGap && (
-        <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
+        <section className="mb-8 rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
           <div className="flex items-start justify-between mb-4">
             <div>
               <h2 className="text-[16px] font-bold text-[var(--text)] flex items-center gap-2">
@@ -4981,7 +4981,7 @@ const seoTableProg = Math.max(0, prog);
 
       {/* ── Strategic Plan ────────────────────────────────────────────────── */}
       {seo?.strategicPlan?.plan && (
-        <section className="mb-8 rounded-[16px] border border-[var(--border)] bg-[var(--card)] overflow-hidden shadow-sm">
+        <section className="mb-8 rounded-[12px] border border-[var(--border)] bg-[var(--card)] overflow-hidden shadow-sm">
           <div className="px-5 py-4 bg-gradient-to-r from-[#1a0a00] to-[#2d1200] flex items-center justify-between">
             <div>
               <h2 className="text-[16px] font-bold text-white flex items-center gap-2">

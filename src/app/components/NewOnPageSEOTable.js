@@ -64,8 +64,8 @@ function DemoPill({ active, onToggle, children }) {
     <button
       className={`inline-flex items-center justify-center rounded-full px-4 py-1.5 text-[12px] font-semibold transition-colors ${
         active
-          ? "bg-gradient-to-b from-[#FFF6EB] to-[#FFEAD5] dark:from-[#78350f]/30 dark:to-[#92400e]/30 border border-[#FDBA74] dark:border-[#d97706]/50 text-[#F97316] dark:text-[#fb923c]"
-          : "bg-gradient-to-b from-[var(--app-bg)] to-[var(--border)]/60 border border-[var(--border)] text-[var(--muted)]"
+          ? "border border-[#CA5223] bg-[linear-gradient(180deg,rgba(245,158,11,0.15),rgba(212,84,39,0.15))] text-[#D45427]"
+          : "border border-transparent text-[var(--muted)] hover:text-[var(--text)]"
       }`}
       onClick={onToggle}
       aria-pressed={active}
@@ -81,7 +81,7 @@ function ViewAllPill({ children, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold bg-gradient-to-b from-[#FFF6EB] to-[#FFEAD5] dark:from-[#78350f]/30 dark:to-[#92400e]/30 border border-[#FDBA74] dark:border-[#d97706]/50 text-[#F97316] dark:text-[#fb923c] hover:opacity-80 transition-opacity"
+      className="inline-flex items-center gap-2 rounded-[8px] px-3 py-1.5 text-[12px] font-semibold border border-[#CA5223] bg-[#FCFCFC] dark:bg-[var(--input)] text-[#D45427] hover:bg-[#CA5223]/5 transition"
     >
       {children}
     </button>

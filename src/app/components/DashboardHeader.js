@@ -118,11 +118,11 @@ export default function DashboardHeader({ onChatWithAi, aiLoading = false, canCh
             aria-expanded={periodOpen}
             className="
               inline-flex items-center justify-center gap-2
-              rounded-full border border-[#F97316] bg-[#FFF7ED] dark:bg-[#F97316]/10
+              rounded-full border border-[#CA5223] bg-transparent
               px-3 py-2 sm:px-4 sm:py-2
               min-h-[36px] sm:min-h-[40px]
-              text-[11px] sm:text-[13px] font-semibold text-[#C05621] dark:text-[#FB923C]
-              hover:bg-[#FFE7D1] dark:hover:bg-[#F97316]/20 transition
+              text-[11px] sm:text-[13px] font-semibold text-[#D45427]
+              hover:bg-[#CA5223]/5 transition
               whitespace-nowrap
             "
           >
