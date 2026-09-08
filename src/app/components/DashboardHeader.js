@@ -132,9 +132,7 @@ export default function DashboardHeader({ onChatWithAi, aiLoading = false, canCh
               whitespace-nowrap
             "
           >
-            <Calendar size={14} />
             <span>{currentPeriodLabel}</span>
-            <ChevronDown size={14} className={`transition-transform ${periodOpen ? "rotate-180" : ""}`} />
           </button>
 
           {periodOpen && (

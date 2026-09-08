@@ -2200,7 +2200,7 @@ const seoTableProg = Math.max(0, prog);
 
   // ====== UI (kept from your working component; only dynamic spots were wired) ======
   return (
-    <main className="min-h-screen bg-[var(--bg-panel)] px-4 py-6 sm:px-6 lg:px-8 overflow-x-clip">
+    <main className="min-h-screen bg-[var(--bg-panel)] px-4 pb-6 sm:px-6 lg:px-8 overflow-x-clip">
 
       {/* ── Initial SEO data loading overlay (hidden as soon as real data is ready) ── */}
       {seoLoading && !selected && (
@@ -2222,7 +2222,7 @@ const seoTableProg = Math.max(0, prog);
         </div>
       )}
 
-      <div className="mx-auto max-w-[100%] mt-1">
+      <div className="mx-auto max-w-[100%]">
         <DashboardHeader
           onChatWithAi={handleAiAnalyze}
           aiLoading={aiLoading}

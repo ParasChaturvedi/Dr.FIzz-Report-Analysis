@@ -59,21 +59,22 @@ export default function ThemeToggle({ inline = false }) {
           />
         )}
 
-        {/* White knob with the ACTIVE-mode icon: dark -> moon (left), light -> sun (right) */}
+        {/* Solid orange knob with the ACTIVE-mode icon: dark -> moon (left), light -> sun (right) */}
         <div
-          className="absolute rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.25)] flex items-center justify-center transition-transform duration-300 ease-out"
+          className="absolute rounded-full shadow-[0_1px_3px_rgba(0,0,0,0.25)] flex items-center justify-center transition-transform duration-300 ease-out"
           style={{
             width: KNOB,
             height: KNOB,
             top: PAD,
             left: PAD,
+            background: "#D45427",
             transform: `translateX(${isDark ? 0 : translateX}px)`,
           }}
         >
           {isDark ? (
-            <Moon size={13} strokeWidth={2} color="#D45427" />
+            <Moon size={13} strokeWidth={2} color="#FFFFFF" />
           ) : (
-            <Sun size={13} strokeWidth={2} color="#D45427" />
+            <Sun size={13} strokeWidth={2} color="#FFFFFF" />
           )}
         </div>
       </div>
