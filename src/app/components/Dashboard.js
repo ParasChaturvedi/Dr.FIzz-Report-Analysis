@@ -3737,15 +3737,15 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
             title="View critical issues"
-            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#EF3E5C]/50 hover:shadow-md transition"
+            className="flex items-center justify-between rounded-[12px] border border-[#D1D5DB] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#EF3E5C]/50 hover:shadow-md transition"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <span className="flex shrink-0 aspect-square h-10 w-10 items-center justify-center rounded-full bg-[#EF3E5C] text-white">
-                <Skull size={20} />
+              <span className="flex shrink-0 h-10 w-10 items-center justify-center">
+                <Skull size={22} className="text-[#E11D48]" style={{ filter: "drop-shadow(0 3px 5px rgba(225,29,72,0.35))" }} />
               </span>
               <div className="leading-tight">
                 <div className="text-[11px] text-[var(--muted)]">Critical Issue</div>
-                <div className="mt-0.5 text-[20px] font-extrabold leading-none text-[var(--text)] tabular-nums">
+                <div className="mt-0.5 text-[15px] font-bold leading-none text-[var(--text)] tabular-nums">
                   {oppCounts[0]}
                 </div>
                 {typeof selected?.issuesGrowth?.critical === "number" && (
@@ -3757,7 +3757,7 @@ const seoTableProg = Math.max(0, prog);
                 )}
               </div>
             </div>
-            <button className="ml-4 inline-flex items-center gap-1 text-[11px] font-medium text-[#8D96A8] shrink-0 whitespace-nowrap">
+            <button className="ml-4 inline-flex items-center gap-1 text-[11px] font-medium text-[#D45427] shrink-0 whitespace-nowrap">
               Fix Now <ChevronRight size={12} />
             </button>
           </div>
@@ -3766,15 +3766,15 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
             title="View warning issues"
-            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#F59E0B]/50 hover:shadow-md transition"
+            className="flex items-center justify-between rounded-[12px] border border-[#D1D5DB] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#F59E0B]/50 hover:shadow-md transition"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <span className="flex shrink-0 aspect-square h-10 w-10 items-center justify-center rounded-full bg-[#F59E0B] text-white">
-                <AlertTriangle size={20} />
+              <span className="flex shrink-0 h-10 w-10 items-center justify-center">
+                <AlertTriangle size={22} className="text-[#F59E0B]" style={{ filter: "drop-shadow(0 3px 5px rgba(245,158,11,0.35))" }} />
               </span>
               <div className="leading-tight">
                 <div className="text-[11px] text-[var(--muted)]">Waring Issue</div>
-                <div className="mt-0.5 text-[20px] font-extrabold leading-none text-[var(--text)] tabular-nums">
+                <div className="mt-0.5 text-[15px] font-bold leading-none text-[var(--text)] tabular-nums">
                   {oppCounts[1]}
                 </div>
                 {typeof selected?.issuesGrowth?.critical === "number" && (
@@ -3786,7 +3786,7 @@ const seoTableProg = Math.max(0, prog);
                 )}
               </div>
             </div>
-            <button className="ml-4 inline-flex items-center gap-1 text-[11px] font-medium text-[#8D96A8] shrink-0 whitespace-nowrap">
+            <button className="ml-4 inline-flex items-center gap-1 text-[11px] font-medium text-[#D45427] shrink-0 whitespace-nowrap">
               Fix Now <ChevronRight size={12} />
             </button>
           </div>
@@ -3795,15 +3795,15 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
             title="View recommendations"
-            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#10B981]/50 hover:shadow-md transition"
+            className="flex items-center justify-between rounded-[12px] border border-[#D1D5DB] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#10B981]/50 hover:shadow-md transition"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#10B981] text-white">
-                <Lightbulb size={20} />
+              <span className="flex shrink-0 h-10 w-10 items-center justify-center">
+                <Lightbulb size={22} className="text-[#10B981]" style={{ filter: "drop-shadow(0 3px 5px rgba(16,185,129,0.35))" }} />
               </span>
               <div className="leading-tight">
                 <div className="text-[11px] text-[var(--muted)]">Recommendations</div>
-                <div className="mt-0.5 text-[20px] font-extrabold leading-none text-[var(--text)] tabular-nums">
+                <div className="mt-0.5 text-[15px] font-bold leading-none text-[var(--text)] tabular-nums">
                   {oppCounts[2]}
                 </div>
                 {typeof selected?.issuesGrowth?.recommendations === "number" && (
@@ -3815,7 +3815,7 @@ const seoTableProg = Math.max(0, prog);
                 )}
               </div>
             </div>
-            <button className="ml-4 inline-flex items-center gap-1 text-[11px] font-medium text-[#8D96A8] shrink-0 whitespace-nowrap">
+            <button className="ml-4 inline-flex items-center gap-1 text-[11px] font-medium text-[#D45427] shrink-0 whitespace-nowrap">
               View All <ChevronRight size={12} />
             </button>
           </div>
@@ -3824,15 +3824,15 @@ const seoTableProg = Math.max(0, prog);
           <div
             onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
             title="View content opportunities"
-            className="flex items-center justify-between rounded-[18px] border border-[#E7EAF0] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#3B82F6]/50 hover:shadow-md transition"
+            className="flex items-center justify-between rounded-[12px] border border-[#D1D5DB] dark:border-[var(--border)] bg-[var(--card)] px-4 py-3 shadow-sm cursor-pointer hover:border-[#3B82F6]/50 hover:shadow-md transition"
           >
             <div className="flex items-center gap-3 min-w-0">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#3B82F6] text-white">
-                <FileText size={18} />
+              <span className="flex shrink-0 h-10 w-10 items-center justify-center">
+                <FileText size={22} className="text-[#3B82F6]" style={{ filter: "drop-shadow(0 3px 5px rgba(59,130,246,0.35))" }} />
               </span>
               <div className="leading-tight">
                 <div className="text-[11px] text-[var(--muted)]">Content Opportunities</div>
-                <div className="mt-0.5 text-[20px] font-extrabold leading-none text-[var(--text)] tabular-nums">
+                <div className="mt-0.5 text-[15px] font-bold leading-none text-[var(--text)] tabular-nums">
                   {oppCounts[3]}
                 </div>
                 {typeof selected?.issuesGrowth?.contentOpps === "number" && (
@@ -3847,7 +3847,7 @@ const seoTableProg = Math.max(0, prog);
             <button
               type="button"
               onClick={() => document.getElementById('onpage-table')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
-              className="ml-4 inline-flex items-center gap-1 text-[11px] font-medium text-[#8D96A8] shrink-0 whitespace-nowrap hover:text-[var(--text)] transition-colors"
+              className="ml-4 inline-flex items-center gap-1 text-[11px] font-medium text-[#D45427] shrink-0 whitespace-nowrap hover:opacity-70 transition"
             >
               View All <ChevronRight size={12} />
             </button>
