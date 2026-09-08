@@ -1928,7 +1928,7 @@ const seoTableProg = Math.max(0, prog);
         </div>
 
         <div className="pr-14">
-          <h3 className="text-[20px] font-semibold leading-snug text-[var(--text)]">{title}</h3>
+          <h3 className="text-[15px] font-semibold leading-snug text-[#374151] dark:text-[var(--text)]">{title}</h3>
         </div>
 
         <hr className="mt-3 border-t border-[var(--border)]" />
@@ -1947,42 +1947,41 @@ const seoTableProg = Math.max(0, prog);
           </span>
         </div>
 
-        <div className="mt-4 rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
+        <div className="mt-4 rounded-[10px] border border-[var(--border)] bg-[#F5F4F2] dark:bg-[var(--input)] px-4 py-3">
           <div className="grid grid-cols-2 gap-6">
-            <div>
-              <div className="text-[12px] text-[var(--muted)]">Word Count</div>
-              <div className="mt-1 text-[28px] font-semibold leading-none text-[var(--text)] tabular-nums">
+            <div className="text-center">
+              <div className="text-[11px] font-medium text-[var(--muted)]">Word Count</div>
+              <div className="mt-1 text-[19px] font-semibold leading-none text-[var(--text)] tabular-nums">
                 {wordAnim.toLocaleString()}
               </div>
             </div>
-            <div>
-              <div className="text-[12px] text-[var(--muted)]">Keywords</div>
-              <div className="mt-1 text-[28px] font-semibold leading-none text-[var(--text)] tabular-nums">
+            <div className="text-center">
+              <div className="text-[11px] font-medium text-[var(--muted)]">Keywords</div>
+              <div className="mt-1 text-[19px] font-semibold leading-none text-[var(--text)] tabular-nums">
                 {keyAnim}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-4 flex items-center justify-between">
+        <div className="mt-4 flex items-center gap-3">
           <button
             type="button"
             onClick={() => setDetailsItem({ title, score, wordCount, keywords, status })}
-            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-[#CA5223] px-4 py-2 text-[12px] font-medium text-[#D45427] hover:bg-[#CA5223]/5 transition"
           >
             <Eye size={14} /> View Details
           </button>
-<button
-  onClick={() => {
-    const payload = { title }; // you can add more fields later (e.g., type, id, content)
-    window.dispatchEvent(new CustomEvent("content-editor:open", { detail: payload }));
-    onOpenContentEditor?.(payload);
-  }}
-  className="inline-flex items-center gap-2 rounded-[16px] px-4 py-2 text-[13px] font-semibold text-white shadow-sm bg-[image:var(--infoHighlight-gradient)] hover:opacity-90 transition"
->
-  Start <ChevronRight size={16} />
-</button>
-
+          <button
+            onClick={() => {
+              const payload = { title };
+              window.dispatchEvent(new CustomEvent("content-editor:open", { detail: payload }));
+              onOpenContentEditor?.(payload);
+            }}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-[14px] border border-[#CA5223] px-4 py-2 text-[13px] font-semibold text-[#D45427] bg-[linear-gradient(180deg,rgba(245,158,11,0.18),rgba(212,84,39,0.18))] hover:opacity-90 transition"
+          >
+            Start <ChevronRight size={16} />
+          </button>
         </div>
       </div>
     );

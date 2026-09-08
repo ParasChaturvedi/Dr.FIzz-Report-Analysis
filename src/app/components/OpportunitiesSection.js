@@ -1082,13 +1082,20 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
     return (
       <div className="relative rounded-[18px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm">
         <div className="group absolute right-4 top-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full text-[14px] font-semibold shadow-sm tabular-nums bg-[#FFF5D9] border border-[#FDE7B8] text-[#B98500] dark:bg-yellow-900/30 dark:border-yellow-700/50 dark:text-yellow-300">
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-full text-[14px] font-semibold shadow-sm tabular-nums bg-white"
+            style={(() => {
+              const s = Math.round(score * prog);
+              const t = s >= 70 ? { c: "#10B981", b: "#88DCC0" } : s >= 40 ? { c: "#F59E0B", b: "#FACF85" } : { c: "#EF4444", b: "#FCA5A5" };
+              return { border: `1px solid ${t.b}`, color: t.c };
+            })()}
+          >
             {Math.round(score * prog)}
           </div>
         </div>
 
         <div className="pr-14">
-          <h3 className="text-[20px] font-semibold leading-snug text-[var(--text)] break-words">
+          <h3 className="text-[15px] font-semibold leading-snug text-[#374151] dark:text-[var(--text)] break-words">
             {displayTitle}
           </h3>
         </div>
@@ -1097,23 +1104,23 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
 
         <div className="mt-3 flex items-center gap-2 flex-wrap">
           <PriorityBadge score={score} />
-          <span className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[#F6F8FB] dark:bg-[#2a2c2c] px-2.5 py-1 text-[12px] text-[var(--muted)]">
+          <span className="inline-flex items-center gap-2 rounded-[6px] border border-[var(--border)] bg-[#F5F4F2] dark:bg-[var(--input)] px-2.5 py-1 text-[11px] text-[var(--muted)]">
             {status === "Published" ? <Check size={14} /> : <PencilLine size={14} />}
             {status}
           </span>
         </div>
 
-        <div className="mt-4 rounded-[12px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
+        <div className="mt-4 rounded-[8px] border border-[var(--border)] bg-[#F5F4F2] dark:bg-[var(--input)] px-4 py-3">
           <div className="grid grid-cols-2 gap-6">
-            <div>
-              <div className="text-[12px] text-[var(--muted)]">Word Count</div>
-              <div className="mt-1 text-[28px] font-semibold leading-none text-[var(--text)] tabular-nums">
+            <div className="text-center">
+              <div className="text-[11px] font-medium text-[var(--muted)]">Word Count</div>
+              <div className="mt-1 text-[19px] font-semibold leading-none text-[var(--text)] tabular-nums">
                 {wc.toLocaleString()}
               </div>
             </div>
-            <div>
-              <div className="text-[12px] text-[var(--muted)]">Keywords</div>
-              <div className="mt-1 text-[28px] font-semibold leading-none text-[var(--text)] tabular-nums">
+            <div className="text-center">
+              <div className="text-[11px] font-medium text-[var(--muted)]">Keywords</div>
+              <div className="mt-1 text-[19px] font-semibold leading-none text-[var(--text)] tabular-nums">
                 {kws}
               </div>
             </div>
@@ -1138,7 +1145,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
                 );
               } catch {}
             }}
-            className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-2.5 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#CA5223] px-2.5 py-2 text-[12px] font-medium text-[#D45427] hover:bg-[#CA5223]/5 transition"
           >
             <ListTodo size={14} /> Add to Tasks
           </button>
@@ -1154,7 +1161,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
                 type,
               })
             }
-            className="inline-flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-[12px] font-medium text-[var(--muted)] hover:border-[#F97316]/40 hover:text-[var(--text)] transition"
+            className="inline-flex items-center gap-2 rounded-full border border-[#CA5223] px-3 py-2 text-[12px] font-medium text-[#D45427] hover:bg-[#CA5223]/5 transition"
           >
             <Eye size={14} /> View Details
           </button>
@@ -1189,7 +1196,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
               };
               setStartOpen(true);
             }}
-            className="inline-flex items-center gap-2 rounded-[14px] px-4 py-2 text-[13px] font-semibold text-white shadow-sm bg-[image:var(--infoHighlight-gradient)] hover:opacity-90 transition"
+            className="inline-flex items-center gap-2 rounded-[14px] border border-[#CA5223] px-4 py-2 text-[13px] font-semibold text-[#D45427] bg-[linear-gradient(180deg,rgba(245,158,11,0.18),rgba(212,84,39,0.18))] hover:opacity-90 transition"
           >
             Start <ChevronRight size={16} />
           </button>
@@ -1222,10 +1229,10 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
       <section className="mb-10 grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4">
           <div className="mb-3 flex items-center gap-2">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#FDE7B8] bg-[#FFF5D9] text-[#B98500] dark:bg-yellow-900/30 dark:border-yellow-700/50 dark:text-yellow-300">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#FFA615] text-white shadow-sm">
               <BookOpen size={14} />
             </span>
-            <span className="text-[13px] font-semibold">BLOG</span>
+            <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)]">BLOG</span>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {(blogCards.length ? blogCards.slice(0, 2) : [{}, {}]).map((b, i) => (
@@ -1236,10 +1243,10 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
 
         <div className="rounded-[16px] border border-[var(--border)] bg-[var(--card)] p-4">
           <div className="mb-3 flex items-center gap-2">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-[#D1FAE5] bg-[#EAF8F1] text-[#178A5D] dark:bg-emerald-900/30 dark:border-emerald-700/50 dark:text-emerald-300">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#FFA615] text-white shadow-sm">
               <FileText size={14} />
             </span>
-            <span className="text-[13px] font-semibold">PAGES</span>
+            <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)]">PAGES</span>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {(pageCards.length ? pageCards.slice(0, 2) : [{}, {}]).map((p, i) => (
