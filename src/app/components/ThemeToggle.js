@@ -86,7 +86,7 @@ export default function ThemeToggle({ inline = false }) {
           }}
         >
           {isDark ? (
-            <MoonIcon size={20} color="#FFFFFF" />
+            <MoonIcon size={20} color="#191A1A" />
           ) : (
             <SunIcon size={20} color="#FFFFFF" />
           )}
