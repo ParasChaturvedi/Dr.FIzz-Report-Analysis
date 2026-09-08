@@ -54,7 +54,7 @@ export default function DashboardHeader({ onChatWithAi, aiLoading = false, canCh
     <header
       className="
         sticky top-0 z-30
-        bg-[var(--bg-panel)]
+        bg-[var(--card)]
         -mx-4 sm:-mx-6 lg:-mx-8
         px-4 sm:px-6 lg:px-8
         pt-3 pb-3
