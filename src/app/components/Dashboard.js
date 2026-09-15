@@ -2439,6 +2439,14 @@ const seoTableProg = Math.max(0, prog);
           <h2 className="text-[16px] font-bold text-[var(--text)] ml-1">
             Technical SEO
           </h2>
+          <button
+            type="button"
+            onClick={() => setSiteHealthOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-[#F97316] bg-[#FFF7ED] dark:bg-[#F97316]/10 px-3.5 py-1.5 text-[12px] font-semibold text-[#C05621] dark:text-[#FB923C] hover:bg-[#FFE7D1] dark:hover:bg-[#F97316]/20 transition whitespace-nowrap"
+          >
+            <SlidersHorizontal size={14} />
+            Switch to Technical SEO
+          </button>
         </div>
 
         <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
