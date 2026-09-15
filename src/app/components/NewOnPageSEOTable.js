@@ -123,6 +123,13 @@ export default function NewOnPageSEOTable({ rows, progress = 1, onOpenContentEdi
   // Which "Generate" pills the user has clicked — keyed by keyword so state survives sorting.
   const [activeMap, setActiveMap] = useState({});
 
+  // The AI's recommended content type for a row (Figma "Preference"): Transactional
+  // intent → a landing Page, everything else → a Blog guide. The recommended type's
+  // "Generate" renders as the highlighted orange pill by default (matching Figma);
+  // the other renders as plain text. Both remain clickable.
+  const recommendedKind = (row) =>
+    String(row?.type || "").toLowerCase().startsWith("trans") ? "page" : "blog";
+
   // Real action: mark the pill active and open the Content Editor pre-loaded with this
   // keyword — same flow the "Start" buttons on the opportunity cards use.
   const handleGenerate = (kind, row) => {
@@ -240,13 +247,13 @@ export default function NewOnPageSEOTable({ rows, progress = 1, onOpenContentEdi
                 {/* Blog / Page buttons */}
                 <div className="flex items-center gap-2 md:justify-center">
                   <span className="md:hidden text-[11px] font-semibold text-[var(--muted)]">Blog:</span>
-                  <DemoPill active={!!activeMap[row.keyword]?.blog} onToggle={() => handleGenerate("blog", row)}>
+                  <DemoPill active={recommendedKind(row) === "blog" || !!activeMap[row.keyword]?.blog} onToggle={() => handleGenerate("blog", row)}>
                     Generate
                   </DemoPill>
                 </div>
                 <div className="flex items-center gap-2 md:justify-center">
                   <span className="md:hidden text-[11px] font-semibold text-[var(--muted)]">Page:</span>
-                  <DemoPill active={!!activeMap[row.keyword]?.page} onToggle={() => handleGenerate("page", row)}>
+                  <DemoPill active={recommendedKind(row) === "page" || !!activeMap[row.keyword]?.page} onToggle={() => handleGenerate("page", row)}>
                     Generate
                   </DemoPill>
                 </div>
