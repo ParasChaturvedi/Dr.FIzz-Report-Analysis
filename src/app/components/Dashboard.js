@@ -2239,9 +2239,7 @@ const seoTableProg = Math.max(0, prog);
           {/* Domain Rating */}
           <div
             id="df-google-panel"
-            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
-            title="View domain authority details"
-            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2297,9 +2295,7 @@ const seoTableProg = Math.max(0, prog);
 
           {/* Referring Domains */}
           <div
-            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
-            title="View referring-domains details"
-            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2322,7 +2318,6 @@ const seoTableProg = Math.max(0, prog);
                 <button
                   type="button"
                   title="Open referring-domains details"
-                  onClick={() => document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#CA5223] bg-[#F5F4F2] dark:bg-[var(--input)] text-[#CA5223] hover:bg-[#CA5223]/10 transition"
                 >
                   <Share2 size={14} />
@@ -2379,9 +2374,7 @@ const seoTableProg = Math.max(0, prog);
 
           {/* Total Backlinks */}
           <div
-            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
-            title="View backlinks details"
-            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
@@ -2400,7 +2393,6 @@ const seoTableProg = Math.max(0, prog);
                 <button
                   type="button"
                   title="Open backlink details"
-                  onClick={() => document.getElementById('authority-link-building')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-[#CA5223] bg-[#F5F4F2] dark:bg-[var(--input)] text-[#CA5223] hover:bg-[#CA5223]/10 transition"
                 >
                   <Maximize2 size={14} />
@@ -2447,14 +2439,6 @@ const seoTableProg = Math.max(0, prog);
           <h2 className="text-[16px] font-bold text-[var(--text)] ml-1">
             Technical SEO
           </h2>
-          <button
-            type="button"
-            onClick={() => document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' })}
-            className="inline-flex items-center gap-1.5 rounded-full border border-[#F97316] bg-[#FFF7ED] dark:bg-[#F97316]/10 px-3.5 py-1.5 text-[12px] font-semibold text-[#C05621] dark:text-[#FB923C] hover:bg-[#FFE7D1] dark:hover:bg-[#F97316]/20 transition whitespace-nowrap"
-          >
-            <SlidersHorizontal size={14} />
-            Switch to Technical SEO
-          </button>
         </div>
 
         <section className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -2526,9 +2510,7 @@ const seoTableProg = Math.max(0, prog);
 
           {/* Core Web Vitals */}
           <div
-            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
-            title="View technical issues"
-            className="flex flex-col rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="flex flex-col rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition"
           >
             {(() => {
               // Google CWV thresholds
@@ -2747,9 +2729,7 @@ const seoTableProg = Math.max(0, prog);
           
 {/* Page Speed Scores */}
           <div
-            onClick={(e) => { if (e.target.closest('button, a')) return; document.getElementById('technical-issues')?.scrollIntoView({ behavior: 'auto', block: 'start' }); }}
-            title="View technical issues"
-            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm cursor-pointer hover:border-[#F97316]/40 hover:shadow-md transition"
+            className="rounded-[12px] border border-[var(--border)] bg-[var(--card)] p-4 shadow-sm transition"
           >
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-2">
