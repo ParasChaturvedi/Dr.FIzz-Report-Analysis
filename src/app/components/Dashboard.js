@@ -2246,8 +2246,9 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Star size={16} />
                 </span>
-                <span className="text-[13px] font-semibold text-[#111827] dark:text-[var(--text)] leading-relaxed">
+                <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#111827] dark:text-[var(--text)] leading-relaxed">
                   Domain Rating
+                  <HelpCircle size={13} className="text-[#9CA3AF] dark:text-[var(--muted)] shrink-0" strokeWidth={2} />
                 </span>
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
@@ -2306,8 +2307,9 @@ const seoTableProg = Math.max(0, prog);
                     <path d="M6.05755 4.54316C6.05755 5.26611 6.34474 5.95945 6.85594 6.47066C7.36715 6.98186 8.06049 7.26906 8.78344 7.26906C9.5064 7.26906 10.1997 6.98186 10.7109 6.47066C11.2221 5.95945 11.5093 5.26611 11.5093 4.54316C11.5093 3.82021 11.2221 3.12687 10.7109 2.61566C10.1997 2.10446 9.5064 1.81726 8.78344 1.81726C8.06049 1.81726 7.36715 2.10446 6.85594 2.61566C6.34474 3.12687 6.05755 3.82021 6.05755 4.54316Z" fill="currentColor" stroke="currentColor" strokeWidth="1.21151" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </span>
-                <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
+                <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
                   Referring Domains
+                  <HelpCircle size={13} className="text-[#9CA3AF] dark:text-[var(--muted)] shrink-0" strokeWidth={2} />
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -2381,8 +2383,9 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Link2 size={16} />
                 </span>
-                <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
+                <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
                   Total Backlinks
+                  <HelpCircle size={13} className="text-[#9CA3AF] dark:text-[var(--muted)] shrink-0" strokeWidth={2} />
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -2461,7 +2464,7 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Activity size={16} />
                 </span>
-                <span className="flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
+                <span className="flex items-center gap-1 text-[12px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
                   Site Health Score
                 </span>
               </div>
@@ -2744,7 +2747,7 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Rocket size={16} />
                 </span>
-                <span className="flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Page Speed Scores</span>
+                <span className="flex items-center gap-1 text-[12px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Page Speed Scores</span>
               </div>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                 <span className="inline-block h-2 w-2 rounded-full" style={{ background: psBadge.color }} />
@@ -2974,7 +2977,7 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Users size={16} />
                 </span>
-                <span className="flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Organic traffic</span>
+                <span className="flex items-center gap-1 text-[12px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Organic traffic<HelpCircle size={13} className="text-[#9CA3AF] dark:text-[var(--muted)] shrink-0" strokeWidth={2} /></span>
                 {OT_GROWTH != null && (
                   <span className="ml-2 inline-flex items-center gap-1.5 rounded-full border border-[#D1D5DB] dark:border-[var(--border)] bg-[#FCFCFC] dark:bg-[var(--card)] px-2 py-0.5 text-[11px] font-medium text-[#4B5563] dark:text-[var(--muted)]">
                     <span className="h-2 w-2 rounded-full" style={{ background: otBadge.color }} />
@@ -3055,7 +3058,7 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <KeyRound size={16} />
                 </span>
-                <span className="flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Organic Keywords</span>
+                <span className="flex items-center gap-1 text-[12px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Organic Keywords<HelpCircle size={13} className="text-[#9CA3AF] dark:text-[var(--muted)] shrink-0" strokeWidth={2} /></span>
               </div>
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--muted)]">
                 <SquareArrowOutUpRight size={16} />
@@ -3133,8 +3136,9 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Goal size={16} />
                 </span>
-                <span className="flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
+                <span className="flex items-center gap-1 text-[12px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">
                   Leads
+                  <HelpCircle size={13} className="text-[#9CA3AF] dark:text-[var(--muted)] shrink-0" strokeWidth={2} />
                 </span>
               </div>
 
@@ -3297,7 +3301,7 @@ const seoTableProg = Math.max(0, prog);
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
                   <Star size={16} strokeWidth={2} />
                 </span>
-                <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">SERP feature</span>
+                <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">SERP feature<HelpCircle size={13} className="text-[#9CA3AF] dark:text-[var(--muted)] shrink-0" strokeWidth={2} /></span>
               </div>
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--muted)]">
                 <SlidersHorizontal size={16} />
@@ -3348,7 +3352,7 @@ const seoTableProg = Math.max(0, prog);
       <span className="inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-[#FFA615] text-white shadow-sm">
         <Star size={16} strokeWidth={2} />
       </span>
-      <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Ai SEO Matrix</span>
+      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-[#374151] dark:text-[var(--text)] leading-relaxed">Ai SEO Matrix<HelpCircle size={13} className="text-[#9CA3AF] dark:text-[var(--muted)] shrink-0" strokeWidth={2} /></span>
     </div>
     <span className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[var(--border)] text-[var(--muted)]">
       <SlidersHorizontal size={16} />

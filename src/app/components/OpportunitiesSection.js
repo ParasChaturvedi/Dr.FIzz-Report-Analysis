@@ -12,6 +12,7 @@ import {
   PencilLine,
   X,
   ListTodo,
+  HelpCircle,
 } from "lucide-react";
 
 /* ============================================================
@@ -1232,7 +1233,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#FFA615] text-white shadow-sm">
               <BookOpen size={14} />
             </span>
-            <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)]">BLOG</span>
+            <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)]">BLOG<HelpCircle size={13} className="text-[#9CA3AF] dark:text-[var(--muted)] shrink-0" strokeWidth={2} /></span>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {(blogCards.length ? blogCards.slice(0, 2) : [{}, {}]).map((b, i) => (
@@ -1246,7 +1247,7 @@ export default function OpportunitiesSection({ onOpenContentEditor, onViewDetail
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] bg-[#FFA615] text-white shadow-sm">
               <FileText size={14} />
             </span>
-            <span className="text-[13px] font-semibold text-[#374151] dark:text-[var(--text)]">PAGES</span>
+            <span className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#374151] dark:text-[var(--text)]">PAGES<HelpCircle size={13} className="text-[#9CA3AF] dark:text-[var(--muted)] shrink-0" strokeWidth={2} /></span>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {(pageCards.length ? pageCards.slice(0, 2) : [{}, {}]).map((p, i) => (
