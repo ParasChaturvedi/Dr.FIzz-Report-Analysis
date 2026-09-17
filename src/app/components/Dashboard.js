@@ -3634,7 +3634,7 @@ const seoTableProg = Math.max(0, prog);
 
   {localSeoOpen && (
     <LocalSeoScreen
-      data={{ domain, gmb: seo?.gmbCheck || seo?.gmb || null }}
+      data={{ domain, gmbCheck: seo?.gmbCheck || null }}
       onBack={() => setLocalSeoOpen(false)}
       onChatWithAi={() => { setLocalSeoOpen(false); handleAiAnalyze?.(); }}
     />

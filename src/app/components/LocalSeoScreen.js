@@ -24,15 +24,23 @@ const TITLE = "inline-flex items-center gap-1 text-[12px] font-semibold text-[#3
 const VALUE = "text-[24px] font-semibold leading-none text-[var(--text)] tabular-nums";
 
 export default function LocalSeoScreen({ data = {}, onBack, onChatWithAi }) {
-  const { domain = "", gmb = null } = data;
+  const { domain = "", gmbCheck = null } = data;
   const scope = domain ? `https://${domain}` : "—";
-  const found = !!(gmb && (gmb.found || gmb.name || gmb.rating != null));
 
-  const rating = gmb?.rating ?? null;
-  const reviews = gmb?.reviewCount ?? null;
-  const completeness = gmb?.completeness ?? null;
-  const unreplied = gmb?.unrepliedReviewCount ?? null;
-  const directories = Array.isArray(gmb?.directories) ? gmb.directories : [];
+  // Real gmbCheck shape: { searchedAs, gmb: {found, name, address, phone, website,
+  // rating, reviewCount, isVerified, hoursAvailable, photos, unrepliedReviewCount},
+  // directories: [...], listedDirectoryCount, completeness: number | {score}, ... }
+  const g = gmbCheck?.gmb || {};
+  const found = !!(gmbCheck && (g.found || g.name || g.rating != null));
+
+  const rating = g.rating ?? null;
+  const reviews = g.reviewCount ?? null;
+  const completeness = typeof gmbCheck?.completeness === "number"
+    ? gmbCheck.completeness
+    : (gmbCheck?.completeness?.score ?? null);
+  const unreplied = g.unrepliedReviewCount ?? null;
+  const directories = Array.isArray(gmbCheck?.directories) ? gmbCheck.directories : [];
+  const gmb = { name: g.name, address: g.address, phone: g.phone, website: g.website };
 
   const StatCard = ({ Icon, title, value, suffix, sub }) => (
     <div className={CARD}>
