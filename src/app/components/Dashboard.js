@@ -11,6 +11,7 @@ import TasksDrawer from "./TasksDrawer";
 import SerpFeatures from "./SerpFeatures";
 import SiteHealth from "./SiteHealth";
 import BacklinksScreen from "./BacklinksScreen";
+import CompAnalysisScreen from "./CompAnalysisScreen";
 
 // --- Prefill content templates for the 4 "Top On-Page Content Opportunities" cards ---
 const PREFILL_BY_TITLE = {
@@ -665,18 +666,22 @@ const [serpScreen, setSerpScreen] = useState(null); // null | { feature }
 const [siteHealthOpen, setSiteHealthOpen] = useState(false);
 const [siteHealthIssue, setSiteHealthIssue] = useState(null); // selected issue for detail modal
 
-// Full Backlinks screen (opened from the sidebar "Backlinks" nav).
+// Full screens opened from the sidebar nav.
 const [backlinksOpen, setBacklinksOpen] = useState(false);
+const [compAnalysisOpen, setCompAnalysisOpen] = useState(false);
 
-// Sidebar "Site Health" nav opens the full Site Health screen; "Backlinks" opens the Backlinks screen.
+// Sidebar nav → full screens.
 useEffect(() => {
   const openSH = () => setSiteHealthOpen(true);
   const openBL = () => setBacklinksOpen(true);
+  const openCA = () => setCompAnalysisOpen(true);
   window.addEventListener("app:open-site-health", openSH);
   window.addEventListener("app:open-backlinks", openBL);
+  window.addEventListener("app:open-comp-analysis", openCA);
   return () => {
     window.removeEventListener("app:open-site-health", openSH);
     window.removeEventListener("app:open-backlinks", openBL);
+    window.removeEventListener("app:open-comp-analysis", openCA);
   };
 }, []);
 
@@ -3540,6 +3545,20 @@ const seoTableProg = Math.max(0, prog);
       }}
       onBack={() => setBacklinksOpen(false)}
       onChatWithAi={() => { setBacklinksOpen(false); handleAiAnalyze?.(); }}
+    />
+  )}
+
+  {compAnalysisOpen && (
+    <CompAnalysisScreen
+      data={{
+        domain,
+        clientDR: DR_TARGET,
+        clientKeywords: selected?.organicKeywords?.total ?? seo?.domainRankOverview?.organicKeywords ?? null,
+        clientTraffic: selected?.organicTraffic?.monthly ?? seo?.domainRankOverview?.organicTraffic ?? null,
+        competitors: Array.isArray(seo?.competitorDomains) ? seo.competitorDomains : [],
+      }}
+      onBack={() => setCompAnalysisOpen(false)}
+      onChatWithAi={() => { setCompAnalysisOpen(false); handleAiAnalyze?.(); }}
     />
   )}
 
