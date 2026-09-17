@@ -10,6 +10,7 @@ import DashboardHeader from "./DashboardHeader";
 import TasksDrawer from "./TasksDrawer";
 import SerpFeatures from "./SerpFeatures";
 import SiteHealth from "./SiteHealth";
+import BacklinksScreen from "./BacklinksScreen";
 
 // --- Prefill content templates for the 4 "Top On-Page Content Opportunities" cards ---
 const PREFILL_BY_TITLE = {
@@ -664,11 +665,19 @@ const [serpScreen, setSerpScreen] = useState(null); // null | { feature }
 const [siteHealthOpen, setSiteHealthOpen] = useState(false);
 const [siteHealthIssue, setSiteHealthIssue] = useState(null); // selected issue for detail modal
 
-// Sidebar "Site Health" nav opens the full Site Health screen.
+// Full Backlinks screen (opened from the sidebar "Backlinks" nav).
+const [backlinksOpen, setBacklinksOpen] = useState(false);
+
+// Sidebar "Site Health" nav opens the full Site Health screen; "Backlinks" opens the Backlinks screen.
 useEffect(() => {
-  const open = () => setSiteHealthOpen(true);
-  window.addEventListener("app:open-site-health", open);
-  return () => window.removeEventListener("app:open-site-health", open);
+  const openSH = () => setSiteHealthOpen(true);
+  const openBL = () => setBacklinksOpen(true);
+  window.addEventListener("app:open-site-health", openSH);
+  window.addEventListener("app:open-backlinks", openBL);
+  return () => {
+    window.removeEventListener("app:open-site-health", openSH);
+    window.removeEventListener("app:open-backlinks", openBL);
+  };
 }, []);
 
 const fetchGa4Report = async (days = periodDays) => {
@@ -3514,6 +3523,23 @@ const seoTableProg = Math.max(0, prog);
       }}
       onViewIssue={(iss) => setSiteHealthIssue(iss)}
       onBack={() => setSiteHealthOpen(false)}
+    />
+  )}
+
+  {backlinksOpen && (
+    <BacklinksScreen
+      data={{
+        domain,
+        domainRating: DR_TARGET,
+        industryAvg: INDUSTRY_AVG,
+        referringDomains: RD_TARGET,
+        totalBacklinks: TB_TARGET,
+        dofollowPct: selected?.dofollowPct ?? null,
+        nofollowPct: selected?.nofollowPct ?? null,
+        domains: seo?.dataForSeo?.backlinkDomains || [],
+      }}
+      onBack={() => setBacklinksOpen(false)}
+      onChatWithAi={() => { setBacklinksOpen(false); handleAiAnalyze?.(); }}
     />
   )}
 

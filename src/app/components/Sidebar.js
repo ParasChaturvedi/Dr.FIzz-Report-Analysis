@@ -102,7 +102,11 @@ export default function Sidebar({
               Icon={Activity}
               onClick={() => { try { window.dispatchEvent(new Event("app:open-site-health")); } catch {} }}
             />
-            <NavItem label="Backlinks" Icon={Link2} disabled />
+            <NavItem
+              label="Backlinks"
+              Icon={Link2}
+              onClick={() => { try { window.dispatchEvent(new Event("app:open-backlinks")); } catch {} }}
+            />
             <NavItem label="Comp analysis" Icon={LineChart} disabled />
             <NavItem label="Reports" Icon={BarChart2} disabled />
           </>
