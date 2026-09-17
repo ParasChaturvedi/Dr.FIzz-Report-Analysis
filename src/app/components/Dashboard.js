@@ -3664,6 +3664,9 @@ const seoTableProg = Math.max(0, prog);
         domain,
         leads: selected?.leads || null,
         traffic: selected?.organicTraffic?.monthly ?? seo?.domainRankOverview?.organicTraffic ?? null,
+        lcp: LCP_TARGET || null,
+        inp: INP_TARGET || null,
+        cls: CLS_TARGET || null,
       }}
       onBack={() => setCroOpen(false)}
       onChatWithAi={() => { setCroOpen(false); handleAiAnalyze?.(); }}
