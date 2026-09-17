@@ -3647,7 +3647,12 @@ const seoTableProg = Math.max(0, prog);
 
   {internalLinkingOpen && (
     <InternalLinkingScreen
-      data={{ domain, audit: seo?.onPageAudit || selected?.onPageAudit || null }}
+      data={{
+        domain,
+        authorityScore: DR_TARGET,
+        gscConnected: !!googleStatus?.connected,
+        audit: seo?.onPageAudit || selected?.onPageAudit || null,
+      }}
       onBack={() => setInternalLinkingOpen(false)}
       onChatWithAi={() => { setInternalLinkingOpen(false); handleAiAnalyze?.(); }}
     />
