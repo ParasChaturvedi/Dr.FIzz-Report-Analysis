@@ -380,80 +380,74 @@ function WebsiteStatsCard({ website, stats }) {
   ];
 
   return (
-    <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-5 dark:bg-[var(--extra-input-dark)] dark:border-[var(--extra-border-dark)]">
+    <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-4 dark:bg-[var(--extra-input-dark)] dark:border-[var(--extra-border-dark)]">
       {/* header */}
-      <div className="flex items-center justify-between">
-        <div className="text-[13px] text-gray-800 dark:text-[var(--text)] font-semibold">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 truncate text-[13px] text-gray-800 dark:text-[var(--text)] font-semibold">
           Website :
-          <span className="ml-2 text-[13px] font-semibold text-[#d45427]">
-            {website}
-          </span>
+          <span className="ml-1.5 font-semibold text-[#d45427]">{website}</span>
         </div>
         <span
-          className={`inline-flex items-center rounded-full text-[11px] font-semibold px-2.5 py-[3px] ${badgeClass}`}
+          className={`shrink-0 inline-flex items-center rounded-full text-[11px] font-semibold px-2.5 py-[3px] ${badgeClass}`}
         >
           {badge?.label || "Good"}
         </span>
       </div>
 
-      {/* stats */}
-      <div className="mt-3 rounded-xl bg-white p-4 dark:bg-[var(--extra-input-dark)]">
-        <div className="flex items-stretch divide-x divide-gray-200 dark:divide-[var(--extra-border-dark)]">
-          {items.map((it, idx) => {
-            const hasValue = Number.isFinite(it.value);
-            const g =
-              typeof it.growth === "number" && Number.isFinite(it.growth)
-                ? it.growth
-                : null;
-            const showRealGrowth = g !== null;
-            // A trend arrow only means something with REAL growth data. Never guess a
-            // direction from the value itself (the old `value >= 70` heuristic was fake).
-            const arrowUp = showRealGrowth ? g >= 0 : null;
+      {/* stats — equal 3-col grid so columns stay centered and never overflow */}
+      <div className="mt-4 grid grid-cols-3 divide-x divide-gray-200 dark:divide-[var(--extra-border-dark)]">
+        {items.map((it, idx) => {
+          const hasValue = Number.isFinite(it.value);
+          const g =
+            typeof it.growth === "number" && Number.isFinite(it.growth)
+              ? it.growth
+              : null;
+          const showRealGrowth = g !== null;
+          // A trend arrow only means something with REAL growth data. Never guess a
+          // direction from the value itself (the old `value >= 70` heuristic was fake).
+          const arrowUp = showRealGrowth ? g >= 0 : null;
 
-            return (
-              <div key={idx} className="flex-1 px-5 text-center">
-                <div className="text-[13px] leading-[16px] text-gray-600 dark:text-[var(--muted)] font-medium">
-                  {it.label}
+          return (
+            <div key={idx} className="min-w-0 px-2 text-center">
+              <div className="text-[12px] leading-[15px] text-gray-600 dark:text-[var(--muted)] font-medium">
+                {it.label}
+              </div>
+
+              <div className="mt-1.5 flex items-baseline justify-center gap-1">
+                <div className="text-[22px] leading-none font-extrabold text-gray-900 dark:text-[var(--text)]">
+                  {hasValue ? (
+                    formatNumber(it.value)
+                  ) : loading ? (
+                    <span className="inline-block h-[20px] w-12 rounded-md bg-gray-200 dark:bg-white/10 animate-pulse align-middle" />
+                  ) : (
+                    "--"
+                  )}
                 </div>
 
-                <div className="mt-2 mb-1.5 flex items-center justify-center gap-2">
-                  <div className="text-[clamp(20px,3vw,23px)] leading-tight font-extrabold text-gray-900 dark:text-[var(--text)]">
-                    {hasValue ? (
-                      formatNumber(it.value)
-                    ) : loading ? (
-                      <span className="inline-block h-[22px] w-14 rounded-md bg-gray-200 dark:bg-white/10 animate-pulse align-middle" />
-                    ) : (
-                      "--"
-                    )}
-                  </div>
+                {showRealGrowth ? (
+                  arrowUp ? (
+                    <span className="text-emerald-500 text-[13px] leading-none">↑</span>
+                  ) : (
+                    <span className="text-red-500 text-[13px] leading-none">↓</span>
+                  )
+                ) : null}
+              </div>
 
-                  {showRealGrowth ? (
-                    arrowUp ? (
-                      <span className="text-emerald-400 text-[14px]">↑</span>
-                    ) : (
-                      <span className="text-red-400 text-[14px]">↓</span>
-                    )
-                  ) : null}
-                </div>
-
+              {(showRealGrowth || loading) && (
                 <div
-                  className="text-[13px] text-gray-500 dark:text-[var(--muted)]"
+                  className="mt-1 text-[12px] text-gray-500 dark:text-[var(--muted)]"
                   suppressHydrationWarning
                 >
                   {showRealGrowth ? (
                     `${Math.abs(g)}%`
-                  ) : loading ? (
-                    <span className="inline-block h-[10px] w-8 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
                   ) : (
-                    // No historical/growth data → show nothing. Never fabricate a number here
-                    // (this slot used to render Math.random() 26–100, which read as real data).
-                    ""
+                    <span className="inline-block h-[10px] w-8 rounded bg-gray-200 dark:bg-white/10 animate-pulse" />
                   )}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
