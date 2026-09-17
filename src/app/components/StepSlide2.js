@@ -286,6 +286,10 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit, varia
 
   /* ---------------- Auto-scroll to bottom (matches Step1Slide1 intent) ---------------- */
   useEffect(() => {
+    // Onboarding (Figma 3-column) variant: never auto-scroll — the selector is a
+    // click-to-pick grid with a fixed bottom bar, so scrolling to the tail on every
+    // pick just yanks the screen to the end. Only the default flow wants this.
+    if (variant === "onboarding") return;
     // Do NOT yank the scroll while a dropdown is OPEN — the user is multi-selecting categories
     // and every pick re-fired scrollIntoView, making the screen jump on each option.
     if (openDropdown !== null) return;
@@ -303,6 +307,7 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit, varia
     customCategory,
     showSummary,
     openDropdown,
+    variant,
   ]);
 
   const kickOppsPrefetchInBackground = () => {
