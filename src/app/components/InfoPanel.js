@@ -851,12 +851,12 @@ export default function InfoPanel({
   const renderStep5Slide2Content = renderStep5Content;
 
   /* -------------------- Render -------------------- */
-  // Onboarding (Figma node 1-11401) → warm peach info-panel bg; otherwise the
-  // original brand-gradient behavior is kept exactly.
-  const bgClass =
-    variant === "onboarding"
-      ? "bg-[#F5C08E]"
-      : "bg-[image:var(--brand-gradient)] bg-no-repeat bg-[size:100%_100%] lg:bg-[image:none]";
+  // Onboarding (Figma node 1-11401) → warm peach info-panel gradient (applied via
+  // inline style below); otherwise the original brand-gradient behavior is kept.
+  const onboardingRail = variant === "onboarding";
+  const bgClass = onboardingRail
+    ? ""
+    : "bg-[image:var(--brand-gradient)] bg-no-repeat bg-[size:100%_100%] lg:bg-[image:none]";
   const basePos =
     "fixed top-0 h-screen z-40 flex flex-col " +
     bgClass + " " +
@@ -877,6 +877,7 @@ export default function InfoPanel({
       <div
         ref={panelRef}
         aria-hidden={!isOpen}
+        style={onboardingRail ? { backgroundImage: "linear-gradient(180deg, #EEB390 0%, #F9C88C 100%)" } : undefined}
         className={`${basePos} transition-transform duration-300 ease-in-out ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
