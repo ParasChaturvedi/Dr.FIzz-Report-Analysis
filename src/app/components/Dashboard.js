@@ -3630,6 +3630,7 @@ const seoTableProg = Math.max(0, prog);
         top3: selected?.organicKeywords?.top3 ?? null,
         top10: selected?.organicKeywords?.top10 ?? null,
         top100: selected?.organicKeywords?.top100 ?? null,
+        serpFeatures: seo?.dataForSeo?.serpFeatures || null,
       }}
       onBack={() => setRankTrackerOpen(false)}
       onChatWithAi={() => { setRankTrackerOpen(false); handleAiAnalyze?.(); }}
