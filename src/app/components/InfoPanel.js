@@ -228,7 +228,7 @@ function VideoModal({ open, title, url, onClose, onExpand }) {
 
   return createPortal(
     <div
-      className="fixed top-0 right-0 bottom-0 left-0 lg:left-[510px] z-[9999] grid place-items-center bg-black/50 p-4"
+      className="fixed top-0 right-0 bottom-0 left-0 lg:left-[424px] z-[9999] grid place-items-center bg-black/50 p-4"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
     >
       <div ref={rootRef} className="relative w-full max-w-[880px] overflow-hidden rounded-2xl bg-[#0d0d0d] shadow-2xl">
@@ -1080,7 +1080,7 @@ export default function InfoPanel({
     bgClass + " " +
     "left-[56px] w-[calc(100vw-56px)] " +
     "md:left-[72px] md:w-[calc(100vw-72px)] " +
-    "lg:left-[80px] lg:w-[430px]";
+    "lg:left-[80px] lg:w-[344px]";
 
   return (
     <>

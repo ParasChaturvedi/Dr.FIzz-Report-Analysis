@@ -473,7 +473,7 @@ export default function Home() {
 
   const mainOffsetClass =
     isInfoOpen || isPinned
-      ? "ml-[48px] sm:ml-[56px] md:ml-[72px] lg:ml-[510px]"
+      ? "ml-[48px] sm:ml-[56px] md:ml-[72px] lg:ml-[424px]"
       : "ml-[48px] sm:ml-[56px] md:ml-[72px] lg:ml-[80px]";
 
   // Onboarding steps (1–6 + report "5b") use the Figma orange rail; the dashboard
