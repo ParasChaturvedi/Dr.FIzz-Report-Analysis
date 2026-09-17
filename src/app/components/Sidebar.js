@@ -4,6 +4,7 @@ import {
   BarChart2,
   PlusSquare,
   Clock,
+  History,
   Grid,
   LayoutDashboard,
   Activity,
@@ -67,6 +68,79 @@ export default function Sidebar({
     const p = s.split(/[.\s@]+/).filter(Boolean);
     return ((p[0]?.[0] || "") + (p[1]?.[0] || "")).toUpperCase() || null;
   })();
+
+  // ── Onboarding orange rail (Figma node 1-11401) ────────────────────────────
+  // Steps 1–6 use this rail instead of the dashboard nav: orange gradient bg,
+  // DARK icons/labels, logo, Info (toggles the info panel) / New / History /
+  // divider / Others, and the same Upgrade + Profile actions. Early return so the
+  // "default" (dashboard) and "editor" sidebars are left 100% untouched.
+  if (variant === "onboarding") {
+    const railItem = (Icon, label, active, onClick) => (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`w-full mb-6 flex flex-col items-center gap-1 outline-none text-[#191A1A] transition-opacity duration-200 ${active ? "opacity-100" : "opacity-45 hover:opacity-100"}`}
+      >
+        <span className="grid place-items-center h-9 w-9 md:h-10 md:w-10">
+          <Icon className="h-[20px] w-[20px] md:h-[22px] md:w-[22px] lg:h-[26px] lg:w-[26px]" />
+        </span>
+        <span className={`leading-none mt-1 text-[10px] md:text-[12px] lg:text-[14px] ${active ? "font-semibold" : ""}`}>{label}</span>
+      </button>
+    );
+    return (
+      <aside
+        className="fixed left-0 top-0 h-full w-[56px] md:w-[72px] lg:w-[80px] flex flex-col items-center py-5 md:py-6 z-50"
+        style={{ backgroundImage: "linear-gradient(180deg, #DB6123 0%, #E97D1D 52%, #FA9D15 100%)" }}
+      >
+        {/* Logo */}
+        <div className="pt-1.5 pb-4 md:pt-2 md:pb-5">
+          <div className="rounded-full bg-white grid place-items-center h-9 w-9 md:h-11 md:w-11 lg:h-12 lg:w-12 overflow-hidden shadow-sm">
+            <img src="/brand/doctorfizz-mark.png" alt="DoctorFizz" draggable="false" className="h-full w-full object-contain select-none p-0.5" />
+          </div>
+        </div>
+
+        {/* Menu */}
+        <nav className="w-full px-1.5 md:px-2 flex flex-col items-center">
+          {railItem(BarChart2, "Info", infoActive, onInfoClick)}
+          {railItem(PlusSquare, "New", false, () => {})}
+          {railItem(History, "History", false, () => {})}
+          <div className="my-2 w-8 border-t border-[#191A1A]/20" />
+          {railItem(Grid, "Others", false, () => {})}
+        </nav>
+
+        <div className="flex-1" />
+
+        {/* Bottom actions */}
+        <div className="w-full pb-5 md:pb-6 flex flex-col items-center text-[#191A1A]">
+          <div className="flex flex-col items-center mb-3 md:mb-4 cursor-pointer group select-none">
+            <div className="text-xl md:text-2xl leading-none transform transition-transform duration-300 group-hover:-translate-y-1 group-hover:scale-y-125 group-hover:scale-x-110">↑</div>
+            <div className="text-[12px] md:text-[14px] font-medium">Upgrade</div>
+          </div>
+          <button
+            type="button"
+            aria-label="Open profile"
+            onClick={() => auth?.openProfile?.()}
+            className="group flex flex-col items-center cursor-pointer outline-none w-full"
+          >
+            <span
+              className="h-10 w-10 md:h-11 md:w-11 rounded-full grid place-items-center overflow-hidden shadow-sm transition-colors duration-300"
+              style={{ background: avatarUrl ? "#fff" : "#191A1A" }}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" draggable="false" className="h-full w-full object-cover" />
+              ) : initials ? (
+                <span className="text-[12px] md:text-[13px] font-semibold text-white">{initials}</span>
+              ) : (
+                <User className="h-5 w-5 md:h-6 md:w-6 text-white" />
+              )}
+            </span>
+            <span className="mt-2 max-w-[68px] truncate text-[12px] md:text-[14px] text-[#191A1A]" title={displayName}>{displayName}</span>
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside
       className="fixed left-0 top-0 h-full

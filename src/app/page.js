@@ -472,7 +472,12 @@ export default function Home() {
       ? "ml-[48px] sm:ml-[56px] md:ml-[72px] lg:ml-[510px]"
       : "ml-[48px] sm:ml-[56px] md:ml-[72px] lg:ml-[80px]";
 
-  const sidebarVariant = currentStep === "contentEditor" ? "editor" : "default";
+  // Onboarding steps (1–6 + report "5b") use the Figma orange rail; the dashboard
+  // keeps its nav sidebar ("default"); the content editor keeps "editor".
+  const sidebarVariant =
+    currentStep === "contentEditor" ? "editor"
+    : currentStep === "dashboard" ? "default"
+    : "onboarding";
 
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--app-bg)]">

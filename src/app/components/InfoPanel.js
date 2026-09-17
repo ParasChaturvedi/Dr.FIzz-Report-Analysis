@@ -421,6 +421,7 @@ export default function InfoPanel({
   keywordData = [],
   competitorData = null,
   currentStep,
+  variant = "default",
 }) {
   const panelRef = useRef(null);
   const isDesktop = useIsDesktop();
@@ -850,12 +851,18 @@ export default function InfoPanel({
   const renderStep5Slide2Content = renderStep5Content;
 
   /* -------------------- Render -------------------- */
+  // Onboarding (Figma node 1-11401) → warm peach info-panel bg; otherwise the
+  // original brand-gradient behavior is kept exactly.
+  const bgClass =
+    variant === "onboarding"
+      ? "bg-[#F5C08E]"
+      : "bg-[image:var(--brand-gradient)] bg-no-repeat bg-[size:100%_100%] lg:bg-[image:none]";
   const basePos =
     "fixed top-0 h-screen z-40 flex flex-col " +
-    "bg-[image:var(--brand-gradient)] bg-no-repeat bg-[size:100%_100%] " +
+    bgClass + " " +
     "left-[56px] w-[calc(100vw-56px)] " +
     "md:left-[72px] md:w-[calc(100vw-72px)] " +
-    "lg:left-[80px] lg:w-[430px] lg:bg-[image:none]";
+    "lg:left-[80px] lg:w-[430px]";
 
   return (
     <>
