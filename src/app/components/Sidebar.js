@@ -112,7 +112,11 @@ export default function Sidebar({
               Icon={LineChart}
               onClick={() => { try { window.dispatchEvent(new Event("app:open-comp-analysis")); } catch {} }}
             />
-            <NavItem label="Reports" Icon={BarChart2} disabled />
+            <NavItem
+              label="Reports"
+              Icon={BarChart2}
+              onClick={() => { try { window.dispatchEvent(new Event("app:open-reports")); } catch {} }}
+            />
           </>
         ) : (
           // editor variant

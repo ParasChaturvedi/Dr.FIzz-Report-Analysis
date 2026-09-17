@@ -12,6 +12,7 @@ import SerpFeatures from "./SerpFeatures";
 import SiteHealth from "./SiteHealth";
 import BacklinksScreen from "./BacklinksScreen";
 import CompAnalysisScreen from "./CompAnalysisScreen";
+import ReportsScreen from "./ReportsScreen";
 
 // --- Prefill content templates for the 4 "Top On-Page Content Opportunities" cards ---
 const PREFILL_BY_TITLE = {
@@ -669,19 +670,23 @@ const [siteHealthIssue, setSiteHealthIssue] = useState(null); // selected issue 
 // Full screens opened from the sidebar nav.
 const [backlinksOpen, setBacklinksOpen] = useState(false);
 const [compAnalysisOpen, setCompAnalysisOpen] = useState(false);
+const [reportsOpen, setReportsOpen] = useState(false);
 
 // Sidebar nav → full screens.
 useEffect(() => {
   const openSH = () => setSiteHealthOpen(true);
   const openBL = () => setBacklinksOpen(true);
   const openCA = () => setCompAnalysisOpen(true);
+  const openRP = () => setReportsOpen(true);
   window.addEventListener("app:open-site-health", openSH);
   window.addEventListener("app:open-backlinks", openBL);
   window.addEventListener("app:open-comp-analysis", openCA);
+  window.addEventListener("app:open-reports", openRP);
   return () => {
     window.removeEventListener("app:open-site-health", openSH);
     window.removeEventListener("app:open-backlinks", openBL);
     window.removeEventListener("app:open-comp-analysis", openCA);
+    window.removeEventListener("app:open-reports", openRP);
   };
 }, []);
 
@@ -3559,6 +3564,16 @@ const seoTableProg = Math.max(0, prog);
       }}
       onBack={() => setCompAnalysisOpen(false)}
       onChatWithAi={() => { setCompAnalysisOpen(false); handleAiAnalyze?.(); }}
+    />
+  )}
+
+  {reportsOpen && (
+    <ReportsScreen
+      data={{ domain }}
+      reportLoading={reportLoading}
+      onDownloadPdf={() => handleGenerateReport?.()}
+      onBack={() => setReportsOpen(false)}
+      onChatWithAi={() => { setReportsOpen(false); handleAiAnalyze?.(); }}
     />
   )}
 
