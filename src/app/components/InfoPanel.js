@@ -2,27 +2,67 @@
 
 import { useEffect, useRef, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Pin, PinOff, BarChart2, Wrench } from "lucide-react";
+import {
+  Pin,
+  PinOff,
+  BarChart2,
+  Wrench,
+  Play,
+  Pause,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  Captions,
+  Settings,
+  PictureInPicture2,
+  Maximize,
+  X,
+} from "lucide-react";
 import Image from "next/image";
 
 /* -------------------- Video helpers -------------------- */
 const DEFAULT_VIDEO =
   "https://youtube.com/shorts/_7LPvKmZkwg?si=vD25P17VltV7szZu";
 
-function toYouTubeEmbed(url) {
+// Extract the YouTube video id from a shorts / watch / youtu.be / embed URL.
+function getYouTubeId(url) {
   try {
     const u = new URL(url);
-    if (u.hostname.includes("youtube.com") && u.pathname.startsWith("/shorts/")) {
-      const id = u.pathname.split("/")[2];
-      return `https://www.youtube.com/embed/${id}`;
+    if (u.pathname.startsWith("/shorts/")) return u.pathname.split("/")[2];
+    if (u.searchParams.get("v")) return u.searchParams.get("v");
+    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
+    if (u.pathname.startsWith("/embed/")) return u.pathname.split("/")[2];
+  } catch {}
+  return "";
+}
+
+// mm:ss (minutes zero-padded to match the Figma "01:02 / 10:02" style)
+function fmtTime(s) {
+  s = Math.max(0, Math.floor(s || 0));
+  const m = Math.floor(s / 60);
+  const ss = String(s % 60).padStart(2, "0");
+  return `${String(m).padStart(2, "0")}:${ss}`;
+}
+
+// Load the YouTube IFrame Player API exactly once.
+let _ytApiPromise = null;
+function loadYouTubeAPI() {
+  if (typeof window === "undefined") return Promise.reject(new Error("no window"));
+  if (window.YT && window.YT.Player) return Promise.resolve(window.YT);
+  if (_ytApiPromise) return _ytApiPromise;
+  _ytApiPromise = new Promise((resolve) => {
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      try { prev && prev(); } catch {}
+      resolve(window.YT);
+    };
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(tag);
     }
-    if (u.hostname.includes("youtube.com") && u.searchParams.get("v")) {
-      return `https://www.youtube.com/embed/${u.searchParams.get("v")}`;
-    }
-    return url;
-  } catch {
-    return url;
-  }
+  });
+  return _ytApiPromise;
 }
 
 /* ---------- simple portal hook ---------- */
@@ -41,18 +81,31 @@ function usePortal(targetId = "modal-root") {
   return el;
 }
 
-/* ---------- GLOBAL MODAL rendered via PORTAL ---------- */
+/* ---------- GLOBAL VIDEO PLAYER (Figma node 1-11544) rendered via PORTAL ----------
+   Custom dark player + control bar (play/pause · skip · volume · time · title ·
+   CC · settings/speed · pop-out · fullscreen) driven by the YouTube IFrame API. */
 function VideoModal({ open, title, url, onClose, onExpand }) {
   const container = usePortal("modal-root");
+  const rootRef = useRef(null);
+  const hostWrapRef = useRef(null); // stable wrapper; the YT iframe is injected inside
+  const playerRef = useRef(null);
+
+  const [ready, setReady] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [cur, setCur] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [rate, setRate] = useState(1);
+  const [cc, setCc] = useState(false);
+
+  const videoId = getYouTubeId(url || DEFAULT_VIDEO);
 
   // lock body scroll when open
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    return () => { document.body.style.overflow = prev; };
   }, [open]);
 
   // esc to close
@@ -63,37 +116,183 @@ function VideoModal({ open, title, url, onClose, onExpand }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Create the YouTube player while the modal is open; tear it down on close.
+  useEffect(() => {
+    if (!open || !container) return;
+    const wrap = hostWrapRef.current;
+    if (!wrap) return;
+
+    let destroyed = false;
+    // A throwaway node YT.Player replaces with its <iframe> (keeps React out of it).
+    const host = document.createElement("div");
+    host.style.width = "100%";
+    host.style.height = "100%";
+    wrap.appendChild(host);
+
+    loadYouTubeAPI()
+      .then((YT) => {
+        if (destroyed || !YT) return;
+        playerRef.current = new YT.Player(host, {
+          videoId,
+          playerVars: {
+            controls: 0, modestbranding: 1, rel: 0, playsinline: 1,
+            iv_load_policy: 3, fs: 0, disablekb: 1,
+          },
+          events: {
+            onReady: (e) => {
+              if (destroyed) return;
+              setReady(true);
+              setDur(e.target.getDuration?.() || 0);
+              try { setMuted(!!e.target.isMuted?.()); } catch {}
+            },
+            onStateChange: (e) => {
+              if (destroyed) return;
+              setPlaying(e.data === 1); // 1 = PLAYING
+              const d = e.target.getDuration?.() || 0;
+              if (d) setDur(d);
+            },
+          },
+        });
+      })
+      .catch(() => {});
+
+    const poll = setInterval(() => {
+      const p = playerRef.current;
+      if (p && p.getCurrentTime) {
+        try {
+          setCur(p.getCurrentTime() || 0);
+          const d = p.getDuration?.() || 0;
+          if (d) setDur(d);
+        } catch {}
+      }
+    }, 250);
+
+    return () => {
+      destroyed = true;
+      clearInterval(poll);
+      try { playerRef.current?.destroy?.(); } catch {}
+      playerRef.current = null;
+      try { wrap.innerHTML = ""; } catch {}
+      setReady(false); setPlaying(false); setCur(0); setDur(0); setRate(1); setCc(false);
+    };
+  }, [open, container, videoId]);
+
   if (!open || !container) return null;
 
-  const embedUrl = toYouTubeEmbed(url || DEFAULT_VIDEO);
+  const pct = dur > 0 ? Math.min(100, (cur / dur) * 100) : 0;
+
+  const togglePlay = () => {
+    const p = playerRef.current; if (!p) return;
+    try { playing ? p.pauseVideo() : p.playVideo(); } catch {}
+  };
+  const skipFwd = () => {
+    const p = playerRef.current; if (!p) return;
+    try { p.seekTo(Math.min((p.getCurrentTime?.() || 0) + 10, dur || 1e9), true); } catch {}
+  };
+  const toggleMute = () => {
+    const p = playerRef.current; if (!p) return;
+    try {
+      if (p.isMuted?.()) { p.unMute(); setMuted(false); }
+      else { p.mute(); setMuted(true); }
+    } catch {}
+  };
+  const seek = (e) => {
+    const p = playerRef.current; if (!p || !dur) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    try { p.seekTo(ratio * dur, true); setCur(ratio * dur); } catch {}
+  };
+  const toggleCC = () => {
+    const p = playerRef.current; if (!p) return;
+    try {
+      if (cc) { p.unloadModule?.("captions"); p.unloadModule?.("cc"); }
+      else { p.loadModule?.("captions"); p.loadModule?.("cc"); p.setOption?.("captions", "track", {}); }
+    } catch {}
+    setCc((v) => !v);
+  };
+  const cycleSpeed = () => {
+    const rates = [1, 1.5, 2, 0.5];
+    const next = rates[(rates.indexOf(rate) + 1) % rates.length];
+    try { playerRef.current?.setPlaybackRate?.(next); } catch {}
+    setRate(next);
+  };
+  const toggleFullscreen = () => {
+    const el = rootRef.current; if (!el) return;
+    try {
+      if (document.fullscreenElement) document.exitFullscreen?.();
+      else el.requestFullscreen?.();
+    } catch {}
+  };
+
+  const iconBtn = "grid place-items-center text-white/80 hover:text-white transition-colors";
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/70 grid place-items-center p-4">
-      <div className="relative w-[90vw] sm:w-[78vw] md:w-[60vw] lg:w-[560px] max-w-[560px] max-h-[80vh] overflow-hidden rounded-2xl bg-[var(--panel)] text-[var(--text)] shadow-2xl p-4">
+    <div
+      className="fixed top-0 right-0 bottom-0 left-0 lg:left-[510px] z-[9999] grid place-items-center bg-black/50 p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+    >
+      <div ref={rootRef} className="relative w-full max-w-[880px] overflow-hidden rounded-2xl bg-[#0d0d0d] shadow-2xl">
+        {/* close */}
         <button
           onClick={onClose}
-          className="absolute right-3 top-3 text-[var(--muted)] hover:text-[var(--text)]"
           aria-label="Close"
+          className="absolute right-3 top-3 z-20 grid h-8 w-8 place-items-center rounded-full bg-black/40 text-white/90 hover:bg-black/60"
         >
-          ✕
+          <X size={18} />
         </button>
-        <div className="text-lg font-semibold mb-3">{title}</div>
-        <div className="aspect-video w-full overflow-hidden rounded-xl bg-black">
-          <iframe
-            className="w-full h-full"
-            src={embedUrl}
-            title={title}
-            allowFullScreen
-            frameBorder="0"
-          />
+
+        {/* video area (16:9) */}
+        <div className="relative aspect-video w-full bg-black">
+          <div ref={hostWrapRef} className="absolute inset-0 [&>iframe]:h-full [&>iframe]:w-full" />
+          {/* center play button + scrim — shows while paused (Figma). The scrim also
+              masks YouTube's own cued overlay (Shorts label / red button / caption). */}
+          {ready && !playing && (
+            <button onClick={togglePlay} aria-label="Play" className="absolute inset-0 z-10 grid place-items-center bg-black/65 transition-colors hover:bg-black/70 [transform:translateZ(0)] will-change-transform">
+              <span className="grid h-16 w-16 place-items-center rounded-full bg-white/25 text-white shadow-lg ring-1 ring-white/50 backdrop-blur-sm transition-transform hover:scale-105">
+                <Play size={30} className="ml-1" fill="currentColor" />
+              </span>
+            </button>
+          )}
         </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            onClick={onExpand}
-            className="px-4 py-2 rounded-md text-white font-medium shadow bg-[image:var(--brand-gradient)]"
-          >
-            Expand in New Tab
-          </button>
+
+        {/* control bar */}
+        <div className="bg-[#0d0d0d] px-4 pt-2.5 pb-3">
+          {/* progress */}
+          <div onClick={seek} className="relative h-1.5 w-full cursor-pointer rounded-full bg-white/25">
+            <div className="absolute left-0 top-0 h-full rounded-full bg-white" style={{ width: `${pct}%` }} />
+          </div>
+
+          {/* controls row */}
+          <div className="mt-2.5 flex items-center gap-4 text-white/85">
+            <button onClick={togglePlay} aria-label={playing ? "Pause" : "Play"} className={iconBtn}>
+              {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+            </button>
+            <button onClick={skipFwd} aria-label="Skip forward" className={iconBtn}>
+              <SkipForward size={18} fill="currentColor" />
+            </button>
+            <button onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} className={iconBtn}>
+              {muted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+            </button>
+            <div className="whitespace-nowrap text-[13px] tabular-nums text-white/80">
+              {fmtTime(cur)} / {fmtTime(dur)}
+            </div>
+            <div className="min-w-0 flex-1 truncate text-[13px] text-white/80">- {title}</div>
+
+            <div className="ml-auto flex items-center gap-3.5">
+              <button onClick={toggleCC} aria-label="Captions" title="Captions" className={cc ? "grid place-items-center text-white" : iconBtn}>
+                <Captions size={18} />
+              </button>
+              <button onClick={cycleSpeed} aria-label="Settings" title={`Speed ${rate}x`} className={iconBtn}>
+                <Settings size={18} />
+              </button>
+              <button onClick={onExpand} aria-label="Open in new tab" title="Pop out to new tab" className={iconBtn}>
+                <PictureInPicture2 size={18} />
+              </button>
+              <button onClick={toggleFullscreen} aria-label="Fullscreen" title="Fullscreen" className={iconBtn}>
+                <Maximize size={18} />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>,
