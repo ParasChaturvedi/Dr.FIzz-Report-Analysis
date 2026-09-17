@@ -54,6 +54,7 @@ export default function AuthGate({ children }) {
   const [resetToken, setResetToken] = useState(null);
   const [authError, setAuthError] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false); // account popover (opened from the sidebar Profile button)
 
   // Read one-time URL params (reset token / google error) before first paint of screens.
   useEffect(() => {
@@ -165,10 +166,22 @@ export default function AuthGate({ children }) {
 
   return (
     <AuthUserContext.Provider
-      value={{ user, setUser, openProfile: () => setProfileOpen(true), logout: handleLogout }}
+      value={{
+        user,
+        setUser,
+        openProfile: () => setProfileOpen(true),
+        openAccountMenu: () => setAccountMenuOpen((v) => !v),
+        logout: handleLogout,
+      }}
     >
       {children}
-      <AccountControl user={user} onLogout={handleLogout} onEditProfile={() => setProfileOpen(true)} />
+      <AccountControl
+        user={user}
+        open={accountMenuOpen}
+        onClose={() => setAccountMenuOpen(false)}
+        onLogout={handleLogout}
+        onEditProfile={() => { setProfileOpen(true); setAccountMenuOpen(false); }}
+      />
       <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
     </AuthUserContext.Provider>
   );

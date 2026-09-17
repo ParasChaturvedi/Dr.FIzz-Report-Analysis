@@ -119,7 +119,8 @@ export default function Sidebar({
           <button
             type="button"
             aria-label="Open profile"
-            onClick={() => auth?.openProfile?.()}
+            data-account-trigger
+            onClick={() => auth?.openAccountMenu?.()}
             className="group flex flex-col items-center cursor-pointer outline-none w-full"
           >
             <span
@@ -263,7 +264,8 @@ export default function Sidebar({
         <button
           type="button"
           aria-label="Open profile"
-          onClick={() => auth?.openProfile?.()}
+          data-account-trigger
+          onClick={() => auth?.openAccountMenu?.()}
           className="group flex flex-col items-center cursor-pointer outline-none w-full"
         >
           <span
