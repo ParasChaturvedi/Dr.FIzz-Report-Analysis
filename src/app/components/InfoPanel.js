@@ -347,13 +347,15 @@ function ContentCard({
         </div>
 
         <div className="relative shrink-0 group/tt">
-          <span className="grid place-items-center h-5 w-5 rounded-full border border-gray-300 text-gray-400 text-[11px] font-semibold cursor-help select-none dark:border-[var(--muted)] dark:text-[var(--muted)]">
+          <span className="grid place-items-center h-5 w-5 rounded-full border border-gray-300 text-gray-400 text-[11px] font-semibold cursor-pointer select-none dark:border-[var(--muted)] dark:text-[var(--muted)]">
             {rightBadgeIcon}
           </span>
           {tooltip ? (
-            <div className="pointer-events-none absolute right-0 top-7 z-30 hidden w-56 rounded-xl bg-[#191A1A] p-3 text-left shadow-lg group-hover/tt:block">
+            <div className="pointer-events-none absolute right-0 bottom-full mb-2 z-30 hidden w-56 rounded-xl bg-[#191A1A] p-3 text-left shadow-lg group-hover/tt:block">
               <div className="text-[12.5px] font-semibold text-white">{tooltip.title}</div>
               <div className="mt-0.5 text-[12px] leading-snug text-white/85">{tooltip.text}</div>
+              {/* down-pointing tail toward the (i) icon (Figma 1-11472) */}
+              <div className="absolute right-2 top-full h-0 w-0 border-x-[7px] border-x-transparent border-t-[8px] border-t-[#191A1A]" />
             </div>
           ) : null}
         </div>
