@@ -14,6 +14,7 @@ import BacklinksScreen from "./BacklinksScreen";
 import CompAnalysisScreen from "./CompAnalysisScreen";
 import ReportsScreen from "./ReportsScreen";
 import KeywordResearchScreen from "./KeywordResearchScreen";
+import RankTrackerScreen from "./RankTrackerScreen";
 
 // --- Prefill content templates for the 4 "Top On-Page Content Opportunities" cards ---
 const PREFILL_BY_TITLE = {
@@ -673,6 +674,7 @@ const [backlinksOpen, setBacklinksOpen] = useState(false);
 const [compAnalysisOpen, setCompAnalysisOpen] = useState(false);
 const [reportsOpen, setReportsOpen] = useState(false);
 const [keywordResearchOpen, setKeywordResearchOpen] = useState(false);
+const [rankTrackerOpen, setRankTrackerOpen] = useState(false);
 
 // Sidebar nav → full screens.
 useEffect(() => {
@@ -681,17 +683,20 @@ useEffect(() => {
   const openCA = () => setCompAnalysisOpen(true);
   const openRP = () => setReportsOpen(true);
   const openKR = () => setKeywordResearchOpen(true);
+  const openRT = () => setRankTrackerOpen(true);
   window.addEventListener("app:open-site-health", openSH);
   window.addEventListener("app:open-backlinks", openBL);
   window.addEventListener("app:open-comp-analysis", openCA);
   window.addEventListener("app:open-reports", openRP);
   window.addEventListener("app:open-keyword-research", openKR);
+  window.addEventListener("app:open-rank-tracker", openRT);
   return () => {
     window.removeEventListener("app:open-site-health", openSH);
     window.removeEventListener("app:open-backlinks", openBL);
     window.removeEventListener("app:open-comp-analysis", openCA);
     window.removeEventListener("app:open-reports", openRP);
     window.removeEventListener("app:open-keyword-research", openKR);
+    window.removeEventListener("app:open-rank-tracker", openRT);
   };
 }, []);
 
@@ -3595,6 +3600,20 @@ const seoTableProg = Math.max(0, prog);
         setKeywordResearchOpen(false);
         try { window.dispatchEvent(new CustomEvent("content-editor:open", { detail: { title: kw, keyword: kw, type: "blog" } })); } catch {}
       }}
+    />
+  )}
+
+  {rankTrackerOpen && (
+    <RankTrackerScreen
+      data={{
+        domain,
+        ranked: seo?.rankedKeywords || [],
+        top3: selected?.organicKeywords?.top3 ?? null,
+        top10: selected?.organicKeywords?.top10 ?? null,
+        top100: selected?.organicKeywords?.top100 ?? null,
+      }}
+      onBack={() => setRankTrackerOpen(false)}
+      onChatWithAi={() => { setRankTrackerOpen(false); handleAiAnalyze?.(); }}
     />
   )}
 

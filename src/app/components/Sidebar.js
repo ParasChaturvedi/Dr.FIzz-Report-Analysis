@@ -128,7 +128,11 @@ export default function Sidebar({
               Icon={Search}
               onClick={() => { try { window.dispatchEvent(new Event("app:open-keyword-research")); } catch {} }}
             />
-            <NavItem label="Rank Tracker" Icon={TrendingUp} disabled />
+            <NavItem
+              label="Rank Tracker"
+              Icon={TrendingUp}
+              onClick={() => { try { window.dispatchEvent(new Event("app:open-rank-tracker")); } catch {} }}
+            />
             <NavItem label="Local SEO" Icon={MapPin} disabled />
             <NavItem label="Internal Linking" Icon={Network} disabled />
             <NavItem label="CRO" Icon={Target} disabled />
