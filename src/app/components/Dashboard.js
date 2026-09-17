@@ -13,6 +13,7 @@ import SiteHealth from "./SiteHealth";
 import BacklinksScreen from "./BacklinksScreen";
 import CompAnalysisScreen from "./CompAnalysisScreen";
 import ReportsScreen from "./ReportsScreen";
+import KeywordResearchScreen from "./KeywordResearchScreen";
 
 // --- Prefill content templates for the 4 "Top On-Page Content Opportunities" cards ---
 const PREFILL_BY_TITLE = {
@@ -671,6 +672,7 @@ const [siteHealthIssue, setSiteHealthIssue] = useState(null); // selected issue 
 const [backlinksOpen, setBacklinksOpen] = useState(false);
 const [compAnalysisOpen, setCompAnalysisOpen] = useState(false);
 const [reportsOpen, setReportsOpen] = useState(false);
+const [keywordResearchOpen, setKeywordResearchOpen] = useState(false);
 
 // Sidebar nav → full screens.
 useEffect(() => {
@@ -678,15 +680,18 @@ useEffect(() => {
   const openBL = () => setBacklinksOpen(true);
   const openCA = () => setCompAnalysisOpen(true);
   const openRP = () => setReportsOpen(true);
+  const openKR = () => setKeywordResearchOpen(true);
   window.addEventListener("app:open-site-health", openSH);
   window.addEventListener("app:open-backlinks", openBL);
   window.addEventListener("app:open-comp-analysis", openCA);
   window.addEventListener("app:open-reports", openRP);
+  window.addEventListener("app:open-keyword-research", openKR);
   return () => {
     window.removeEventListener("app:open-site-health", openSH);
     window.removeEventListener("app:open-backlinks", openBL);
     window.removeEventListener("app:open-comp-analysis", openCA);
     window.removeEventListener("app:open-reports", openRP);
+    window.removeEventListener("app:open-keyword-research", openKR);
   };
 }, []);
 
@@ -3574,6 +3579,22 @@ const seoTableProg = Math.max(0, prog);
       onDownloadPdf={() => handleGenerateReport?.()}
       onBack={() => setReportsOpen(false)}
       onChatWithAi={() => { setReportsOpen(false); handleAiAnalyze?.(); }}
+    />
+  )}
+
+  {keywordResearchOpen && (
+    <KeywordResearchScreen
+      data={{
+        domain,
+        keywords: seo?.dataForSeo?.topKeywords || seo?.seoRows || selected?.seoRows || [],
+        ranked: seo?.rankedKeywords || [],
+      }}
+      onBack={() => setKeywordResearchOpen(false)}
+      onChatWithAi={() => { setKeywordResearchOpen(false); handleAiAnalyze?.(); }}
+      onGenerate={(kw) => {
+        setKeywordResearchOpen(false);
+        try { window.dispatchEvent(new CustomEvent("content-editor:open", { detail: { title: kw, keyword: kw, type: "blog" } })); } catch {}
+      }}
     />
   )}
 

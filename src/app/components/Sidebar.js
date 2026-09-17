@@ -10,6 +10,11 @@ import {
   Link2,
   LineChart,
   User,
+  Search,
+  TrendingUp,
+  MapPin,
+  Network,
+  Target,
 } from "lucide-react";
 import { useAuthUser } from "./auth/authContext";
 
@@ -117,6 +122,16 @@ export default function Sidebar({
               Icon={BarChart2}
               onClick={() => { try { window.dispatchEvent(new Event("app:open-reports")); } catch {} }}
             />
+            <div className="my-2 mx-2 border-t border-[var(--border)]" />
+            <NavItem
+              label="Keyword Research"
+              Icon={Search}
+              onClick={() => { try { window.dispatchEvent(new Event("app:open-keyword-research")); } catch {} }}
+            />
+            <NavItem label="Rank Tracker" Icon={TrendingUp} disabled />
+            <NavItem label="Local SEO" Icon={MapPin} disabled />
+            <NavItem label="Internal Linking" Icon={Network} disabled />
+            <NavItem label="CRO" Icon={Target} disabled />
           </>
         ) : (
           // editor variant
