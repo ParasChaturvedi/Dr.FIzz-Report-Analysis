@@ -12,6 +12,7 @@ export default function StepSlide4({
   onKeywordSubmit,
   businessData,
   languageLocationData,
+  variant = "default",
 }) {
   const [selectedKeywords, setSelectedKeywords] = useState([]);
   const [customKeyword, setCustomKeyword] = useState("");
@@ -333,6 +334,99 @@ export default function StepSlide4({
     // Only scroll when genuinely new content appears (the "More" input, or a fresh load).
   }, [showInlineMoreInput, isLoadingKeywords]);
 
+  // ── Figma "Chat with AI · Step-4" body (variant="chat") ────────────────────
+  // Pixel-matched to Figma node 1-10282 "CHAT WITH AI STEP-4": heading + AI subtext
+  // + a grid of compact keyword chips (+ to add, "More +" → inline custom input) +
+  // the "Here's your site report" note. Reuses the SAME keyword loader
+  // (bootstrap cache / /api/keywords/suggest), toggle handlers, onKeywordSubmit
+  // payload and the negative-terms → drfizz.keywordExclusions write (report input
+  // Figma omits — kept as optional). Default render path is byte-identical.
+  const chatChip = (keyword) => {
+    const isSelected = selectedKeywords.includes(keyword);
+    if (keyword === "More" && showInlineMoreInput) {
+      return (
+        <div key="more-input" className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <input
+            ref={moreInputRef}
+            type="text"
+            placeholder="Add your own keyword"
+            value={customKeyword}
+            onChange={(e) => setCustomKeyword(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="w-full rounded-[8px] border border-[#d45427] bg-[var(--card)] px-3 py-2 text-[12.5px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none sm:w-[220px]"
+          />
+          <button onClick={handleAddCustom} disabled={!customKeyword.trim()} type="button" aria-label="Add custom keyword"
+            className="rounded-[8px] bg-[image:var(--infoHighlight-gradient)] px-3 py-2 text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70">
+            <Plus size={15} />
+          </button>
+          <button type="button" onClick={() => { setShowInlineMoreInput(false); setCustomKeyword(""); }} title="Cancel"
+            className="rounded-[8px] px-2 py-2 text-[var(--muted)] hover:text-red-500">
+            <X size={15} />
+          </button>
+        </div>
+      );
+    }
+    return (
+      <button
+        key={keyword}
+        type="button"
+        aria-pressed={isSelected}
+        onClick={() => handleKeywordToggle(keyword)}
+        className={`group inline-flex items-center gap-1.5 rounded-[8px] border px-3 py-2 text-[12.5px] transition-colors ${isSelected ? "border-[var(--border)] bg-[#EBEDF0] font-medium text-[var(--text)] dark:bg-white/10" : "border-[var(--border)] bg-[var(--card)] text-[var(--text)] hover:border-[#d45427]"}`}
+      >
+        <span className="truncate max-w-[160px]">{keyword}</span>
+        {keyword !== "More" ? (
+          isSelected ? (
+            <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+              <Check size={15} className="absolute opacity-100 transition-opacity duration-150 group-hover:opacity-0" style={{ color: "#d45427" }} />
+              <X size={15} className="absolute opacity-0 transition-opacity duration-150 group-hover:opacity-100" style={{ color: "#d45427" }} />
+            </span>
+          ) : (
+            <Plus size={15} className="shrink-0 text-[var(--muted)]" />
+          )
+        ) : (
+          <Plus size={15} className="shrink-0 text-[var(--muted)]" />
+        )}
+      </button>
+    );
+  };
+
+  const renderChatBody = () => (
+    <div className="mx-auto w-full max-w-[1000px]">
+      <div className="text-[12px] font-medium text-[var(--muted)]">Step - 4</div>
+      <h1 className="mt-2 text-[18px] md:text-[20px] font-bold text-[var(--text)]">Unlock high-impact keywords.</h1>
+      <p className="mt-1 text-[13px] leading-relaxed text-[var(--muted)]">
+        {isLoadingKeywords ? "Scanning your site…" : loadError ? "Showing starter suggestions (we'll refine once data is available)." : "I scanned your site and found these gems."}
+      </p>
+
+      {/* Keyword chips (Figma) */}
+      <div className="mt-4 flex flex-wrap gap-2.5">
+        {isLoadingKeywords && suggestedKeywords.length === 0 && Array.from({ length: 8 }).map((_, i) => <span key={`skel-${i}`} className="chip-skel" />)}
+        {!isLoadingKeywords && suggestedKeywords.map((keyword) => chatChip(keyword))}
+      </div>
+
+      {showSummary && (
+        <div className="mt-6">
+          <h3 className="text-[15px] md:text-[16px] font-bold text-[var(--text)]">Here&apos;s your site report — take a quick look on the Info Tab.</h3>
+          <p className="mt-1 text-[13px] text-[var(--muted)]">You can always view more information in Info Tab</p>
+          {/* Negative / exclude terms (Figma omits; report input — kept optional) */}
+          <div className="mt-4 max-w-[480px] rounded-[12px] border border-[var(--border)] bg-[var(--card)]/40 p-4">
+            <label className="mb-1.5 block text-[12px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+              Negative / Exclude Terms <span className="normal-case text-[var(--muted)]">(optional, comma-separated)</span>
+            </label>
+            <input type="text" value={negativeTerms} onChange={(e) => setNegativeTerms(e.target.value)} placeholder="e.g. jobs, free, cracked, login"
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427]" />
+            <p className="mt-1 text-[11px] text-[var(--muted)]">Any keyword containing these terms is suppressed from the final report.</p>
+          </div>
+          <button type="button" onClick={handleReset} className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#d45427] bg-[var(--card)] px-4 py-2 text-[12px] text-[var(--text)]">
+            Reset
+          </button>
+        </div>
+      )}
+      <div ref={tailRef} />
+    </div>
+  );
+
   return (
     <div className="w-full h-full flex flex-col bg-transparent overflow-x-hidden">
       <div className="px-3 sm:px-4 md:px-6 pt-4 sm:pt-5 md:pt-6">
@@ -358,6 +452,8 @@ export default function StepSlide4({
 
           <div ref={scrollRef} className="inner-scroll h-full w-full overflow-y-auto">
             <div className="flex flex-col items-start text-start gap-5 sm:gap-6 md:gap-8 max-w-[820px] mx-auto">
+              {variant === "onboarding" ? renderChatBody() : (
+              <>
               <div className="text-[11px] sm:text-[12px] md:text-[13px] text-[var(--muted)] font-medium">
                 Step - 4
               </div>
@@ -478,6 +574,8 @@ export default function StepSlide4({
 
               <div className="h-2" />
               <div ref={tailRef} />
+              </>
+              )}
             </div>
           </div>
         </div>

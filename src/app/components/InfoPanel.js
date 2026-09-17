@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Pin, PinOff, BarChart2 } from "lucide-react";
+import { Pin, PinOff, BarChart2, Wrench } from "lucide-react";
 import Image from "next/image";
 
 /* -------------------- Video helpers -------------------- */
@@ -184,8 +184,8 @@ function WebsiteStatsCard({ website, stats }) {
     <div className="rounded-2xl bg-white border border-gray-200 shadow-sm p-5 dark:bg-[var(--extra-input-dark)] dark:border-[var(--extra-border-dark)]">
       {/* header */}
       <div className="flex items-center justify-between">
-        <div className="text-[12px] tracking-wide text-gray-500 dark:text-[var(--muted)] font-medium">
-          WEBSITE :
+        <div className="text-[13px] text-gray-800 dark:text-[var(--text)] font-semibold">
+          Website :
           <span className="ml-2 text-[13px] font-semibold text-[#d45427]">
             {website}
           </span>
@@ -308,6 +308,7 @@ function ContentCard({
   rightBadgeIcon = "i",
   poster,
   extra, // ✅ NEW
+  tooltip, // ✅ NEW: { title, text } → dark hover bubble on the (i) icon (Figma 1-11472)
 }) {
   const [open, setOpen] = useState(false);
 
@@ -345,8 +346,16 @@ function ContentCard({
           {extra ? <div className="mt-2">{extra}</div> : null}
         </div>
 
-        <div className="text-gray-400 dark:text-[var(--muted)] cursor-help select-none">
-          {rightBadgeIcon}
+        <div className="relative shrink-0 group/tt">
+          <span className="grid place-items-center h-5 w-5 rounded-full border border-gray-300 text-gray-400 text-[11px] font-semibold cursor-help select-none dark:border-[var(--muted)] dark:text-[var(--muted)]">
+            {rightBadgeIcon}
+          </span>
+          {tooltip ? (
+            <div className="pointer-events-none absolute right-0 top-7 z-30 hidden w-56 rounded-xl bg-[#191A1A] p-3 text-left shadow-lg group-hover/tt:block">
+              <div className="text-[12.5px] font-semibold text-white">{tooltip.title}</div>
+              <div className="mt-0.5 text-[12px] leading-snug text-white/85">{tooltip.text}</div>
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -621,6 +630,27 @@ export default function InfoPanel({
 
   /* -------------------- STEP VIEWS -------------------- */
 
+  // Onboarding (peach) panel — Figma node 1-11401 / 1-11472.
+  const onboardingRail = variant === "onboarding";
+
+  // "Fix this" heading — Figma 1-11472 shows a wrench + "Fix this" in BLACK on the
+  // peach onboarding panel. The default (brand-gradient) variant keeps its original
+  // "!" badge + .fixthis-title so that screen is untouched.
+  const fixThisHeading = () =>
+    onboardingRail ? (
+      <div className="flex items-center gap-2">
+        <Wrench size={18} className="text-[#191A1A]" strokeWidth={2.5} />
+        <h4 className="text-[15px] font-bold text-[#191A1A]">Fix this</h4>
+      </div>
+    ) : (
+      <div className="flex items-center gap-2">
+        <div className="w-4 h-4 rounded-sm flex items-center justify-center fixthis-badge">
+          <span className="text-xs font-bold">!</span>
+        </div>
+        <h4 className="text-sm font-bold fixthis-title">FIX THIS</h4>
+      </div>
+    );
+
   const KeywordsStrip = () => {
     const isLoading = (isOpen || isPinned) && rawWebsite && apiSeo === null;
     const hasAny = chosenKeywords.length > 0;
@@ -665,12 +695,7 @@ export default function InfoPanel({
       <WebsiteStatsCard website={displayWebsite} stats={stats} />
 
       <div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-sm flex items-center justify-center fixthis-badge">
-            <span className="text-xs font-bold">!</span>
-          </div>
-          <h4 className="text-sm font-bold fixthis-title">FIX THIS</h4>
-        </div>
+        {fixThisHeading()}
         <div className="place-items-center flex justify-center">
           <div className="divider-gradient-line h-[1px] w-[100%] bg-[image:var(--brand-gradient)] my-2 mb-5"></div>
         </div>
@@ -683,6 +708,7 @@ export default function InfoPanel({
               `${Number.isFinite(stats.domainAuthority) ? stats.domainAuthority : "--"} = above average for SMBs`,
             ]}
             badge={{ text: "Improve : Build Quality Backlinks", tone: "warning" }}
+            tooltip={{ title: "Domain Authority:", text: "Your site's credit rating with Google." }}
             videoTitle="How to Build Domain Authority"
             videoUrl={DEFAULT_VIDEO}
             poster="/assets/poster.png"
@@ -694,6 +720,7 @@ export default function InfoPanel({
             lines={[
               `${Number.isFinite(stats.organicTraffic) ? stats.organicTraffic : "--"} = visitors last month.`,
             ]}
+            tooltip={{ title: "Organic Traffic:", text: "Monthly visitors who find you through unpaid search." }}
             badge={{ text: "Each organic visitor costs $0 vs $2–5 for ads.", tone: "warning" }}
             videoTitle="Turn Traffic Into Customers"
             videoUrl={DEFAULT_VIDEO}
@@ -707,12 +734,7 @@ export default function InfoPanel({
   const renderStep2Content = () => (
     <div className="space-y-6">
       <WebsiteStatsCard website={displayWebsite} stats={stats} />
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded-sm flex items-center justify-center fixthis-badge">
-          <span className="text-xs font-bold">!</span>
-        </div>
-        <h4 className="text-sm font-bold fixthis-title">FIX THIS</h4>
-      </div>
+      {fixThisHeading()}
 
       <div className="space-y-4">
         <ContentCard
@@ -739,12 +761,7 @@ export default function InfoPanel({
   const renderStep3Content = () => (
     <div className="space-y-6">
       <WebsiteStatsCard website={displayWebsite} stats={stats} />
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded-sm flex items-center justify-center fixthis-badge">
-          <span className="text-xs font-bold">!</span>
-        </div>
-        <h4 className="text-sm font-bold fixthis-title">FIX THIS</h4>
-      </div>
+      {fixThisHeading()}
       <div className="space-y-4">
         <ContentCard
           title="Local SEO Power"
@@ -776,12 +793,7 @@ export default function InfoPanel({
   const renderStep4Content = () => (
     <div className="space-y-6">
       <WebsiteStatsCard website={displayWebsite} stats={stats} />
-      <div className="flex items-center gap-2">
-        <div className="w-4 h-4 rounded-sm flex items-center justify-center fixthis-badge">
-          <span className="text-xs font-bold">!</span>
-        </div>
-        <h4 className="text-sm font-bold fixthis-title">FIX THIS</h4>
-      </div>
+      {fixThisHeading()}
       <div className="space-y-4">
         <ContentCard
           title="Keyword Fundamentals"
@@ -812,12 +824,7 @@ export default function InfoPanel({
     return (
       <div className="space-y-6">
         <WebsiteStatsCard website={displayWebsite} stats={stats} />
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 rounded-sm flex items-center justify-center fixthis-badge">
-            <span className="text-xs font-bold">!</span>
-          </div>
-          <h4 className="text-sm font-bold fixthis-title">FIX THIS</h4>
-        </div>
+        {fixThisHeading()}
         <div className="space-y-4">
           <ContentCard
             title="Business vs. Search Competitors"
@@ -853,7 +860,6 @@ export default function InfoPanel({
   /* -------------------- Render -------------------- */
   // Onboarding (Figma node 1-11401) → warm peach info-panel gradient (applied via
   // inline style below); otherwise the original brand-gradient behavior is kept.
-  const onboardingRail = variant === "onboarding";
   const bgClass = onboardingRail
     ? ""
     : "bg-[image:var(--brand-gradient)] bg-no-repeat bg-[size:100%_100%] lg:bg-[image:none]";
@@ -884,10 +890,10 @@ export default function InfoPanel({
       >
         {/* header */}
         <div className="flex items-center justify-between px-4 pt-6 bg-transparent">
-          <div className="flex items-center gap-3">
-            <BarChart2 className="text-[#111827]" size={26} />
-            <h3 className="text-xl font-black text-[#111827] dark:text-[var(--text)]">
-              INFO
+          <div className="flex items-center gap-2">
+            <BarChart2 className="text-[#111827] dark:text-[var(--text)]" size={20} />
+            <h3 className="text-[20px] font-bold text-[#111827] dark:text-[var(--text)]">
+              Info
             </h3>
           </div>
           <button

@@ -6,7 +6,7 @@ import { ArrowRight, ArrowLeft, ChevronDown, Check, Plus } from "lucide-react";
 import { GEO, LANGUAGES } from "./data/geo";
 import { DIRECTORY_GROUPS } from "./data/directories";
 
-export default function StepSlide3({ onNext, onBack, onLanguageLocationSubmit }) {
+export default function StepSlide3({ onNext, onBack, onLanguageLocationSubmit, variant = "default" }) {
   // V4 — every selector here is MULTI-SELECT. Language + at least one country are
   // mandatory; state, city and directories are optional. Singular `language`/
   // `country`/`state`/`city` are still emitted (primary = first) for back-compat.
@@ -318,6 +318,126 @@ try {
 
   const singleCountryNeedsRegion = selectedCountries.length === 1;
 
+  // ── Figma "Chat with AI · Step-3" body (variant="chat") ────────────────────
+  // Pixel-matched to Figma node 1-10282 "CHAT WITH AI STEP-3": a row of 4 compact
+  // dropdowns (Select Language / Select Country / Select State / Select City) + a
+  // selection summary card. Reuses the SAME state + toggle handlers + bootstrap +
+  // onLanguageLocationSubmit payload as the default flow (report data byte-identical)
+  // — only the presentation differs. Business directories (report-value input the
+  // Figma mock omits) are KEPT in an "optional" section below so citation-gap
+  // detection never loses that input.
+  const chatDropdown = (name, label, options, selected, onToggle, disabled, disabledLabel, grouped) => (
+    <div className="relative dropdown-container" style={{ zIndex: openDropdown === name ? 1000 : 1 }}>
+      <button
+        onClick={() => handleDropdownToggle(name, disabled)}
+        type="button"
+        className={`flex min-w-[150px] items-center justify-between gap-2 rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-[12.5px] transition-colors ${disabled ? "cursor-not-allowed opacity-60" : "hover:border-[#d45427]"}`}
+      >
+        <span className={selected.length ? "text-[var(--text)]" : "text-[var(--muted)]"}>
+          {disabled ? disabledLabel : selected.length ? (selected.length === 1 ? selected[0] : `${selected.length} selected`) : label}
+        </span>
+        <ChevronDown size={15} className={`shrink-0 text-[var(--muted)] transition-transform ${openDropdown === name ? "rotate-180" : ""}`} />
+      </button>
+      {openDropdown === name && !disabled && (
+        <div className="absolute left-0 top-full mt-1 max-h-56 min-w-[200px] overflow-y-auto rounded-[8px] border border-[var(--border)] bg-[var(--card)] shadow-2xl" style={{ zIndex: 1001 }}>
+          {grouped
+            ? options.map((group) => (
+                <div key={group.label}>
+                  <div className="sticky top-0 bg-[var(--card)] px-3.5 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--muted)]">{group.label}</div>
+                  {group.items.map((o) => {
+                    const checked = selected.includes(o);
+                    return (
+                      <button key={o} onClick={() => onToggle(o)} type="button" className="flex w-full items-center justify-between gap-2 border-b border-[var(--border)] px-3.5 py-2 text-left text-[12.5px] text-[var(--text)] last:border-b-0 hover:bg-[var(--menuHover)]">
+                        <span>{o}</span>{checked && <Check size={14} className="shrink-0 text-[#d45427]" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))
+            : options.map((o) => {
+                const checked = selected.includes(o);
+                return (
+                  <button key={o} onClick={() => onToggle(o)} type="button" className="flex w-full items-center justify-between gap-2 border-b border-[var(--border)] px-3.5 py-2 text-left text-[12.5px] text-[var(--text)] last:border-b-0 hover:bg-[var(--menuHover)]">
+                    <span>{o}</span>{checked && <Check size={14} className="shrink-0 text-[#d45427]" />}
+                  </button>
+                );
+              })}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderChatBody = () => (
+    <div className="mx-auto w-full max-w-[1000px]">
+      <div className="text-[12px] font-medium text-[var(--muted)]">Step - 3</div>
+      <h1 className="mt-2 max-w-[620px] text-[18px] md:text-[20px] font-bold text-[var(--text)]">
+        Select the languages and locations relevant to your business
+      </h1>
+      <p className="mt-1 max-w-[560px] text-[13px] leading-relaxed text-[var(--muted)]">
+        Choose your language &amp; business locations. Select at least one country to localize your analysis.
+      </p>
+      {bootstrapError && <p className="mt-2 text-[12.5px] font-medium text-red-500">{bootstrapError}</p>}
+
+      {/* Row of 4 dropdowns (Figma) */}
+      <div className="mt-4 flex flex-wrap gap-3">
+        {chatDropdown("lang", "Select Language", languages, selectedLanguages, onToggleLanguage, false, "", false)}
+        {chatDropdown("country", "Select Country", countries, selectedCountries, onToggleCountry, false, "", false)}
+        {chatDropdown("state", "Select State", states, selectedStates, onToggleState, !singleCountryNeedsRegion, "State (single country only)", false)}
+        {chatDropdown("city", "Select City", cities, selectedCities, onToggleCity, !selectedStates.length, "City (select a state first)", false)}
+      </div>
+
+      {/* Selection summary card (Figma) */}
+      {(selectedLanguages.length > 0 || selectedCountries.length > 0) && (
+        <div className="mt-5 inline-block rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-[12.5px] leading-relaxed text-[var(--text)]">
+          <div>Language : <b>{selectedLanguages.join(", ") || "—"}</b></div>
+          <div>Country : <b>{selectedCountries.join(", ") || "—"}</b></div>
+          {selectedStates.length > 0 && <div>State : <b>{selectedStates.join(", ")}</b></div>}
+          {selectedCities.length > 0 && <div>City : <b>{selectedCities.join(", ")}</b></div>}
+          <div className="mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold" style={{ background: "#FDF1EB", color: "#d45427" }}>
+            Scope: {serviceAreaLabel}
+          </div>
+        </div>
+      )}
+
+      {/* Business directories / citations (Figma mock omits; kept for citation-gap
+          detection — optional) */}
+      <div className="mt-6 rounded-[12px] border border-[var(--border)] bg-[var(--card)]/40 p-4">
+        <div className="text-[12px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+          Existing listings <span className="normal-case text-[var(--muted)]">(directories &amp; citations — optional, sharpens your report)</span>
+        </div>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="w-full sm:max-w-[260px]">
+            {chatDropdown("directories", "Select directories", DIRECTORY_GROUPS, selectedDirectories, onToggleDirectory, false, "", true)}
+          </div>
+          <div className="flex w-full items-center gap-2 sm:max-w-[320px]">
+            <input
+              type="text"
+              value={customDirectory}
+              onChange={(e) => setCustomDirectory(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomDirectory(); } }}
+              placeholder="Add another directory…"
+              className="flex-1 rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-[12.5px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427]"
+            />
+            <button type="button" onClick={addCustomDirectory} className="inline-flex shrink-0 items-center gap-1 rounded-[8px] border border-[#d45427] px-3 py-2.5 text-[12px] font-semibold text-[#d45427] hover:bg-[#FDF1EB]">
+              <Plus size={14} /> Add
+            </button>
+          </div>
+        </div>
+        {selectedDirectories.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {selectedDirectories.map((d) => (
+              <span key={`dir-${d}`} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-[12px] text-[var(--text)]">
+                {d}
+                <button type="button" onClick={() => onToggleDirectory(d)} className="font-bold leading-none text-[var(--muted)] hover:text-[#d45427]">×</button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      <div ref={tailRef} />
+    </div>
+  );
+
   return (
     <div className="w-full h-full flex flex-col bg-transparent slides-accent overflow-x-hidden">
       <div className="px-3 sm:px-4 md:px-6 pt-4 sm:pt-5 md:pt-6">
@@ -356,6 +476,8 @@ try {
 
 <div ref={scrollRef} className="inner-scroll h-full w-full overflow-y-auto">
             <div className="flex flex-col items-start text-start gap-5 sm:gap-6 md:gap-8 max-w-[820px] mx-auto">
+              {variant === "onboarding" ? renderChatBody() : (
+              <>
               <div className="text-[11px] sm:text-[12px] md:text-[13px] text-[var(--muted)] font-medium">
                 Step - 3
               </div>
@@ -582,6 +704,8 @@ try {
 
               <div className="h-2" />
               <div ref={tailRef} />
+              </>
+              )}
             </div>
           </div>
         </div>

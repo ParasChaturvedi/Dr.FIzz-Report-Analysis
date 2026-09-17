@@ -358,6 +358,7 @@ export default function Home() {
       case 2:
         return (
           <StepSlide2
+            variant="onboarding"
             onNext={handleNextStep}
             onBack={handleBackStep}
             onBusinessDataSubmit={handleBusinessDataSubmit}
@@ -367,6 +368,7 @@ export default function Home() {
       case 3:
         return (
           <StepSlide3
+            variant="onboarding"
             onNext={handleNextStep}
             onBack={handleBackStep}
             onLanguageLocationSubmit={handleLanguageLocationSubmit}
@@ -376,6 +378,7 @@ export default function Home() {
       case 4:
         return (
           <StepSlide4
+            variant="onboarding"
             onNext={handleNextStep}
             onBack={handleBackStep}
             onKeywordSubmit={handleKeywordSubmit}
@@ -399,6 +402,7 @@ export default function Home() {
       case 6:
         return (
           <StepSlide5
+            variant="onboarding"
             onNext={handleNextStep}
             onBack={handleBackStep}
             onCompetitorSubmit={handleCompetitorSubmit}

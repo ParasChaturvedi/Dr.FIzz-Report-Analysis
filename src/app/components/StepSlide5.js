@@ -10,6 +10,7 @@ export default function StepSlide5({
   businessData,
   languageLocationData,
   selectedKeywords,
+  variant = "default",
 }) {
   const [selectedBusinessCompetitors, setSelectedBusinessCompetitors] = useState([]);
   const [selectedSearchCompetitors, setSelectedSearchCompetitors] = useState([]);
@@ -428,6 +429,84 @@ export default function StepSlide5({
     </button>
   );
 
+  // ── Figma "Chat with AI · Step-5" body (variant="chat") ────────────────────
+  // Pixel-matched to Figma node 1-10282 "CHAT WITH AI STEP-5": heading + AI subtext
+  // + Business Competitors chips + Search Engine Competitors chips (compact, + to
+  // add, "More +" → inline custom input) + the "Here's your site report" note.
+  // Reuses the SAME competitor loader (bootstrap cache / /api/competitors/suggest),
+  // toggle handlers and onCompetitorSubmit payload — default render path byte-identical.
+  const chatCompChip = (k, label, isSelected, onClick) => (
+    <button
+      key={k}
+      onClick={onClick}
+      disabled={isLoading && label === "More"}
+      type="button"
+      aria-pressed={isSelected}
+      className={`group inline-flex items-center gap-1.5 rounded-[8px] border px-3 py-2 text-[12.5px] transition-colors ${isSelected ? "border-[var(--border)] bg-[#EBEDF0] font-medium text-[var(--text)] dark:bg-white/10" : "border-[var(--border)] bg-[var(--card)] text-[var(--text)] hover:border-[#d45427]"} ${isLoading && label === "More" ? "cursor-not-allowed opacity-60" : ""}`}
+    >
+      <span className="truncate max-w-[170px]">{label}</span>
+      {label !== "More" ? (
+        isSelected ? (
+          <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
+            <Check size={15} className="absolute opacity-100 transition-opacity duration-150 group-hover:opacity-0" style={{ color: "#d45427" }} />
+            <X size={15} className="absolute opacity-0 transition-opacity duration-150 group-hover:opacity-100" style={{ color: "#d45427" }} />
+          </span>
+        ) : (
+          <Plus size={15} className="shrink-0 text-[var(--muted)]" />
+        )
+      ) : (
+        <Plus size={15} className="shrink-0 text-[var(--muted)]" />
+      )}
+    </button>
+  );
+
+  const renderCompGroup = (title, prefix, suggestions, selectedList, toggleFn, adding, cancelAdding, inputId, inputVal, setInputVal, addCustomFn, placeholder) => (
+    <div className="mt-4">
+      <div className="mb-2 text-[12.5px] font-medium text-[var(--text)]">{title}</div>
+      <div className="flex flex-wrap items-center gap-2.5">
+        {isLoading && suggestions.length === 0
+          ? Array.from({ length: 4 }).map((_, i) => <span key={`${prefix}-skel-${i}`} className="chip-skel" />)
+          : suggestions.map((label) => {
+              const isSelected = selectedList.includes(label);
+              if (label === "More" && adding) {
+                return (
+                  <div key={`${prefix}-inline`} className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+                    <input id={inputId} value={inputVal} onChange={(e) => setInputVal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addCustomFn(); }} placeholder={placeholder}
+                      className="w-full rounded-[8px] border border-[#d45427] bg-[var(--card)] px-3 py-2 text-[12.5px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none sm:w-[240px]" />
+                    <button onClick={addCustomFn} type="button" className="rounded-[8px] bg-[image:var(--infoHighlight-gradient)] px-3 py-2 text-white hover:opacity-90"><Plus size={15} /></button>
+                    <button onClick={cancelAdding} type="button" title="Cancel" className="rounded-[8px] px-2 py-2 text-[var(--muted)] hover:text-red-500"><X size={15} /></button>
+                  </div>
+                );
+              }
+              return chatCompChip(`${prefix}-${label}`, label, isSelected, () => toggleFn(label));
+            })}
+      </div>
+    </div>
+  );
+
+  const renderChatBody = () => (
+    <div className="mx-auto w-full max-w-[1000px]">
+      <div className="text-[12px] font-medium text-[var(--muted)]">Step - 6</div>
+      <h1 className="mt-2 max-w-[620px] text-[18px] md:text-[20px] font-bold text-[var(--text)]">
+        Here are some suggestions for Business and Search Engine Competitors based on your website.
+      </h1>
+      <p className="mt-1 text-[13px] leading-relaxed text-[var(--muted)]">
+        {isLoading ? "Scanning your site…" : loadError ? "Showing your own inputs (we couldn’t auto-detect enough competitors)." : "I scanned your site and found these gems."}
+      </p>
+
+      {renderCompGroup("Business Competitors", "biz", businessSuggestions, selectedBusinessCompetitors, toggleBusiness, addingBusiness, () => { setAddingBusiness(false); setBizInput(""); }, "biz-more-input", bizInput, setBizInput, addCustomBusiness, "Add business competitor")}
+      {renderCompGroup("Search Engine Competitors", "search", searchSuggestions, selectedSearchCompetitors, toggleSearch, addingSearch, () => { setAddingSearch(false); setSearchInput(""); }, "search-more-input", searchInput, setSearchInput, addCustomSearch, "Add search competitor")}
+
+      {showSummary && (
+        <div className="mt-6">
+          <h3 className="text-[15px] md:text-[16px] font-bold text-[var(--text)]">Here&apos;s your site report — take a quick look on the Info Tab.</h3>
+          <p className="mt-1 text-[13px] text-[var(--muted)]">You can always view more information in Info Tab</p>
+        </div>
+      )}
+      <div ref={tailRef} />
+    </div>
+  );
+
   return (
     <div className="w-full h-full flex flex-col bg-transparent overflow-x-hidden">
       <div className="px-3 sm:px-4 md:px-6 pt-4 sm:pt-5 md:pt-6">
@@ -453,6 +532,8 @@ export default function StepSlide5({
 
           <div ref={scrollRef} className="inner-scroll h-full w-full overflow-y-auto">
             <div className="flex flex-col items-start text-start gap-5 sm:gap-6 md:gap-8 max-w-[820px] mx-auto">
+              {variant === "onboarding" ? renderChatBody() : (
+              <>
               <div className="text-[11px] sm:text-[12px] md:text-[13px] text-[var(--muted)] font-medium">
                 Step - 5
               </div>
@@ -592,6 +673,8 @@ export default function StepSlide5({
 
               <div className="h-2" />
               <div ref={tailRef} />
+              </>
+              )}
             </div>
           </div>
         </div>

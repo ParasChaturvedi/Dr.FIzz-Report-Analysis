@@ -41,7 +41,7 @@ const withOther = (arr, fallback = []) => {
   return out;
 };
 
-export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
+export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit, variant = "default" }) {
   // selections
   const [businessName, setBusinessName]         = useState("");
   // V4 — Industry stays single (it anchors the AI cascade + website detection);
@@ -442,6 +442,134 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
     </div>
   );
 
+  // ── Figma "Chat with AI · Step-2" body (variant="chat") ────────────────────
+  // Pixel-matched 3-column card selector (Industry Sector / Offering Type /
+  // Specific Category) exactly like Figma node 1-10282. It reuses the SAME state
+  // + handlers + businessData building as the default flow (report data is
+  // byte-identical) — only the presentation differs. The report-critical business
+  // fields (GMB name, core services, geography scope) that Figma's mock omits are
+  // KEPT below the columns so the report never loses that input.
+  // One column = THREE stacked cards (Figma): a header pill (title + chevron), a
+  // separate list card (selected row = neutral light-gray highlight, no dot — the
+  // orange dots/arrows in the Figma mock are annotations, not UI), and a separate
+  // "Others" card (label + custom input). Data logic/handlers are unchanged.
+  const chatCol = (title, opts, isSel, onPick, loading, othersSel, othersVal, setOthers, othersPh, disabled, hasOthers) => (
+    <div className={`flex flex-col gap-2.5 ${disabled ? "opacity-60" : ""}`}>
+      {/* header pill */}
+      <div className="flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-4 py-3">
+        <span className="text-[13px] font-medium text-[var(--text)]">{title}</span>
+        {loading ? <Loader2 size={15} className="animate-spin text-[var(--muted)]" /> : <ChevronDown size={16} className="rotate-180 text-[var(--muted)]" />}
+      </div>
+      {/* list card */}
+      <div className={`max-h-[300px] overflow-y-auto rounded-[10px] border border-[var(--border)] bg-[var(--card)] p-2 ${disabled ? "pointer-events-none" : ""}`}>
+        {opts.filter((o) => o !== "Others").map((opt) => {
+          const sel = isSel(opt);
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onPick(opt)}
+              className={`flex w-full items-center rounded-[8px] px-3 py-2.5 text-left text-[13px] transition-colors ${sel ? "bg-[#EBEDF0] font-medium text-[var(--text)] dark:bg-white/10" : "text-[var(--text)] hover:bg-[#F1F2F4] dark:hover:bg-white/5"}`}
+            >
+              <span>{opt}</span>
+            </button>
+          );
+        })}
+      </div>
+      {/* others card */}
+      {hasOthers && (
+        <div className="rounded-[10px] border border-[var(--border)] bg-[var(--card)] p-3">
+          <div className="text-[13px] font-medium text-[var(--text)]">Others</div>
+          <input
+            type="text"
+            value={othersVal}
+            onChange={(e) => { const v = e.target.value; setOthers(v); if (v && !othersSel) onPick("Others"); }}
+            placeholder={othersPh}
+            className="mt-2 w-full rounded-[8px] border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427]"
+          />
+        </div>
+      )}
+    </div>
+  );
+
+  const renderChatBody = () => (
+    <div className="mx-auto w-full max-w-[1000px]">
+      <div className="text-[12px] font-medium text-[var(--muted)]">Step - 2</div>
+      <h1 className="mt-2 text-[18px] md:text-[20px] font-bold text-[var(--text)]">Tell us about your business</h1>
+      <p className="mt-1 max-w-[560px] text-[13px] leading-relaxed text-[var(--muted)]">
+        Pick the closest category that best describes your business. This tailors benchmarks and keyword ideas.
+      </p>
+
+      {/* AI detection hint */}
+      {(taxoLoading.industry || detected?.industry) && (
+        <div className="mt-3 text-[12px]">
+          {taxoLoading.industry ? (
+            <span className="inline-flex items-center gap-2 text-[var(--muted)]"><Loader2 size={14} className="animate-spin" /> Analyzing your website to suggest the best matches…</span>
+          ) : detected?.industry ? (
+            <span className="inline-flex flex-wrap items-center gap-1.5 text-[var(--muted)]">
+              <Sparkles size={14} className="text-[#d45427]" /> Detected from your site:&nbsp;
+              <span className="font-semibold text-[#d45427]">{detected.industry}</span>
+              {typeof detected.confidence === "number" ? <span>({Math.round(detected.confidence * 100)}% match)</span> : null}
+              <span>. Change any selection below.</span>
+            </span>
+          ) : null}
+        </div>
+      )}
+
+      {/* 3-column selector (Figma) */}
+      <div className="mt-4 grid grid-cols-1 gap-3.5 md:grid-cols-3">
+        {chatCol("Industry Sector", industryOptions, (o) => selectedIndustry === o, handleIndustrySelect, taxoLoading.industry && !selectedIndustry, selectedIndustry === "Others", customIndustry, setCustomIndustry, "describe your sector", false, true)}
+        {chatCol("Offering Type", offeringOptions, (o) => selectedOfferings.includes(o), handleOfferingToggle, false, selectedOfferings.includes("Others"), customOffering, setCustomOffering, "describe your offering", false, false)}
+        {chatCol("Specific Category for service", categoryOptions, (o) => selectedCategories.includes(o), handleCategoryToggle, taxoLoading.category && !selectedCategories.length, selectedCategories.includes("Others"), customCategory, setCustomCategory, "describe your service", !selectedIndustry, true)}
+      </div>
+
+      {/* Report-critical business details (Figma mock omits these; kept so the
+          report never loses GMB / keyword-relevance / geography-scope input) */}
+      <div className="mt-6 rounded-[12px] border border-[var(--border)] bg-[var(--card)]/40 p-4">
+        <div className="text-[12px] font-semibold uppercase tracking-wide text-[var(--muted)]">
+          Business details <span className="normal-case text-[var(--muted)]">(optional — sharpens your report)</span>
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Business / Company Name <span className="text-[#ffa615]">(GMB lookup)</span></label>
+            <input type="text" value={businessName} onChange={(e) => setBusinessName(e.target.value)} placeholder="e.g. Itzfizz Digital Private Limited"
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427]" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Core Services / Products <span className="normal-case text-[var(--muted)]">(comma-separated)</span></label>
+            <input type="text" value={coreServices} onChange={(e) => setCoreServices(e.target.value)} placeholder="e.g. SEO, web design, paid ads"
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427]" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Revenue-Driving Offers <span className="normal-case text-[var(--muted)]">(optional)</span></label>
+            <input type="text" value={revenueOffers} onChange={(e) => setRevenueOffers(e.target.value)} placeholder="e.g. monthly retainers, audits"
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427]" />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Customer / Buyer Type <span className="normal-case text-[var(--muted)]">(optional)</span></label>
+            <input type="text" value={buyerType} onChange={(e) => setBuyerType(e.target.value)} placeholder="e.g. SMBs, enterprise teams, homeowners"
+              className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--card)] px-3.5 py-2.5 text-[13px] text-[var(--text)] placeholder:text-[var(--muted)] outline-none focus:border-[#d45427]" />
+          </div>
+        </div>
+        <div className="mt-3">
+          <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">Business-Model Scope <span className="normal-case text-[var(--muted)]">(select all that apply)</span></label>
+          <div className="flex flex-wrap gap-2">
+            {["Local", "Regional", "National", "International"].map((s) => {
+              const active = businessScopes.includes(s);
+              return (
+                <button key={s} type="button" onClick={() => toggleBusinessScope(s)}
+                  className={`rounded-full border px-3 py-1.5 text-[12px] transition-colors ${active ? "border-[#d45427] bg-[#d45427] text-white" : "border-[var(--border)] bg-[var(--card)] text-[var(--text)] hover:border-[#d45427]"}`}>
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <div ref={tailRef} />
+    </div>
+  );
+
   return (
     <div className="w-full h-full flex flex-col bg-transparent slides-accent overflow-x-hidden">
       {/* ---------------- Content Section ---------------- */}
@@ -471,6 +599,8 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
             className="inner-scroll h-full w-full overflow-y-auto"
           >
             <div className="flex flex-col items-start text-start gap-5 sm:gap-6 md:gap-8 max-w-[820px] mx-auto">
+              {variant === "onboarding" ? renderChatBody() : (
+              <>
               {/* Step label */}
               <div className="text-[11px] sm:text-[12px] md:text-[13px] text-[var(--muted)] font-medium">
                 Step - 2
@@ -701,6 +831,8 @@ export default function StepSlide2({ onNext, onBack, onBusinessDataSubmit }) {
               <div className="h-2" />
               <div ref={tailRef} />{" "}
               {/* <-- tail element to anchor auto-scroll */}
+              </>
+              )}
             </div>
           </div>
         </div>
