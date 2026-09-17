@@ -3615,6 +3615,10 @@ const seoTableProg = Math.max(0, prog);
         setKeywordResearchOpen(false);
         try { window.dispatchEvent(new CustomEvent("content-editor:open", { detail: { title: kw, keyword: kw, type: "blog" } })); } catch {}
       }}
+      onQuickAction={(label) => {
+        if (label === "Analyse Competitor") { setKeywordResearchOpen(false); setCompAnalysisOpen(true); }
+        else { setKeywordResearchOpen(false); handleAiAnalyze?.(); }
+      }}
     />
   )}
 
