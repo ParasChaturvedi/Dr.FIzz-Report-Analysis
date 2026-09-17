@@ -739,6 +739,7 @@ export default function InfoPanel({
       <div className="space-y-4">
         <ContentCard
           title="Why Industry Matters"
+          tooltip={{ title: "Why Industry Matters:", text: "Your industry decides which benchmarks and keywords are relevant to you." }}
           subtitle="Personalized Benchmarks vs. relevant peers"
           lines={["Keyword suggestion"]}
           extra={<KeywordsStrip />}   // ✅ pills now inside this white card
@@ -749,6 +750,7 @@ export default function InfoPanel({
 
         <ContentCard
           title="Business Type Impact"
+          tooltip={{ title: "Business Type Impact:", text: "Local vs. national focus changes your content and customer journey." }}
           lines={["Local vs. national focus", "Content and customer journey differences"]}
           videoTitle="How to Build Domain Authority"
           videoUrl={DEFAULT_VIDEO}
@@ -765,6 +767,7 @@ export default function InfoPanel({
       <div className="space-y-4">
         <ContentCard
           title="Local SEO Power"
+          tooltip={{ title: "Local SEO Power:", text: "Most local searches lead to a store visit or call — local ranking matters." }}
           subtitle="76% of local searches lead to store visits"
           videoTitle="Dominate Local Search"
           videoUrl={DEFAULT_VIDEO}
@@ -772,6 +775,7 @@ export default function InfoPanel({
         />
         <ContentCard
           title="Language Strategy"
+          tooltip={{ title: "Language Strategy:", text: "Match your customers' search language; non-English terms face less competition." }}
           lines={["Match customers' search language", "Less competition in non-English terms"]}
           badge={{ text: "Less competition in non-English terms", tone: "warning" }}
           videoTitle="Multi-Language SEO"
@@ -780,6 +784,7 @@ export default function InfoPanel({
         />
         <ContentCard
           title="Location Guide"
+          tooltip={{ title: "Location Guide:", text: "Map your service areas and track each new market separately." }}
           lines={["Map service areas", "Track new markets separately"]}
           badge={{ text: "Track new markets separately", tone: "warning" }}
           videoTitle="Location Optimization"
@@ -797,6 +802,7 @@ export default function InfoPanel({
       <div className="space-y-4">
         <ContentCard
           title="Keyword Fundamentals"
+          tooltip={{ title: "Keyword Fundamentals:", text: "Keywords are the phrases customers type to find businesses like yours." }}
           subtitle="What keywords are & why they matter"
           videoTitle="Keyword Research 101"
           videoUrl={DEFAULT_VIDEO}
@@ -804,6 +810,7 @@ export default function InfoPanel({
         />
         <ContentCard
           title="Volume & Competition"
+          tooltip={{ title: "Volume & Competition:", text: "Target terms with real demand but beatable competition (100–1,000/mo)." }}
           lines={["Match industry volume & Competition", "100–1,000 searches = sweet spot"]}
           videoTitle="Low-Competition Keywords"
           videoUrl={DEFAULT_VIDEO}
@@ -811,6 +818,7 @@ export default function InfoPanel({
         />
         <ContentCard
           title="Customer Language"
+          tooltip={{ title: "Customer Language:", text: "Use the exact words and questions your customers search with." }}
           lines={["Think like your customers", "Use question-based & local phrases"]}
           videoTitle="Find the Language Your Customers Use"
           videoUrl={DEFAULT_VIDEO}
@@ -828,6 +836,7 @@ export default function InfoPanel({
         <div className="space-y-4">
           <ContentCard
             title="Business vs. Search Competitors"
+            tooltip={{ title: "Business vs. Search Competitors:", text: "Market rivals compete for customers; search rivals only rank for your terms." }}
             subtitle="Market vs. ranking competitors"
             videoTitle="Identify Your SEO Competition"
             videoUrl={DEFAULT_VIDEO}
@@ -836,6 +845,7 @@ export default function InfoPanel({
 
           <ContentCard
             title="Competitive Intelligence"
+            tooltip={{ title: "Competitive Intelligence:", text: "Analyze competitors' strengths and gaps to find your openings." }}
             lines={["Strategy insights & gap analysis", "Analyze your competitors' strengths and gaps"]}
             badge={{ text: "Analyse, Compare, Discover & Optimize.", tone: "warning" }}
             videoTitle="Spy on Competitors"
@@ -845,6 +855,7 @@ export default function InfoPanel({
 
           <ContentCard
             title="How to Find Them?"
+            tooltip={{ title: "How to Find Them?", text: "Ask customers and search your own keywords to spot real competitors." }}
             subtitle="Ask customers & search your keywords"
             videoTitle="Find Your Competitors via SERPs"
             videoUrl={DEFAULT_VIDEO}
