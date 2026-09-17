@@ -133,9 +133,21 @@ export default function Sidebar({
               Icon={TrendingUp}
               onClick={() => { try { window.dispatchEvent(new Event("app:open-rank-tracker")); } catch {} }}
             />
-            <NavItem label="Local SEO" Icon={MapPin} disabled />
-            <NavItem label="Internal Linking" Icon={Network} disabled />
-            <NavItem label="CRO" Icon={Target} disabled />
+            <NavItem
+              label="Local SEO"
+              Icon={MapPin}
+              onClick={() => { try { window.dispatchEvent(new Event("app:open-local-seo")); } catch {} }}
+            />
+            <NavItem
+              label="Internal Linking"
+              Icon={Network}
+              onClick={() => { try { window.dispatchEvent(new Event("app:open-internal-linking")); } catch {} }}
+            />
+            <NavItem
+              label="CRO"
+              Icon={Target}
+              onClick={() => { try { window.dispatchEvent(new Event("app:open-cro")); } catch {} }}
+            />
           </>
         ) : (
           // editor variant

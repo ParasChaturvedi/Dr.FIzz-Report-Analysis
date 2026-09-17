@@ -15,6 +15,9 @@ import CompAnalysisScreen from "./CompAnalysisScreen";
 import ReportsScreen from "./ReportsScreen";
 import KeywordResearchScreen from "./KeywordResearchScreen";
 import RankTrackerScreen from "./RankTrackerScreen";
+import LocalSeoScreen from "./LocalSeoScreen";
+import InternalLinkingScreen from "./InternalLinkingScreen";
+import CroScreen from "./CroScreen";
 
 // --- Prefill content templates for the 4 "Top On-Page Content Opportunities" cards ---
 const PREFILL_BY_TITLE = {
@@ -675,6 +678,9 @@ const [compAnalysisOpen, setCompAnalysisOpen] = useState(false);
 const [reportsOpen, setReportsOpen] = useState(false);
 const [keywordResearchOpen, setKeywordResearchOpen] = useState(false);
 const [rankTrackerOpen, setRankTrackerOpen] = useState(false);
+const [localSeoOpen, setLocalSeoOpen] = useState(false);
+const [internalLinkingOpen, setInternalLinkingOpen] = useState(false);
+const [croOpen, setCroOpen] = useState(false);
 
 // Sidebar nav → full screens.
 useEffect(() => {
@@ -684,12 +690,18 @@ useEffect(() => {
   const openRP = () => setReportsOpen(true);
   const openKR = () => setKeywordResearchOpen(true);
   const openRT = () => setRankTrackerOpen(true);
+  const openLS = () => setLocalSeoOpen(true);
+  const openIL = () => setInternalLinkingOpen(true);
+  const openCRO = () => setCroOpen(true);
   window.addEventListener("app:open-site-health", openSH);
   window.addEventListener("app:open-backlinks", openBL);
   window.addEventListener("app:open-comp-analysis", openCA);
   window.addEventListener("app:open-reports", openRP);
   window.addEventListener("app:open-keyword-research", openKR);
   window.addEventListener("app:open-rank-tracker", openRT);
+  window.addEventListener("app:open-local-seo", openLS);
+  window.addEventListener("app:open-internal-linking", openIL);
+  window.addEventListener("app:open-cro", openCRO);
   return () => {
     window.removeEventListener("app:open-site-health", openSH);
     window.removeEventListener("app:open-backlinks", openBL);
@@ -697,6 +709,9 @@ useEffect(() => {
     window.removeEventListener("app:open-reports", openRP);
     window.removeEventListener("app:open-keyword-research", openKR);
     window.removeEventListener("app:open-rank-tracker", openRT);
+    window.removeEventListener("app:open-local-seo", openLS);
+    window.removeEventListener("app:open-internal-linking", openIL);
+    window.removeEventListener("app:open-cro", openCRO);
   };
 }, []);
 
@@ -3614,6 +3629,35 @@ const seoTableProg = Math.max(0, prog);
       }}
       onBack={() => setRankTrackerOpen(false)}
       onChatWithAi={() => { setRankTrackerOpen(false); handleAiAnalyze?.(); }}
+    />
+  )}
+
+  {localSeoOpen && (
+    <LocalSeoScreen
+      data={{ domain, gmb: seo?.gmbCheck || seo?.gmb || null }}
+      onBack={() => setLocalSeoOpen(false)}
+      onChatWithAi={() => { setLocalSeoOpen(false); handleAiAnalyze?.(); }}
+    />
+  )}
+
+  {internalLinkingOpen && (
+    <InternalLinkingScreen
+      data={{ domain, audit: seo?.onPageAudit || selected?.onPageAudit || null }}
+      onBack={() => setInternalLinkingOpen(false)}
+      onChatWithAi={() => { setInternalLinkingOpen(false); handleAiAnalyze?.(); }}
+    />
+  )}
+
+  {croOpen && (
+    <CroScreen
+      data={{
+        domain,
+        leads: selected?.leads || null,
+        traffic: selected?.organicTraffic?.monthly ?? seo?.domainRankOverview?.organicTraffic ?? null,
+      }}
+      onBack={() => setCroOpen(false)}
+      onChatWithAi={() => { setCroOpen(false); handleAiAnalyze?.(); }}
+      onConnect={() => { setCroOpen(false); try { connectGoogle?.(); } catch {} }}
     />
   )}
 
