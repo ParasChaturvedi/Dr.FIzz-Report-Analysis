@@ -32,7 +32,7 @@ export default function Steps({ currentStep = 1 }) {
       const firstRect = first.getBoundingClientRect();
       const lastRect = last.getBoundingClientRect();
 
-      const CIRCLE = 36; // w-9 h-9
+      const CIRCLE = 32; // w-8 h-8
       const R = CIRCLE / 2;
 
       const firstCenterX = firstRect.left - wrapRect.left + firstRect.width / 2;
@@ -68,7 +68,7 @@ export default function Steps({ currentStep = 1 }) {
       : 0;
 
   return (
-    <div className="w-full max-w-4xl mx-auto mt-6 mb-8">
+    <div className="w-full max-w-3xl mx-auto mt-5 mb-6">
       {/* subtle entrance for the whole bar */}
       <style jsx>{`
         .pulse {
@@ -92,7 +92,7 @@ export default function Steps({ currentStep = 1 }) {
 
       <div
         ref={wrapRef}
-        className="relative flex items-center justify-center gap-x-10"
+        className="relative flex items-center justify-center gap-x-4"
       >
         {/* gray base dots */}
         <div
@@ -143,12 +143,12 @@ export default function Steps({ currentStep = 1 }) {
             <div
               key={step.id}
               className="flex flex-col items-center"
-              style={{ minWidth: 104 }}
+              style={{ minWidth: 78 }}
             >
               {/* circle */}
               <div
                 ref={(el) => (circleRefs.current[i] = el)}
-                className={`flex items-center justify-center rounded-full w-9 h-9 z-10 transition-all duration-300
+                className={`flex items-center justify-center rounded-full w-8 h-8 z-10 transition-all duration-300
                   ${
                     isActive
                       ? "bg-[image:var(--infoHighlight-gradient)] text-white scale-105 shadow-sm pulse"
@@ -159,8 +159,8 @@ export default function Steps({ currentStep = 1 }) {
                 {isCompleted ? (
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    width="22"
-                    height="22"
+                    width="18"
+                    height="18"
                     viewBox="0 0 24 24"
                     fill="none"
                   >
@@ -190,7 +190,7 @@ export default function Steps({ currentStep = 1 }) {
                     />
                   </svg>
                 ) : (
-                  <span className="font-semibold text-sm transition-colors duration-300 text-[#303030] dark:text-white">
+                  <span className="font-semibold text-[12px] transition-colors duration-300 text-[#303030] dark:text-white">
                     {step.id}
                   </span>
                 )}
@@ -198,7 +198,7 @@ export default function Steps({ currentStep = 1 }) {
 
               {/* label */}
               <span
-                className={`mt-2 text-sm text-center leading-tight transition-colors duration-300
+                className={`mt-2 text-[12px] text-center leading-tight transition-colors duration-300
                   ${
                     isActive
                       ? "font-medium text-gray-900 dark:text-white"
