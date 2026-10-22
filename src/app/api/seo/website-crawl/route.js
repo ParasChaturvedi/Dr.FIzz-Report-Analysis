@@ -4,7 +4,7 @@
 // duplicate detection, Core Web Vitals hints, social meta, SERP preview,
 // content quality, page speed hints, E-E-A-T signals, overall health score.
 
-import { getOrFetch } from "@/lib/cache/mongo";
+import { getOrFetch, putCached } from "@/lib/cache/mongo";
 import { logUsage } from "@/lib/cache/usage";
 import { CRAWL_ENGINE_VERSION } from "@/lib/crawl/engineVersion";
 
@@ -1085,6 +1085,21 @@ export async function POST(request) {
       domain, dataType: `crawl-${CRAWL_ENGINE_VERSION}`, ttlDays: 30, source: "crawl",
       fetchFn: () => crawlDomain(domain, keywords),
     });
+    // A cached crawl whose Google-indexed count failed at crawl time (DataForSEO down/timeout —
+    // e.g. every crawl cached during the 2026-10 credit outage) re-tries ONLY that one cheap call,
+    // instead of serving "indexed pages: —" for 30 days or forcing a full re-crawl. On success the
+    // patched crawl is appended (append-only cache) so later reads are served the complete doc.
+    if (cached && result && !result.error && result.indexedPages == null) {
+      const n = await Promise.race([
+        fetchIndexedPageCount(normHost(domain)),
+        new Promise((r) => setTimeout(() => r(null), 15000)),
+      ]).catch(() => null);
+      if (Number.isFinite(n)) {
+        result.indexedPages = n;
+        result.totalPagesEstimate = Math.max(n, Number(result.totalPagesEstimate) || 0);
+        try { await putCached({ domain, dataType: `crawl-${CRAWL_ENGINE_VERSION}`, payload: result, source: "crawl" }); } catch {}
+      }
+    }
     await logUsage({ domain, api: "crawl", costUSD: cached ? 0 : 0.02, cached });
     return Response.json(result);
   } catch (err) {

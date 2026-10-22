@@ -1092,6 +1092,9 @@ export async function fetchDomainRankOverview(domain, options = {}) {
 
     const json = await res.json();
     const task = Array.isArray(json?.tasks) ? json.tasks[0] : null;
+    // Task-level failure (credit/quota errors come back HTTP 200) → null, never a fabricated
+    // 0 keywords / 0 traffic that would then be cached for 30 days as if it were real.
+    if (task?.status_code && task.status_code !== 20000) return null;
     const result = Array.isArray(task?.result) ? task.result[0] : null;
     // BUGFIX: DataForSEO Labs nests metrics under result.items[0].metrics — NOT
     // result.metrics. The missing items[0] level was returning 0 organic

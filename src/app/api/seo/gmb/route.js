@@ -113,6 +113,14 @@ async function fetchGmbInfo(keyword, location, auth, errSink) {
       const items = data?.tasks?.[0]?.result?.[0]?.items || [];
       if (!items.length) continue; // try next variant
       const b = items[0];
+      // my_business_info returns hours at work_time.work_hours.timetable as an OBJECT keyed by
+      // weekday ({ monday: [{open,close}], sunday: null, ... }) — not work_hours.timetable[] — so the
+      // old Array check always read "no hours" and every report flagged a false "Business hours not
+      // set" (and lost completeness points). Photos/rank/coords also use these field names.
+      const timetable = b.work_time?.work_hours?.timetable || b.work_hours?.timetable || null;
+      const hasHours = Array.isArray(timetable)
+        ? timetable.length > 0
+        : !!(timetable && typeof timetable === "object" && Object.values(timetable).some((v) => Array.isArray(v) && v.length));
 
       return {
         found: true,
@@ -126,16 +134,18 @@ async function fetchGmbInfo(keyword, location, auth, errSink) {
         rating:         b.rating?.value ?? null,
         reviewCount:    b.rating?.votes_count ?? null,
         isVerified:     b.is_claimed ?? false,
-        hoursAvailable: Array.isArray(b.work_hours?.timetable) && b.work_hours.timetable.length > 0,
-        hoursDetail:    b.work_hours?.timetable || null,
+        hoursAvailable: hasHours,
+        hoursDetail:    hasHours ? timetable : null,
         placeId:        b.place_id || null,
         cid:            b.cid || null,
-        hasPhotos:      b.main_image ? true : false,
-        totalPhotos:    b.photos_count ?? null,
+        hasPhotos:      b.main_image ? true : !!b.total_photos,
+        totalPhotos:    b.total_photos ?? b.photos_count ?? null,
         priceLevel:     b.price_level || null,
         popularTimes:   b.popular_times ? true : false,
+        latitude:       b.latitude ?? null,
+        longitude:      b.longitude ?? null,
         attributes:     Array.isArray(b.attributes) ? b.attributes.slice(0, 10) : [],
-        serpRank:       b.rank || null,
+        serpRank:       b.rank_absolute || b.rank_group || b.rank || null,
       };
     } catch (err) {
       // A THROWN error (transport / DataForSEO task-level quota) is distinct from a
@@ -518,7 +528,14 @@ export async function checkGmb(domain, businessName = "", location = "India", op
 
   const reviews = reviewRes.status === "fulfilled" ? reviewRes.value : [];
   const qa      = qaRes.status     === "fulfilled" ? qaRes.value     : [];
-  const dirs    = dirRes.status    === "fulfilled" ? dirRes.value    : _dirsCC.map(d => ({ ...d, listed: null }));
+  const _dirsRaw = dirRes.status   === "fulfilled" ? dirRes.value    : _dirsCC.map(d => ({ ...d, listed: null }));
+  // The GBP listing we just found IS the Google Maps listing — never report Maps as unlisted
+  // (a noisy site: SERP / LLM directory check returned listed:false for itzfizz while its GBP was found).
+  const dirs = info?.found
+    ? _dirsRaw.map((d) => (d?.name === "Google Maps" && d.listed !== true
+        ? { ...d, listed: true, listingUrl: d.listingUrl || (info.cid ? `https://maps.google.com/?cid=${info.cid}` : null) }
+        : d))
+    : _dirsRaw;
 
   // Review analytics
   const reviewVelocity = computeReviewVelocity(reviews);
@@ -594,7 +611,8 @@ export async function POST(request) {
     // 30-day persistent cache by domain + MARKET (so a UK lookup is never served India data).
     const { data: result, cached } = await getOrFetch({
       domain,
-      dataType: `gmb:${loc}:${skipDirectories ? "nodirs" : "full"}`,
+      // "v2": GBP field-mapping fix (hours/photos/coords) — busts listings cached with the old mapper.
+      dataType: `gmb:v2:${loc}:${skipDirectories ? "nodirs" : "full"}`,
       ttlDays: 30,
       source: "gmb",
       fetchFn: () => checkGmb(domain, businessName || "", loc, { skipDirectories: !!skipDirectories, countryCode }),

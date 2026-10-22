@@ -81,11 +81,17 @@ export async function getCached({ domain, dataType, ttlDays = 30 } = {}) {
     const col = await collection();
     if (!col) return null;
     const since = new Date(Date.now() - Number(ttlDays) * 86400000);
-    const doc = await col
-      .find({ domain: normDomain(domain), data_type: dataType, fetched_at: { $gte: since } })
-      .sort({ fetched_at: -1 })
-      .limit(1)
-      .next();
+    const q = { domain: normDomain(domain), data_type: dataType, fetched_at: { $gte: since } };
+    // Types with a degraded-payload detector look past a poisoned latest doc (written while an
+    // upstream provider was failing) to the newest GOOD one; if none, it's a miss → live refetch.
+    // The bad doc stays in the audit log (append-only). Other types read exactly 1 doc, as before.
+    if (_hasDegradedCheck(dataType)) {
+      const docs = await col.find(q).sort({ fetched_at: -1 }).limit(5).toArray();
+      const good = docs.find((d) => !_isDegraded(dataType, d.payload));
+      if (docs.length && !good) console.log(`[cache DEGRADED] ${dataType}:${normDomain(domain)} — ${docs.length} cached doc(s) skipped (failed-provider payload)`);
+      return good ? good.payload : null;
+    }
+    const doc = await col.find(q).sort({ fetched_at: -1 }).limit(1).next();
     return doc ? doc.payload : null;
   } catch (e) {
     console.warn("[cache] getCached failed (serving live):", e?.message);
@@ -99,6 +105,7 @@ export async function putCached({ domain, dataType, payload, source = "", forCli
   // Universal guard (covers direct callers, not just getOrFetch): never persist an
   // error / empty / explicitly-_partial payload — one bad fetch must not poison the TTL.
   if (!_isCacheable(payload)) return false;
+  if (_isDegraded(dataType, payload)) { console.log(`[cache SKIP] ${dataType}:${normDomain(domain)} — failed-provider payload, not cached`); return false; }
   try {
     const col = await collection();
     if (!col) return false;
@@ -132,6 +139,31 @@ function _isCacheable(d) {
   return true;
 }
 
+// DEGRADED-PAYLOAD DETECTORS (per data_type). A payload that is non-empty but was produced while
+// the upstream provider was failing (e.g. DataForSEO 402 / quota) must neither be cached nor served
+// from cache — otherwise one outage poisons a domain's metrics for the full 30-day TTL (seen live:
+// itzfizz.com info-stats traffic/keywords null + dataforseo 0 keywords / 0 SERP, cached 2026-10-03).
+// Signatures were checked against every stored doc: only failed-provider payloads match.
+const _DEGRADED = [
+  // Info panel: Labs domain overview failed → both organic numbers null (a real "no data" domain is 0/0).
+  { test: (t) => t === "info-stats", bad: (d) => d.organicTraffic == null && d.organicKeyword == null },
+  // Full DataForSEO payload: keywords_for_site AND every SERP call failed (a real small site still
+  // gets the SERP for its own domain string, so raw.serp is non-empty).
+  { test: (t) => t.startsWith("dataforseo:"), bad: (d) => {
+      const f = d.dataForSeo || {};
+      return !(f.topKeywords || []).length && !((f.raw || {}).serp || []).length;
+  } },
+];
+function _hasDegradedCheck(dataType) {
+  const t = String(dataType || "");
+  return _DEGRADED.some((x) => x.test(t));
+}
+function _isDegraded(dataType, d) {
+  if (!d || typeof d !== "object" || Array.isArray(d)) return false;
+  const t = String(dataType || "");
+  try { return _DEGRADED.some((x) => x.test(t) && x.bad(d)); } catch { return false; }
+}
+
 // getOrFetch: serve a fresh cached payload, else run fetchFn() live and append it.
 // Returns { data, cached }. Errors in the cache layer never block fetchFn.
 export async function getOrFetch({ domain, dataType, ttlDays = 30, source = "", forClientDomain = null, fetchedBy = null, fetchFn } = {}) {
@@ -143,14 +175,14 @@ export async function getOrFetch({ domain, dataType, ttlDays = 30, source = "", 
     return { data: cached, cached: true };
   }
   const data = await fetchFn();
-  if (_isCacheable(data)) {
+  if (_isCacheable(data) && !_isDegraded(dataType, data)) {
     // Await the write so it completes before a serverless function freezes.
     await putCached({ domain, dataType, payload: data, source, forClientDomain, fetchedBy });
     console.log(`[cache MISS] ${dataType}:${normDomain(domain)} — fetched live + saved`);
   } else {
     // Never persist an error/empty payload — one transient upstream failure must not
     // poison this domain's report for the full TTL window.
-    console.log(`[cache SKIP] ${dataType}:${normDomain(domain)} — error/empty payload, not cached`);
+    console.log(`[cache SKIP] ${dataType}:${normDomain(domain)} — error/empty/degraded payload, not cached`);
   }
   return { data, cached: false };
 }

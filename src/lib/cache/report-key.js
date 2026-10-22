@@ -12,6 +12,9 @@ export function reportCacheType({ reportType = "website", businessData, competit
     // Fold in the crawl engine version so upgrading the crawler (new accuracy fixes, the
     // rendered pass) busts the 30-day report cache instead of serving pre-upgrade data.
     ce: CRAWL_ENGINE_VERSION,
+    // Data-quality version: bump when an upstream-data fix lands (2 = 2026-10-22 failed-provider
+    // cache gate + GBP hours mapping) so a regenerate rebuilds instead of serving the old report.
+    dq: 2,
     bn: businessData?.businessName || businessData?.name || "",
     // competitorData is normally the object { businessCompetitors, searchCompetitors }
     // (NOT an array) — flatten BOTH into the key, else the competitor set is dropped and
